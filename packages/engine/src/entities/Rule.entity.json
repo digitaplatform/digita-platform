@@ -1,0 +1,102 @@
+{
+  "name": "Rule",
+  "module": "core",
+  "database": "core",
+  "label": "Rule",
+  "label_plural": "Rules",
+  "description": "Declarative rule that fires on a dispatched entity lifecycle event (validate, before_save, on_update, before_submit, on_submit, before_cancel — plus file-authored on_workflow_transition:<from>:<to>) and executes an ordered list of actions. Actions run INSIDE the triggering document's MongoDB transaction — all effects roll back together on any error. create_document and update_document are governed (they flow through the full DocumentService pipeline); update_document patches the allow_on_submit band of an already-submitted target; set_value is an in-memory pre-write mutation (validate/before_submit only); validate throws to abort. Seeded from `<appDir>/rules/**.rule.json` files; admin UI stores overrides in this collection.",
+  "icon": "zap",
+  "naming": { "strategy": "user_set" },
+  "is_submittable": false,
+  "track_changes": true,
+  "title_field": "label",
+  "search_fields": ["_id", "label", "entity"],
+  "default_sort": { "field": "priority", "order": "asc" },
+  "in_global_search": true,
+  "fields": [
+    { "fieldname": "sb_trigger", "fieldtype": "SectionBreak", "label": "Trigger", "idx": 1 },
+    { "fieldname": "label", "fieldtype": "Data", "label": "Label", "required": true, "in_list_view": true, "idx": 2 },
+    {
+      "fieldname": "entity",
+      "fieldtype": "Data",
+      "label": "Entity",
+      "required": true,
+      "in_list_view": true,
+      "in_standard_filter": true,
+      "description": "The entity whose lifecycle event triggers this rule (the doctype name).",
+      "idx": 3
+    },
+    {
+      "fieldname": "event",
+      "fieldtype": "Select",
+      "label": "Event",
+      "required": true,
+      "in_list_view": true,
+      "in_standard_filter": true,
+      "options": ["validate", "before_save", "on_update", "before_submit", "on_submit", "before_cancel"],
+      "description": "The dispatched lifecycle event that triggers this rule. Dynamic workflow-transition events (on_workflow_transition:<from>:<to>) fire too but are file-authored only — a Select cannot enumerate them.",
+      "idx": 4
+    },
+    { "fieldname": "priority", "fieldtype": "Int", "label": "Priority", "default": 100, "in_list_view": true, "description": "Lower runs first when multiple rules fire on the same event.", "idx": 5 },
+    { "fieldname": "cb_trigger", "fieldtype": "ColumnBreak", "idx": 6 },
+    { "fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": true, "in_list_view": true, "in_standard_filter": true, "idx": 7 },
+    { "fieldname": "condition", "fieldtype": "Data", "label": "Condition", "description": "Expression against `doc`. Rule skips when it evaluates false. E.g. `doc.docstatus == 1`.", "idx": 8 },
+    {
+      "fieldname": "overridden",
+      "fieldtype": "Check",
+      "label": "Overridden",
+      "default": false,
+      "read_only": true,
+      "description": "Set true when admin UI edits a seeded rule; boot skips re-seed for these.",
+      "idx": 9
+    },
+    { "fieldname": "sb_actions", "fieldtype": "SectionBreak", "label": "Actions", "idx": 10 },
+    {
+      "fieldname": "actions",
+      "fieldtype": "Table",
+      "label": "Actions",
+      "min_rows": 1,
+      "description": "Executed in order inside the parent transaction.",
+      "child_fields": [
+        {
+          "fieldname": "type",
+          "fieldtype": "Select",
+          "label": "Type",
+          "required": true,
+          "options": ["create_document", "update_document", "validate", "set_value"],
+          "in_list_view": true,
+          "idx": 1
+        },
+        { "fieldname": "target_entity", "fieldtype": "Data", "label": "Target Entity", "in_list_view": true, "idx": 2 },
+        { "fieldname": "target_name", "fieldtype": "Data", "label": "Target Name (expr)", "description": "Expression that resolves to the target document's _id.", "idx": 3 },
+        {
+          "fieldname": "iterate",
+          "fieldtype": "Data",
+          "label": "Iterate (path)",
+          "description": "When set on create_document, iterates the array at this path (e.g. `doc.lines`) and emits one doc per row. Inside mappings, `row.field` is available.",
+          "idx": 4
+        },
+        {
+          "fieldname": "field_mappings",
+          "fieldtype": "JSON",
+          "label": "Field Mappings (expressions)",
+          "description": "{ targetField: expression } map. Only for create_document + update_document. Values are rule expressions or $-tokens ($now[±ISO-dur], $root.*, $user.*).",
+          "idx": 5
+        },
+        { "fieldname": "field", "fieldtype": "Data", "label": "Field", "description": "For set_value — target field on the current doc.", "idx": 6 },
+        { "fieldname": "value", "fieldtype": "Data", "label": "Value (expr)", "description": "For set_value — expression to compute the value.", "idx": 7 },
+        { "fieldname": "condition", "fieldtype": "Data", "label": "Condition (expr)", "description": "For validate — action fails when this evaluates false.", "idx": 8 },
+        { "fieldname": "message", "fieldtype": "Data", "label": "Message", "description": "For validate — shown when the condition fails; preferred over error_message.", "idx": 9 },
+        { "fieldname": "error_message", "fieldtype": "Data", "label": "Error Message", "description": "For validate — message shown when condition fails (deprecated — kept for existing rows).", "idx": 10 }
+      ],
+      "idx": 11
+    }
+  ],
+  "indexes": [
+    { "fields": ["entity", "event", "enabled", "priority"], "name": "idx_trigger_lookup" }
+  ],
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1 },
+    { "role": "System User", "level": 0, "select": 1, "read": 1 }
+  ]
+}

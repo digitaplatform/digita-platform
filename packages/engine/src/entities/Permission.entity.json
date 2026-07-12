@@ -1,0 +1,45 @@
+{
+  "name": "Permission",
+  "module": "core",
+  "database": "identity",
+  "label": "Permission",
+  "label_plural": "Permissions",
+  "description": "Restrict user access to specific document values",
+  "naming": { "strategy": "auto_increment", "prefix": "PERM-", "pad_length": 5 },
+  "is_submittable": false,
+  "track_changes": true,
+  "default_sort": { "field": "creation", "order": "desc" },
+  "fields": [
+    { "fieldname": "user", "fieldtype": "Data", "label": "User", "description": "User id (email) in digita-auth.", "required": true, "in_list_view": true, "in_standard_filter": true, "idx": 1 },
+    {
+      "fieldname": "allow_entity",
+      "fieldtype": "Link",
+      "target": "Entity",
+      "target_display": "label",
+      "label": "Allow Entity",
+      "required": true,
+      "in_list_view": true,
+      "in_standard_filter": true,
+      "description": "Which entity type this restriction applies to. Validated at insert against the Entity meta-collection.",
+      "idx": 2
+    },
+    { "fieldname": "allow_field", "fieldtype": "Data", "label": "Allow Field", "required": true, "description": "Which field to match on", "idx": 3 },
+    {
+      "fieldname": "allow_value",
+      "fieldtype": "Data",
+      "label": "Allow Value",
+      "required": true,
+      "in_list_view": true,
+      "description": "User can only access documents where this field equals this value",
+      "idx": 4
+    },
+    { "fieldname": "is_default", "fieldtype": "Check", "label": "Is Default", "default": false, "description": "Auto-apply this value when user creates new documents", "idx": 5 }
+  ],
+  "indexes": [
+    { "fields": ["user", "allow_entity"], "name": "idx_user_entity" }
+  ],
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1 },
+    { "role": "System User", "level": 0, "select": 1, "read": 1 }
+  ]
+}

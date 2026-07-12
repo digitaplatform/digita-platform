@@ -1,0 +1,138 @@
+/* Variant-neutral component hooks — apply in EVERY design (no data-design-variant
+   required). Home for cross-variant defaults like the adaptive-FAB gate. */
+
+/* Adaptive FABs are hidden by default; a variant (Material) opts them in. */
+[data-ui="fab"][data-adaptive] { display: none; }
+
+/* Explicit bottom sheets (presentation="sheet") slide up in EVERY design.
+   Scope the flex-end dock to the OVERLAY only — BaseDialog stamps
+   data-presentation on the panel too, and an unscoped rule right-aligned the
+   panel's own flex-col children (grabber/title/footer). */
+[data-ui="dialog-overlay"][data-presentation="sheet"] { align-items: flex-end !important; }
+[data-presentation="sheet"] [data-ui="dialog"] {
+  border-radius: var(--radius-dialog) var(--radius-dialog) 0 0;
+  animation: anim-sheet-in var(--duration-slow) var(--ease-spring);
+}
+
+/* ── Nordstern F3 — editors inside a grid are COMPACT: they fit the row, never
+   inflate it ("das Input-Feld wird nach Füllung grösser"). Variant-neutral. ── */
+[data-ui="table"] [data-ui="input"],
+[data-ui="table"] [data-ui="input-frame"],
+[data-ui="table"] [data-ui="select-trigger"] {
+  min-height: 0;
+  height: calc(var(--density-row) * 1px - 8px);
+  padding-top: 0; padding-bottom: 0;
+  border-radius: calc(var(--radius-input) - 2px);
+  box-shadow: none;
+}
+[data-ui="table"] [data-ui="input"]:focus,
+[data-ui="table"] [data-ui="input-frame"]:focus-within,
+[data-ui="table"] [data-ui="select-trigger"]:focus {
+  box-shadow: 0 0 0 2px var(--color-primary-400);
+  border-color: var(--color-primary-400);
+}
+/* Variant layers must not re-inflate grid editors (higher specificity). */
+:root[data-design-variant="ios"] [data-ui="table"] [data-ui="input"],
+:root[data-design-variant="ios"] [data-ui="table"] [data-ui="input-frame"],
+:root[data-design-variant="ios"] [data-ui="table"] [data-ui="select-trigger"] { min-height: 0; }
+:root[data-design-variant="material"] [data-ui="table"] [data-ui="input"]:focus,
+:root[data-design-variant="material"] [data-ui="table"] [data-ui="input-frame"]:focus-within,
+:root[data-design-variant="material"] [data-ui="table"] [data-ui="select-trigger"]:focus {
+  margin-bottom: 0; border-bottom-width: 1px;
+}
+
+/* ── Nordstern F6 — the sticky tab strip always paints its own surface. ── */
+[data-ui="tabs"] { background: var(--color-surface); }
+
+/* ── Nordstern F3 addendum — row action buttons may never inflate the row
+   (44px iOS / 40px M3 icon-button minimums broke 32/36px rows). ── */
+[data-ui="table"] [data-ui="icon-button"] { min-width: 0; min-height: 0; }
+:root[data-design-variant="ios"] [data-ui="table"] [data-ui="icon-button"] { min-width: 0; min-height: 0; }
+:root[data-design-variant="material"] [data-ui="table"] [data-ui="icon-button"] { min-width: 0; min-height: 0; }
+
+/* ── FIX 11 · DataGrid Nordstern skin ──────────────────────────────────────
+   Target: digita-theme/build/variants/base.css (CSS-only; keyed on the same
+   data-ui hooks). The grid read like a bare spreadsheet widget inside a soft
+   card UI: always-visible destructive icons, uniformly hard hairlines,
+   editor boxes floating inside cells, a detached entry field. */
+
+/* Body separators recede; the frame + header/footer rules carry structure. */
+[data-ui="table-row"] { border-bottom-color: color-mix(in srgb, var(--color-border) 62%, transparent); }
+[data-ui="table-header"] { background: color-mix(in srgb, var(--color-subtle) 60%, var(--color-surface)); }
+.table-footer { background: var(--color-surface); border-top-color: var(--color-border-strong); }
+
+/* Row actions (remove/edit/duplicate) appear on hover or focus — calm rows.
+   Touch devices (no hover) keep them always visible. */
+@media (hover: hover) {
+  [data-ui="table-row"] [data-ui="icon-button"] { opacity: 0; transition: opacity var(--duration-base) var(--ease-smooth); }
+  [data-ui="table-row"]:hover [data-ui="icon-button"],
+  [data-ui="table-row"]:focus-within [data-ui="icon-button"] { opacity: 1; }
+}
+
+/* Editors melt into the cell: the CELL shows the active state (inset ring),
+   the input itself is chromeless — no box floating inside a box. */
+[data-ui="table"] [role="gridcell"]:focus-within { box-shadow: inset 0 0 0 2px var(--color-primary-400); border-radius: 4px; }
+[data-ui="table"] [role="gridcell"] [data-ui="input"],
+[data-ui="table"] [role="gridcell"] [data-ui="input"]:focus {
+  background: transparent; border-color: transparent; box-shadow: none;
+}
+
+/* Line entry lives INSIDE the grid frame as a ghost row, not detached below. */
+.grid-entry [data-ui="input-frame"] {
+  border: 0; border-top: 1px solid var(--color-border); border-radius: 0;
+  background: transparent; padding-left: 0.75rem; padding-right: 0.5rem;
+}
+.grid-entry [data-ui="input-frame"]:focus-within { box-shadow: none; background: var(--color-bg-hover); }
+
+/* ── FIX 12 · Grid scrollbars: thin, hover-reveal, with edge fades ─────────
+   Target: digita-theme/build/variants/base.css
+   A permanent OS scrollbar track inside the grid frame eats a row of
+   vertical space and reads like a legacy form widget. The scroller keeps
+   scrolling everywhere; the BAR only materializes while the pointer is
+   over the grid. Scroll-edge fades signal clipped columns instead. */
+/* Nordstern F16 — the native scrollbar never renders inside grids; the
+   floating thumb (data-ui="grid-hscroll", owned by DataGrid) is the
+   affordance, next to the F12 pin shadows. */
+[data-ui="table"] > div:first-child { scrollbar-width: none; -ms-overflow-style: none; }
+[data-ui="table"] > div:first-child::-webkit-scrollbar { display: none; }
+
+/* iOS paints the table header transparent (grouped-list look) — pinned header
+   cells then inherit transparent and scrolled content GHOSTS through them.
+   Pinned header cells get a solid surface under iOS. */
+:root[data-design-variant="ios"] [data-ui="table-header"] .col-pin-l,
+:root[data-design-variant="ios"] [data-ui="table-header"] .col-pin-r { background: var(--color-surface); }
+
+/* Clipped-content signal: the PINNED columns cast a soft shadow while content
+   slides underneath (the DataGrid sets data-scroll-l/-r in its onScroll).
+   Painted per pinned cell — stacks into a continuous column shadow. */
+[data-ui="table"][data-scroll-l="true"] .col-pin-l { box-shadow: 6px 0 8px -6px rgba(20, 15, 5, 0.28); }
+[data-ui="table"][data-scroll-r="true"] .col-pin-r { box-shadow: -6px 0 8px -6px rgba(20, 15, 5, 0.28); }
+.dark [data-ui="table"][data-scroll-l="true"] .col-pin-l { box-shadow: 6px 0 10px -6px rgba(0, 0, 0, 0.65); }
+.dark [data-ui="table"][data-scroll-r="true"] .col-pin-r { box-shadow: -6px 0 10px -6px rgba(0, 0, 0, 0.65); }
+
+/* ── Nordstern F12 — pinned-column classes (DataGrid adds col-pin-l to the
+   first data column's header/cell/footer, col-pin-r to the actions column). ── */
+[data-ui="table-row"] { background: var(--color-surface); }
+.col-pin-l { position: sticky; left: 0; z-index: 1; background: inherit; border-right: 1px solid transparent; }
+.col-pin-r { position: sticky; right: 0; z-index: 1; background: inherit; border-left: 1px solid transparent; }
+[data-ui="table"][data-scroll-l="true"] .col-pin-l { border-right-color: var(--color-border); }
+[data-ui="table"][data-scroll-r="true"] .col-pin-r { border-left-color: var(--color-border); }
+
+/* ── P2.2 SwipeRow — desktop (hover + fine pointer) reaches the row actions
+   WITHOUT any gesture (policy §2 "Collections", §3 "Row action"): the trailing
+   tray doubles as the hover row. Keyboard focus and the touch swipe reveal via
+   component state (data-open) instead — this rule is only the pure-CSS hover
+   path, so it must not fire on touch (no hover hijack there). ── */
+@media (hover: hover) and (pointer: fine) {
+  [data-ui="swipe-row"]:hover [data-ui="swipe-row-actions"][data-side="trailing"] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* ── P1.1 PageHeader — the collapse swap is functional in EVERY design: the
+   large title yields to the aria-hidden bar mirror. Pure opacity (variants add
+   type + motion) — no box ever changes size, so collapsing can never reflow
+   the page or feed back into the scroll position. ── */
+[data-ui="page-header"][data-collapsed="true"] [data-ui="page-header-title"] { opacity: 0; }
+[data-ui="page-header"][data-collapsed="true"] [data-ui="page-header-bar-title"] { opacity: 1; }

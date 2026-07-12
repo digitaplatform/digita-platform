@@ -1,0 +1,49 @@
+{
+  "name": "Translation",
+  "module": "core",
+  "database": "core",
+  "label": "Translation",
+  "label_plural": "Translations",
+  "naming": { "strategy": "user_set" },
+  "is_submittable": false,
+  "track_changes": false,
+  "title_field": "key",
+  "search_fields": ["key", "value"],
+  "default_sort": { "field": "key", "order": "asc" },
+  "fields": [
+    { "fieldname": "namespace", "fieldtype": "Select", "label": "Namespace", "options": ["system", "entity", "data"], "required": true, "in_list_view": true, "in_standard_filter": true, "idx": 1 },
+    {
+      "fieldname": "locale",
+      "fieldtype": "Link",
+      "label": "Locale",
+      "target": "Language",
+      "target_display": "native_name",
+      "required": true,
+      "in_list_view": true,
+      "in_standard_filter": true,
+      "idx": 2
+    },
+    { "fieldname": "key", "fieldtype": "Data", "label": "Key", "required": true, "in_list_view": true, "in_global_search": true, "idx": 3 },
+    { "fieldname": "value", "fieldtype": "Text", "label": "Value", "required": true, "in_list_view": true, "idx": 4 },
+    { "fieldname": "cb_1", "fieldtype": "ColumnBreak", "idx": 5 },
+    { "fieldname": "source", "fieldtype": "Select", "label": "Source", "options": ["file", "api", "user"], "default": "api", "read_only": true, "in_standard_filter": true, "idx": 6 },
+    { "fieldname": "overridden", "fieldtype": "Check", "label": "Overridden", "default": false, "read_only": true, "idx": 7 },
+    { "fieldname": "overridden_by", "fieldtype": "Data", "label": "Overridden By", "read_only": true, "idx": 8 },
+    { "fieldname": "original_value", "fieldtype": "Text", "label": "Original Value", "read_only": true, "idx": 9 },
+    { "fieldname": "sb_data", "fieldtype": "SectionBreak", "label": "Data Translation Info", "collapsible": true, "collapsed": true, "idx": 10 },
+    { "fieldname": "entity", "fieldtype": "Data", "label": "Entity", "in_standard_filter": true, "idx": 11 },
+    { "fieldname": "document_name", "fieldtype": "Data", "label": "Document Name", "idx": 12 },
+    { "fieldname": "fieldname", "fieldtype": "Data", "label": "Field Name", "idx": 13 },
+    { "fieldname": "module", "fieldtype": "Data", "label": "Module", "idx": 14 }
+  ],
+  "indexes": [
+    { "fields": ["namespace", "locale", "key"], "name": "idx_namespace_locale_key", "unique": true },
+    { "fields": ["namespace", "entity", "document_name", "locale"], "name": "idx_data_translation" },
+    { "fields": ["value"], "name": "idx_search_value", "type": "text" },
+    { "fields": ["overridden", "namespace"], "name": "idx_overridden" }
+  ],
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1 },
+    { "role": "System User", "level": 0, "select": 1, "read": 1 }
+  ]
+}

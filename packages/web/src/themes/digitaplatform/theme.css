@@ -1,0 +1,35 @@
+/* digitaplatform brand theme — layered over @digitaplatform/theme. Scoped to the
+ * `.theme-digitaplatform` class set on <html> when WebSite.theme === "digitaplatform".
+ * Overrides only design VARIABLES (+ a few weightless block accents); all utilities
+ * read these, so the same content restyles per brand. Light + dark both defined. */
+
+.theme-digitaplatform {
+  --color-primary-50: #eef0ff;
+  --color-primary-600: #5b54e6;
+  --color-primary-700: #4940c9;
+  --color-bg-hover: #f1f1fe;
+  --color-surface-glass: rgba(252, 252, 255, 0.72);
+  --shadow-focus: 0 0 0 3px rgba(91, 84, 230, 0.18);
+}
+
+.theme-digitaplatform.dark {
+  --color-primary-50: #1d1b3a;
+  --color-primary-600: #8a83f6;
+  --color-primary-700: #6f67ea;
+  --color-bg-hover: #1a1a2e;
+  --color-surface-glass: rgba(16, 18, 24, 0.72);
+}
+
+/* Weightless hero: a soft brand wash behind the first impression. */
+.theme-digitaplatform [data-block="hero"] {
+  background:
+    radial-gradient(60% 120% at 50% -10%, color-mix(in srgb, var(--color-primary-600) 14%, transparent), transparent 70%);
+}
+
+.theme-digitaplatform [data-block="hero"] h1 {
+  letter-spacing: -0.03em;
+  background: linear-gradient(180deg, var(--color-text-main), color-mix(in srgb, var(--color-text-main) 70%, var(--color-primary-600)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

@@ -1,0 +1,31 @@
+{
+  "name": "@digitaplatform/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Digita Web — public, multilingual website renderer (Next.js App Router). Consumes the engine's generic public read API; multi-theme + frontend-plugin extensible.",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@digitaplatform/shared": "workspace:*",
+    "@digitaplatform/theme": "workspace:*",
+    "framer-motion": "^12.0.0",
+    "next": "^15.5.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.0",
+    "@types/node": "^25.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "postcss": "^8.5.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^6.0.0"
+  }
+}

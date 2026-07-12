@@ -1,0 +1,36 @@
+{
+  "name": "BrandingSetting",
+  "module": "core",
+  "database": "core",
+  "label": "Appearance & Branding",
+  "is_single": true,
+  "reload_boot_on_write": true,
+  "naming": { "strategy": "user_set" },
+  "is_submittable": false,
+  "track_changes": true,
+  "storage_path": "branding",
+  "fields": [
+    { "fieldname": "sb_identity", "fieldtype": "SectionBreak", "label": "Identity", "idx": 1 },
+    { "fieldname": "app_name", "fieldtype": "Data", "label": "App Name", "translatable": true, "description": "Shown in the operator UI shell + login. Falls back to the platform name.", "idx": 2 },
+    { "fieldname": "logo", "fieldtype": "AttachImage", "label": "Logo", "public": true, "idx": 3 },
+    { "fieldname": "logo_dark", "fieldtype": "AttachImage", "label": "Logo (dark mode)", "public": true, "idx": 4 },
+    { "fieldname": "favicon", "fieldtype": "AttachImage", "label": "Favicon", "public": true, "idx": 5 },
+
+    { "fieldname": "sb_theme", "fieldtype": "SectionBreak", "label": "Theme", "idx": 6 },
+    { "fieldname": "primary_color", "fieldtype": "Color", "label": "Primary Color", "description": "Brand primary; snapped to the nearest accent palette at runtime.", "idx": 7 },
+    { "fieldname": "accent_palette", "fieldtype": "Select", "label": "Secondary / Accent Palette", "options": ["blue", "pink", "purple", "green", "orange", "teal", "indigo", "cyan"], "idx": 8 },
+    { "fieldname": "density", "fieldtype": "Select", "label": "Density", "options": ["comfortable", "compact"], "default": "comfortable", "idx": 9 },
+    { "fieldname": "default_template", "fieldtype": "Data", "label": "Default Template", "description": "Default shell template id (e.g. 'classic').", "idx": 10 },
+
+    { "fieldname": "sb_login", "fieldtype": "SectionBreak", "label": "Login", "idx": 11 },
+    { "fieldname": "login_background", "fieldtype": "AttachImage", "label": "Login Background", "public": true, "idx": 12 },
+
+    { "fieldname": "sb_user_options", "fieldtype": "SectionBreak", "label": "User Options", "idx": 13 },
+    { "fieldname": "allow_user_template_override", "fieldtype": "Check", "label": "Allow user template override", "default": true, "idx": 14 },
+    { "fieldname": "allow_user_theme_mode", "fieldtype": "Check", "label": "Allow user light/dark choice", "default": true, "idx": 15 }
+  ],
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1 },
+    { "role": "System User", "level": 0, "select": 1, "read": 1 }
+  ]
+}

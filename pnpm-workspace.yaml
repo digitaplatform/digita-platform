@@ -1,0 +1,18 @@
+# Digita open core — pnpm workspace. Base packages first; engine/ui/web follow.
+packages:
+  - packages/*
+
+# Match digitabase/digitadesign supply-chain settings for deterministic installs.
+minimumReleaseAge: 0
+
+# Dependencies allowed to run install/build scripts (pnpm 11 allowlist).
+# esbuild is pulled in by vitest; argon2 (engine password hashing) and
+# @tailwindcss/oxide (web's Tailwind v4 native binding) build native addons;
+# mongodb-memory-server downloads the mongod binary its postinstall needs for
+# the engine test suite; sharp is Next.js's optional image codec.
+allowBuilds:
+  esbuild: true
+  argon2: true
+  sharp: true
+  "@tailwindcss/oxide": true
+  mongodb-memory-server: true

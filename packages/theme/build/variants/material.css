@@ -1,0 +1,398 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Material 3 variant layer — scoped to :root[data-design-variant="material"].
+   All rules key on a stable [data-ui] hook + emitted vars only.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Buttons — the M3 state-layer overlay (hover 8% / press 12% currentColor) +
+   hover elevation: the M3 signature interaction without a JS ripple. */
+:root[data-design-variant="material"] [data-ui="button"],
+:root[data-design-variant="material"] [data-ui="icon-button"] {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+:root[data-design-variant="material"] [data-ui="button"]::after,
+:root[data-design-variant="material"] [data-ui="icon-button"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-base) var(--ease-smooth);
+}
+:root[data-design-variant="material"] [data-ui="button"]:hover:not(:disabled)::after,
+:root[data-design-variant="material"] [data-ui="icon-button"]:hover:not(:disabled)::after { opacity: 0.08; }
+:root[data-design-variant="material"] [data-ui="button"]:active:not(:disabled)::after,
+:root[data-design-variant="material"] [data-ui="icon-button"]:active:not(:disabled)::after { opacity: 0.12; }
+/* M3 only ELEVATES filled buttons on hover — text/outlined/ghost never lift. */
+:root[data-design-variant="material"] [data-ui="button"][data-variant="primary"]:hover:not(:disabled),
+:root[data-design-variant="material"] [data-ui="button"][data-variant="danger"]:hover:not(:disabled) { box-shadow: var(--shadow-sm); }
+:root[data-design-variant="material"] [data-ui="icon-button"] { min-width: 2.5rem; min-height: 2.5rem; }
+
+/* Switch — M3 52×32 track, outlined off-state, thumb GROWS 16→24px. */
+:root[data-design-variant="material"] [data-ui="switch"] {
+  height: 32px; width: 52px; border-radius: 999px; background: var(--color-subtle); border: 2px solid var(--color-border-strong);
+}
+:root[data-design-variant="material"] [data-ui="switch"][aria-checked="true"] { background: var(--color-primary-600); border-color: var(--color-primary-600); }
+:root[data-design-variant="material"] [data-ui="switch-thumb"] {
+  height: 16px; width: 16px; transform: translateX(6px); background: var(--color-border-strong); box-shadow: none;
+  transition: transform var(--duration-base) var(--ease-smooth), width var(--duration-base) var(--ease-smooth), height var(--duration-base) var(--ease-smooth);
+}
+:root[data-design-variant="material"] [data-ui="switch"][aria-checked="true"] [data-ui="switch-thumb"] {
+  height: 24px; width: 24px; transform: translateX(22px); background: var(--color-on-primary);
+}
+
+/* SegmentedControl — M3 outlined segmented buttons (selected = tonal + check). */
+:root[data-design-variant="material"] [data-ui="segmented"] {
+  background: transparent; padding: 0; gap: 0; border: 1px solid var(--color-border-strong); border-radius: 999px; overflow: hidden;
+}
+:root[data-design-variant="material"] [data-ui="segmented-item"] { border-radius: 0; padding: 0.5rem 1rem; box-shadow: none; }
+:root[data-design-variant="material"] [data-ui="segmented-item"] + [data-ui="segmented-item"] { border-left: 1px solid var(--color-border-strong); }
+:root[data-design-variant="material"] [data-ui="segmented-item"][data-selected] { color: var(--color-on-primary-container); }
+:root[data-design-variant="material"] [data-ui="segmented-item"][data-selected] [data-ui="segmented-check"] { display: inline-flex; }
+/* The tonal selected fill lives on the kit's sliding thumb (purely visual node
+   under the selection) — square it off to match the M3 rectangular cells. The
+   --color-primary-container role token already flips itself in dark. */
+:root[data-design-variant="material"] [data-ui="segmented-thumb"] {
+  background: var(--color-primary-container); border-radius: 0; box-shadow: none;
+}
+
+/* FAB — M3 primary-container surface, 16px radius, elevation. Adaptive FABs show here. */
+:root[data-design-variant="material"] [data-ui="fab"][data-adaptive] { display: inline-flex; }
+:root[data-design-variant="material"] [data-ui="fab"] {
+  border-radius: 1rem; background: var(--color-primary-container); color: var(--color-on-primary-container); box-shadow: var(--shadow-lg);
+}
+
+/* Chip — M3 32px outlined → tonal + leading check when selected. */
+:root[data-design-variant="material"] [data-ui="chip"] { height: 2rem; border-radius: 0.5rem; border-color: var(--color-border-strong); }
+:root[data-design-variant="material"] [data-ui="chip"]:not([data-color])[data-selected] { background: var(--color-primary-container); color: var(--color-on-primary-container); border-color: transparent; }
+:root[data-design-variant="material"] [data-ui="chip"][data-selected] [data-ui="chip-check"] { display: inline-flex; }
+
+/* TextField — M3 FILLED: subtle fill, no side borders, 1px→2px primary underline. */
+:root[data-design-variant="material"] [data-ui="textfield"] {
+  background: var(--color-subtle); border: none; border-bottom: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-input) var(--radius-input) 0 0; box-shadow: none;
+}
+:root[data-design-variant="material"] [data-ui="textfield"]:focus-within {
+  /* Nordstern F2: paint the 2nd pixel with an inset shadow — zero layout shift. */
+  border-bottom: 1px solid var(--color-primary-600);
+  box-shadow: inset 0 -1px 0 var(--color-primary-600);
+}
+:root[data-design-variant="material"] [data-ui="textfield"][data-invalid] { border-bottom-color: var(--color-error); }
+
+/* ══ Wave 2 — existing controls speak Material 3 ══ */
+
+/* Buttons — filled / tonal / outlined / text hierarchy + M3 disabled state. */
+:root[data-design-variant="material"] [data-ui="button"] { min-height: 2.5rem; padding-inline: 1.5rem; font-weight: 500; }
+:root[data-design-variant="material"] [data-ui="button"][data-size="xs"],
+:root[data-design-variant="material"] [data-ui="button"][data-size="sm"] { min-height: 2rem; padding-inline: 1rem; }
+:root[data-design-variant="material"] [data-ui="button"][data-variant="secondary"] {
+  background: var(--color-primary-container); color: var(--color-on-primary-container);
+}
+:root[data-design-variant="material"] [data-ui="button"][data-variant="outline"] {
+  border-color: var(--color-border-strong); color: var(--color-primary-600);
+}
+:root[data-design-variant="material"] [data-ui="button"][data-variant="ghost"] {
+  color: var(--color-primary-600); padding-inline: 0.75rem;
+}
+:root[data-design-variant="material"] [data-ui="button"]:disabled {
+  background: color-mix(in srgb, var(--color-text-main) 12%, transparent);
+  color: color-mix(in srgb, var(--color-text-main) 38%, transparent); box-shadow: none;
+}
+
+/* Checkbox — M3 18px, 2px radius, 2px outline, primary fill. */
+:root[data-design-variant="material"] [data-ui="checkbox"] { height: 18px; width: 18px; border-radius: 2px; border: 2px solid var(--color-text-muted); }
+:root[data-design-variant="material"] [data-ui="checkbox-box"] { height: 18px; width: 18px; }
+:root[data-design-variant="material"] [data-ui="checkbox"]:checked { border-color: var(--color-primary-600); background: var(--color-primary-600); }
+
+/* Inputs / Select — M3 "filled-lite": fill + 1px→2px primary underline. */
+:root[data-design-variant="material"] [data-ui="input"],
+:root[data-design-variant="material"] [data-ui="input-frame"],
+:root[data-design-variant="material"] [data-ui="select-trigger"] {
+  background: var(--color-subtle); border-color: transparent; border-bottom: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-input) var(--radius-input) 0 0;
+}
+:root[data-design-variant="material"] [data-ui="input"]:focus,
+:root[data-design-variant="material"] [data-ui="input-frame"]:focus-within,
+:root[data-design-variant="material"] [data-ui="select-trigger"]:focus {
+  /* Nordstern F2: paint the 2nd pixel with an inset shadow — zero layout shift. */
+  border-bottom: 1px solid var(--color-primary-600);
+  box-shadow: inset 0 -1px 0 var(--color-primary-600);
+}
+:root[data-design-variant="material"] [data-ui="input-frame"] [data-ui="input"] { background: transparent; border: none; border-radius: 0; }
+
+/* Menu / Popover / Tooltip — M3 has NO glass: solid surface, small radius; inverse tooltip. */
+:root[data-design-variant="material"] [data-ui="popover"],
+:root[data-design-variant="material"] [data-ui="tooltip"] {
+  -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--color-surface);
+}
+/* Menus/popovers float on surface-container (M3 menu container, P2.4). */
+:root[data-design-variant="material"] [data-ui="popover"] { border-radius: 0.25rem; background: var(--color-surface-container); }
+:root[data-design-variant="material"] [data-ui="menu-item"] { min-height: 2.5rem; }
+:root[data-design-variant="material"] [data-ui="tooltip"] {
+  background: var(--color-text-main); color: var(--color-bg); border-color: transparent; border-radius: 0.25rem;
+}
+
+/* ══ Wave 3 — lists, tables, tabs speak Material 3 ══ */
+
+/* Table — keep the card frame, sentence-case label-large headers. */
+:root[data-design-variant="material"] [data-ui="table"] { box-shadow: none; }
+:root[data-design-variant="material"] [data-ui="table-header"] { background: var(--color-surface); }
+:root[data-design-variant="material"] [data-ui="table-header"] th,
+:root[data-design-variant="material"] [data-ui="table-header"] [role="columnheader"] {
+  text-transform: none; letter-spacing: normal; font-size: 0.875rem; font-weight: 500; color: var(--color-text-main);
+}
+:root[data-design-variant="material"] [data-ui="list-row"] { border-radius: var(--radius-card); }
+
+/* Tabs — M3 primary tabs with the 3px rounded active indicator. */
+:root[data-design-variant="material"] [data-ui="tab"] { position: relative; padding: 0.75rem 1rem; border-bottom-color: transparent; }
+:root[data-design-variant="material"] [data-ui="tab"][aria-selected="true"] { color: var(--color-primary-600); }
+:root[data-design-variant="material"] [data-ui="tab"][aria-selected="true"]::after {
+  content: ""; position: absolute; bottom: 0; left: 20%; right: 20%; height: 3px; border-radius: 3px 3px 0 0; background: var(--color-primary-600);
+}
+:root[data-design-variant="material"] [data-ui="tab"]:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
+
+/* ══ Wave 4 — chrome & presentation speak Material 3 ══ */
+
+/* Topbar — flat tonal top app bar (M3 surface-container, P2.4 real step). */
+:root[data-design-variant="material"] [data-ui="topbar"] { background: var(--color-surface-container); border-bottom-color: transparent; }
+
+/* Dialogs — M3 headline + divider-less header/footer, scrim (no blur); the
+   panel sits on surface-container-high (P2.4, the M3 dialog container). */
+:root[data-design-variant="material"] [data-ui="dialog"] {
+  -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--color-surface-container-high);
+}
+:root[data-design-variant="material"] [data-ui="dialog-header"] { border-bottom-color: transparent; }
+:root[data-design-variant="material"] [data-ui="dialog-header"] h2 { font-size: 1.5rem; font-weight: 400; }
+:root[data-design-variant="material"] [data-ui="dialog-footer"] {
+  border-top-color: transparent; display: flex; justify-content: flex-end; gap: 0.5rem;
+}
+:root[data-design-variant="material"] [data-ui="dialog-overlay"] { background: rgba(0,0,0,0.32); backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* The list "New" toolbar button gives way to the FAB under Material (M3's create
+   affordance). The FAB (adaptive) shows here; the toolbar button hides. */
+:root[data-design-variant="material"] [data-ui="create-action"] { display: none; }
+
+/* Cards — M3 surfaces on the P2.4 container steps: filled (default) and
+   interactive sit on surface-container; elevated = surface-container-low +
+   shadow (the M3 elevated-card recipe: lower tone, real elevation). */
+:root[data-design-variant="material"] [data-ui="card"][data-variant="default"],
+:root[data-design-variant="material"] [data-ui="card"][data-variant="interactive"] {
+  border-color: transparent; background: var(--color-surface-container);
+}
+:root[data-design-variant="material"] [data-ui="card"][data-variant="interactive"]:hover {
+  background: var(--color-surface-container-low);
+  box-shadow: var(--shadow-sm);
+}
+:root[data-design-variant="material"] [data-ui="card"][data-variant="elevated"] {
+  border-color: transparent;
+  background: var(--color-surface-container-low);
+  box-shadow: var(--shadow-md);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Material 3 DARK-MODE corrections — ramps are mode-static, so flip primary to
+   primary-200 (#D0BCFF = M3 dark primary) and tonal containers to
+   primary-700/100 here. Ref: docs/status/2026-07-08-variant-css-audit.md
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* P0-2 — primary-600 (#6750A4) is only 2.6:1 on the dark surface → primary-200. */
+:root[data-design-variant="material"].dark [data-ui="tab"][aria-selected="true"] { color: var(--color-primary-200); }
+:root[data-design-variant="material"].dark [data-ui="tab"][aria-selected="true"]::after { background: var(--color-primary-200); }
+:root[data-design-variant="material"].dark [data-ui="button"][data-variant="outline"],
+:root[data-design-variant="material"].dark [data-ui="button"][data-variant="ghost"] { color: var(--color-primary-200); }
+:root[data-design-variant="material"].dark [data-ui="input"]:focus,
+:root[data-design-variant="material"].dark [data-ui="input-frame"]:focus-within,
+:root[data-design-variant="material"].dark [data-ui="select-trigger"]:focus,
+:root[data-design-variant="material"].dark [data-ui="textfield"]:focus-within { border-bottom-color: var(--color-primary-200); }
+:root[data-design-variant="material"].dark [data-ui="textfield-input"]:focus ~ [data-ui="textfield-label"] { color: var(--color-primary-200); }
+/* Nordstern F2 — recolor the inset focus pixel in dark. */
+:root[data-design-variant="material"].dark [data-ui="input"]:focus,
+:root[data-design-variant="material"].dark [data-ui="input-frame"]:focus-within,
+:root[data-design-variant="material"].dark [data-ui="select-trigger"]:focus,
+:root[data-design-variant="material"].dark [data-ui="textfield"]:focus-within {
+  box-shadow: inset 0 -1px 0 var(--color-primary-200);
+}
+:root[data-design-variant="material"].dark [data-ui="switch"][aria-checked="true"] { background: var(--color-primary-200); border-color: var(--color-primary-200); }
+:root[data-design-variant="material"].dark [data-ui="switch"][aria-checked="true"] [data-ui="switch-thumb"] { background: var(--color-primary-800); }
+:root[data-design-variant="material"].dark [data-ui="checkbox"]:checked { border-color: var(--color-primary-200); background: var(--color-primary-200); }
+:root[data-design-variant="material"].dark [data-ui="checkbox-box"] svg { color: var(--color-primary-800); }
+
+/* P1-3 — RESOLVED by the P3 color roles: tonal containers now sit on
+   --color-primary-container / --color-on-primary-container, which the material
+   design's .dark semantic block flips to #4F378B/#EADDFF (= primary-700/-100,
+   the values this override used to force) and tenant branding re-derives via
+   light-dark(). No dark-mode correction needed here anymore. */
+
+/* ══ Nordstern F10 — Material polish wave (M3 counterpart of the iOS F7) ══ */
+
+/* Menus + select/combobox dropdowns: M3 48dp rows. */
+:root[data-design-variant="material"] [data-ui="option"] {
+  min-height: 3rem;
+}
+
+/* Search fields: the M3 search bar is a full pill with the tonal fill and no
+   underline (the filled-input underline is a text-field pattern, not search). */
+:root[data-design-variant="material"] [data-ui="input"][type="search"] {
+  border-radius: 9999px;
+  border-bottom-color: transparent;
+}
+:root[data-design-variant="material"] [data-ui="input"][type="search"]:focus {
+  border-bottom: 1px solid transparent;
+  margin-bottom: 0;
+  box-shadow: 0 0 0 2px var(--color-primary-600);
+}
+:root[data-design-variant="material"].dark [data-ui="input"][type="search"]:focus {
+  box-shadow: 0 0 0 2px var(--color-primary-200);
+}
+
+/* Date picker: M3 day/month/year cells are full circles. */
+:root[data-design-variant="material"] .dg-datepicker .dp-day {
+  border-radius: 9999px;
+}
+
+/* Dialog search-result rows: 48dp under Material. */
+:root[data-design-variant="material"] [data-ui="dialog-body"] tbody tr { height: 48px; }
+
+/* M3: the on-state thumb carries a check icon. */
+:root[data-design-variant="material"] [data-ui="switch"][aria-checked="true"] [data-ui="switch-check"] {
+  display: block;
+  color: var(--color-primary-600);
+}
+:root[data-design-variant="material"].dark [data-ui="switch"][aria-checked="true"] [data-ui="switch-check"] {
+  color: var(--color-primary-100);
+}
+
+/* ══ P2.5 — Type bump for content surfaces (policy §4: M3 body-large 16sp) ══ */
+
+/* Same content surfaces as the iOS bump: grouped-list rows plus the prose/value
+   text inside cards and form-dialog bodies read body-large 16/24. Controls keep
+   their explicit sizes (buttons 14/500 label-large, inputs text-sm, grid inner
+   block text-sm — inherited bumps never override explicit sizes). Small alert
+   dialogs keep body-medium supporting text. */
+:root[data-design-variant="material"] [data-ui="list-row"],
+:root[data-design-variant="material"] [data-ui="card"],
+:root[data-design-variant="material"] [data-ui="dialog"]:not([data-size="sm"]) [data-ui="dialog-body"] {
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+/* Data grids stay 14px (hard rule) — re-pin the grid FRAME so footer/entry
+   slots (outside the grid's own text-sm block) can't inherit 16 in a card. */
+:root[data-design-variant="material"] [data-ui="table"] {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+/* ══ P1.1 — PageHeader speaks M3: medium top app bar. Headline-small on its own
+   row condenses to a leading title-large in the bar; the bar tint switches
+   surface → subtle on scroll via the same [data-collapsed] hook. ══ */
+
+/* The whole app-bar container sits on surface; the 64dp BAR row carries the
+   on-scroll tint (by collapse time the headline row is out of view anyway). */
+:root[data-design-variant="material"] [data-ui="page-header"] { background: var(--color-surface); }
+:root[data-design-variant="material"] [data-ui="page-header-bar"] {
+  min-height: 4rem;
+  transition: background-color var(--duration-base) var(--ease-smooth);
+}
+:root[data-design-variant="material"] [data-ui="page-header"][data-collapsed="true"] [data-ui="page-header-bar"] {
+  background: var(--color-surface-container);
+}
+
+/* Headline: headline-small 24/32 regular (medium top app bar spec). */
+:root[data-design-variant="material"] [data-ui="page-header-heading"] {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* Condensed bar title: title-large 22/28, LEADING-aligned next to the nav icon
+   (M3 never centers) — the mirror leaves its centered overlay slot and becomes
+   a normal flex item after the back button. */
+:root[data-design-variant="material"] [data-ui="page-header-bar-title"] {
+  position: static;
+  transform: none;
+  max-width: none;
+  min-width: 0;
+  flex: 0 1 auto;
+  font-size: 1.375rem;
+  line-height: 1.75rem;
+  font-weight: 400;
+}
+
+/* Back = ← arrow icon button (48dp target); the text label lives in aria-label
+   only, so the accessible name survives hiding it. */
+:root[data-design-variant="material"] [data-ui="page-header-back"] {
+  min-width: 3rem;
+  min-height: 3rem;
+  justify-content: center;
+  border-radius: 999px;
+}
+:root[data-design-variant="material"] [data-ui="page-header-back-label"] { display: none; }
+:root[data-design-variant="material"] [data-ui="page-header-back-chevron"] { display: none; }
+:root[data-design-variant="material"] [data-ui="page-header-back-arrow"] { display: block; }
+
+/* ══ P1.2 — NavigationBar speaks M3: the navigation bar. 80dp targets on the
+   real surface-container step (P2.4), 64×32 secondary-container pill behind
+   the active glyph (tonal recipe: the P3 primary-container/on-primary-container
+   roles, which flip in dark and follow tenant branding), label-medium 12sp —
+   weight 500 + on-surface when active. ══ */
+:root[data-design-variant="material"] [data-ui="nav-bar"] {
+  background: var(--color-surface-container);
+  border-top-color: transparent;
+}
+:root[data-design-variant="material"] [data-ui="nav-bar-item"] {
+  height: 5rem;
+  gap: 0.25rem;
+}
+:root[data-design-variant="material"] [data-ui="nav-bar-label"] {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+/* The pill: tonal fill + on-container icon only while active. */
+:root[data-design-variant="material"] [data-ui="nav-bar-indicator"] {
+  height: 2rem;
+  width: 4rem;
+  border-radius: 999px;
+}
+:root[data-design-variant="material"] [data-ui="nav-bar-item"][data-active] [data-ui="nav-bar-indicator"] {
+  background: var(--color-primary-container);
+  color: var(--color-on-primary-container);
+}
+:root[data-design-variant="material"] [data-ui="nav-bar-item"][data-active] {
+  color: var(--color-text-main);
+}
+:root[data-design-variant="material"] [data-ui="nav-bar-item"][data-active] [data-ui="nav-bar-label"] {
+  font-weight: 500;
+  color: var(--color-text-main);
+}
+/* (Dark flip of the pill now comes from the --color-primary-container role itself.) */
+/* State layer on the pill (hover 8% via the label color, press 12%). */
+:root[data-design-variant="material"] [data-ui="nav-bar-item"]:hover [data-ui="nav-bar-indicator"] {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+:root[data-design-variant="material"] [data-ui="nav-bar-item"]:active [data-ui="nav-bar-indicator"] {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+:root[data-design-variant="material"] [data-ui="nav-bar-item"][data-active]:hover [data-ui="nav-bar-indicator"] {
+  background: color-mix(in srgb, var(--color-on-primary-container) 8%, var(--color-primary-container));
+}
+
+/* ══ Stage G — toast speaks Material 3 ══ */
+
+/* Toast — the M3 snackbar: INVERSE surface (light↔dark flip like the tooltip
+   above), 4dp radius, no severity tint — M3 snackbars are monochrome; the type
+   icon's SHAPE (plus role="alert"/"status") still carries severity. */
+:root[data-design-variant="material"] [data-ui="toast"] {
+  background: var(--color-text-main); color: var(--color-bg);
+  border-color: transparent; border-radius: 0.25rem;
+}
+/* The inline action rides inverse-primary: a light tint on the dark inverse
+   surface (flipped to a dark tint in dark mode, where the surface is light). */
+:root[data-design-variant="material"] [data-ui="toast-action"] { color: var(--color-primary-200); }
+:root[data-design-variant="material"].dark [data-ui="toast-action"] { color: var(--color-primary-700); }
+/* Snackbars sit bottom-LEADING in M3 — and must not cover the adaptive FAB,
+   which Material (alone) pins bottom-right. (The split divider needs nothing:
+   its hairline + `selection` hover accent are per-design tokens already.) */
+:root[data-design-variant="material"] [data-ui="toast-viewport"] { right: auto; left: 1rem; }

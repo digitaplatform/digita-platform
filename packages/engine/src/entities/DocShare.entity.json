@@ -1,0 +1,37 @@
+{
+  "name": "DocShare",
+  "module": "core",
+  "database": "identity",
+  "label": "Document Share",
+  "label_plural": "Document Shares",
+  "naming": { "strategy": "expression", "expression": "{entity}:{document_name}:{shared_with}" },
+  "is_submittable": false,
+  "track_changes": false,
+  "default_sort": { "field": "creation", "order": "desc" },
+  "hooks": {
+    "before_insert": "docshare/docshare.beforeSave",
+    "before_save": "docshare/docshare.beforeSave"
+  },
+  "fields": [
+    { "fieldname": "entity", "fieldtype": "Data", "label": "Entity", "required": true, "in_list_view": true, "in_standard_filter": true, "idx": 1 },
+    { "fieldname": "document_name", "fieldtype": "Data", "label": "Document", "required": true, "in_list_view": true, "idx": 2 },
+    { "fieldname": "shared_with", "fieldtype": "Data", "label": "Shared With", "description": "User id (email) in digita-auth.", "required": true, "in_list_view": true, "idx": 3 },
+    { "fieldname": "shared_with_name", "fieldtype": "Data", "label": "Shared With (Name)", "read_only": true, "description": "Denormalized display name, resolved read-only from the identity store at write time.", "in_list_view": true, "idx": 4 },
+    { "fieldname": "shared_by", "fieldtype": "Data", "label": "Shared By", "read_only": true, "description": "User id (email) of the sharer — stamped from the JWT claims.", "idx": 5 },
+    { "fieldname": "shared_by_name", "fieldtype": "Data", "label": "Shared By (Name)", "read_only": true, "description": "Denormalized display name of the sharer at write time (from JWT claims).", "idx": 6 },
+    { "fieldname": "cb_1", "fieldtype": "ColumnBreak", "idx": 7 },
+    { "fieldname": "can_read", "fieldtype": "Check", "label": "Can Read", "default": true, "idx": 8 },
+    { "fieldname": "can_write", "fieldtype": "Check", "label": "Can Write", "default": false, "idx": 9 },
+    { "fieldname": "can_share", "fieldtype": "Check", "label": "Can Share", "default": false, "idx": 10 },
+    { "fieldname": "expires_at", "fieldtype": "Datetime", "label": "Expires At", "idx": 11 },
+    { "fieldname": "notify", "fieldtype": "Check", "label": "Notify User", "default": true, "idx": 12 }
+  ],
+  "indexes": [
+    { "fields": ["entity", "document_name"], "name": "idx_doc" },
+    { "fields": ["shared_with"], "name": "idx_shared_with" }
+  ],
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1 },
+    { "role": "System User", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "if_owner": true }
+  ]
+}

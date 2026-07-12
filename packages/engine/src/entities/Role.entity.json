@@ -1,0 +1,52 @@
+{
+  "name": "Role",
+  "module": "core",
+  "database": "identity",
+  "label": "Role",
+  "label_plural": "Roles",
+  "naming": { "strategy": "by_field", "field": "name" },
+  "is_submittable": false,
+  "track_changes": true,
+  "title_field": "label",
+  "search_fields": ["name", "label"],
+  "default_sort": { "field": "label", "order": "asc" },
+  "hooks": {
+    "before_save": "role/role.beforeSave",
+    "after_insert": "role/role.afterInsert",
+    "after_delete": "role/role.afterDelete"
+  },
+  "fields": [
+    {
+      "fieldname": "name",
+      "fieldtype": "Data",
+      "label": "Code Name",
+      "required": true,
+      "unique": true,
+      "in_list_view": true,
+      "description": "Immutable code identifier referenced by user.roles and entity permissions. PascalCase.",
+      "regex": "^[A-Za-z][A-Za-z0-9 _-]*$",
+      "regex_message": "Role name must start with a letter and contain only letters, digits, spaces, hyphens or underscores.",
+      "idx": 1
+    },
+    {
+      "fieldname": "label",
+      "fieldtype": "Data",
+      "label": "Display Label",
+      "required": true,
+      "in_list_view": true,
+      "translatable": true,
+      "description": "Human-readable display name. Can be renamed without affecting references.",
+      "idx": 2
+    },
+    { "fieldname": "desk_access", "fieldtype": "Check", "label": "Desk Access", "default": true, "in_list_view": true, "idx": 3 },
+    { "fieldname": "disabled", "fieldtype": "Check", "label": "Disabled", "default": false, "in_list_view": true, "in_standard_filter": true, "idx": 4 },
+    { "fieldname": "is_custom", "fieldtype": "Check", "label": "Custom Role", "default": true, "read_only": true, "idx": 5 }
+  ],
+  "indexes": [
+    { "fields": ["name"], "name": "idx_name", "unique": true }
+  ],
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1 },
+    { "role": "System User", "level": 0, "select": 1, "read": 1 }
+  ]
+}

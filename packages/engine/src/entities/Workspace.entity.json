@@ -1,0 +1,44 @@
+{
+  "name": "Workspace",
+  "module": "core",
+  "database": "core",
+  "label": "Workspace",
+  "label_plural": "Workspaces",
+  "description": "Role-bound dashboard. An ordered list of presentation cards (number/chart/list/shortcut/links) that compose the View engine — each card points at a named view + section. App-agnostic; the engine stores `cards` as opaque JSON and never interprets a card kind.",
+  "icon": "layout-dashboard",
+  "naming": { "strategy": "user_set" },
+  "is_single": false,
+  "is_submittable": false,
+  "track_changes": true,
+  "title_field": "name",
+  "search_fields": ["_id", "name", "description"],
+  "default_sort": { "field": "priority", "order": "asc" },
+  "role_visibility_field": "roles",
+  "in_global_search": false,
+  "fields": [
+    { "fieldname": "sb_meta", "fieldtype": "SectionBreak", "label": "Metadata", "idx": 1 },
+    { "fieldname": "name", "fieldtype": "Data", "label": "Name", "required": true, "in_list_view": true, "idx": 2 },
+    { "fieldname": "description", "fieldtype": "SmallText", "label": "Description", "in_list_view": true, "idx": 3 },
+    { "fieldname": "module", "fieldtype": "Data", "label": "Module", "in_list_view": true, "in_standard_filter": true, "idx": 4 },
+    { "fieldname": "icon", "fieldtype": "Data", "label": "Icon", "description": "lucide icon name", "idx": 5 },
+    { "fieldname": "cb_meta", "fieldtype": "ColumnBreak", "idx": 6 },
+    { "fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": true, "in_list_view": true, "in_standard_filter": true, "idx": 7 },
+    { "fieldname": "priority", "fieldtype": "Int", "label": "Priority", "default": 100, "in_list_view": true, "description": "Lower wins when a user matches several default workspaces.", "idx": 8 },
+
+    { "fieldname": "sb_access", "fieldtype": "SectionBreak", "label": "Access", "idx": 10 },
+    { "fieldname": "roles", "fieldtype": "JSON", "label": "Visible to roles", "description": "string[] role names that may SEE this workspace. Empty/absent = all authenticated users.", "idx": 11 },
+    { "fieldname": "is_default_for_roles", "fieldtype": "JSON", "label": "Default for roles", "description": "string[] role names for whom this is the DEFAULT workspace.", "idx": 12 },
+    { "fieldname": "default_view", "fieldtype": "Data", "label": "Default View", "description": "View._id that view-bound cards inherit when their own `view` is omitted.", "idx": 13 },
+
+    { "fieldname": "sb_cards", "fieldtype": "SectionBreak", "label": "Cards", "idx": 20 },
+    { "fieldname": "cards", "fieldtype": "JSON", "label": "Cards", "required": true, "description": "WorkspaceCard[] (digita-shared contract). Opaque to the engine.", "idx": 21 }
+  ],
+  "indexes": [
+    { "fields": ["enabled"], "name": "idx_workspace_enabled" },
+    { "fields": ["priority"], "name": "idx_workspace_priority" }
+  ],
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1 },
+    { "role": "System User", "level": 0, "select": 1, "read": 1 }
+  ]
+}

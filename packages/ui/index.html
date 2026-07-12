@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Shared-singleton resolution for runtime-loaded plugins: maps react,
+         react-dom, react-router(+dom), and digita-plugins to the self-hosted
+         vendor ESM so the host and every plugin use ONE instance of each. The
+         build (vite inlineImportMap plugin) replaces the tag below with an INLINE
+         import map from public/import-map.json (external import maps via src are
+         unsupported by browsers). It MUST precede any module script; the inline
+         map needs CSP script-src to allow it (docker/nginx-ui.conf).
+         NOTE: keep no importmap-script literal in this comment — Vite would parse
+         it as a real tag and emit a duplicate, broken map. -->
+    <script type="importmap" src="/import-map.json"></script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#2563eb" />
+    <title>Digita</title>
+    <style>
+      /* Pre-mount paint so there is no white flash before React hydrates.
+         React's createRoot replaces #root (incl. this splash) on mount. */
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+      }
+      @media (prefers-color-scheme: dark) {
+        #app-splash { background: #0a0a0a; }
+      }
+      #app-splash svg {
+        width: 32px;
+        height: 32px;
+        color: #2563eb;
+        animation: app-splash-spin 0.7s linear infinite;
+      }
+      @keyframes app-splash-spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body class="bg-background text-textMain antialiased">
+    <div id="root">
+      <div id="app-splash">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" stroke-opacity="0.25" />
+          <path fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+        </svg>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

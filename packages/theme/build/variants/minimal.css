@@ -1,0 +1,430 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Minimal variant layer — scoped to :root[data-design-variant="minimal"].
+   Geist / shadcn language: flat surfaces, hairline borders, tight radii,
+   quiet neutral controls, one accent moment (the tint) for primary actions
+   and the focus ring. All rules key on a stable [data-ui] hook + emitted
+   vars only — color always arrives via the live tint (--color-primary-*),
+   never a hardcoded hue.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ══ Wave 1 — surfaces go flat (no glass, no gradients, hairlines carry) ══ */
+
+/* Cards — border + NO shadow is the resting state; only `elevated` may cast
+   a subtle shadow. Interactive cards answer with a stronger hairline, not
+   elevation. */
+:root[data-design-variant="minimal"] [data-ui="card"] {
+  background: var(--color-surface); border-color: var(--color-border); box-shadow: none;
+}
+:root[data-design-variant="minimal"] [data-ui="card"][data-variant="elevated"] { box-shadow: var(--shadow-sm); }
+:root[data-design-variant="minimal"] [data-ui="card"][data-variant="interactive"]:hover {
+  border-color: var(--color-border-strong); box-shadow: none;
+}
+
+/* Menus / popovers / listboxes / command palette — NO glass: solid surface,
+   1px hairline, subtle shadow. */
+:root[data-design-variant="minimal"] [data-ui="menu"],
+:root[data-design-variant="minimal"] [data-ui="popover"],
+:root[data-design-variant="minimal"] [data-ui="listbox"],
+:root[data-design-variant="minimal"] [data-ui="command-palette"] {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-card); box-shadow: var(--shadow-sm);
+}
+:root[data-design-variant="minimal"] [data-ui="command-palette-overlay"] {
+  background: rgba(0, 0, 0, 0.5); -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+
+/* Tooltip — solid inverse chip, tight radius, no blur. */
+:root[data-design-variant="minimal"] [data-ui="tooltip"] {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  background: var(--color-text-main); color: var(--color-bg);
+  border-color: transparent; border-radius: calc(var(--radius-input) - 2px);
+}
+
+/* Dialogs — solid panel on surface, hairline frame, restrained shadow; the
+   scrim is a plain black veil (no blur). Header/footer lose their dividers —
+   spacing groups the content (shadcn dialogs draw no rules). */
+:root[data-design-variant="minimal"] [data-ui="dialog"] {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: var(--shadow-md);
+}
+:root[data-design-variant="minimal"] [data-ui="dialog-overlay"] {
+  background: rgba(0, 0, 0, 0.5); -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+:root[data-design-variant="minimal"] [data-ui="dialog-header"] { border-bottom-color: transparent; }
+:root[data-design-variant="minimal"] [data-ui="dialog-header"] h2 { font-size: 1.125rem; font-weight: 600; letter-spacing: -0.01em; }
+:root[data-design-variant="minimal"] [data-ui="dialog-footer"] {
+  border-top-color: transparent; display: flex; justify-content: flex-end; gap: 0.5rem;
+}
+
+/* Topbar — flat surface bar with a hairline; no translucency. */
+:root[data-design-variant="minimal"] [data-ui="topbar"] {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+}
+
+/* ══ Wave 2 — controls speak shadcn ══ */
+
+/* Buttons — flat, weight 500, tight radius, NO gradient/shadow, no press
+   transform. Hierarchy: solid tint / subtle fill / hairline outline / ghost. */
+:root[data-design-variant="minimal"] [data-ui="button"],
+:root[data-design-variant="minimal"] [data-ui="icon-button"] {
+  font-weight: 500; background-image: none; box-shadow: none;
+}
+:root[data-design-variant="minimal"] [data-ui="button"] { min-height: 2.25rem; border-radius: var(--radius-btn); }
+:root[data-design-variant="minimal"] [data-ui="icon-button"] { min-width: 2.25rem; min-height: 2.25rem; }
+:root[data-design-variant="minimal"] [data-ui="button"][data-size="xs"],
+:root[data-design-variant="minimal"] [data-ui="button"][data-size="sm"] { min-height: 2rem; }
+:root[data-design-variant="minimal"] [data-ui="button"][data-size="lg"] { min-height: 2.5rem; }
+:root[data-design-variant="minimal"] [data-ui="button"]:active,
+:root[data-design-variant="minimal"] [data-ui="icon-button"]:active { transform: none; }
+
+/* Primary — the ONE accent moment: solid live tint. Hover dims toward bg
+   (shadcn's primary/90) — token math, works under any tint. */
+:root[data-design-variant="minimal"] [data-ui="button"][data-variant="primary"] {
+  background: var(--color-primary-600); color: var(--color-on-primary); border-color: transparent; box-shadow: none;
+}
+:root[data-design-variant="minimal"] [data-ui="button"][data-variant="primary"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-primary-600) 90%, var(--color-bg)); box-shadow: none;
+}
+
+/* Secondary — quiet subtle fill, neutral text. */
+:root[data-design-variant="minimal"] [data-ui="button"][data-variant="secondary"] {
+  background: var(--color-subtle); color: var(--color-text-main); border-color: transparent;
+}
+:root[data-design-variant="minimal"] [data-ui="button"][data-variant="secondary"]:hover:not(:disabled) {
+  background: var(--color-surface-container-high);
+}
+
+/* Outline — 1px hairline on transparent; hover fills subtle. */
+:root[data-design-variant="minimal"] [data-ui="button"][data-variant="outline"] {
+  background: transparent; border-color: var(--color-border); color: var(--color-text-main);
+}
+:root[data-design-variant="minimal"] [data-ui="button"][data-variant="outline"]:hover:not(:disabled) {
+  background: var(--color-subtle); border-color: var(--color-border);
+}
+
+/* Ghost — nothing until hover. */
+:root[data-design-variant="minimal"] [data-ui="button"][data-variant="ghost"],
+:root[data-design-variant="minimal"] [data-ui="icon-button"][data-variant="ghost"] {
+  background: transparent; border-color: transparent; color: var(--color-text-main);
+}
+:root[data-design-variant="minimal"] [data-ui="button"][data-variant="ghost"]:hover:not(:disabled),
+:root[data-design-variant="minimal"] [data-ui="icon-button"][data-variant="ghost"]:hover:not(:disabled) {
+  background: var(--color-subtle);
+}
+
+/* Danger — solid status red, flat. */
+:root[data-design-variant="minimal"] [data-ui="button"][data-variant="danger"] {
+  background: var(--color-error); color: var(--color-on-error); border-color: transparent; box-shadow: none;
+}
+:root[data-design-variant="minimal"] [data-ui="button"][data-variant="danger"]:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-error) 90%, var(--color-bg)); box-shadow: none;
+}
+
+/* Inputs / Select — clean 1px bordered fields, transparent fill on the
+   surface, tight radius. Emphasis on focus comes from the ring (below). */
+:root[data-design-variant="minimal"] [data-ui="input"],
+:root[data-design-variant="minimal"] [data-ui="input-frame"],
+:root[data-design-variant="minimal"] [data-ui="select-trigger"] {
+  background: transparent; border-color: var(--color-border);
+  border-radius: var(--radius-input); box-shadow: none; min-height: 2.25rem;
+}
+:root[data-design-variant="minimal"] [data-ui="input-frame"] [data-ui="input"] {
+  background: transparent; border-color: transparent; box-shadow: none; min-height: 0;
+}
+:root[data-design-variant="minimal"] [data-ui="input"][data-invalid],
+:root[data-design-variant="minimal"] [data-ui="input-frame"][data-invalid],
+:root[data-design-variant="minimal"] [data-ui="select-trigger"][data-invalid] { border-color: var(--color-error); }
+:root[data-design-variant="minimal"] [data-ui="field-label"] { font-weight: 500; }
+
+/* Pointer focus stays quiet — only keyboard focus draws the ring (text
+   inputs match :focus-visible on any focus, so the caret field still rings). */
+:root[data-design-variant="minimal"] [data-ui="select-trigger"]:focus:not(:focus-visible) {
+  box-shadow: none; border-color: var(--color-border);
+}
+:root[data-design-variant="minimal"] [data-ui="button"]:focus:not(:focus-visible),
+:root[data-design-variant="minimal"] [data-ui="icon-button"]:focus:not(:focus-visible) {
+  box-shadow: none;
+}
+
+/* TextField — same flat chrome; shadcn has NO floating labels: pin the label
+   as a static caption above the field (same recipe as the iOS pin). */
+:root[data-design-variant="minimal"] [data-ui="textfield"] {
+  background: transparent; border-color: var(--color-border);
+  border-radius: var(--radius-input); box-shadow: none;
+  flex-wrap: wrap; padding-top: 0;
+}
+:root[data-design-variant="minimal"] [data-ui="textfield-label"] {
+  position: static; order: -1; transform: none; flex-basis: 100%;
+  font-size: 0.75rem; font-weight: 500; padding-top: 0.375rem;
+}
+:root[data-design-variant="minimal"] [data-ui="textfield-input"] {
+  background: transparent; padding-top: 0.25rem; padding-bottom: 0.5rem;
+}
+/* The label stays quiet on focus — no tint flash; the ring carries focus. */
+:root[data-design-variant="minimal"] [data-ui="textfield-input"]:focus ~ [data-ui="textfield-label"] {
+  color: var(--color-text-muted);
+}
+:root[data-design-variant="minimal"] [data-ui="textfield"][data-invalid] { border-color: var(--color-error); }
+
+/* Checkbox — 16px, crisp 4px corner, hairline off / solid tint on. */
+:root[data-design-variant="minimal"] [data-ui="checkbox"] {
+  height: 16px; width: 16px; border-radius: 4px; border: 1px solid var(--color-border-strong); box-shadow: none;
+}
+:root[data-design-variant="minimal"] [data-ui="checkbox-box"] { height: 16px; width: 16px; }
+:root[data-design-variant="minimal"] [data-ui="checkbox"]:checked {
+  background: var(--color-primary-600); border-color: var(--color-primary-600);
+}
+
+/* Switch — small 36×20 track, 16px flat white thumb, tint when on. */
+:root[data-design-variant="minimal"] [data-ui="switch"] {
+  height: 20px; width: 36px; border-radius: 999px; background: var(--color-neutral-200); border: none;
+}
+:root[data-design-variant="minimal"] [data-ui="switch"][aria-checked="true"] { background: var(--color-primary-600); }
+:root[data-design-variant="minimal"] [data-ui="switch-thumb"] {
+  height: 16px; width: 16px; transform: translateX(2px); background: #fff; box-shadow: none;
+}
+:root[data-design-variant="minimal"] [data-ui="switch"][aria-checked="true"] [data-ui="switch-thumb"] { transform: translateX(18px); }
+
+/* SegmentedControl — subtle track, flat surface thumb with a hairline
+   (definition without elevation), muted resting labels. */
+:root[data-design-variant="minimal"] [data-ui="segmented"] {
+  background: var(--color-subtle); padding: 2px; border-radius: calc(var(--radius-input) + 2px);
+}
+:root[data-design-variant="minimal"] [data-ui="segmented-item"] {
+  border-radius: calc(var(--radius-input) - 2px); font-weight: 500;
+}
+:root[data-design-variant="minimal"] [data-ui="segmented-item"]:not([data-selected]) { color: var(--color-text-muted); }
+:root[data-design-variant="minimal"] [data-ui="segmented-item"][data-selected] { color: var(--color-text-main); }
+:root[data-design-variant="minimal"] [data-ui="segmented-thumb"] {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius-input) - 2px); box-shadow: none;
+}
+
+/* Chip — quiet bordered pill; selected fills subtle + shows the check (state
+   reads from shape, not color). */
+:root[data-design-variant="minimal"] [data-ui="chip"]:not([data-color]) {
+  background: transparent; border-color: var(--color-border);
+}
+:root[data-design-variant="minimal"] [data-ui="chip"]:not([data-color])[data-selected] {
+  background: var(--color-subtle); border-color: var(--color-border-strong); color: var(--color-text-main);
+}
+:root[data-design-variant="minimal"] [data-ui="chip"][data-selected] [data-ui="chip-check"] { display: inline-flex; }
+
+/* Badge — quiet bordered, neutral text (status badges with data-color keep
+   their semantic paint). */
+:root[data-design-variant="minimal"] [data-ui="badge"]:not([data-color]) {
+  background: transparent; border: 1px solid var(--color-border); color: var(--color-text-main); font-weight: 500;
+}
+
+/* Menu / option rows — tight rows, subtle hover pill, hairline separators. */
+:root[data-design-variant="minimal"] [data-ui="menu-item"] {
+  min-height: 2rem; border-radius: calc(var(--radius-input) - 2px);
+}
+:root[data-design-variant="minimal"] [data-ui="menu-item"]:hover { background: var(--color-subtle); }
+:root[data-design-variant="minimal"] [data-ui="menu-item"] + [data-ui="menu-item"] {
+  border-top: 1px solid var(--color-border);
+}
+:root[data-design-variant="minimal"] [data-ui="option"] { min-height: 2rem; }
+:root[data-design-variant="minimal"] [data-ui="option"]:hover { background: var(--color-subtle); }
+:root[data-design-variant="minimal"] [data-ui="option"][aria-selected="true"] {
+  background: var(--color-subtle); color: var(--color-text-main);
+}
+:root[data-design-variant="minimal"] [data-ui="option"] + [data-ui="option"] {
+  border-top: 1px solid var(--color-border);
+}
+:root[data-design-variant="minimal"] [data-ui="command-palette-item"] {
+  border-radius: calc(var(--radius-input) - 2px);
+}
+:root[data-design-variant="minimal"] [data-ui="command-palette-item"][data-active] { background: var(--color-subtle); }
+
+/* ══ Wave 3 — lists, tables, tabs speak minimal ══ */
+
+/* Table — hairline frame, flat header on surface, sentence-case muted
+   headers (shadcn table voice). */
+:root[data-design-variant="minimal"] [data-ui="table"] { border-color: var(--color-border); box-shadow: none; }
+:root[data-design-variant="minimal"] [data-ui="table-header"] { background: var(--color-surface); }
+:root[data-design-variant="minimal"] [data-ui="table-header"] th,
+:root[data-design-variant="minimal"] [data-ui="table-header"] [role="columnheader"] {
+  text-transform: none; letter-spacing: normal; font-size: 0.8125rem; font-weight: 500; color: var(--color-text-muted);
+}
+
+/* List groups — one flat bordered block: rows collapse into it, hairlines
+   divide, only the group's ends keep the radius. */
+:root[data-design-variant="minimal"] [data-ui="list-row"] {
+  background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: none;
+}
+:root[data-design-variant="minimal"] [data-ui="list-group"] > * + * { margin-top: 0; }
+:root[data-design-variant="minimal"] [data-ui="list-group"] [data-ui="list-row"] { border-radius: 0; }
+:root[data-design-variant="minimal"] [data-ui="list-group"] > li + li [data-ui="list-row"] { border-top-width: 0; }
+:root[data-design-variant="minimal"] [data-ui="list-group"] > li:first-child [data-ui="list-row"] {
+  border-top-left-radius: var(--radius-card); border-top-right-radius: var(--radius-card);
+}
+:root[data-design-variant="minimal"] [data-ui="list-group"] > li:last-child [data-ui="list-row"] {
+  border-bottom-left-radius: var(--radius-card); border-bottom-right-radius: var(--radius-card);
+}
+:root[data-design-variant="minimal"] [data-ui="list-row"]:hover { background: var(--color-bg-hover); }
+
+/* Tabs — the muted underline: neutral foreground carries the active state
+   (no tint), so the strip reads identically under every tint. */
+:root[data-design-variant="minimal"] [data-ui="tabs"] { border-bottom: 1px solid var(--color-border); }
+:root[data-design-variant="minimal"] [data-ui="tab"] {
+  color: var(--color-text-muted); font-weight: 500; border-bottom: 2px solid transparent;
+}
+:root[data-design-variant="minimal"] [data-ui="tab"]:hover { color: var(--color-text-main); }
+:root[data-design-variant="minimal"] [data-ui="tab"][aria-selected="true"] {
+  color: var(--color-text-main); border-bottom-color: var(--color-text-main);
+}
+
+/* Swipe actions — flat slabs: neutral subtle for default, status red for
+   destructive. */
+:root[data-design-variant="minimal"] [data-ui="swipe-row-action"] { font-weight: 500; }
+:root[data-design-variant="minimal"] [data-ui="swipe-row-action"][data-variant="default"] {
+  background: var(--color-subtle); color: var(--color-text-main);
+}
+:root[data-design-variant="minimal"] [data-ui="swipe-row-action"][data-variant="danger"] {
+  background: var(--color-error); color: var(--color-on-error);
+}
+
+/* ══ Wave 4 — chrome & presentation speak minimal ══ */
+
+/* Toast — bordered solid surface (NOT inverse): same flat card language as
+   everything else; the action is the accent moment. */
+:root[data-design-variant="minimal"] [data-ui="toast"] {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  background: var(--color-surface); color: var(--color-text-main);
+  border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: var(--shadow-md);
+}
+:root[data-design-variant="minimal"] [data-ui="toast-action"] { color: var(--color-primary-600); font-weight: 500; }
+
+/* PageHeader — flat bar that blends with the page; the hairline materializes
+   only once content scrolls underneath. Tight, confident type. */
+:root[data-design-variant="minimal"] [data-ui="page-header-bar"] {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  background: var(--color-bg); border-bottom: 1px solid transparent;
+  transition: border-color var(--duration-base) var(--ease-smooth);
+}
+:root[data-design-variant="minimal"] [data-ui="page-header"][data-collapsed="true"] [data-ui="page-header-bar"] {
+  border-bottom-color: var(--color-border);
+}
+:root[data-design-variant="minimal"] [data-ui="page-header-heading"] {
+  font-size: 1.5rem; line-height: 2rem; font-weight: 600; letter-spacing: -0.02em;
+}
+:root[data-design-variant="minimal"] [data-ui="page-header-bar-title"] { font-size: 0.9375rem; font-weight: 600; }
+:root[data-design-variant="minimal"] [data-ui="page-header-back"] { color: var(--color-text-muted); }
+:root[data-design-variant="minimal"] [data-ui="page-header-back"]:hover { color: var(--color-text-main); }
+
+/* TabBar / NavigationBar (mobile) — flat surface bar + hairline; active is
+   the high-contrast foreground, the nav pill fills subtle (quiet, tint-free). */
+:root[data-design-variant="minimal"] [data-ui="tab-bar"],
+:root[data-design-variant="minimal"] [data-ui="nav-bar"] {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  background: var(--color-surface); border-top: 1px solid var(--color-border);
+}
+:root[data-design-variant="minimal"] [data-ui="tab-bar-item"],
+:root[data-design-variant="minimal"] [data-ui="nav-bar-item"] { color: var(--color-text-muted); }
+:root[data-design-variant="minimal"] [data-ui="tab-bar-item"][data-active],
+:root[data-design-variant="minimal"] [data-ui="nav-bar-item"][data-active] { color: var(--color-text-main); }
+:root[data-design-variant="minimal"] [data-ui="tab-bar-label"],
+:root[data-design-variant="minimal"] [data-ui="nav-bar-label"] { font-weight: 500; }
+:root[data-design-variant="minimal"] [data-ui="nav-bar-item"][data-active] [data-ui="nav-bar-indicator"] {
+  background: var(--color-subtle); color: var(--color-text-main);
+}
+
+/* ══ Focus — the shadcn offset ring: 2px bg gap + 2px live tint, on
+   keyboard focus. The ONE place (besides primary buttons) color always
+   appears. ══ */
+:root[data-design-variant="minimal"] [data-ui="button"]:focus-visible,
+:root[data-design-variant="minimal"] [data-ui="icon-button"]:focus-visible,
+:root[data-design-variant="minimal"] [data-ui="input"]:focus-visible,
+:root[data-design-variant="minimal"] [data-ui="select-trigger"]:focus-visible,
+:root[data-design-variant="minimal"] [data-ui="checkbox"]:focus-visible,
+:root[data-design-variant="minimal"] [data-ui="switch"]:focus-visible,
+:root[data-design-variant="minimal"] [data-ui="segmented-item"]:focus-visible,
+:root[data-design-variant="minimal"] [data-ui="chip"]:focus-visible,
+:root[data-design-variant="minimal"] [data-ui="tab"]:focus-visible,
+:root[data-design-variant="minimal"] [data-ui="input-frame"]:focus-within,
+:root[data-design-variant="minimal"] [data-ui="textfield"]:focus-within {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-primary-600);
+}
+/* The frame owns the ring — the inner input never doubles it. */
+:root[data-design-variant="minimal"] [data-ui="input-frame"] [data-ui="input"]:focus,
+:root[data-design-variant="minimal"] [data-ui="input-frame"] [data-ui="input"]:focus-visible {
+  box-shadow: none; border-color: transparent;
+}
+
+/* ══ Grid guard — editors inside a data grid stay chromeless and compact
+   (base.css melts them into the cell; this layer must not re-inflate or
+   re-ring them — same discipline as the ios/material guards). ══ */
+:root[data-design-variant="minimal"] [data-ui="table"] [data-ui="input"],
+:root[data-design-variant="minimal"] [data-ui="table"] [data-ui="input-frame"],
+:root[data-design-variant="minimal"] [data-ui="table"] [data-ui="select-trigger"] {
+  min-height: 0; background: transparent; border-color: transparent; box-shadow: none;
+}
+:root[data-design-variant="minimal"] [data-ui="table"] [data-ui="input"]:focus-visible,
+:root[data-design-variant="minimal"] [data-ui="table"] [data-ui="input-frame"]:focus-within,
+:root[data-design-variant="minimal"] [data-ui="table"] [data-ui="select-trigger"]:focus-visible {
+  box-shadow: none; border-color: transparent;
+}
+:root[data-design-variant="minimal"] [data-ui="table"] [data-ui="icon-button"] { min-width: 0; min-height: 0; }
+/* The ghost entry row keeps its base.css treatment (top hairline only). */
+:root[data-design-variant="minimal"] .grid-entry [data-ui="input-frame"] {
+  background: transparent; border-color: transparent; border-radius: 0; box-shadow: none;
+}
+:root[data-design-variant="minimal"] .grid-entry [data-ui="input-frame"]:focus-within {
+  box-shadow: none; background: var(--color-bg-hover);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Minimal DARK-MODE corrections — the tint ramp is mode-static, so the
+   variant layer swaps low-contrast steps itself (both `.dark` and
+   `data-design-variant` sit on <html>), exactly like ios.css/material.css.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Focus ring — primary-600 can sink into a dark bg under several tints;
+   primary-400 keeps the ring legible. The inner gap follows --color-bg. */
+:root[data-design-variant="minimal"].dark [data-ui="button"]:focus-visible,
+:root[data-design-variant="minimal"].dark [data-ui="icon-button"]:focus-visible,
+:root[data-design-variant="minimal"].dark [data-ui="input"]:focus-visible,
+:root[data-design-variant="minimal"].dark [data-ui="select-trigger"]:focus-visible,
+:root[data-design-variant="minimal"].dark [data-ui="checkbox"]:focus-visible,
+:root[data-design-variant="minimal"].dark [data-ui="switch"]:focus-visible,
+:root[data-design-variant="minimal"].dark [data-ui="segmented-item"]:focus-visible,
+:root[data-design-variant="minimal"].dark [data-ui="chip"]:focus-visible,
+:root[data-design-variant="minimal"].dark [data-ui="tab"]:focus-visible,
+:root[data-design-variant="minimal"].dark [data-ui="input-frame"]:focus-within,
+:root[data-design-variant="minimal"].dark [data-ui="textfield"]:focus-within {
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-primary-400);
+}
+
+/* Small solid tint fills rise a step too — under darker tints the 600 fill
+   of a 16px control sinks into the dark surface (ios/material make the same
+   move for their small controls). */
+:root[data-design-variant="minimal"].dark [data-ui="checkbox"]:checked {
+  background: var(--color-primary-400); border-color: var(--color-primary-400);
+}
+:root[data-design-variant="minimal"].dark [data-ui="switch"][aria-checked="true"] {
+  background: var(--color-primary-400);
+}
+
+/* Switch off-track — neutral-200 is a glaring light pill in dark. */
+:root[data-design-variant="minimal"].dark [data-ui="switch"]:not([aria-checked="true"]) {
+  background: var(--color-neutral-700);
+}
+
+/* Segmented thumb — dark surface barely separates from the subtle track;
+   neutral-700 lifts the thumb one visible step (the hairline retires). */
+:root[data-design-variant="minimal"].dark [data-ui="segmented-thumb"] {
+  background: var(--color-neutral-700); border-color: transparent;
+}
+
+/* Tinted text moments rise a step in dark (same move as the ring). */
+:root[data-design-variant="minimal"].dark [data-ui="toast-action"] { color: var(--color-primary-400); }
+
+/* The scrim deepens a touch so the flat, shadow-light panels still separate. */
+:root[data-design-variant="minimal"].dark [data-ui="dialog-overlay"],
+:root[data-design-variant="minimal"].dark [data-ui="command-palette-overlay"] {
+  background: rgba(0, 0, 0, 0.6);
+}

@@ -1,0 +1,13 @@
+{
+  "//": "Typecheck-only config that ALSO covers tests/ — the build tsconfig excludes",
+  "//2": "them (and vitest runs via esbuild without typechecking), so test type errors",
+  "//3": "would otherwise go unnoticed. Run via `pnpm typecheck`. No emit; rootDir is the",
+  "//4": "package root so test files outside src/ are allowed.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
+  "exclude": []
+}

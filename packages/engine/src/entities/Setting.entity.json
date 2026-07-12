@@ -1,0 +1,55 @@
+{
+  "name": "Setting",
+  "module": "core",
+  "database": "core",
+  "label": "Settings",
+  "is_single": true,
+  "reload_boot_on_write": true,
+  "naming": { "strategy": "user_set" },
+  "is_submittable": false,
+  "track_changes": true,
+  "fields": [
+    { "fieldname": "sb_locale", "fieldtype": "SectionBreak", "label": "Language & Locale", "idx": 1 },
+    {
+      "fieldname": "default_language",
+      "fieldtype": "Link",
+      "label": "Default Language",
+      "target": "Language",
+      "target_display": "native_name",
+      "target_filters": { "enabled": true },
+      "required": true,
+      "idx": 2
+    },
+    {
+      "fieldname": "fallback_language",
+      "fieldtype": "Link",
+      "label": "Fallback Language",
+      "target": "Language",
+      "target_display": "native_name",
+      "target_filters": { "enabled": true },
+      "required": true,
+      "idx": 3
+    },
+    { "fieldname": "allow_user_language", "fieldtype": "Check", "label": "Allow Users to Choose Language", "default": true, "idx": 4 },
+    { "fieldname": "sb_general", "fieldtype": "SectionBreak", "label": "General", "idx": 5 },
+    { "fieldname": "platform_name", "fieldtype": "Data", "label": "Platform Name", "default": "Digita Platform", "translatable": true, "idx": 6 },
+    { "fieldname": "timezone", "fieldtype": "Select", "options_source": "timezones", "label": "Timezone", "default": "UTC", "idx": 7 },
+    { "fieldname": "default_currency", "fieldtype": "Select", "options_source": "currencies", "label": "Currency", "description": "ISO 4217 currency code (e.g. EUR, USD) used to format amounts that carry no own currency. Optional — when unset, such amounts render without a currency symbol (the platform bakes in no currency).", "idx": 8 },
+    { "fieldname": "cb_2", "fieldtype": "ColumnBreak", "idx": 9 },
+    { "fieldname": "session_timeout_minutes", "fieldtype": "Int", "label": "Session Timeout (minutes)", "default": 480, "min_value": 5, "idx": 10 },
+    { "fieldname": "max_login_attempts", "fieldtype": "Int", "label": "Max Login Attempts", "default": 5, "min_value": 1, "idx": 11 },
+    { "fieldname": "sb_setup", "fieldtype": "SectionBreak", "label": "Setup", "idx": 20 },
+    {
+      "fieldname": "is_first_run",
+      "fieldtype": "Check",
+      "label": "First-run setup pending",
+      "default": true,
+      "description": "True for fresh installations until an app's setup wizard (or operator) flips it to false. Apps decide what to do with the flag — the platform only declares it.",
+      "idx": 21
+    }
+  ],
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1 },
+    { "role": "System User", "level": 0, "select": 1, "read": 1 }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "name": "@digitaplatform/theme",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Digita central design FOUNDATION (framework-agnostic, no React): design tokens as the single source of truth, generated theme.css (CSS variables light/dark + Inter fonts + resets) + a Tailwind preset from ONE transform, and a pure-DOM branding/theming runtime (applyBranding/applyMode). Consumed by every Digita frontend + plugin.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./preset": {
+      "types": "./dist/preset.d.ts",
+      "import": "./dist/preset.js"
+    },
+    "./theme.css": "./dist/theme.css",
+    "./fonts/*": "./dist/fonts/*"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/digitaplatform/digita-platform.git",
+    "directory": "packages/theme"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "scripts": {
+    "build": "tsc && node build/gen-css.mjs",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

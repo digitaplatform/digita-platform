@@ -1,0 +1,24 @@
+{
+  "name": "digita-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Digita open core: the engine, shared contracts, the plugin-SDK, ui and web, plus the base packages (theme, components, shared). Engine/ui/web land here in the big digitabase peel.",
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "build": "pnpm --filter @digitaplatform/shared build && pnpm --filter @digitaplatform/theme build && pnpm --filter @digitaplatform/components build && pnpm --filter @digitaplatform/plugins build && pnpm --filter @digitaplatform/engine build && pnpm --filter @digitaplatform/ui build:vendor && pnpm --filter @digitaplatform/ui build && pnpm --filter @digitaplatform/web build",
+    "build:shared": "pnpm --filter @digitaplatform/shared build",
+    "build:theme": "pnpm --filter @digitaplatform/theme build",
+    "build:components": "pnpm --filter @digitaplatform/components build",
+    "build:plugins": "pnpm --filter @digitaplatform/plugins build",
+    "build:engine": "pnpm --filter @digitaplatform/engine build",
+    "build:ui": "pnpm --filter @digitaplatform/ui build:vendor && pnpm --filter @digitaplatform/ui build",
+    "build:web": "pnpm --filter @digitaplatform/web build",
+    "test": "pnpm --filter @digitaplatform/engine test",
+    "clean": "pnpm -r clean"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=11.0.0"
+  }
+}

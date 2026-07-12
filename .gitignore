@@ -1,0 +1,23 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+
+# Next.js
+.next/
+next-env.d.ts
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Environment (env.ts loads .env/.env.development from the repo root)
+.env
+.env.*
+!.env.example
+
+# Generated build artifacts
+packages/ui/public/vendor/
+packages/ui/public/import-map.json
+packages/*/public/plugins/
+dist/csp-importmap-sha256.txt

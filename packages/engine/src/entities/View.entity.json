@@ -1,0 +1,62 @@
+{
+  "name": "View",
+  "module": "core",
+  "database": "core",
+  "label": "View",
+  "label_plural": "Views",
+  "description": "Declarative multi-collection read endpoint. Composes link/list/aggregate sections under a single anchor (or unanchored). Seeded from `<appDir>/views/**.view.json`; admin UI stores overrides in this collection. Served at `GET /api/v1/view/:viewName(/:rootName)?` by a single generic router.",
+  "icon": "layout-dashboard",
+  "naming": { "strategy": "user_set" },
+  "is_submittable": false,
+  "track_changes": true,
+  "title_field": "name",
+  "search_fields": ["_id", "name", "description"],
+  "default_sort": { "field": "_id", "order": "asc" },
+  "in_global_search": true,
+  "fields": [
+    { "fieldname": "sb_meta", "fieldtype": "SectionBreak", "label": "Metadata", "idx": 1 },
+    { "fieldname": "name", "fieldtype": "Data", "label": "Name", "required": true, "in_list_view": true, "idx": 2 },
+    { "fieldname": "description", "fieldtype": "SmallText", "label": "Description", "in_list_view": true, "idx": 3 },
+    { "fieldname": "cb_meta", "fieldtype": "ColumnBreak", "idx": 4 },
+    { "fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": true, "in_list_view": true, "in_standard_filter": true, "idx": 5 },
+    {
+      "fieldname": "anchored",
+      "fieldtype": "Check",
+      "label": "Anchored",
+      "default": true,
+      "description": "When true the view requires a `:rootName` URL segment naming a `source.entity` document.",
+      "idx": 6
+    },
+    {
+      "fieldname": "overridden",
+      "fieldtype": "Check",
+      "label": "Overridden",
+      "default": false,
+      "read_only": true,
+      "description": "Set true when admin UI edits a seeded view; boot skips re-seed for these.",
+      "idx": 7
+    },
+    { "fieldname": "sb_source", "fieldtype": "SectionBreak", "label": "Source", "idx": 10 },
+    { "fieldname": "source", "fieldtype": "JSON", "label": "Source", "description": "{ entity, param } — root entity and which `params[]` entry binds the URL :rootName.", "idx": 11 },
+    { "fieldname": "params", "fieldtype": "JSON", "label": "Parameters", "description": "Typed query-string parameters: [{ name, type, required?, default?, enum_values? }, ...]", "idx": 12 },
+    { "fieldname": "sb_limits", "fieldtype": "SectionBreak", "label": "Limits", "idx": 20 },
+    { "fieldname": "default_limit", "fieldtype": "Int", "label": "Default Section Limit", "default": 20, "idx": 21 },
+    { "fieldname": "max_limit", "fieldtype": "Int", "label": "Maximum Section Limit", "default": 200, "idx": 22 },
+    { "fieldname": "sb_sections", "fieldtype": "SectionBreak", "label": "Sections", "idx": 30 },
+    {
+      "fieldname": "sections",
+      "fieldtype": "JSON",
+      "label": "Sections",
+      "required": true,
+      "description": "Array of { key, kind, entity, ... } — discriminated by `kind` ∈ {link, list, aggregate}.",
+      "idx": 31
+    }
+  ],
+  "indexes": [
+    { "fields": ["enabled"], "name": "idx_view_enabled" }
+  ],
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1 },
+    { "role": "System User", "level": 0, "select": 1, "read": 1 }
+  ]
+}

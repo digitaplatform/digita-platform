@@ -1,0 +1,31 @@
+{
+  "name": "Language",
+  "module": "core",
+  "database": "core",
+  "label": "Language",
+  "label_plural": "Languages",
+  "naming": { "strategy": "by_field", "field": "code" },
+  "is_submittable": false,
+  "track_changes": true,
+  "title_field": "name",
+  "search_fields": ["name", "code"],
+  "default_sort": { "field": "name", "order": "asc" },
+  "fields": [
+    { "fieldname": "code", "fieldtype": "Data", "label": "Code", "required": true, "unique": true, "max_length": 10, "description": "ISO 639-1 code, e.g. en, de, tr", "in_list_view": true, "idx": 1 },
+    { "fieldname": "name", "fieldtype": "Data", "label": "Language Name", "required": true, "translatable": true, "in_list_view": true, "idx": 2 },
+    { "fieldname": "native_name", "fieldtype": "Data", "label": "Native Name", "required": true, "description": "Name in the language itself: Deutsch, Türkçe", "in_list_view": true, "idx": 3 },
+    { "fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": true, "in_list_view": true, "in_standard_filter": true, "idx": 4 },
+    { "fieldname": "direction", "fieldtype": "Select", "label": "Text Direction", "options": ["ltr", "rtl"], "default": "ltr", "idx": 5 },
+    { "fieldname": "cb_1", "fieldtype": "ColumnBreak", "idx": 6 },
+    { "fieldname": "date_format", "fieldtype": "Select", "label": "Date Format", "options": ["DD.MM.YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD/MM/YYYY"], "default": "YYYY-MM-DD", "idx": 7 },
+    { "fieldname": "time_format", "fieldtype": "Select", "label": "Time Format", "options": ["HH:mm", "hh:mm A"], "default": "HH:mm", "idx": 8 },
+    { "fieldname": "number_format", "fieldtype": "Select", "label": "Number Format", "options": ["#,###.##", "#.###,##", "# ###,##", "#'###.##"], "default": "#,###.##", "idx": 9 },
+    { "fieldname": "first_day_of_week", "fieldtype": "Select", "label": "First Day of Week", "options": ["Monday", "Sunday", "Saturday"], "default": "Monday", "idx": 10 },
+    { "fieldname": "flag_emoji", "fieldtype": "Data", "label": "Flag", "max_length": 10, "idx": 11 },
+    { "fieldname": "translation_coverage", "fieldtype": "Percent", "label": "Translation Coverage", "read_only": true, "idx": 12 }
+  ],
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1 },
+    { "role": "System User", "level": 0, "select": 1, "read": 1 }
+  ]
+}

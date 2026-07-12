@@ -1,0 +1,11 @@
+{
+  "//": "Typecheck config for the test suite. The main tsconfig only includes `src`",
+  "//2": "(browser app, no Node types). Tests run in node/jsdom and use node: builtins,",
+  "//3": "so they are typechecked here with @types/node added. Run via `pnpm typecheck`.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "allowJs": true
+  },
+  "include": ["src", "tests"]
+}

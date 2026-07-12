@@ -1,0 +1,42 @@
+@import "tailwindcss";
+/* Design FOUNDATION: CSS variables (light + .dark) + Inter fonts + resets. */
+@import "@digitaplatform/theme/theme.css";
+/* Brand themes (scoped to their .theme-* class; activated via WebSite.theme). */
+@import "../themes/digitaplatform/theme.css";
+
+/* Class-based dark mode (matches @digitaplatform/theme's `.dark` on <html>), so
+ * `dark:` utilities track the toggle, not the OS preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Bridge the @digitaplatform/theme runtime CSS variables into Tailwind v4 utilities.
+ * `inline` means the value is inlined into utilities (NOT re-emitted to :root),
+ * so the `.dark` overrides from theme.css flow through. Distinct token names
+ * avoid any clash with theme.css's own `--color-*` variables. A theme (see
+ * src/themes) may override the underlying @digita variables to restyle the site. */
+@theme inline {
+  --color-page: var(--color-bg);
+  --color-card: var(--color-surface);
+  --color-muted-bg: var(--color-subtle);
+  --color-hover: var(--color-bg-hover);
+  --color-glass: var(--color-surface-glass);
+  --color-line: var(--color-border);
+  --color-line-strong: var(--color-border-strong);
+  --color-fg: var(--color-text-main);
+  --color-fg-muted: var(--color-text-muted);
+  --color-primary: var(--color-primary-600);
+  --color-primary-strong: var(--color-primary-700);
+  --color-primary-soft: var(--color-primary-50);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-main);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}

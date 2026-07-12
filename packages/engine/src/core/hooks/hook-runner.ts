@@ -1,0 +1,407 @@
+import { resolve, join } from "path";
+import { pathToFileURL } from "url";
+import { existsSync } from "fs";
+import type { EntityDefinition, DelegationScope } from "@digitaplatform/shared";
+import type { BaseDocument } from "../document/base-document.js";
+import type { ResponseContext } from "../api/response-context.js";
+import type { ClientSession } from "mongodb";
+import type { MongoDBService } from "../database/mongodb-service.js";
+import type { EntityRegistry } from "../entity/entity-registry.js";
+import type { UserContext } from "../permissions/types.js";
+import { env } from "../config/env.js";
+import { createLogger } from "../logging/logger.js";
+
+const log = createLogger("hook-runner");
+
+/**
+ * True when a thrown value DECLARES an explicit integer 4xx `statusCode` (the
+ * shared `DeclaredClientError` convention). Such a throw is an EXPECTED business-
+ * rule / lifecycle rejection that the global error handler surfaces as a typed
+ * 4xx — not a server fault — so it should log at `warn`, not raise the `error`-
+ * level "Hook execution failed" server alarm. Mirrors the handler's own range
+ * check (400–499); a bare 500 or a non-integer stays at `error`.
+ */
+function declaresClientError(err: unknown): boolean {
+  const sc = (err as { statusCode?: unknown } | null | undefined)?.statusCode;
+  return typeof sc === "number" && Number.isInteger(sc) && sc >= 400 && sc <= 499;
+}
+
+/**
+ * Services available to hook functions.
+ * Hooks receive this as their third argument so they can do cross-entity
+ * lookups (read a related parent during a child save, write a side-effect
+ * doc on submit, etc.). Hooks that don't need these can ignore the argument.
+ */
+export interface HookServices {
+  db: MongoDBService;
+  registry: EntityRegistry;
+  // documentService wired later via setter to avoid a circular import
+  documentService?: unknown;
+  /** Present during transactional lifecycle events (before_submit / on_submit /
+   *  insert / update). Hook db calls MUST pass this session to participate. */
+  session?: ClientSession;
+  /** Params of the running action (dialog_fields values, job chunk _cursor).
+   *  Only present during action:* hooks invoked with params. */
+  actionParams?: Record<string, unknown>;
+  /** The user context that triggered the surrounding lifecycle event.
+   *  Present whenever DocumentService called the hook (insert / update /
+   *  submit / cancel / delete / runAction). Hooks that spawn side-effect
+   *  documents (e.g. an action creating a child doc, or on_submit posting a
+   *  linked ledger entry) should pass this through to documentService.insert so
+   *  audit trails reflect the real actor instead of an escalated "system" user. */
+  user?: UserContext;
+  /** True inside a `before_cancel` hook ONLY when the cancel is a cascade from a
+   *  parent doc's cancel (it joined the parent's transaction via sessionOverride),
+   *  not a direct API cancel. Lets a source-owned child (e.g. a doc's linked ledger
+   *  entry) refuse a DIRECT cancel while still allowing the parent-cancel cascade. */
+  cancelCascade?: boolean;
+  /** Mint a signed on-behalf delegation token for the ACTING user, bound to
+   *  `scope`, to drive a satellite service (e.g. render via digita-report). Present
+   *  only on action hooks reached through the API (the engine holds the user's live
+   *  JWT there). Throws loudly if AUTH_URL is unconfigured or no user token is
+   *  available — no silent fallback. Keeps the raw JWT inside the engine. */
+  mintDelegation?: (scope: DelegationScope) => Promise<string>;
+}
+
+// All hooks run SYNCHRONOUSLY and block the response: fire-and-forget / queued
+// execution is NOT wired (JOBS_* env is reserved, inert — see config/env.ts).
+// Hooks that spawn side-effect docs (e.g. an on_submit posting a ledger entry) do
+// so inline via documentService.insert(), participating in the parent transaction's
+// ClientSession, so the whole lifecycle commits or rolls back atomically.
+type HookFunction = (
+  doc: BaseDocument,
+  ctx?: ResponseContext,
+  services?: HookServices,
+) => Promise<void> | void;
+
+/** Merge per-call session + user into the platform-wide HookServices.
+ *  Returns the unmodified base services when neither is supplied so we
+ *  don't allocate a fresh object on every hook fire.
+ */
+function mergeServices(
+  base: HookServices | undefined,
+  session: ClientSession | undefined,
+  user: UserContext | undefined,
+): HookServices | undefined {
+  if (!base) return base;
+  if (!session && !user) return base;
+  return { ...base, session: session ?? base.session, user: user ?? base.user };
+}
+
+export class HookRunner {
+  private hooks: Map<string, Map<string, HookFunction>> = new Map();
+  private moduleDirs: string[] = [];
+  private loaded = false;
+  private services?: HookServices;
+
+  /** Inject platform services so hooks can do DB / registry / doc-service calls. */
+  setServices(services: HookServices): void {
+    this.services = services;
+  }
+
+  setDocumentService(documentService: unknown): void {
+    if (this.services) this.services.documentService = documentService;
+  }
+
+  /** Public accessor — handy for tests / admin tooling. */
+  getServices(): HookServices | undefined {
+    return this.services;
+  }
+
+  /**
+   * Load hook modules for all entities.
+   * Hook paths are defined in entity.hooks and resolve to TypeScript modules.
+   * @param moduleDirs — directories to search for hook modules (searched in order)
+   */
+  async loadHooks(entities: EntityDefinition[], moduleDirs?: string[]): Promise<void> {
+    this.moduleDirs = moduleDirs ?? [env.MODULES_DIR];
+    for (const entity of entities) {
+      if (!entity.hooks) continue;
+
+      const entityHooks = new Map<string, HookFunction>();
+
+      for (const [event, hookPath] of Object.entries(entity.hooks)) {
+        if (!hookPath || typeof hookPath !== "string") continue;
+        if (event === "on_field_change" || event === "computed") continue; // handled separately
+
+        try {
+          const fn = await this.loadHookFunction(hookPath);
+          if (fn) {
+            entityHooks.set(event, fn);
+            log.debug({ entity: entity.name, event, path: hookPath }, "Hook loaded");
+          }
+        } catch (err) {
+          log.error({ entity: entity.name, event, path: hookPath, err }, "Failed to load hook");
+        }
+      }
+
+      // Load field change hooks
+      if (entity.hooks.on_field_change) {
+        for (const [field, hookPath] of Object.entries(entity.hooks.on_field_change)) {
+          try {
+            const fn = await this.loadHookFunction(hookPath);
+            if (fn) {
+              entityHooks.set(`on_field_change:${field}`, fn);
+            }
+          } catch (err) {
+            log.error(
+              { entity: entity.name, field, path: hookPath, err },
+              "Failed to load field change hook",
+            );
+          }
+        }
+      }
+
+      // Load computed field hooks
+      if (entity.hooks.computed) {
+        for (const [field, hookPath] of Object.entries(entity.hooks.computed)) {
+          try {
+            const fn = await this.loadHookFunction(hookPath);
+            if (fn) {
+              entityHooks.set(`computed:${field}`, fn);
+            }
+          } catch (err) {
+            log.error(
+              { entity: entity.name, field, path: hookPath, err },
+              "Failed to load computed hook",
+            );
+          }
+        }
+      }
+
+      // Load action handlers (one per `actions[].action` name).
+      if (entity.hooks.actions) {
+        for (const [actionName, hookPath] of Object.entries(entity.hooks.actions)) {
+          try {
+            const fn = await this.loadHookFunction(hookPath);
+            if (fn) {
+              entityHooks.set(`action:${actionName}`, fn);
+            }
+          } catch (err) {
+            log.error(
+              { entity: entity.name, actionName, path: hookPath, err },
+              "Failed to load action hook",
+            );
+          }
+        }
+      }
+
+      if (entityHooks.size > 0) {
+        this.hooks.set(entity.name, entityHooks);
+      }
+    }
+
+    this.loaded = true;
+    log.info({ total_entities: this.hooks.size }, "Hooks loaded");
+  }
+
+  /**
+   * Run a lifecycle hook for an entity.
+   */
+  async run(
+    doctype: string,
+    event: string,
+    doc: BaseDocument,
+    ctx?: ResponseContext,
+    session?: ClientSession,
+    user?: UserContext,
+    extra?: Partial<HookServices>,
+  ): Promise<void> {
+    const entityHooks = this.hooks.get(doctype);
+    if (!entityHooks) return;
+
+    const fn = entityHooks.get(event);
+    if (!fn) return;
+
+    const merged = mergeServices(this.services, session, user);
+    const services = extra && merged ? { ...merged, ...extra } : merged;
+
+    try {
+      await fn(doc, ctx, services);
+      log.debug({ doctype, event, name: doc._id }, "Hook executed");
+    } catch (err) {
+      // A declared-4xx throw is an expected client-side rejection (surfaced as a
+      // typed 4xx by the global error handler), not a server fault — log it at
+      // warn to avoid false server alarms. Anything else stays at error.
+      if (declaresClientError(err)) {
+        log.warn({ doctype, event, name: doc._id, err }, "Hook execution failed");
+      } else {
+        log.error({ doctype, event, name: doc._id, err }, "Hook execution failed");
+      }
+      throw err; // Re-throw to abort the operation
+    }
+  }
+
+  /**
+   * Invoke an action handler by name. Returns whatever the handler returned
+   * (typically a JSON-shaped descriptor of what was created/changed). When
+   * no handler is registered for the action, returns `undefined` — the
+   * action route then sends back the doc itself, mirroring the pre-handler
+   * behaviour for actions that are effectively "no-op confirmations".
+   */
+  /** Whether a handler is registered for this meta-declared action — lets the
+   *  caller distinguish a genuinely handler-less action (a config gap) from a
+   *  handler that legitimately returns undefined. */
+  hasActionHandler(doctype: string, actionName: string): boolean {
+    return this.hooks.get(doctype)?.has(`action:${actionName}`) ?? false;
+  }
+
+  async runAction(
+    doctype: string,
+    actionName: string,
+    doc: BaseDocument,
+    ctx?: ResponseContext,
+    session?: ClientSession,
+    user?: UserContext,
+    params?: Record<string, unknown>,
+    extraServices?: Partial<HookServices>,
+  ): Promise<unknown> {
+    const entityHooks = this.hooks.get(doctype);
+    if (!entityHooks) return undefined;
+    const fn = entityHooks.get(`action:${actionName}`);
+    if (!fn) return undefined;
+
+    let services = mergeServices(this.services, session, user);
+    // Action params (dialog_fields values / job chunk cursor) travel on the
+    // per-call services view - handlers read `services.actionParams`.
+    if (params && Object.keys(params).length > 0) {
+      services = { ...(services ?? {}), actionParams: params } as HookServices;
+    }
+    // Per-call capabilities the API layer supplies (e.g. mintDelegation bound to
+    // the request's user JWT) — merged last so they ride the same services view.
+    if (extraServices) {
+      services = { ...(services ?? {}), ...extraServices } as HookServices;
+    }
+
+    try {
+      const result = await fn(doc, ctx, services);
+      log.debug({ doctype, action: actionName, name: doc._id }, "Action executed");
+      return result;
+    } catch (err) {
+      // Same rationale as `run`: a declared-4xx throw is an expected client-side
+      // rejection, not a server fault — log warn, else error.
+      if (declaresClientError(err)) {
+        log.warn({ doctype, action: actionName, name: doc._id, err }, "Action execution failed");
+      } else {
+        log.error({ doctype, action: actionName, name: doc._id, err }, "Action execution failed");
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Run field change hooks for changed fields. When called from inside a
+   * transaction, pass the active `session` so hook DB writes participate in
+   * the parent transaction.
+   */
+  async runFieldChangeHooks(
+    doctype: string,
+    doc: BaseDocument,
+    changedFields: string[],
+    ctx?: ResponseContext,
+    session?: ClientSession,
+    user?: UserContext,
+  ): Promise<void> {
+    const entityHooks = this.hooks.get(doctype);
+    if (!entityHooks) return;
+
+    const services = mergeServices(this.services, session, user);
+
+    for (const field of changedFields) {
+      const fn = entityHooks.get(`on_field_change:${field}`);
+      if (fn) {
+        await fn(doc, ctx, services);
+      }
+    }
+  }
+
+  /**
+   * Run computed field hooks. Receives `services` (with optional `session`)
+   * for parity with `run` and `runFieldChangeHooks`. Computed hooks are
+   * usually pure but may do read-only DB lookups (e.g. resolve a linked
+   * doc's price); the session keeps those reads consistent with the
+   * surrounding transaction.
+   *
+   * When the same handler is registered for multiple computed fields
+   * (e.g. one computeTotals function wired to subtotal + tax_amount +
+   * grand_total), it runs ONCE per save, not N×. The dedupe is by
+   * function reference — different handlers all run, in entity-JSON
+   * insertion order. Most handlers naturally cover several fields in
+   * one pass, so per-field invocation was wasteful (N× DB reads, N×
+   * the same total math).
+   */
+  async runComputedHooks(
+    doctype: string,
+    doc: BaseDocument,
+    ctx?: ResponseContext,
+    session?: ClientSession,
+    user?: UserContext,
+  ): Promise<void> {
+    const entityHooks = this.hooks.get(doctype);
+    if (!entityHooks) return;
+
+    const services = mergeServices(this.services, session, user);
+
+    const seen = new Set<HookFunction>();
+    for (const [key, fn] of entityHooks) {
+      if (!key.startsWith("computed:")) continue;
+      if (seen.has(fn)) continue;
+      seen.add(fn);
+      await fn(doc, ctx, services);
+    }
+  }
+
+  private async loadHookFunction(hookPath: string): Promise<HookFunction | null> {
+    // hookPath format: "module/entity/file.functionName"
+    // e.g., "accounting/invoice/invoice.validate"
+    const lastDot = hookPath.lastIndexOf(".");
+    if (lastDot === -1) return null;
+
+    const modulePath = hookPath.slice(0, lastDot);
+    const functionName = hookPath.slice(lastDot + 1);
+
+    // Try each module directory × each plausible extension. tsx (dev) and
+    // tsc-built dist (prod) need different extensions; rather than guess,
+    // try `.ts` first then `.js`. Convert the absolute path to a file://
+    // URL so dynamic import() works on Windows (Node ESM rejects raw
+    // backslash paths in import specifiers).
+    const extensions = [".ts", ".js"];
+    for (const dir of this.moduleDirs) {
+      for (const ext of extensions) {
+        const fullPath = resolve(dir, `${modulePath}${ext}`);
+        // A legitimately-absent candidate → try the next dir/ext. Checking the
+        // file on disk (rather than discriminating the import() error code) is
+        // deterministic and runtime-independent. Once the file EXISTS, any import
+        // failure is a REAL breakage (syntax error, broken transitive import,
+        // stale/half-built .js) that previously silently DISABLED the hook —
+        // including validation and GL/stock posting — with only a debug log.
+        if (!existsSync(fullPath)) continue;
+        const importUrl = pathToFileURL(fullPath).href;
+        try {
+          const module = await import(importUrl);
+          const fn = module[functionName];
+          if (typeof fn === "function") {
+            return fn as HookFunction;
+          }
+          log.warn(
+            { path: fullPath, function: functionName },
+            "Hook module loaded but function not exported",
+          );
+        } catch (err) {
+          // Surface it loudly and rethrow so the caller's per-hook catch logs it
+          // at error level (boot still proceeds; sibling hooks still register).
+          log.error(
+            { path: fullPath, function: functionName, err },
+            "Hook module failed to load (broken import / syntax error) — hook disabled",
+          );
+          throw err;
+        }
+      }
+    }
+
+    // Module doesn't exist in any dir — not an error during development
+    // (apps may declare hooks they haven't implemented yet).
+    log.debug({ path: hookPath, dirs: this.moduleDirs }, "Hook module not found in any directory");
+    return null;
+  }
+}

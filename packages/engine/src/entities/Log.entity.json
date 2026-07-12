@@ -1,0 +1,42 @@
+{
+  "name": "Log",
+  "module": "core",
+  "database": "logs",
+  "label": "Log",
+  "label_plural": "Logs",
+  "naming": { "strategy": "auto_increment", "prefix": "LOG-", "pad_length": 8 },
+  "is_submittable": false,
+  "is_log": true,
+  "track_changes": false,
+  "default_sort": { "field": "creation", "order": "desc" },
+  "fields": [
+    {
+      "fieldname": "action",
+      "fieldtype": "Select",
+      "label": "Action",
+      "options": ["Created", "Updated", "Submitted", "Cancelled", "Deleted", "Amended", "Shared", "Login", "Logout", "Password Changed", "Import", "Export"],
+      "required": true,
+      "in_list_view": true,
+      "in_standard_filter": true,
+      "idx": 1
+    },
+    { "fieldname": "entity", "fieldtype": "Data", "label": "Entity", "in_list_view": true, "in_standard_filter": true, "idx": 2 },
+    { "fieldname": "document_name", "fieldtype": "Data", "label": "Document", "in_list_view": true, "idx": 3 },
+    { "fieldname": "user", "fieldtype": "Data", "label": "User", "description": "User id (email) in digita-auth — the actor from the JWT claims.", "in_list_view": true, "in_standard_filter": true, "idx": 4 },
+    { "fieldname": "user_name", "fieldtype": "Data", "label": "User Name", "read_only": true, "description": "Denormalized display name of the actor at write time (from JWT claims).", "in_list_view": true, "idx": 5 },
+    { "fieldname": "cb_1", "fieldtype": "ColumnBreak", "idx": 6 },
+    { "fieldname": "ip_address", "fieldtype": "Data", "label": "IP Address", "idx": 7 },
+    { "fieldname": "details", "fieldtype": "JSON", "label": "Details", "idx": 8 },
+    { "fieldname": "summary", "fieldtype": "Data", "label": "Summary", "idx": 9 }
+  ],
+  "indexes": [
+    { "fields": ["entity", "document_name"], "name": "idx_document" },
+    { "fields": ["user"], "name": "idx_user" },
+    { "fields": ["action"], "name": "idx_action" },
+    { "fields": ["creation"], "name": "idx_ttl", "expireAfterSeconds": 7776000 }
+  ],
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1 },
+    { "role": "System User", "level": 0, "select": 1, "read": 1, "if_owner": true }
+  ]
+}

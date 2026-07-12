@@ -1,0 +1,29 @@
+{
+  "name": "UserPreference",
+  "module": "core",
+  "database": "core",
+  "label": "User Preference",
+  "label_plural": "User Preferences",
+  "description": "Generic per-user key-value settings store (theme mode, density, and any future per-user UI/setting that should ROAM across devices — distinct from device-local localStorage). One row per (owner, pref_key), enforced by a unique index; the client upserts by that pair. Personal: every op is if_owner, so a user only ever reads/writes their own preferences (Administrator bypasses). Named saved list views live in their own richer entity, ListPreference, NOT here.",
+  "icon": "settings",
+  "naming": { "strategy": "uuid" },
+  "is_single": false,
+  "is_submittable": false,
+  "track_changes": false,
+  "title_field": "pref_key",
+  "search_fields": ["pref_key"],
+  "default_sort": { "field": "pref_key", "order": "asc" },
+  "in_global_search": false,
+  "fields": [
+    { "fieldname": "pref_key", "fieldtype": "Data", "label": "Key", "required": true, "in_list_view": true, "in_standard_filter": true, "idx": 1 },
+    { "fieldname": "value", "fieldtype": "Text", "label": "Value", "idx": 2 },
+    { "fieldname": "owner_name", "fieldtype": "Data", "label": "Owner", "read_only": true, "in_list_view": true, "idx": 3 }
+  ],
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1 },
+    { "role": "System User", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1, "if_owner": true }
+  ],
+  "indexes": [
+    { "fields": ["owner", "pref_key"], "name": "idx_userpref_owner_key", "unique": true }
+  ]
+}
