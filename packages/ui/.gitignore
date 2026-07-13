@@ -9,3 +9,4 @@ dist-ssr
 public/vendor/
 public/plugins/
 public/import-map.json
+public/plugins-premium/

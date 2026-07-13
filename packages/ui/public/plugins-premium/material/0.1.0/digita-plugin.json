@@ -1,9 +1,0 @@
-{
-  "id": "material",
-  "type": "design",
-  "tier": "premium",
-  "sdk": "^0.1.0",
-  "entry": "material.css",
-  "displayName": "Material 3",
-  "variant": "material"
-}
