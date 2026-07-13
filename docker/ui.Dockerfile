@@ -12,19 +12,22 @@
 #   /            → this SPA
 # (see the digita-deploy digita-ui chart ingress).
 #
-# PLUGIN DELIVERY: this image bakes the STAGED plugin artifacts into the SPA
-# web root. tools/plugin-mock/stage-plugins.mjs stages the set pinned in
-# plugins.lock.json into packages/ui/public:
-#   public/plugins/<id>/<ver>/<entry> + /plugins/index.json  (free — nginx-static)
-#   public/plugins-premium/<id>/<ver>/<entry>                (premium — engine-gated)
+# PLUGIN DELIVERY: this image bakes ONLY the FREE staged plugin artifacts into
+# the SPA web root. tools/plugin-mock/stage-plugins.mjs stages the set pinned in
+# plugins.lock.json, splitting the two tiers by DESTINATION so premium bytes can
+# never enter this image's web root:
+#   packages/ui/public/plugins/<id>/<ver>/<entry> + /plugins/index.json
+#                                       (free    — nginx-static, baked into this image)
+#   <repoRoot>/staged-premium/<id>/<ver>/<entry>
+#                                       (premium — OUTSIDE this build context;
+#                                        mounted by the ENGINE image/chart)
 # The host joins GET /api/v1/plugins (composition + entitlements) with
 # /plugins/index.json (inventory) and loads each plugin by type (component →
 # dynamic import, design → <link rel="stylesheet">). Premium bytes are NEVER
-# served by nginx: the engine streams them at /api/v1/plugin-assets/... from
-# PLUGINS_PREMIUM_DIR (engine env — owned by the engine image/chart, which
-# must point it at a copy of the staged plugins-premium dir) after verifying
-# the tenant's license entitlements. A community-tier ui image (the default,
-# see PLUGIN_TIER below) therefore ships NO premium bytes at all.
+# served by nginx and NEVER ride in this image: the engine streams them at
+# /api/v1/plugin-assets/... from PLUGINS_PREMIUM_DIR (engine env — owned by the
+# engine image/chart, which points it at the staged-premium dir) after verifying
+# the tenant's license entitlements. This ui image ALWAYS ships free-only.
 #
 # Registry auth: the build pipeline writes an authenticated .npmrc
 # (@digitaplatform scope → GitHub Packages + read token) into the build-context
@@ -86,14 +89,18 @@ COPY docker/verify-plugin-stage.mjs docker/
 # digita-plugins-premium) which live OUTSIDE this build context, so it cannot
 # run in here. Two supported paths:
 #   PLUGINS_SOURCE=prestaged (default): staging already ran on the HOST
-#     (`node tools/plugin-mock/stage-plugins.mjs --local`) and the staged tree
-#     entered via `COPY packages/ui/` above. public/plugins/ is GITIGNORED —
-#     a fresh clone must run the staging before `docker build`.
+#     (`node tools/plugin-mock/stage-plugins.mjs --local`) and the FREE staged
+#     tree (public/plugins/) entered via `COPY packages/ui/` above. Premium was
+#     staged to <repoRoot>/staged-premium/ — OUTSIDE this build context — so it
+#     is intentionally absent here (engine-mounted; see PLUGIN DELIVERY). Both
+#     staged trees are GITIGNORED — a fresh clone must run staging before build.
 #   PLUGINS_SOURCE=registry: stage inside the build via `npm pack` from the
-#     registry (--registry mode; auth via the bind-mounted .npmrc).
-# Either way the staged tree is then verified against the inventory (files
-# exist, sha384 integrity matches, free/premium URL shapes correct) so a
-# broken/partial stage fails the build here, not at runtime.
+#     registry (--registry mode; auth via the bind-mounted .npmrc). Premium lands
+#     in /app/staged-premium and is likewise ignored by this free-only image.
+# Either way the FREE staged tree is then verified against the inventory (files
+# exist, sha384 integrity matches, free/premium URL shapes correct, and NO
+# premium bytes in the web root) so a broken/partial stage fails the build here,
+# not at runtime.
 # WITH_PLUGINS=0 (emergency escape hatch, also honoured by the deploy guard
 # below) skips staging entirely and ships a plugin-less image.
 ARG WITH_PLUGINS=1
@@ -114,7 +121,7 @@ RUN --mount=type=bind,source=.npmrc,target=/root/.npmrc \
       echo "  or build with --build-arg PLUGINS_SOURCE=registry (published packages + .npmrc)."; \
       exit 1; \
     fi; \
-    node docker/verify-plugin-stage.mjs --staged
+    node docker/verify-plugin-stage.mjs --staged --require-no-premium
 
 # Order matters: shared → theme (tsc + gen-css) → components (React kit) →
 # plugins SDK (tsc) → build:vendor (vendor ESM singletons + import-map.json
@@ -133,21 +140,18 @@ RUN pnpm --filter @digitaplatform/shared build && \
 #  - the vendor ESM dir is populated,
 #  - WITH_PLUGINS=1 (default): dist/plugins/index.json — the inventory the host
 #    joins against GET /api/v1/plugins — made it into dist/, and EVERY free
-#    artifact it lists exists with a matching sha384 integrity
-#    (docker/verify-plugin-stage.mjs --dist). WITH_PLUGINS=0 is the emergency
-#    escape hatch: ship a plugin-less image (both plugin dirs stripped).
-#  - PLUGIN_TIER=community (default): dist/plugins-premium is STRIPPED before
-#    the nginx COPY and asserted empty/absent — a free image ships NO premium
-#    bytes. Premium CSS/JS reaches the browser ONLY via the engine's gated
-#    /api/v1/plugin-assets/... route (streamed from PLUGINS_PREMIUM_DIR — an
-#    ENGINE env owned by the engine image/chart; it must point at a copy of
-#    the staged plugins-premium dir). Any other PLUGIN_TIER value keeps
-#    dist/plugins-premium in the image purely as an extraction source for that
-#    engine mount — nginx still refuses to serve it (see docker/nginx-ui.conf).
+#    artifact it lists exists with a matching sha384 integrity. This ui image is
+#    ALWAYS free-only: dist/plugins-premium is stripped (a no-op — premium was
+#    staged to <repoRoot>/staged-premium, OUTSIDE this build context) and the
+#    ABSENCE of premium bytes is asserted (verify-plugin-stage.mjs --dist
+#    --require-no-premium). Premium CSS/JS reaches the browser ONLY via the
+#    engine's gated /api/v1/plugin-assets/... route (streamed from
+#    PLUGINS_PREMIUM_DIR — an ENGINE env owned by the engine image/chart; it
+#    points at the staged-premium dir). WITH_PLUGINS=0 is the emergency escape
+#    hatch: ship a plugin-less image (both plugin dirs stripped).
 #  - no browser-breaking shims leaked into the host or plugin bundles (a throwing
 #    dynamic-require or unreplaced process.env/jsxDEV = a deploy-only white screen).
 # (WITH_PLUGINS is declared before the staging step above and stays in scope.)
-ARG PLUGIN_TIER=community
 RUN set -eu; \
     grep -q '<script type="importmap">' packages/ui/dist/index.html \
       || { echo "ERROR: import-map not inlined into dist/index.html"; exit 1; }; \
@@ -158,12 +162,8 @@ RUN set -eu; \
     if [ "$WITH_PLUGINS" = "1" ]; then \
       test -s packages/ui/dist/plugins/index.json \
         || { echo "ERROR: dist/plugins/index.json (plugin inventory) missing — staging did not reach dist/"; exit 1; }; \
-      if [ "$PLUGIN_TIER" = "community" ]; then \
-        rm -rf packages/ui/dist/plugins-premium; \
-        node docker/verify-plugin-stage.mjs --dist --require-no-premium; \
-      else \
-        node docker/verify-plugin-stage.mjs --dist; \
-      fi; \
+      rm -rf packages/ui/dist/plugins-premium; \
+      node docker/verify-plugin-stage.mjs --dist --require-no-premium; \
     else \
       echo "WITH_PLUGINS=0: shipping a plugin-less image (emergency escape hatch)"; \
       rm -rf packages/ui/dist/plugins packages/ui/dist/plugins-premium; \

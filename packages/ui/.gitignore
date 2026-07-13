@@ -9,4 +9,5 @@ dist-ssr
 public/vendor/
 public/plugins/
 public/import-map.json
-public/plugins-premium/
+# (premium is no longer staged under the web root — it lives in
+#  <repoRoot>/staged-premium/, gitignored at the platform root)
