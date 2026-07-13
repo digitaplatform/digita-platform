@@ -126,9 +126,16 @@ export default defineConfig(({ command, mode }) => {
     ...(isBuild ? { optimizeDeps: { exclude: SHARED_EXTERNALS } } : {}),
     server: {
       port: 5174,
-      // Allow the dev server to serve plugin source from the monorepo root
-      // (digita-plugins/*) — needed for the dev plugin-source glob in registry.tsx.
-      fs: { allow: [searchForWorkspaceRoot(process.cwd())] },
+      // Allow the dev server to serve plugin source from the sibling plugin repos
+      // (digita-plugins-community/* and digita-plugins-premium/*) — needed for the
+      // dev plugin-source glob in registry.tsx.
+      fs: {
+        allow: [
+          searchForWorkspaceRoot(process.cwd()),
+          path.resolve(__dirname, '../../../digita-plugins-community'),
+          path.resolve(__dirname, '../../../digita-plugins-premium'),
+        ],
+      },
       // Path-based routing mirrors the prod ingress (per-app single origin):
       // auth flows go to the digita-auth IdP, everything else to the engine.
       // First match wins, so /api/v1/auth must precede /api. httpOnly session

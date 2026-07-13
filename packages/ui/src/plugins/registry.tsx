@@ -19,7 +19,10 @@ export function registerPlugin(plugin: FrontendPlugin): void {
 // extracted by Vite but the import.meta.env.DEV guard tree-shakes it (and the
 // plugin sources) out of the production build, which keeps using the manifest URL.
 const devPluginSources: Record<string, () => Promise<unknown>> = import.meta.env.DEV
-  ? import.meta.glob('../../../digita-plugins/plugins/*/src/index.tsx')
+  ? import.meta.glob([
+      '../../../../../digita-plugins-community/plugins/*/src/index.tsx',
+      '../../../../../digita-plugins-premium/plugins/*/src/index.tsx',
+    ])
   : {};
 
 function devSourceLoader(id: string): (() => Promise<unknown>) | undefined {
