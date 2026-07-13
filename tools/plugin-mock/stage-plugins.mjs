@@ -7,8 +7,9 @@
  * computes a sha384 SRI integrity for the entry artifact, and copies the
  * artifact + manifest into the version-addressed staged web dirs:
  *
- *   free    -> packages/ui/public/plugins/<id>/<version>/           (open nginx /plugins)
- *   premium -> packages/ui/public/plugins-premium/<id>/<version>/   (served gated by the engine)
+ *   free    -> packages/ui/public/plugins/<id>/<version>/   (open nginx /plugins)
+ *   premium -> staged-premium/<id>/<version>/  (repo root, OUTSIDE the web root;
+ *              served gated by the engine via /api/v1/plugin-assets)
  *
  * Finally emits the inventory at packages/ui/public/plugins/index.json with
  * same-origin URLs: free entries under /plugins/..., premium entries under
@@ -43,7 +44,10 @@ const lockPath = path.join(platformRoot, 'plugins.lock.json');
 
 const publicDir = path.join(platformRoot, 'packages', 'ui', 'public');
 const freeStageBase = path.join(publicDir, 'plugins');
-const premiumStageBase = path.join(publicDir, 'plugins-premium');
+// Premium artifacts must NEVER live under the ui web root (nginx would serve
+// them openly, bypassing the license gate). They stage into a repo-root dir
+// that no web server serves; the engine streams them via /api/v1/plugin-assets.
+const premiumStageBase = path.join(platformRoot, 'staged-premium');
 const inventoryPath = path.join(freeStageBase, 'index.json');
 
 function fail(message) {

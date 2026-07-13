@@ -20,4 +20,5 @@ next-env.d.ts
 packages/ui/public/vendor/
 packages/ui/public/import-map.json
 packages/*/public/plugins/
+staged-premium/
 dist/csp-importmap-sha256.txt

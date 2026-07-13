@@ -257,11 +257,12 @@ export const env = {
   ),
   // Root of the engine-gated premium artifact store, streamed by
   // GET ${API_PREFIX}/plugin-assets/:id/:version/* ONLY for entitled ids.
-  // Defaults to the monorepo staging dir (packages/ui/public/plugins-premium);
-  // deployments point it at the mounted premium bundle (absolute path).
+  // Defaults to the repo-root staging dir (staged-premium/) — deliberately
+  // OUTSIDE packages/ui/public so nginx can never serve premium artifacts
+  // openly; deployments point it at the mounted premium bundle (absolute path).
   PLUGINS_PREMIUM_DIR: getEnv(
     "PLUGINS_PREMIUM_DIR",
-    resolve(monorepoRoot, "packages/ui/public/plugins-premium"),
+    resolve(monorepoRoot, "staged-premium"),
   ),
 
   // ─── PERMISSION SCOPE ────────────────────────────────

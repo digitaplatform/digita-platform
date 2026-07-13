@@ -55,7 +55,7 @@ vi.mock("../src/core/config/env.js", async () => {
     DIGITA_PLUGIN_LICENSE: "",
     DIGITA_PLUGIN_LICENSE_FILE: join(repoRoot, "tools", "plugin-mock", "dev-sample-license.jwt"),
     DIGITA_PLUGIN_LICENSE_PUBKEY_FILE: join(repoRoot, "tools", "plugin-mock", "keys", "dev-sample-ed25519-public.pem"),
-    PLUGINS_PREMIUM_DIR: join(repoRoot, "packages", "ui", "public", "plugins-premium"),
+    PLUGINS_PREMIUM_DIR: join(repoRoot, "staged-premium"),
   } };
 });
 vi.mock("../src/core/logging/logger.js", () => ({
