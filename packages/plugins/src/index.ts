@@ -43,6 +43,68 @@ export interface LayoutConfig {
   regions: Record<string, string>;
 }
 
+// ─── Typed plugin contract (v2, additive) ─────────────────────────────────
+// A plugin declares its TYPE (how the host integrates it) and its TIER (whether a
+// tenant may use it) — orthogonal axes. These are added ALONGSIDE the legacy
+// FrontendPlugin / PluginManifestEntry above; consumers migrate incrementally.
+
+/** How the host integrates a plugin — the discriminator every stage dispatches on.
+ *  Reserved values are declared now, handled when the first plugin of that type ships. */
+export type PluginType = 'component' | 'design';
+// reserved (future): 'data-source' | 'report' | 'workflow' | 'entity-pack'
+
+/** Commercial tier. Orthogonal to type: gates staging + activation, never integration. */
+export type PluginTier = 'community' | 'premium';
+
+/** A component plugin — today's FrontendPlugin, now carrying its discriminator. */
+export interface ComponentPlugin {
+  type: 'component';
+  id: string;
+  title?: string;
+  component: ComponentType; // rendered into a template Region, error-boundaried
+}
+
+/** A design plugin — a pure-CSS look applied via <html data-design>. Ships no React. */
+export interface DesignPlugin {
+  type: 'design';
+  id: string;
+  title?: string;
+  designId: string; // value written to the data-design attribute
+  cssUrl: string; // same-origin, version-addressed stylesheet URL
+}
+
+/** The discriminated set of runtime plugin objects — grows one member per type. */
+export type DigitaPlugin = ComponentPlugin | DesignPlugin;
+
+/** The `digita` manifest a plugin package ships (package.json block + dist/digita-plugin.json).
+ *  Read by the build-time staging step and validated in CI. */
+export interface PluginPackageManifest {
+  /** Stable slug — drives folder, package name @digitaplatform/<id>, served path, manifest id. */
+  id: string;
+  type: PluginType;
+  tier: PluginTier;
+  /** Semver range of @digitaplatform/plugins this artifact was built against. */
+  sdk: string;
+  /** Primary artifact inside dist/ (component: the ESM file, design: the CSS file). */
+  entry: string;
+  displayName: string;
+  /** Premium only: which offer/SKU sells it. */
+  sku?: string;
+}
+
+/** One entry of the TYPED per-tenant manifest the engine serves — coexists with the
+ *  legacy PluginManifestEntry during migration. */
+export type TypedPluginManifestEntry =
+  | { type: 'component'; id: string; version: string; tier: PluginTier; title?: string; url: string }
+  | { type: 'design'; id: string; version: string; tier: PluginTier; title?: string; designId: string; cssUrl: string };
+
+/** Runtime narrowing guard for a dynamically-imported module's plugin export. */
+export function isDigitaPlugin(v: unknown): v is DigitaPlugin {
+  if (!v || typeof v !== 'object' || !('type' in v)) return false;
+  const t = (v as { type: unknown }).type;
+  return t === 'component' || t === 'design';
+}
+
 // ─── Template definitions (declarative shell layout) ──────────────────────
 // A TemplateDefinition is PURE DATA: which regions exist, where each docks, its
 // size/chrome/collapse, and its responsive behavior. The host ships a single
