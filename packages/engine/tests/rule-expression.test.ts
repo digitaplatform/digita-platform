@@ -93,7 +93,7 @@ describe("rule-expression legit paths still work", () => {
 describe("stocktake rule mappings evaluate (C3)", () => {
   // Mirrors the shipped erp rule field_mappings after the C3 rewrite to
   // supported rule-expression syntax (see
-  // digitaapps/erp/stock/rules/stocktake-on-submit-emit-movements.rule.json).
+  // digita-apps/erp/stock/rules/stocktake-on-submit-emit-movements.rule.json).
   // Pre-fix these used $now/$root and unquoted string literals, so every
   // evaluation threw ("unexpected char: $") or resolved to undefined.
   const now = new Date("2026-07-05T10:00:00Z");

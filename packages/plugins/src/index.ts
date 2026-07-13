@@ -4,7 +4,7 @@ import type { ComponentType } from 'react';
  * A frontend plugin — a self-contained widget the host places into a template
  * region. The host knows NOTHING about what a plugin does (menu, dashboard,
  * notifications, …); a plugin fetches its own backend data and renders itself.
- * Built and shipped by an app (digitaapps/<app>/plugins), loaded by the host
+ * Built and shipped by an app (digita-apps/<app>/plugins), loaded by the host
  * at runtime; identified by a stable `id` the layout config references.
  *
  * NOTE: a plugin placed in a drawer-mode rail mounts TWICE on mobile — a

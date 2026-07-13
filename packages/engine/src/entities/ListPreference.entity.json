@@ -4,7 +4,7 @@
   "database": "core",
   "label": "Saved View",
   "label_plural": "Saved Views",
-  "description": "A named saved list view (filters + sort + columns + page size) for one entity, applied BY REFERENCE in digita-ui (?view=<id>; the URL stays clean until the user forks it by editing). Owner is stamped by the write pipeline (plain email id + denormalized owner_name). Visibility: private (owner only) | shared (shared_with_roles and/or shared_with_users) | everyone. Write/delete are if_owner (only the owner edits/deletes; Administrator bypasses); read is unconditional and the visible set is filtered by visibility (client + a view-scope query). is_default = the owner's auto-applied default for this entity; is_org_default = an Administrator-set fallback for users with no default of their own.",
+  "description": "A named saved list view (filters + sort + columns + page size) for one entity, applied BY REFERENCE in digita-platform/packages/ui (?view=<id>; the URL stays clean until the user forks it by editing). Owner is stamped by the write pipeline (plain email id + denormalized owner_name). Visibility: private (owner only) | shared (shared_with_roles and/or shared_with_users) | everyone. Write/delete are if_owner (only the owner edits/deletes; Administrator bypasses); read is unconditional and the visible set is filtered by visibility (client + a view-scope query). is_default = the owner's auto-applied default for this entity; is_org_default = an Administrator-set fallback for users with no default of their own.",
   "icon": "list-filter",
   "naming": { "strategy": "uuid" },
   "is_single": false,

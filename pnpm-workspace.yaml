@@ -2,7 +2,7 @@
 packages:
   - packages/*
 
-# Match digitabase/digitadesign supply-chain settings for deterministic installs.
+# Match digita-platform supply-chain settings for deterministic installs.
 minimumReleaseAge: 0
 
 # Dependencies allowed to run install/build scripts (pnpm 11 allowlist).

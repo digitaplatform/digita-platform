@@ -90,7 +90,7 @@ export function registerMetaRoutes(
   // far more common System User, plus service principals and — transitionally —
   // any token without a `tiers` claim) get the definition VERBATIM, because the
   // operator UI computes field/action visibility from entity.permissions +
-  // perm_level client-side (digita-ui/src/lib/permissions.ts, PrintMenu, ListPage,
+  // perm_level client-side (digita-platform/packages/ui/src/lib/permissions.ts, PrintMenu, ListPage,
   // evaluate-field). Only the EXTERNAL audience must not enumerate the internal
   // schema: its fields are limited to what it can read, the whole permissions[]
   // array (roles, scope, condition expressions) + states are stripped, and a

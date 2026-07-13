@@ -12,7 +12,7 @@ function secretsMatch(a: string, b: string): boolean {
 }
 
 /**
- * On-publish revalidation webhook. The engine app-hook (digitaapps/web) POSTs
+ * On-publish revalidation webhook. The engine app-hook (digita-apps/web) POSTs
  * here with the cache tags affected by a publish. Authenticated by a shared
  * secret so only the engine can purge. Body: `{ tags?: string[], paths?: string[] }`.
  */

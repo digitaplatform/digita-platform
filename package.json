@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Digita open core: the engine, shared contracts, the plugin-SDK, ui and web, plus the base packages (theme, components, shared). Engine/ui/web land here in the big digitabase peel.",
+  "description": "Digita open core: the engine, shared contracts, the plugin-SDK, ui and web, plus the base packages (theme, components, shared). Engine/ui/web land here as part of the digita-platform consolidation.",
   "packageManager": "pnpm@11.7.0",
   "scripts": {
     "build": "pnpm --filter @digitaplatform/shared build && pnpm --filter @digitaplatform/theme build && pnpm --filter @digitaplatform/components build && pnpm --filter @digitaplatform/plugins build && pnpm --filter @digitaplatform/engine build && pnpm --filter @digitaplatform/ui build:vendor && pnpm --filter @digitaplatform/ui build && pnpm --filter @digitaplatform/web build",

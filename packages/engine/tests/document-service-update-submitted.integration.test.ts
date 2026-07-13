@@ -273,7 +273,7 @@ describe("updateSubmitted — scalar band", () => {
 });
 
 // ─── standard update() hard-block — the source of truth the UI mirrors ───────
-// The operator UI (digita-ui) renders a submitted/cancelled submittable doc as
+// The operator UI (digita-platform/packages/ui) renders a submitted/cancelled submittable doc as
 // read-only (no Save, lock badge, disabled controls). That UI lock is defence-in-
 // depth over THIS service gate: the plain update() path — what the HTTP
 // PUT /resource/:doctype/:name calls — must itself refuse the edit. updateSubmitted

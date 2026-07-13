@@ -55,8 +55,8 @@ import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { existsSync } from "node:fs";
 
-// The web-content app now lives in the separate digitaapps repo. This is a
-// cross-repo integration test (engine + the web app): run it when digitaapps is
+// The web-content app now lives in the separate digita-apps repo. This is a
+// cross-repo integration test (engine + the web app): run it when digita-apps is
 // checked out as a sibling (local / integration), skip it in engine-only CI.
 const APPS_PRESENT = existsSync("../../../digita-apps/web");
 

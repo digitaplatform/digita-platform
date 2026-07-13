@@ -7,7 +7,7 @@ import { computeLayout, parseLayout } from '@/components/render/layout';
 
 /**
  * Fleet census — runs the auto-layout engine over the REAL entity fleet (engine
- * platform entities + the digitaapps/erp app) and proves its invariants hold on
+ * platform entities + the digita-apps/erp app) and proves its invariants hold on
  * every one, so a metadata change that would drop/reorder a field or wrongly
  * re-layout an authored form fails here. `computeLayout` is pure, so this needs no
  * DOM: it walks the JSON files and checks the derived tree.
@@ -102,10 +102,10 @@ function fleetChecks(label: string, dir: string) {
 
 describe('fleet census — engine entities', () => fleetChecks('engine', ENGINE_DIR));
 
-describe.skipIf(!existsSync(ERP_DIR))('fleet census — digitaapps/erp', () => fleetChecks('erp', ERP_DIR));
+describe.skipIf(!existsSync(ERP_DIR))('fleet census — digita-apps/erp', () => fleetChecks('erp', ERP_DIR));
 
 if (!existsSync(ERP_DIR)) {
   // digita-ui tests are not in the root CI gate; locally the sibling checkout is
   // always present, so keep the skip loud rather than silently green.
-  console.warn('[fleet-layout] digitaapps sibling checkout missing — ERP census SKIPPED');
+  console.warn('[fleet-layout] digita-apps sibling checkout missing — ERP census SKIPPED');
 }
