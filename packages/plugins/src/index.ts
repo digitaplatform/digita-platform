@@ -70,6 +70,7 @@ export interface DesignPlugin {
   id: string;
   title?: string;
   designId: string; // value written to the data-design attribute
+  variant: string; // value written to data-design-variant (the component-variant CSS layer)
   cssUrl: string; // same-origin, version-addressed stylesheet URL
 }
 
@@ -88,6 +89,8 @@ export interface PluginPackageManifest {
   /** Primary artifact inside dist/ (component: the ESM file, design: the CSS file). */
   entry: string;
   displayName: string;
+  /** design only: the value written to data-design-variant (component-variant CSS layer). */
+  variant?: string;
   /** Premium only: which offer/SKU sells it. */
   sku?: string;
 }
@@ -96,7 +99,7 @@ export interface PluginPackageManifest {
  *  legacy PluginManifestEntry during migration. */
 export type TypedPluginManifestEntry =
   | { type: 'component'; id: string; version: string; tier: PluginTier; title?: string; url: string }
-  | { type: 'design'; id: string; version: string; tier: PluginTier; title?: string; designId: string; cssUrl: string };
+  | { type: 'design'; id: string; version: string; tier: PluginTier; title?: string; designId: string; variant: string; cssUrl: string };
 
 /** Runtime narrowing guard for a dynamically-imported module's plugin export. */
 export function isDigitaPlugin(v: unknown): v is DigitaPlugin {
