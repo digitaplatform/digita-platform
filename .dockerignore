@@ -1,0 +1,36 @@
+# Docker build context excludes. The build context is the repo ROOT (both
+# docker/ui.Dockerfile and docker/engine.Dockerfile build from here).
+#
+# CRITICAL: dependencies are installed FRESH inside each image (pnpm install in
+# the deps stage). The host's node_modules are pnpm symlink farms pointing at the
+# ROOT node_modules/.pnpm store, which is NOT copied into the image — so if a host
+# node_modules rode along via `COPY packages/<x>/`, its symlinks would DANGLE and
+# clobber the image's clean install (tsc "Cannot find module ..."). Never ship
+# host node_modules into a multi-stage node image.
+node_modules
+**/node_modules
+
+# Build output — every package is rebuilt inside the image, in dependency order.
+**/dist
+**/dist-ssr
+
+# Generated plugin-runtime bits: the vendor ESM bundle + import-map are produced
+# by `build:vendor` INSIDE the image. The FREE staged plugin tree
+# (packages/ui/public/plugins/) is deliberately NOT ignored — the prestaged
+# docker path needs it in the context (see ui.Dockerfile).
+packages/ui/public/vendor
+packages/ui/public/import-map.json
+
+# Premium plugin bytes never belong in the ui image (they are engine-mounted).
+staged-premium
+
+# VCS, tooling, test and editor artifacts (context bloat / irrelevant to a build).
+.git
+.gitignore
+**/.vite
+**/.turbo
+**/coverage
+**/*.log
+**/.DS_Store
+.vscode
+.idea
