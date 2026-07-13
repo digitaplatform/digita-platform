@@ -20,13 +20,13 @@ export function registerPlugin(plugin: FrontendPlugin): void {
 // plugin sources) out of the production build, which keeps using the manifest URL.
 const devPluginSources: Record<string, () => Promise<unknown>> = import.meta.env.DEV
   ? import.meta.glob([
-      '../../../../../digita-plugins-community/plugins/*/src/index.tsx',
-      '../../../../../digita-plugins-premium/plugins/*/src/index.tsx',
+      '../../../../../digita-plugins-community/*/src/index.tsx',
+      '../../../../../digita-plugins-premium/*/src/index.tsx',
     ])
   : {};
 
 function devSourceLoader(id: string): (() => Promise<unknown>) | undefined {
-  const key = Object.keys(devPluginSources).find((p) => p.includes(`/plugins/${id}/src/`));
+  const key = Object.keys(devPluginSources).find((p) => p.includes(`/${id}/src/`));
   return key ? devPluginSources[key] : undefined;
 }
 
