@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "free": { "usermenu": "0.1.0" },
+  "premium": { "editorial": "0.1.0", "fluent": "0.1.0", "ios": "0.1.0", "material": "0.1.0" }
+}
