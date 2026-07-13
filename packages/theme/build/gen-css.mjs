@@ -353,22 +353,24 @@ for (const f of ['Inter-latin.woff2', 'Inter-latin-ext.woff2']) {
   else console.warn(`[theme] WARNING: font not found at ${src}`);
 }
 
-// ── Equality guard — re-baselined to the INK & LEDGER identity (ADR-V1), then
-//    the --color-primary-* / container entries re-baselined AGAIN for the ADR-V2
-//    tint decoupling: the bare-:root default primary is now the BLUE default
-//    tint = synthesizeRamp('#007AFF') (container roles: ramp 100/900 light,
-//    800/100 dark). Every NON-primary entry is byte-identical to the ADR-V1
-//    baseline. An INTENTIONAL token change must update EXPECTED here too, or
-//    the build fails; the guard catches UNINTENDED drift from the chosen design. ──
+// ── Equality guard — re-baselined for the PLUGIN-DELIVERY FLIP: the bare
+//    :root/.dark is now painted by MINIMAL (the only BAKED design and the free
+//    default; zinc neutral, values verbatim from src/designs/minimal). The
+//    --color-primary-* / container entries are UNCHANGED from the ADR-V2 tint
+//    decoupling: the bare-:root default primary stays the BLUE default tint =
+//    synthesizeRamp('#007AFF') (container roles: ramp 100/900 light, 800/100
+//    dark) — the tint layer owns primary, no design defines it. An INTENTIONAL
+//    token change must update EXPECTED here too, or the build fails; the guard
+//    catches UNINTENDED drift from the baked default design. ──
 const EXPECTED = {
   light: {
-    '--color-bg': '#FAF9F5', '--color-surface': '#FFFFFF', '--color-subtle': '#F2EFE8', '--color-border': '#E8E4DA',
-    '--color-border-strong': '#D9D4C7', '--color-bg-hover': '#F4F0E7', '--color-surface-glass': 'rgba(255,255,255,0.72)',
-    '--color-surface-container-lowest': '#FFFFFF', '--color-surface-container-low': '#F7F5EF', '--color-surface-container': '#F2EFE8',
-    '--color-surface-container-high': '#ECE8DF', '--color-surface-container-highest': '#E6E1D5',
-    '--color-text-main': '#1F1D1A', '--color-text-muted': '#6F6A5F',
-    '--color-error': '#dc2626', '--color-error-light': '#fef2f2', '--color-warning': '#f59e0b', '--color-warning-light': '#fffbeb',
-    '--color-success': '#10b981', '--color-success-light': '#ecfdf5', '--color-info': '#3b82f6', '--color-info-light': '#eff6ff',
+    '--color-bg': '#FFFFFF', '--color-surface': '#FFFFFF', '--color-subtle': '#F4F4F5', '--color-border': '#E4E4E7',
+    '--color-border-strong': '#D4D4D8', '--color-bg-hover': '#F4F4F5', '--color-surface-glass': 'rgba(255,255,255,0.72)',
+    '--color-surface-container-lowest': '#FFFFFF', '--color-surface-container-low': '#FAFAFA', '--color-surface-container': '#F6F6F7',
+    '--color-surface-container-high': '#F4F4F5', '--color-surface-container-highest': '#EFEFF1',
+    '--color-text-main': '#09090B', '--color-text-muted': '#71717A',
+    '--color-error': '#DC2626', '--color-error-light': '#FEF2F2', '--color-warning': '#D97706', '--color-warning-light': '#FFFBEB',
+    '--color-success': '#16A34A', '--color-success-light': '#F0FDF4', '--color-info': '#2563EB', '--color-info-light': '#EFF6FF',
     '--color-on-primary': '#FFFFFF', '--color-on-error': '#FFFFFF',
     '--color-primary-container': '#cfe6ff', '--color-on-primary-container': '#002f74',
     '--color-primary-50': '#e9f5ff', '--color-primary-100': '#cfe6ff', '--color-primary-200': '#a4cdff', '--color-primary-300': '#6badff',
@@ -376,13 +378,13 @@ const EXPECTED = {
     '--color-primary-800': '#003b87', '--color-primary-900': '#002f74', '--color-primary-950': '#031c47',
   },
   dark: {
-    '--color-bg': '#171512', '--color-surface': '#1F1D19', '--color-subtle': '#26231E', '--color-border': '#35312A',
-    '--color-border-strong': '#494339', '--color-bg-hover': 'rgba(255,250,240,0.05)', '--color-surface-glass': 'rgba(31,29,25,0.72)',
-    '--color-surface-container-lowest': '#12100D', '--color-surface-container-low': '#1B1915', '--color-surface-container': '#201D19',
-    '--color-surface-container-high': '#282520', '--color-surface-container-highest': '#302D26',
-    '--color-text-main': '#F1EEE6', '--color-text-muted': '#A39E92',
-    '--color-error': '#f87171', '--color-error-light': 'rgba(239,68,68,0.1)', '--color-warning': '#fbbf24', '--color-warning-light': 'rgba(245,158,11,0.1)',
-    '--color-success': '#34d399', '--color-success-light': 'rgba(16,185,129,0.1)', '--color-info': '#60a5fa', '--color-info-light': 'rgba(59,130,246,0.1)',
+    '--color-bg': '#09090B', '--color-surface': '#18181B', '--color-subtle': '#27272A', '--color-border': '#27272A',
+    '--color-border-strong': '#3F3F46', '--color-bg-hover': 'rgba(255,255,255,0.06)', '--color-surface-glass': 'rgba(24,24,27,0.72)',
+    '--color-surface-container-lowest': '#0C0C0E', '--color-surface-container-low': '#121214', '--color-surface-container': '#18181B',
+    '--color-surface-container-high': '#1E1E21', '--color-surface-container-highest': '#232326',
+    '--color-text-main': '#FAFAFA', '--color-text-muted': '#A1A1AA',
+    '--color-error': '#F87171', '--color-error-light': 'rgba(220,38,38,0.15)', '--color-warning': '#FBBF24', '--color-warning-light': 'rgba(217,119,6,0.15)',
+    '--color-success': '#4ADE80', '--color-success-light': 'rgba(22,163,74,0.15)', '--color-info': '#60A5FA', '--color-info-light': 'rgba(37,99,235,0.15)',
     '--color-on-primary': '#FFFFFF', '--color-on-error': '#FFFFFF',
     '--color-primary-container': '#003b87', '--color-on-primary-container': '#cfe6ff',
     '--color-primary-50': '#e9f5ff', '--color-primary-100': '#cfe6ff', '--color-primary-200': '#a4cdff', '--color-primary-300': '#6badff',
