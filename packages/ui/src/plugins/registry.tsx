@@ -1,14 +1,41 @@
-import type { FrontendPlugin, PluginModule, PluginManifestEntry, LayoutConfig } from '@digitaplatform/plugins';
+import type {
+  ComponentPlugin,
+  DesignPlugin,
+  DigitaPlugin,
+  FrontendPlugin,
+  LayoutConfig,
+  PluginManifestEntry,
+  PluginType,
+} from '@digitaplatform/plugins';
+import { isDigitaPlugin } from '@digitaplatform/plugins';
 import { ErrorBoundary } from '@digitaplatform/components';
+import { applyDesign, registerDesign } from '@digitaplatform/theme';
 import { usePluginLayoutStore } from '@/stores/plugin-state';
 
-// Plugins loaded for this session. The host ships NONE — every plugin is
-// app-provided and loaded at runtime from the manifest. A future build-time
-// path could call registerPlugin() directly; the rest is identical.
+// COMPONENT plugins loaded for this session (design plugins live in the theme's
+// runtime design registry — only components render into Regions). The host ships
+// NONE — every plugin is app-provided and loaded at runtime from the composition.
+// A future build-time path could call registerPlugin() directly; the rest is identical.
 const loaded = new Map<string, FrontendPlugin>();
+
+// Premium plugin ids the tenant is NOT entitled to (per /api/v1/plugins
+// entitlements). Locked = its bytes are never fetched; a Region placing one
+// explains WHY instead of the generic "not loaded" error.
+const locked = new Set<string>();
 
 export function registerPlugin(plugin: FrontendPlugin): void {
   loaded.set(plugin.id, plugin);
+}
+
+/** Replace the locked set for this composition load (composition.ts calls it on
+ *  every (re)load, so a post-login license can unlock what boot locked). */
+export function setLockedPlugins(ids: string[]): void {
+  locked.clear();
+  for (const id of ids) locked.add(id);
+}
+
+export function isPluginLocked(id: string): boolean {
+  return locked.has(id);
 }
 
 // Dev only: load plugin implementations from their workspace SOURCE so the whole
@@ -31,28 +58,147 @@ function devSourceLoader(id: string): (() => Promise<unknown>) | undefined {
 }
 
 /**
- * Load every app plugin in the manifest. In dev each is imported from its
- * workspace source (single React graph); in prod each is dynamically imported as
- * its ESM bundle (`@vite-ignore` — the URL is a runtime remote, not a build
- * input), with React + the other shared singletons resolved via the host's
+ * One plugin to load, as produced by the composition ⋈ inventory join
+ * (plugins/composition.ts): the composition contributes id/title, the inventory
+ * contributes type/url. Both may be absent for a dev-source-only plugin — the
+ * workspace glob needs no URL and the module's own export carries the type.
+ */
+export interface PluginSource {
+  id: string;
+  title?: string;
+  type?: PluginType;
+  url?: string;
+}
+
+/** Normalize a dynamically-imported plugin module to a typed DigitaPlugin.
+ *  Back-compat: a legacy FrontendPlugin export (no `type` discriminator) is a
+ *  component plugin — wrapped here instead of forcing every plugin to migrate. */
+function normalizeModulePlugin(mod: unknown, id: string): DigitaPlugin | null {
+  const m = mod as { plugin?: unknown; default?: unknown };
+  const exported = m.plugin ?? m.default;
+  if (isDigitaPlugin(exported)) return exported;
+  const legacy = exported as FrontendPlugin | undefined;
+  if (legacy && typeof legacy === 'object' && typeof legacy.id === 'string' && legacy.component) {
+    return { ...legacy, type: 'component' };
+  }
+  console.error(`[plugins] "${id}" exposes no plugin/default export`);
+  return null;
+}
+
+// ─── Type-dispatch handler table ───────────────────────────────────────────
+// Each handler INTEGRATES one typed plugin into the host. Both load paths (dev
+// workspace source and inventory URL) converge here, so a plugin behaves
+// identically however it arrived.
+
+type IntegrateHandlers = { [P in DigitaPlugin as P['type']]: (plugin: P) => void | Promise<void> };
+
+const integrateHandlers: IntegrateHandlers = {
+  // component: today's behaviour, unchanged semantics — register, the layout's
+  // Region renders it (error-boundaried).
+  component: (plugin: ComponentPlugin) => {
+    registerPlugin(plugin);
+  },
+  // design: inject the same-origin stylesheet, then register {designId, variant}
+  // with the theme so applyDesign()/data-design + the DesignMenu work for it.
+  design: async (plugin: DesignPlugin) => {
+    await injectDesignStylesheet(plugin);
+    registerDesign(plugin.designId, plugin.variant, { name: plugin.title ?? plugin.designId });
+    // If this design is the ACTIVE one (persisted pick applied at boot, before
+    // the plugin loaded), the variant stamp was resolved without the registry —
+    // re-apply so data-design-variant reflects the now-registered variant.
+    if (document.documentElement.getAttribute('data-design') === plugin.designId) {
+      applyDesign(plugin.designId);
+    }
+  },
+};
+
+async function integratePlugin(plugin: DigitaPlugin): Promise<void> {
+  const handler = integrateHandlers[plugin.type] as (p: DigitaPlugin) => void | Promise<void>;
+  await handler(plugin);
+}
+
+/** Idempotent stylesheet injection for a design plugin (marker: the
+ *  data-design-plugin attribute). Resolves once the CSS is loaded; on a load
+ *  failure the dead link is removed and the promise rejects, so a broken design
+ *  never registers in the picker. */
+function injectDesignStylesheet(plugin: DesignPlugin): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (document.head.querySelector(`link[data-design-plugin="${CSS.escape(plugin.designId)}"]`)) {
+      resolve();
+      return;
+    }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = plugin.cssUrl;
+    link.setAttribute('data-design-plugin', plugin.designId);
+    link.onload = () => resolve();
+    link.onerror = () => {
+      link.remove();
+      reject(new Error(`stylesheet failed to load: ${plugin.cssUrl}`));
+    };
+    document.head.appendChild(link);
+  });
+}
+
+/**
+ * Resolve one plugin source to its typed runtime object. The dev workspace
+ * source wins whatever the declared type — it must yield the same DigitaPlugin
+ * shape the handlers consume. Otherwise the TYPE decides: 'design' needs no
+ * module at all (the inventory URL IS the artifact — a same-origin CSS file);
+ * 'component' is a dynamic ESM import (`@vite-ignore` — a runtime remote, not a
+ * build input) with React + the shared singletons resolved via the host's
  * import-map so plugin components compose with the host's React tree.
  */
-export async function loadPluginsFromManifest(entries: PluginManifestEntry[]): Promise<void> {
+async function resolvePlugin(source: PluginSource): Promise<DigitaPlugin | null> {
+  const devLoader = devSourceLoader(source.id);
+  if (devLoader) return normalizeModulePlugin(await devLoader(), source.id);
+  if (!source.url || !source.type) {
+    console.error(`[plugins] "${source.id}" has no inventory entry (and no dev source) — cannot load`);
+    return null;
+  }
+  if (source.type === 'design') {
+    // Inventory schemaVersion 1 carries no designId/variant, so both derive from
+    // the plugin id — every shipped design plugin declares meta.variant === id
+    // (its dist/digita-plugin.json agrees). When a design whose variant differs
+    // from its id ships, the inventory gains explicit designId/variant fields.
+    return {
+      type: 'design',
+      id: source.id,
+      title: source.title,
+      designId: source.id,
+      variant: source.id,
+      cssUrl: source.url,
+    };
+  }
+  return normalizeModulePlugin(await import(/* @vite-ignore */ source.url), source.id);
+}
+
+/**
+ * Load + integrate every plugin of the composition ⋈ inventory join, each by its
+ * TYPE via the handler table. Per-plugin fail-soft: one broken plugin logs and is
+ * skipped; the rest of the shell keeps working.
+ */
+export async function loadPlugins(sources: PluginSource[]): Promise<void> {
   await Promise.all(
-    entries.map(async (entry) => {
+    sources.map(async (source) => {
       try {
-        const devLoader = devSourceLoader(entry.id);
-        const mod = (devLoader
-          ? await devLoader()
-          : await import(/* @vite-ignore */ entry.url)) as PluginModule;
-        const plugin = mod.plugin ?? mod.default;
-        if (plugin?.id) registerPlugin(plugin);
-        else console.error(`[plugins] "${entry.id}" exposes no plugin/default export`);
+        const plugin = await resolvePlugin(source);
+        if (plugin) await integratePlugin(plugin);
       } catch (err) {
-        console.error(`[plugins] failed to load "${entry.id}" from ${entry.url}`, err);
+        console.error(
+          `[plugins] failed to load "${source.id}"${source.url ? ` from ${source.url}` : ''}`,
+          err,
+        );
       }
     }),
   );
+}
+
+/** Legacy manifest loader — entries whose `url` is a component ESM bundle (the
+ *  pre-inventory engine shape). Kept working for back-compat; delegates to the
+ *  typed path as component plugins. */
+export async function loadPluginsFromManifest(entries: PluginManifestEntry[]): Promise<void> {
+  await loadPlugins(entries.map((e) => ({ id: e.id, title: e.title, type: 'component' as const, url: e.url })));
 }
 
 // Placement: which plugin fills which template region. Backed by a reactive store
@@ -73,8 +219,9 @@ export function getRegionPlugin(region: string): FrontendPlugin | undefined {
  * Render whatever plugin the layout config placed into `name`. The template
  * decides WHERE the region sits; this renders WHAT the config put there. If a
  * plugin is PLACED but not loaded (manifest miss / failed import), surface it
- * loudly rather than a silently empty region. A render error in the plugin is
- * contained by an error boundary so it can't crash the whole shell.
+ * loudly rather than a silently empty region — except a LOCKED premium plugin
+ * (not entitled), which is an expected state and shown as such. A render error
+ * in the plugin is contained by an error boundary so it can't crash the whole shell.
  */
 export function Region({ name }: { name: string }) {
   // Reactive read so the region paints as soon as the composition loads (post-login).
@@ -82,6 +229,13 @@ export function Region({ name }: { name: string }) {
   if (!id) return null; // nothing placed here — fine
   const plugin = loaded.get(id);
   if (!plugin) {
+    if (locked.has(id)) {
+      return (
+        <p className="p-4 text-sm text-textMuted">
+          Plugin “{id}” is a premium plugin this tenant is not licensed for.
+        </p>
+      );
+    }
     return <p className="p-4 text-sm text-error">Plugin “{id}” is placed here but not loaded.</p>;
   }
   const Component = plugin.component;

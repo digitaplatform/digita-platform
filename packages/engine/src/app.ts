@@ -62,6 +62,8 @@ import { registerPublicRoutes } from "./core/api/public-router.js";
 import { registerMetaRoutes } from "./core/api/meta-router.js";
 import { registerBootRoutes } from "./core/api/boot-router.js";
 import { loadPluginConfig, type PluginRuntime } from "./core/plugins/plugin-config.js";
+import { loadPluginEntitlements } from "./core/plugins/plugin-license.js";
+import { registerPluginAssetRoutes } from "./core/api/plugin-assets-router.js";
 import { registerTranslationRoutes } from "./core/api/translation-router.js";
 import { registerSearchRoutes } from "./core/api/search-router.js";
 import { registerSchemaDriftRoutes } from "./core/api/schema-drift-router.js";
@@ -189,6 +191,11 @@ export async function createApp(
   // Populated during startup(); read late by the plugin-manifest route via the
   // variable's current value.
   let pluginRuntime: PluginRuntime = { plugins: [], layout: null, audiences: {} };
+  // Premium plugin entitlements from the offline-verified license
+  // (claims.plugins). Populated during startup(); [] until then and whenever
+  // the license is missing/invalid/expired (fail-closed — premium stays
+  // locked, boot never crashes over licensing).
+  let pluginEntitlements: string[] = [];
 
   // ─── Declarative View Engine ───────────────────────────
 
@@ -406,24 +413,39 @@ export async function createApp(
     scope.addHook("onRequest", authenticate);
     scope.addHook("onRequest", csrf);
 
-    // Frontend plugin composition — which app plugins the operator frontend
-    // loads at runtime (id + ESM bundle URL + title) and the opaque placement
-    // layout, both from the app-declared plugins.config.json. The engine does
-    // NOT interpret the layout; it only relays app config. Bundles are served
-    // same-origin by the SPA's nginx at /plugins/<id>/<id>.js (the engine serves
-    // no static JS). Empty until an app enables plugins; the host renders fine
-    // with none.
+    // Frontend plugin COMPOSITION — which plugins the app enables (id +
+    // optional title, from the merged app-declared plugins.config.json), the
+    // opaque placement layout, and the tenant's premium ENTITLEMENTS (the
+    // verified license's claims.plugins; [] without a valid license). The
+    // engine does NOT interpret the layout and hands out NO asset URLs here:
+    // the host joins this list by id with the static inventory at
+    // /plugins/index.json and loads each plugin by TYPE from the inventory's
+    // url (free = nginx static under /plugins/…, premium = the engine-gated
+    // /plugin-assets route below; a premium id outside `entitlements` is shown
+    // locked and its bytes are never fetched). Empty until an app enables
+    // plugins; the host renders fine with none.
     scope.get(`${env.API_PREFIX}/plugins`, async (_request, reply) => {
       return reply.send(
         successResponse({
           plugins: pluginRuntime.plugins.map((p) => ({
             id: p.id,
-            url: `/plugins/${p.id}/${p.id}.js`,
             title: p.title,
           })),
           layout: pluginRuntime.layout ?? undefined,
+          entitlements: pluginEntitlements,
         }),
       );
+    });
+
+    // Premium plugin artifacts — engine-gated static delivery from
+    // PLUGINS_PREMIUM_DIR. 403 for any :id outside the verified entitlements
+    // (bytes never leave the server); path-traversal-safe; immutable cache
+    // (artifacts are version-addressed). Lazy getters: entitlements load in
+    // startup() after routes register, and the env key may be absent (tests
+    // that mock the whole env object) ⇒ 404s, never a crash.
+    registerPluginAssetRoutes(scope, env.API_PREFIX, {
+      getEntitlements: () => pluginEntitlements,
+      getPremiumDir: () => env.PLUGINS_PREMIUM_DIR,
     });
 
     registerMetaRoutes(scope, env.API_PREFIX, registry, db, permissionChecker);
@@ -733,6 +755,13 @@ export async function createApp(
       { plugins: pluginRuntime.plugins.map((p) => p.id) },
       "Frontend plugin composition configured",
     );
+
+    // 5e. Verify the plugin license OFFLINE (EdDSA, jose) and extract the
+    //     premium entitlements (claims.plugins) for the composition endpoint
+    //     and the gated /plugin-assets delivery. Fail-closed by construction:
+    //     loadPluginEntitlements never throws — a missing/invalid/expired
+    //     license yields [] (premium locked), never a boot failure.
+    pluginEntitlements = await loadPluginEntitlements();
 
     // 6. Load hook modules from all app directories
     await hookRunner.loadHooks(registry.getAll(), moduleDirs);

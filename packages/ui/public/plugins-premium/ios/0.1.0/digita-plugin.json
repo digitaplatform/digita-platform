@@ -1,0 +1,9 @@
+{
+  "id": "ios",
+  "type": "design",
+  "tier": "premium",
+  "sdk": "^0.1.0",
+  "entry": "ios.css",
+  "displayName": "iOS",
+  "variant": "ios"
+}

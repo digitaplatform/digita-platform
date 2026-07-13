@@ -1,7 +1,8 @@
 import { COLOR_PALETTES, type PaletteName } from '../tokens/palettes.js';
 import { cssVarName } from '../tokens/index.js';
 import { TINT_PALETTES, type TintKey } from '../tokens/tints.js';
-import { DEFAULT_DESIGN_ID, getDesign } from '../designs/index.js';
+import { DEFAULT_DESIGN_ID, DESIGNS, getDesign } from '../designs/index.js';
+import { getRuntimeDesign } from '../designs/runtime-registry.js';
 
 /**
  * Framework-agnostic branding + theming runtime (pure DOM — no React/zustand) so
@@ -165,7 +166,11 @@ export function applyDesign(id: string, target: HTMLElement = document.documentE
   // Stamp the component-variant family (material / ios) so the primitives pick up
   // the variant layer PURELY via CSS ([data-design-variant] selectors) — no JS
   // branching in components. 'default' (or none) removes the attribute.
-  const variant = getDesign(id).meta.variant;
+  // Resolution order: a BAKED design's meta wins; else a RUNTIME-loaded design
+  // plugin (registered via registerDesign, its injected CSS ships the variant
+  // layer); else getDesign's visible fall-through to the default design.
+  const variant =
+    DESIGNS[id]?.meta.variant ?? getRuntimeDesign(id)?.variant ?? getDesign(id).meta.variant;
   if (!variant || variant === 'default') target.removeAttribute('data-design-variant');
   else target.setAttribute('data-design-variant', variant);
   // ADR-V2: restore the DESIGN'S stored tint pick (one localStorage key per

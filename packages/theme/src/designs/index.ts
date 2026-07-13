@@ -1,20 +1,22 @@
 import type { Design, DesignMeta } from './types.js';
-import editorial from './editorial/index.js';
-import fluent from './fluent/index.js';
 import minimal from './minimal/index.js';
-import ios from './ios/index.js';
-import material from './material/index.js';
 
 export type { Design, DesignMeta } from './types.js';
 
+// Runtime-loaded design plugins (registered by the host at composition time)
+// live in their own registry — reactive, framework-agnostic.
+export * from './runtime-registry.js';
+
 /** The id painted at the bare `:root`/`.dark` blocks (no `data-design` attribute
  *  needed). Extracting a different default is a one-line change here. */
-export const DEFAULT_DESIGN_ID = 'editorial';
+export const DEFAULT_DESIGN_ID = 'minimal';
 
-// The ONLY list of designs. Adding a design = one import above + one entry here;
-// no core-logic edit anywhere else. (tsc-only build → no import.meta.glob; an
-// explicit barrel is the honest, type-safe equivalent.)
-const ALL: Design[] = [editorial, fluent, minimal, ios, material];
+// The ONLY list of BAKED designs — exactly the free default. The other design
+// languages (editorial/fluent/ios/material) are PREMIUM design plugins now:
+// delivered at runtime as entitlement-gated CSS artifacts and registered via the
+// runtime registry above — never compiled into theme.css. Adding a baked design
+// = one import above + one entry here; no core-logic edit anywhere else.
+const ALL: Design[] = [minimal];
 
 export const DESIGNS: Record<string, Design> = Object.fromEntries(ALL.map((d) => [d.meta.id, d]));
 

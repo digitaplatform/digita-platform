@@ -238,6 +238,32 @@ export const env = {
     "application/vnd.openxmlformats-officedocument.*",
   ]),
 
+  // ─── FRONTEND PLUGIN DELIVERY ────────────────────────
+  // Premium plugin entitlements come from an OFFLINE-verified license JWT
+  // (EdDSA/Ed25519, iss=digita-licensing, claims.plugins = entitled premium
+  // ids — see src/core/plugins/plugin-license.ts). Every key is OPTIONAL with
+  // a dev default: a missing/invalid/expired license simply yields ZERO
+  // premium entitlements (fail-closed) — never a boot failure. The inline JWT
+  // wins over the file; the file default is the checked-in dev-sample license
+  // so a local dev boot is entitled to the sample premium designs.
+  DIGITA_PLUGIN_LICENSE: getEnv("DIGITA_PLUGIN_LICENSE", ""),
+  DIGITA_PLUGIN_LICENSE_FILE: getEnv(
+    "DIGITA_PLUGIN_LICENSE_FILE",
+    resolve(monorepoRoot, "tools/plugin-mock/dev-sample-license.jwt"),
+  ),
+  DIGITA_PLUGIN_LICENSE_PUBKEY_FILE: getEnv(
+    "DIGITA_PLUGIN_LICENSE_PUBKEY_FILE",
+    resolve(monorepoRoot, "tools/plugin-mock/keys/dev-sample-ed25519-public.pem"),
+  ),
+  // Root of the engine-gated premium artifact store, streamed by
+  // GET ${API_PREFIX}/plugin-assets/:id/:version/* ONLY for entitled ids.
+  // Defaults to the monorepo staging dir (packages/ui/public/plugins-premium);
+  // deployments point it at the mounted premium bundle (absolute path).
+  PLUGINS_PREMIUM_DIR: getEnv(
+    "PLUGINS_PREMIUM_DIR",
+    resolve(monorepoRoot, "packages/ui/public/plugins-premium"),
+  ),
+
   // ─── PERMISSION SCOPE ────────────────────────────────
   // Gate for declarative permission `scope` enforcement (a generic field-equality
   // narrowing — e.g. an app scoping records by company / department / tenant). OFF

@@ -1,0 +1,9 @@
+{
+  "id": "fluent",
+  "type": "design",
+  "tier": "premium",
+  "sdk": "^0.1.0",
+  "entry": "fluent.css",
+  "displayName": "Fluent",
+  "variant": "fluent"
+}

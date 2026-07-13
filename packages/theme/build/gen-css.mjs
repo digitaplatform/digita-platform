@@ -1,12 +1,15 @@
 // Generate dist/theme.css (the runtime layer: CSS-variable values light/dark +
 // Inter @font-face + base resets) from the compiled token source, and copy the
-// font files. Runs after `tsc`. A frozen equality guard asserts every legacy
-// digita-ui variable still resolves to its original value, so the central
-// extraction can never silently change the original design.
+// font files. Runs after `tsc`. A frozen equality guard asserts every variable
+// of the BAKED DEFAULT design still resolves to its baselined value, so a token
+// edit can never silently change the shipped default. Plugin-delivery flip:
+// theme.css bakes ONLY the free default (minimal); the premium design languages
+// (editorial/fluent/ios/material) arrive at runtime as design-plugin CSS
+// artifacts (built in digita-plugins-premium from the same public generators).
 import { writeFileSync, mkdirSync, copyFileSync, existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
-import { varsForMode, shadowVarsForMode, motionVars, borderRadius, fontFamily } from '../dist/index.js';
+import { semantic, cssVarName, shadowVarsForMode, motionVars, borderRadius, fontFamily } from '../dist/index.js';
 import { synthesizeRamp, RAMPS, TINT_PALETTES, DEFAULT_TINT_KEY, tintRamp, varsForTint } from '../dist/tokens/index.js';
 import { varsForDesign, DESIGNS, getDesign, DEFAULT_DESIGN_ID } from '../dist/index.js';
 
@@ -49,22 +52,30 @@ const fontsSrc = join(root, 'assets', 'fonts');
 // [data-tint] blocks below override them at equal specificity, later source.
 const DEFAULT_TINT_RAMP = tintRamp(DEFAULT_TINT_KEY);
 
-// Colors + per-mode shadows in each block; motion vars only in :root (they cascade
-// into .dark unchanged). Dark gets its OWN, stronger shadows so depth registers.
+// The bare :root/.dark blocks are painted BY the default design — the same
+// designLight/designDark composition as its scoped block (INCLUDING its shadow/
+// motion overrides), so an attribute-less page and data-design="<default>"
+// resolve identically. The tint layer then adds the default-blue primary ramp +
+// container roles, and the design-agnostic selection accents (ADR-V2: derived
+// from the ACTIVE primary via var()/color-mix in the platform semantic; defined
+// by NO design) ride along at the bare blocks so EVERY design — baked or
+// runtime-loaded — falls through to them.
+const DEFAULT_DESIGN = getDesign(DEFAULT_DESIGN_ID);
+function selectionVarsFor(mode) {
+  return {
+    [cssVarName('selection')]: semantic[mode].selection,
+    [cssVarName('selectionSoft')]: semantic[mode].selectionSoft,
+  };
+}
 const light = {
-  ...varsForMode('light'),
+  ...designLight(DEFAULT_DESIGN),
   ...varsForTint(DEFAULT_TINT_RAMP, 'light'),
-  ...shadowVarsForMode('light'),
-  ...motionVars(),
-  ...radiusFor(getDesign(DEFAULT_DESIGN_ID)),
-  ...typoFor(getDesign(DEFAULT_DESIGN_ID)),
-  ...categoricalFor(getDesign(DEFAULT_DESIGN_ID), 'light'),
+  ...selectionVarsFor('light'),
 };
 const dark = {
-  ...varsForMode('dark'),
+  ...designDark(DEFAULT_DESIGN),
   ...varsForTint(DEFAULT_TINT_RAMP, 'dark'),
-  ...shadowVarsForMode('dark'),
-  ...categoricalFor(getDesign(DEFAULT_DESIGN_ID), 'dark'),
+  ...selectionVarsFor('dark'),
 };
 
 // ── Per-design composition (Phase 1) ─────────────────────────────────────────
@@ -285,11 +296,13 @@ body { overscroll-behavior: none; overflow-x: clip; }
 }
 `;
 
-// The DEFAULT design paints the bare :root / .dark (byte-identical to pre-plugin
-// output, the equality-guard target). EVERY design (incl. the default) also emits
-// a scoped :root[data-design="id"] / ...].dark pair. Attribute specificity (0,1,1)
-// beats bare :root (0,0,1): a set data-design wins, an unset one falls through to
-// the bare default → no first-paint flash, existing apps (no attribute) unchanged.
+// The DEFAULT design paints the bare :root / .dark (the equality-guard target).
+// EVERY BAKED design (incl. the default) also emits a scoped
+// :root[data-design="id"] / ...].dark pair; runtime design PLUGINS ship the same
+// scoped pair inside their own CSS artifact instead. Attribute specificity
+// (0,1,1) beats bare :root (0,0,1): a set data-design wins, an unset one falls
+// through to the bare default → no first-paint flash, existing apps (no
+// attribute) unchanged.
 const scoped = [];
 for (const d of Object.values(DESIGNS)) {
   scoped.push(
@@ -316,10 +329,12 @@ for (const [key] of Object.entries(TINT_PALETTES)) {
 // ── Component-variant layer — platform-specific component BEHAVIOR a design opts
 //    into via meta.variant (→ data-design-variant on <html>, set by applyDesign).
 //    Pure CSS keyed on the stable [data-ui] hook the primitives expose — no JS
-//    branching in the kit. Sourced from build/variants/{base,ios,material}.css so
-//    the growing layer stays maintainable (order: base → ios → material). ──
+//    branching in the kit. Plugin-delivery flip: only the BAKED designs' variant
+//    files are compiled in (base + minimal); the premium variant layers
+//    (ios/material/editorial/fluent) ship inside their design-plugin CSS
+//    artifacts (digita-plugins-premium), never here. ──
 const variantsDir = join(here, 'variants');
-const VARIANT_CSS = ['base.css', 'ios.css', 'material.css', 'editorial.css', 'fluent.css', 'minimal.css']
+const VARIANT_CSS = ['base.css', 'minimal.css']
   .map((f) => readFileSync(join(variantsDir, f), 'utf8').trimEnd())
   .join('\n\n');
 

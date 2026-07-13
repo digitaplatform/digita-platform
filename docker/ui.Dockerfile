@@ -12,10 +12,19 @@
 #   /            → this SPA
 # (see the digita-deploy digita-ui chart ingress).
 #
-# PLUGIN HANDOFF: the usermenu plugin no longer lives in this repo — it moved
-# to digita-plugins-community (@digitaplatform/plugin-usermenu). Until the
-# phase-2 plugin-loader wiring lands, this image ships NO plugin bundles and
-# the usermenu deploy-guard assertion is gated behind WITH_PLUGINS (default 0).
+# PLUGIN DELIVERY: this image bakes the STAGED plugin artifacts into the SPA
+# web root. tools/plugin-mock/stage-plugins.mjs stages the set pinned in
+# plugins.lock.json into packages/ui/public:
+#   public/plugins/<id>/<ver>/<entry> + /plugins/index.json  (free — nginx-static)
+#   public/plugins-premium/<id>/<ver>/<entry>                (premium — engine-gated)
+# The host joins GET /api/v1/plugins (composition + entitlements) with
+# /plugins/index.json (inventory) and loads each plugin by type (component →
+# dynamic import, design → <link rel="stylesheet">). Premium bytes are NEVER
+# served by nginx: the engine streams them at /api/v1/plugin-assets/... from
+# PLUGINS_PREMIUM_DIR (engine env — owned by the engine image/chart, which
+# must point it at a copy of the staged plugins-premium dir) after verifying
+# the tenant's license entitlements. A community-tier ui image (the default,
+# see PLUGIN_TIER below) therefore ships NO premium bytes at all.
 #
 # Registry auth: the build pipeline writes an authenticated .npmrc
 # (@digitaplatform scope → GitHub Packages + read token) into the build-context
@@ -45,8 +54,9 @@ COPY packages/web/package.json packages/web/
 # ui (host) + @digitaplatform/theme (design foundation) + @digitaplatform/components
 # (React kit) + @digitaplatform/plugins (SDK) + shared — all in-repo workspace
 # members. The host stays app-agnostic; it bundles NO apps. Plugin bundles
-# (e.g. usermenu) are built in digita-plugins-community and are NOT installed
-# here (see PLUGIN HANDOFF above).
+# are built in digita-plugins-community / digita-plugins-premium and are NOT
+# installed as deps — they enter as staged static artifacts (see PLUGIN
+# DELIVERY above).
 RUN --mount=type=bind,source=.npmrc,target=/root/.npmrc \
     pnpm install --frozen-lockfile \
     --filter @digitaplatform/shared \
@@ -64,11 +74,47 @@ COPY packages/components/ packages/components/
 COPY packages/plugins/ packages/plugins/
 COPY packages/ui/ packages/ui/
 
-# TODO(phase2 plugin-loader): fetch the @digitaplatform/plugin-usermenu BUILT
-# bundle (published from digita-plugins-community) into
-# packages/ui/public/plugins/usermenu/ HERE — before build:vendor/vite build —
-# so it lands in dist/plugins/ and the WITH_PLUGINS=1 guard below can become
-# the default again. Until then the image ships without plugin bundles.
+# Staging inputs: the pinned plugin set + the staging script + the build guard.
+COPY plugins.lock.json ./
+COPY tools/plugin-mock/stage-plugins.mjs tools/plugin-mock/
+COPY docker/verify-plugin-stage.mjs docker/
+
+# ─── Stage the plugin artifacts (BEFORE the vite build) ──────
+# vite copies public/ → dist/ verbatim, so the staged plugin tree (see PLUGIN
+# DELIVERY above) must exist NOW. `stage-plugins.mjs --local` reads built
+# dists from the SIBLING repos (digita-plugins-community /
+# digita-plugins-premium) which live OUTSIDE this build context, so it cannot
+# run in here. Two supported paths:
+#   PLUGINS_SOURCE=prestaged (default): staging already ran on the HOST
+#     (`node tools/plugin-mock/stage-plugins.mjs --local`) and the staged tree
+#     entered via `COPY packages/ui/` above. public/plugins/ is GITIGNORED —
+#     a fresh clone must run the staging before `docker build`.
+#   PLUGINS_SOURCE=registry: stage inside the build via `npm pack` from the
+#     registry (--registry mode; auth via the bind-mounted .npmrc).
+# Either way the staged tree is then verified against the inventory (files
+# exist, sha384 integrity matches, free/premium URL shapes correct) so a
+# broken/partial stage fails the build here, not at runtime.
+# WITH_PLUGINS=0 (emergency escape hatch, also honoured by the deploy guard
+# below) skips staging entirely and ships a plugin-less image.
+ARG WITH_PLUGINS=1
+ARG PLUGINS_SOURCE=prestaged
+RUN --mount=type=bind,source=.npmrc,target=/root/.npmrc \
+    set -eu; \
+    if [ "$WITH_PLUGINS" != "1" ]; then \
+      echo "WITH_PLUGINS=0: skipping plugin staging (emergency escape hatch)"; \
+      exit 0; \
+    fi; \
+    if [ "$PLUGINS_SOURCE" = "registry" ]; then \
+      node tools/plugin-mock/stage-plugins.mjs --registry; \
+    elif [ "$PLUGINS_SOURCE" != "prestaged" ]; then \
+      echo "ERROR: PLUGINS_SOURCE must be 'prestaged' or 'registry' (got '$PLUGINS_SOURCE')"; exit 1; \
+    elif [ ! -s packages/ui/public/plugins/index.json ]; then \
+      echo "ERROR: packages/ui/public/plugins/index.json missing from the build context."; \
+      echo "  Run 'node tools/plugin-mock/stage-plugins.mjs --local' before 'docker build',"; \
+      echo "  or build with --build-arg PLUGINS_SOURCE=registry (published packages + .npmrc)."; \
+      exit 1; \
+    fi; \
+    node docker/verify-plugin-stage.mjs --staged
 
 # Order matters: shared → theme (tsc + gen-css) → components (React kit) →
 # plugins SDK (tsc) → build:vendor (vendor ESM singletons + import-map.json
@@ -85,13 +131,23 @@ RUN pnpm --filter @digitaplatform/shared build && \
 # loading 404s / the SPA fails to boot only in prod. Assert the EXACT artifacts:
 #  - the import-map is INLINED into index.html (external import maps don't work),
 #  - the vendor ESM dir is populated,
-#  - WITH_PLUGINS=1 only: the exact plugin bundle the engine advertises
-#    (/plugins/usermenu/usermenu.js). Default 0 — the usermenu plugin now
-#    builds in digita-plugins-community and is not staged here yet (see the
-#    phase2 plugin-loader TODO above), so the assertion would always fail.
+#  - WITH_PLUGINS=1 (default): dist/plugins/index.json — the inventory the host
+#    joins against GET /api/v1/plugins — made it into dist/, and EVERY free
+#    artifact it lists exists with a matching sha384 integrity
+#    (docker/verify-plugin-stage.mjs --dist). WITH_PLUGINS=0 is the emergency
+#    escape hatch: ship a plugin-less image (both plugin dirs stripped).
+#  - PLUGIN_TIER=community (default): dist/plugins-premium is STRIPPED before
+#    the nginx COPY and asserted empty/absent — a free image ships NO premium
+#    bytes. Premium CSS/JS reaches the browser ONLY via the engine's gated
+#    /api/v1/plugin-assets/... route (streamed from PLUGINS_PREMIUM_DIR — an
+#    ENGINE env owned by the engine image/chart; it must point at a copy of
+#    the staged plugins-premium dir). Any other PLUGIN_TIER value keeps
+#    dist/plugins-premium in the image purely as an extraction source for that
+#    engine mount — nginx still refuses to serve it (see docker/nginx-ui.conf).
 #  - no browser-breaking shims leaked into the host or plugin bundles (a throwing
 #    dynamic-require or unreplaced process.env/jsxDEV = a deploy-only white screen).
-ARG WITH_PLUGINS=0
+# (WITH_PLUGINS is declared before the staging step above and stays in scope.)
+ARG PLUGIN_TIER=community
 RUN set -eu; \
     grep -q '<script type="importmap">' packages/ui/dist/index.html \
       || { echo "ERROR: import-map not inlined into dist/index.html"; exit 1; }; \
@@ -100,10 +156,17 @@ RUN set -eu; \
     [ -n "$(ls -A packages/ui/dist/vendor 2>/dev/null)" ] \
       || { echo "ERROR: dist/vendor is empty"; exit 1; }; \
     if [ "$WITH_PLUGINS" = "1" ]; then \
-      test -s packages/ui/dist/plugins/usermenu/usermenu.js \
-        || { echo "ERROR: dist/plugins/usermenu/usermenu.js missing"; exit 1; }; \
+      test -s packages/ui/dist/plugins/index.json \
+        || { echo "ERROR: dist/plugins/index.json (plugin inventory) missing — staging did not reach dist/"; exit 1; }; \
+      if [ "$PLUGIN_TIER" = "community" ]; then \
+        rm -rf packages/ui/dist/plugins-premium; \
+        node docker/verify-plugin-stage.mjs --dist --require-no-premium; \
+      else \
+        node docker/verify-plugin-stage.mjs --dist; \
+      fi; \
     else \
-      echo "WITH_PLUGINS=0: skipping usermenu bundle assertion (plugin moved to digita-plugins-community; TODO phase2 plugin-loader)"; \
+      echo "WITH_PLUGINS=0: shipping a plugin-less image (emergency escape hatch)"; \
+      rm -rf packages/ui/dist/plugins packages/ui/dist/plugins-premium; \
     fi; \
     PLUGIN_DIR=""; \
     if [ -d packages/ui/dist/plugins ]; then PLUGIN_DIR="packages/ui/dist/plugins"; fi; \

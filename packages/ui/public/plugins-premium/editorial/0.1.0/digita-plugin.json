@@ -1,0 +1,9 @@
+{
+  "id": "editorial",
+  "type": "design",
+  "tier": "premium",
+  "sdk": "^0.1.0",
+  "entry": "editorial.css",
+  "displayName": "Editorial",
+  "variant": "editorial"
+}
