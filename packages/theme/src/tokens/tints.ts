@@ -5,7 +5,7 @@ import { synthesizeRamp, type RampStep } from './synthesize.js';
  * design. A design decides typography, radius, shadows, surfaces and variant
  * CSS; the primary ramp comes from ONE shared 3x3 tint grid that the user
  * picks from PER DESIGN (persisted in localStorage, see applyTint /
- * resolveInitialTint in branding/applyBranding.ts).
+ * resolveInitialTint in runtime/runtime.ts).
  *
  * Each entry is the step-600 SEED of an 11-step ramp — the full ramp is
  * synthesized at build time via synthesizeRamp(hex) (OKLCH, brand at 600),

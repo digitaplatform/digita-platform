@@ -1,4 +1,4 @@
-import { applyBranding } from '../branding/applyBranding.js';
+import { applyBranding } from '../runtime/runtime.js';
 
 /**
  * SIGNATURES — built-in identity overlays. A signature is NOT a design: it is a

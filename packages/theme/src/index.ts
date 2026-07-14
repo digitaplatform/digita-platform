@@ -5,6 +5,6 @@
  * The generated CSS is `import '@digitaplatform/theme/theme.css'`.
  */
 export * from './tokens/index.js';
-export * from './branding/applyBranding.js';
+export * from './runtime/runtime.js';
 export * from './designs/index.js';
 export * from './signatures/index.js';
