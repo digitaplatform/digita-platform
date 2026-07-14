@@ -5,6 +5,7 @@ import {
   resetBranding,
   applySignature,
   resolveInitialSignature,
+  synthesizeRamp,
   SIGNATURES,
   DEFAULT_SIGNATURE_ID,
 } from '../src/index.js';
@@ -38,9 +39,13 @@ describe('branding fonts + signature runtime', () => {
   it("applySignature('simetrix') writes a primary ramp AND the three --font-* vars via the branding layer", () => {
     const root = document.documentElement;
     applySignature('simetrix');
-    // The accent hex snaps to the nearest accent palette → SOME --color-primary-* inline var.
+    // The accent hex is synthesized into an EXACT ramp (OKLCH, brand at 600) —
+    // simetrix's azure must paint verbatim, not snap to a preset palette.
     const primarySteps = Array.from(root.style).filter((p) => p.startsWith('--color-primary-'));
     expect(primarySteps.length).toBeGreaterThan(0);
+    expect(root.style.getPropertyValue('--color-primary-600')).toBe(
+      synthesizeRamp('#0E6FB8')!['600'],
+    );
     const fonts = SIGNATURES['simetrix']!.fonts!;
     expect(root.style.getPropertyValue('--font-display')).toBe(fonts.display);
     expect(root.style.getPropertyValue('--font-sans')).toBe(fonts.sans);

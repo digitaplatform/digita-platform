@@ -1,5 +1,6 @@
 import { COLOR_PALETTES, type PaletteName } from '../tokens/palettes.js';
 import { cssVarName } from '../tokens/index.js';
+import { synthesizeRamp } from '../tokens/synthesize.js';
 import { TINT_PALETTES, type TintKey } from '../tokens/tints.js';
 import { DEFAULT_DESIGN_ID, DESIGNS, getDesign } from '../designs/index.js';
 import { getRuntimeDesign } from '../designs/runtime-registry.js';
@@ -15,7 +16,8 @@ import { getRuntimeDesign } from '../designs/runtime-registry.js';
  * `applyBranding(boot.branding)` with no mapping layer.
  */
 export interface BrandingInput {
-  /** Single hex for the PRIMARY ramp; Phase 1 snaps it to the nearest accent palette. */
+  /** Single hex for the PRIMARY ramp; a full 11-step ramp is SYNTHESIZED from it
+   *  (OKLCH, the brand hex lands exactly at step 600) — never snapped to a preset. */
   primary_color?: string | null;
   /** Named palette for the SECONDARY/accent ramp (one of COLOR_PALETTES). */
   accent_palette?: string | null;
@@ -68,32 +70,6 @@ function clearContainerRoles(target: HTMLElement): void {
   target.style.removeProperty(cssVarName('onPrimaryContainer'));
 }
 
-function hexToRgb(hex: string): [number, number, number] | null {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return null;
-  const n = parseInt(m[1] as string, 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-/** Snap an arbitrary hex to the nearest accent palette by its 600 shade.
- *  (A full programmatic 11-step ramp from one hex is deferred — additive later.) */
-function nearestPalette(hex: string): PaletteName | null {
-  const rgb = hexToRgb(hex);
-  if (!rgb) return null;
-  let best: PaletteName | null = null;
-  let bestDistance = Infinity;
-  for (const name of Object.keys(COLOR_PALETTES) as PaletteName[]) {
-    const six = hexToRgb(COLOR_PALETTES[name][600]);
-    if (!six) continue;
-    const d = (rgb[0] - six[0]) ** 2 + (rgb[1] - six[1]) ** 2 + (rgb[2] - six[2]) ** 2;
-    if (d < bestDistance) {
-      bestDistance = d;
-      best = name;
-    }
-  }
-  return best;
-}
-
 /** Apply branding overrides (idempotent; writes only brandable vars).
  *  Precedence note (ADR-V2): the primary vars written here are INLINE styles,
  *  so a tenant brand beats the user's `data-tint` pick, which beats the bare
@@ -107,11 +83,13 @@ export function applyBranding(
     setRamp(target, 'accent', COLOR_PALETTES[branding.accent_palette as PaletteName]);
   }
   if (branding.primary_color) {
-    const palette = nearestPalette(branding.primary_color);
-    if (palette) {
-      setRamp(target, 'primary', COLOR_PALETTES[palette]);
+    // The primary ramp is SYNTHESIZED exactly from the brand hex (OKLCH, brand
+    // at step 600) — no longer snapped to the nearest preset palette.
+    const ramp = synthesizeRamp(branding.primary_color);
+    if (ramp) {
+      setRamp(target, 'primary', ramp);
       // P3: tonal container roles follow the applied primary ramp.
-      setContainerRoles(target, COLOR_PALETTES[palette]);
+      setContainerRoles(target, ramp);
     }
   }
   if (branding.density) target.setAttribute('data-density', branding.density);
