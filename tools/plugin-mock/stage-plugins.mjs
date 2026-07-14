@@ -5,20 +5,21 @@
  * Reads the pinned distribution set from ../../plugins.lock.json (repo root),
  * validates each plugin's built dist (manifest shape, tier, entry file),
  * computes a sha384 SRI integrity for the entry artifact, and copies the
- * artifact + manifest into the version-addressed staged web dirs:
+ * artifact + manifest into the version-addressed staged dir:
  *
- *   free    -> packages/ui/public/plugins/<id>/<version>/   (open nginx /plugins)
  *   premium -> staged-premium/<id>/<version>/  (repo root, OUTSIDE the web root;
  *              served gated by the engine via /api/v1/plugin-assets)
  *
+ * First-party FREE plugins are BUILT-IN workspace packages compiled into the
+ * host bundle — they are never staged; only premium plugins stage here.
+ *
  * Finally emits the inventory at packages/ui/public/plugins/index.json with
- * same-origin URLs: free entries under /plugins/..., premium entries under
- * the engine's gated route /api/v1/plugin-assets/... .
+ * same-origin URLs: premium entries under the engine's gated route
+ * /api/v1/plugin-assets/... .
  *
  * Two source modes:
  *   --local    (default) read each package's built dist directly from the
- *              sibling repos digita-plugins-community/<id>/dist (free) and
- *              digita-plugins-premium/<id>/dist (premium). Works with CI down.
+ *              sibling repo digita-plugins/<id>/dist. Works with CI down.
  *   --registry `npm pack @digitaplatform/<id>@<version>` into a temp dir
  *              (auth via the existing .npmrc) and read package/dist.
  *
@@ -78,17 +79,9 @@ if (lock.schemaVersion !== 1) fail(`Unsupported lock schemaVersion ${lock.schema
 
 const sections = [
   {
-    section: 'free',
-    expectedTier: 'community',
-    siblingRepo: 'digita-plugins-community',
-    stageBase: freeStageBase,
-    urlFor: (id, version, entry) => `/plugins/${id}/${version}/${entry}`,
-    entries: lock.free ?? {},
-  },
-  {
     section: 'premium',
     expectedTier: 'premium',
-    siblingRepo: 'digita-plugins-premium',
+    siblingRepo: 'digita-plugins',
     stageBase: premiumStageBase,
     urlFor: (id, version, entry) => `/api/v1/plugin-assets/${id}/${version}/${entry}`,
     entries: lock.premium ?? {},

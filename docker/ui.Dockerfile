@@ -59,7 +59,7 @@ COPY packages/web/package.json packages/web/
 # (React kit) + @digitaplatform/plugins (SDK) + @digitaplatform/usermenu (BUILT-IN
 # first-party plugin — its source compiles into the host bundle) + shared — all
 # in-repo workspace members. The host stays app-agnostic; it bundles NO apps.
-# PREMIUM plugin bundles are built in digita-plugins-premium and are NOT
+# PREMIUM plugin bundles are built in digita-plugins and are NOT
 # installed as deps — they enter as staged static artifacts (see PLUGIN
 # DELIVERY above).
 RUN --mount=type=bind,source=.npmrc,target=/root/.npmrc \
@@ -88,9 +88,8 @@ COPY docker/verify-plugin-stage.mjs docker/
 # ─── Stage the plugin artifacts (BEFORE the vite build) ──────
 # vite copies public/ → dist/ verbatim, so the staged plugin tree (see PLUGIN
 # DELIVERY above) must exist NOW. `stage-plugins.mjs --local` reads built
-# dists from the SIBLING repos (digita-plugins-community /
-# digita-plugins-premium) which live OUTSIDE this build context, so it cannot
-# run in here. Two supported paths:
+# dists from the SIBLING repo (digita-plugins) which lives OUTSIDE this build
+# context, so it cannot run in here. Two supported paths:
 #   PLUGINS_SOURCE=prestaged (default): staging already ran on the HOST
 #     (`node tools/plugin-mock/stage-plugins.mjs --local`) and the FREE staged
 #     tree (public/plugins/) entered via `COPY packages/ui/` above. Premium was

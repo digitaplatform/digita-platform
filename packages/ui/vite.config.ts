@@ -127,13 +127,13 @@ export default defineConfig(({ command, mode }) => {
     server: {
       port: 5174,
       // Allow the dev server to serve PREMIUM plugin source from the sibling repo
-      // (digita-plugins-premium/*) — needed for the dev plugin-source glob in
+      // (digita-plugins/*) — needed for the dev plugin-source glob in
       // registry.tsx. First-party FREE plugins are built-in workspace packages
       // (packages/plugins/*) and are covered by the workspace root.
       fs: {
         allow: [
           searchForWorkspaceRoot(process.cwd()),
-          path.resolve(__dirname, '../../../digita-plugins-premium'),
+          path.resolve(__dirname, '../../../digita-plugins'),
         ],
       },
       // Path-based routing mirrors the prod ingress (per-app single origin):

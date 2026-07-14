@@ -5,7 +5,7 @@
 // edit can never silently change the shipped default. Plugin-delivery flip:
 // theme.css bakes ONLY the free default (minimal); the premium design languages
 // (editorial/fluent/ios/material) arrive at runtime as design-plugin CSS
-// artifacts (built in digita-plugins-premium from the same public generators).
+// artifacts (built in digita-plugins from the same public generators).
 import { writeFileSync, mkdirSync, copyFileSync, existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
@@ -355,7 +355,7 @@ for (const [key] of Object.entries(TINT_PALETTES)) {
 //    branching in the kit. Plugin-delivery flip: only the BAKED designs' variant
 //    files are compiled in (base + minimal); the premium variant layers
 //    (ios/material/editorial/fluent) ship inside their design-plugin CSS
-//    artifacts (digita-plugins-premium), never here. ──
+//    artifacts (digita-plugins), never here. ──
 const variantsDir = join(here, 'variants');
 const VARIANT_CSS = ['base.css', 'minimal.css']
   .map((f) => readFileSync(join(variantsDir, f), 'utf8').trimEnd())
