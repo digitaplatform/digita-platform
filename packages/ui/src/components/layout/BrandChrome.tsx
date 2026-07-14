@@ -1,6 +1,8 @@
 import { X, PanelLeft, PanelLeftClose } from 'lucide-react';
 import type { RegionSide } from '@digitaplatform/plugins';
+import { getSignature } from '@digitaplatform/theme';
 import { useSessionStore } from '@/stores/session';
+import { useThemeStore } from '@/stores/theme';
 import { useChrome } from '@/lib/chrome-i18n';
 
 interface BrandChromeProps {
@@ -26,9 +28,20 @@ export function BrandChrome({ side, collapsed, collapsible, onToggleCollapse, on
   const branding = useSessionStore((s) => s.branding);
   const platformName = useSessionStore((s) => s.settings?.platform_name);
   const appName = branding?.app_name ?? platformName ?? 'Digita';
+  const signatureId = useThemeStore((s) => s.signature);
+  const monogram = getSignature(signatureId).monogram;
 
+  // Precedence: a tenant-provided logo ALWAYS wins; the active signature's
+  // monogram (an inline currentColor SVG, painted with the accent) is the
+  // default-brand fallback; the initial-letter tile is the last resort.
   const logo = branding?.logo ? (
     <img src={branding.logo} alt="" className="h-7 w-7 shrink-0 rounded" />
+  ) : monogram ? (
+    <div
+      aria-hidden="true"
+      className="h-7 w-7 shrink-0 text-primary-600 [&>svg]:h-full [&>svg]:w-full"
+      dangerouslySetInnerHTML={{ __html: monogram }}
+    />
   ) : (
     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-primary-600 text-sm font-bold text-white">
       {appName.charAt(0).toUpperCase()}
