@@ -50,7 +50,7 @@ export interface LayoutConfig {
 
 /** How the host integrates a plugin — the discriminator every stage dispatches on.
  *  Reserved values are declared now, handled when the first plugin of that type ships. */
-export type PluginType = 'component' | 'design';
+export type PluginType = 'component' | 'design' | 'signature';
 // reserved (future): 'data-source' | 'report' | 'workflow' | 'entity-pack'
 
 /** Commercial tier. Orthogonal to type: gates staging + activation, never integration. */
@@ -74,8 +74,19 @@ export interface DesignPlugin {
   cssUrl: string; // same-origin, version-addressed stylesheet URL
 }
 
+/** A signature — a composable IDENTITY overlay (brand accent + fonts + logo) applied ON TOP
+ *  of any design via the branding layer; it COMPOSES, never replaces the design skin. */
+export interface SignaturePlugin {
+  type: 'signature';
+  id: string;
+  title?: string;
+  accent?: string;
+  fonts?: { display?: string; sans?: string; mono?: string };
+  logoUrl?: string;
+}
+
 /** The discriminated set of runtime plugin objects — grows one member per type. */
-export type DigitaPlugin = ComponentPlugin | DesignPlugin;
+export type DigitaPlugin = ComponentPlugin | DesignPlugin | SignaturePlugin;
 
 /** The `digita` manifest a plugin package ships (package.json block + dist/digita-plugin.json).
  *  Read by the build-time staging step and validated in CI. */
@@ -99,13 +110,14 @@ export interface PluginPackageManifest {
  *  legacy PluginManifestEntry during migration. */
 export type TypedPluginManifestEntry =
   | { type: 'component'; id: string; version: string; tier: PluginTier; title?: string; url: string }
-  | { type: 'design'; id: string; version: string; tier: PluginTier; title?: string; designId: string; variant: string; cssUrl: string };
+  | { type: 'design'; id: string; version: string; tier: PluginTier; title?: string; designId: string; variant: string; cssUrl: string }
+  | { type: 'signature'; id: string; version: string; tier: PluginTier; title?: string; accent?: string; fonts?: { display?: string; sans?: string; mono?: string }; logoUrl?: string };
 
 /** Runtime narrowing guard for a dynamically-imported module's plugin export. */
 export function isDigitaPlugin(v: unknown): v is DigitaPlugin {
   if (!v || typeof v !== 'object' || !('type' in v)) return false;
   const t = (v as { type: unknown }).type;
-  return t === 'component' || t === 'design';
+  return t === 'component' || t === 'design' || t === 'signature';
 }
 
 // ─── Template definitions (declarative shell layout) ──────────────────────

@@ -20,6 +20,9 @@ export interface BrandingInput {
   /** Named palette for the SECONDARY/accent ramp (one of COLOR_PALETTES). */
   accent_palette?: string | null;
   density?: 'comfortable' | 'compact' | null;
+  /** Brand font stacks — set inline as --font-display/--font-sans/--font-mono,
+   *  which the Tailwind preset already reads (var(--font-*)). */
+  fonts?: { display?: string | null; sans?: string | null; mono?: string | null };
 }
 
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -112,6 +115,13 @@ export function applyBranding(
     }
   }
   if (branding.density) target.setAttribute('data-density', branding.density);
+  if (branding.fonts) {
+    for (const key of ['display', 'sans', 'mono'] as const) {
+      const v = branding.fonts[key];
+      // NOT cssVarName() — font vars are --font-*, exactly what the preset reads.
+      if (typeof v === 'string' && v) target.style.setProperty(`--font-${key}`, v);
+    }
+  }
 }
 
 /** Clear all runtime branding overrides (back to the default token values). */
@@ -120,6 +130,7 @@ export function resetBranding(target: HTMLElement = document.documentElement): v
   clearRamp(target, 'accent');
   clearContainerRoles(target);
   target.removeAttribute('data-density');
+  for (const key of ['display', 'sans', 'mono'] as const) target.style.removeProperty(`--font-${key}`);
 }
 
 // Single live listener so `system` mode follows the OS in real time; torn down

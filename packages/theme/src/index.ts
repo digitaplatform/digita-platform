@@ -7,3 +7,4 @@
 export * from './tokens/index.js';
 export * from './branding/applyBranding.js';
 export * from './designs/index.js';
+export * from './signatures/index.js';

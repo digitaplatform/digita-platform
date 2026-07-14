@@ -6,10 +6,11 @@ import type {
   LayoutConfig,
   PluginManifestEntry,
   PluginType,
+  SignaturePlugin,
 } from '@digitaplatform/plugins';
 import { isDigitaPlugin } from '@digitaplatform/plugins';
 import { ErrorBoundary } from '@digitaplatform/components';
-import { applyDesign, registerDesign } from '@digitaplatform/theme';
+import { applyBranding, applyDesign, registerDesign } from '@digitaplatform/theme';
 import { usePluginLayoutStore } from '@/stores/plugin-state';
 
 // COMPONENT plugins loaded for this session (design plugins live in the theme's
@@ -68,6 +69,10 @@ export interface PluginSource {
   title?: string;
   type?: PluginType;
   url?: string;
+  /** signature only: identity config carried by the inventory entry itself. */
+  accent?: string;
+  fonts?: { display?: string; sans?: string; mono?: string };
+  logoUrl?: string;
 }
 
 /** Normalize a dynamically-imported plugin module to a typed DigitaPlugin.
@@ -109,6 +114,15 @@ const integrateHandlers: IntegrateHandlers = {
     if (document.documentElement.getAttribute('data-design') === plugin.designId) {
       applyDesign(plugin.designId);
     }
+  },
+  // signature: an IDENTITY overlay (accent + fonts) applied via the BRANDING
+  // layer (inline --color-primary-* / --font-* vars). CRITICAL: it never touches
+  // data-design — a signature COMPOSES on top of whatever design skin is active,
+  // so flipping the design keeps the signature and vice versa.
+  signature: (plugin: SignaturePlugin) => {
+    applyBranding({ primary_color: plugin.accent ?? null, fonts: plugin.fonts });
+    // TODO(plugin.logoUrl): swap the shell's logo chrome (header/sidebar brand
+    // slot) to the signature's logo once the shell exposes that slot.
   },
 };
 
@@ -152,6 +166,19 @@ function injectDesignStylesheet(plugin: DesignPlugin): Promise<void> {
 async function resolvePlugin(source: PluginSource): Promise<DigitaPlugin | null> {
   const devLoader = devSourceLoader(source.id);
   if (devLoader) return normalizeModulePlugin(await devLoader(), source.id);
+  if (source.type === 'signature') {
+    // A signature is pure CONFIG — no module to import, no CSS to inject, no
+    // URL needed. The inventory/source entry itself carries everything the
+    // handler applies (accent + fonts + logoUrl).
+    return {
+      type: 'signature',
+      id: source.id,
+      title: source.title,
+      accent: source.accent,
+      fonts: source.fonts,
+      logoUrl: source.logoUrl,
+    };
+  }
   if (!source.url || !source.type) {
     console.error(`[plugins] "${source.id}" has no inventory entry (and no dev source) — cannot load`);
     return null;

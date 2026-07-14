@@ -5,9 +5,11 @@ import {
   applyBranding,
   applyDensity,
   applyDesign,
+  applySignature,
   resolveInitialMode,
   resolveInitialDensity,
   resolveInitialDesign,
+  resolveInitialSignature,
   type ThemeMode,
   type Density,
 } from '@digitaplatform/theme';
@@ -17,9 +19,11 @@ const MODE_KEY = 'digita-ui:theme-mode';
 const TEMPLATE_KEY = 'digita-ui:template';
 const DENSITY_KEY = 'digita-ui:density';
 const DESIGN_KEY = 'digita-ui:design';
+const SIGNATURE_KEY = 'digita-ui:signature';
 const PREF_MODE = 'ui.theme_mode';
 const PREF_DENSITY = 'ui.density';
 const PREF_DESIGN = 'ui.design';
+const PREF_SIGNATURE = 'ui.signature';
 
 interface ThemeState {
   mode: ThemeMode;
@@ -27,6 +31,9 @@ interface ThemeState {
   density: Density;
   /** Active design id (the token plugin selected via data-design). */
   design: string;
+  /** Active signature id (the identity overlay riding the branding layer — it
+   *  COMPOSES on top of the design, never replaces it). */
+  signature: string;
   /** Per-user template override (else resolved from branding.default_template). */
   templateOverride: string | null;
   branding: BootBranding | null;
@@ -34,6 +41,7 @@ interface ThemeState {
   cycleMode: () => void;
   setDensity: (density: Density) => void;
   setDesign: (design: string) => void;
+  setSignature: (id: string) => void;
   setTemplateOverride: (key: string) => void;
   setBranding: (branding: BootBranding) => void;
   /** Pull mode + density + design from UserPreference (server) so they roam across
@@ -51,11 +59,16 @@ const initialDesign = resolveInitialDesign(DESIGN_KEY);
 applyDesign(initialDesign);
 applyMode(initialMode);
 applyDensity(initialDensity);
+// Signature LAST: its accent/fonts ride the branding layer (inline vars), which
+// composes ON TOP of the design stamp — 'simetrix' paints by default.
+const initialSignature = resolveInitialSignature(SIGNATURE_KEY);
+applySignature(initialSignature);
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
   mode: initialMode,
   density: initialDensity,
   design: initialDesign,
+  signature: initialSignature,
   templateOverride: localStorage.getItem(TEMPLATE_KEY),
   branding: null,
   setMode: (mode) => {
@@ -80,6 +93,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     set({ design });
     void setUserPreference(PREF_DESIGN, design).catch(() => {});
   },
+  setSignature: (id) => {
+    localStorage.setItem(SIGNATURE_KEY, id);
+    applySignature(id);
+    set({ signature: id });
+    void setUserPreference(PREF_SIGNATURE, id).catch(() => {});
+  },
   setTemplateOverride: (key) => {
     localStorage.setItem(TEMPLATE_KEY, key);
     set({ templateOverride: key });
@@ -94,10 +113,11 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   },
   loadRemotePrefs: async () => {
     try {
-      const [mode, density, design] = await Promise.all([
+      const [mode, density, design, signature] = await Promise.all([
         getUserPreference<ThemeMode>(PREF_MODE),
         getUserPreference<Density>(PREF_DENSITY),
         getUserPreference<string>(PREF_DESIGN),
+        getUserPreference<string>(PREF_SIGNATURE),
       ]);
       if (mode === 'light' || mode === 'dark' || mode === 'system') {
         localStorage.setItem(MODE_KEY, mode);
@@ -113,6 +133,11 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         localStorage.setItem(DESIGN_KEY, design);
         applyDesign(design);
         set({ design });
+      }
+      if (typeof signature === 'string' && signature) {
+        localStorage.setItem(SIGNATURE_KEY, signature);
+        applySignature(signature);
+        set({ signature });
       }
     } catch {
       /* offline or unset — keep the localStorage default */

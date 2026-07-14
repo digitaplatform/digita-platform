@@ -40,6 +40,11 @@ export interface PluginInventoryEntry {
   entry: string;
   integrity?: string;
   url: string;
+  /** signature only: identity config inlined in the inventory (a signature is
+   *  pure config — no artifact to fetch beyond these fields). */
+  accent?: string;
+  fonts?: { display?: string; sans?: string; mono?: string };
+  logoUrl?: string;
 }
 
 export interface PluginInventory {

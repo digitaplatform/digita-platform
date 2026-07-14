@@ -29,7 +29,16 @@ export function joinCompositionWithInventory(
         lockedIds.push(entry.id);
         continue;
       }
-      sources.push({ id: entry.id, title: entry.title, type: staged.type, url: staged.url });
+      sources.push({
+        id: entry.id,
+        title: entry.title,
+        type: staged.type,
+        url: staged.url,
+        // signature only: identity config rides the inventory entry itself.
+        accent: staged.accent,
+        fonts: staged.fonts,
+        logoUrl: staged.logoUrl,
+      });
     } else if (entry.url) {
       // Legacy engine shape: the component bundle url inlined in the composition.
       sources.push({ id: entry.id, title: entry.title, type: 'component', url: entry.url });
