@@ -394,7 +394,7 @@
   "description.View.params": "Typed query-string parameters: [{ name, type, required?, default?, enum_values? }, ...]",
   "description.View.sections": "Array of { key, kind, entity, ... } — discriminated by `kind` ∈ {link, list, aggregate}.",
   "description.View.source": "{ entity, param } — root entity and which `params[]` entry binds the URL :rootName.",
-  "description.Workspace.cards": "WorkspaceCard[] (digita-shared contract). Opaque to the engine.",
+  "description.Workspace.cards": "WorkspaceCard[] (@digitaplatform/shared contract). Opaque to the engine.",
   "description.Workspace.default_view": "View._id that view-bound cards inherit when their own `view` is omitted.",
   "description.Workspace.icon": "lucide icon name",
   "description.Workspace.is_default_for_roles": "string[] role names for whom this is the DEFAULT workspace.",

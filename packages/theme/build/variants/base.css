@@ -51,7 +51,7 @@
 :root[data-design-variant="material"] [data-ui="table"] [data-ui="icon-button"] { min-width: 0; min-height: 0; }
 
 /* ── FIX 11 · DataGrid Nordstern skin ──────────────────────────────────────
-   Target: digita-theme/build/variants/base.css (CSS-only; keyed on the same
+   Target: packages/theme/build/variants/base.css (CSS-only; keyed on the same
    data-ui hooks). The grid read like a bare spreadsheet widget inside a soft
    card UI: always-visible destructive icons, uniformly hard hairlines,
    editor boxes floating inside cells, a detached entry field. */
@@ -85,7 +85,7 @@
 .grid-entry [data-ui="input-frame"]:focus-within { box-shadow: none; background: var(--color-bg-hover); }
 
 /* ── FIX 12 · Grid scrollbars: thin, hover-reveal, with edge fades ─────────
-   Target: digita-theme/build/variants/base.css
+   Target: packages/theme/build/variants/base.css
    A permanent OS scrollbar track inside the grid frame eats a row of
    vertical space and reads like a legacy form widget. The scroller keeps
    scrolling everywhere; the BAR only materializes while the pointer is

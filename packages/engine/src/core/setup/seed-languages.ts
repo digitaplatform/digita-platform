@@ -5,7 +5,7 @@ import { createLogger } from "../logging/logger.js";
 const log = createLogger("seed-languages");
 
 // Master language list. All six are ENABLED so the platform fully supports the
-// languages the public website (digita-web) ships in: English, German, Italian,
+// languages the public website (packages/web) ships in: English, German, Italian,
 // French, Spanish, Turkish. Rule: any language the frontend needs MUST exist
 // (and be enabled) here \u2014 the engine is the master list. (Operator-UI chrome
 // bundles exist for all six; the website carries its own per-page content

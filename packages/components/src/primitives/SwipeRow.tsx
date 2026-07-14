@@ -38,7 +38,8 @@ import { Menu, MenuItem } from '../composites/Menu.js';
  * Hooks: `data-ui="swipe-row"` (+ `data-open="none|leading|trailing"`),
  * `"swipe-row-content"`, `"swipe-row-actions"` (+ `data-side`),
  * `"swipe-row-action"` (+ `data-variant`), `"swipe-row-menu"`. The iOS layer
- * paints delete red / more gray and the spring snap in ios.css; the neutral
+ * paints delete red / more gray and the spring snap in the premium ios variant
+ * CSS (digita-plugins-premium); the neutral
  * default is token-styled (danger = error tokens).
  *
  * jsdom note: tray/row widths are unmeasurable there — the state machine falls

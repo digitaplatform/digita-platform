@@ -1,7 +1,7 @@
 /**
  * Digita backend — collection + database name constants.
  *
- * Hand-maintained alongside `packages/backend/src/entities/*.entity.json`.
+ * Hand-maintained alongside `packages/engine/src/entities/*.entity.json`.
  * When you add or rename an entity, update this file too. The TypeScript
  * compiler will surface any reference that doesn't match a constant key,
  * so drift between the JSON files and these constants is caught at build

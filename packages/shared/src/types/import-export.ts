@@ -1,6 +1,6 @@
 /**
  * Master-data import/export DTOs — shared by the engine (import-export
- * services + router) and digita-ui (ImportWizard). Everything is generic and
+ * services + router) and packages/ui (ImportWizard). Everything is generic and
  * metadata-driven; there is no entity-specific shape here.
  */
 

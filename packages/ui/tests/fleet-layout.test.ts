@@ -105,7 +105,7 @@ describe('fleet census — engine entities', () => fleetChecks('engine', ENGINE_
 describe.skipIf(!existsSync(ERP_DIR))('fleet census — digita-apps/erp', () => fleetChecks('erp', ERP_DIR));
 
 if (!existsSync(ERP_DIR)) {
-  // digita-ui tests are not in the root CI gate; locally the sibling checkout is
+  // packages/ui tests are not in the root CI gate; locally the sibling checkout is
   // always present, so keep the skip loud rather than silently green.
   console.warn('[fleet-layout] digita-apps sibling checkout missing — ERP census SKIPPED');
 }

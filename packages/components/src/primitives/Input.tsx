@@ -3,7 +3,7 @@ import { cn } from '../lib/cn.js';
 
 // `h-[var(--control-h,2.625rem)]` — the shared single-line control height (BUG-2
 // reflow fix). The literal 2.625rem (42px) is the historical padded height; the
-// `--control-h` design token can override it, and the load-skeleton bar + digita-ui's
+// `--control-h` design token can override it, and the load-skeleton bar + packages/ui's
 // FIELD_CLASS reference the same expression so a skeleton and its real control settle
 // at the identical height (no 36→42px jump).
 //

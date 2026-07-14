@@ -392,7 +392,7 @@
   "description.View.params": "Parametri di query string tipizzati: [{ name, type, required?, default?, enum_values? }, ...]",
   "description.View.sections": "Array di { key, kind, entity, ... } — discriminato da `kind` ∈ {link, list, aggregate}.",
   "description.View.source": "{ entity, param } — entità radice e quale voce di `params[]` vincola il :rootName dell'URL.",
-  "description.Workspace.cards": "WorkspaceCard[] (contratto di digita-shared). Opaco per il motore.",
+  "description.Workspace.cards": "WorkspaceCard[] (contratto di @digitaplatform/shared). Opaco per il motore.",
   "description.Workspace.default_view": "View._id che le schede vincolate a una vista ereditano quando il proprio `view` è omesso.",
   "description.Workspace.icon": "nome dell'icona Lucide",
   "description.Workspace.is_default_for_roles": "string[] nomi dei ruoli per cui questa è l'area di lavoro PREDEFINITA.",

@@ -1,6 +1,6 @@
 /**
  * Workspace (dashboard) contract — the SINGLE source for both the engine-side seed
- * authors and the digita-ui DashboardPage. A Workspace is an ordered list of
+ * authors and the packages/ui DashboardPage. A Workspace is an ordered list of
  * presentation cards that COMPOSE the View engine (each view-bound card points at a
  * named view + section). The engine stores `cards` as opaque JSON and never
  * interprets a card kind — all interpretation is client-side, app-agnostic.

@@ -380,7 +380,8 @@
 /* ══════════════════════════════════════════════════════════════════════════
    Minimal DARK-MODE corrections — the tint ramp is mode-static, so the
    variant layer swaps low-contrast steps itself (both `.dark` and
-   `data-design-variant` sit on <html>), exactly like ios.css/material.css.
+   `data-design-variant` sit on <html>), exactly like the premium ios/material
+   variant layers (shipped from digita-plugins-premium).
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* Focus ring — primary-600 can sink into a dark bg under several tints;

@@ -31,6 +31,7 @@
   },
   "scripts": {
     "build": "tsc && node build/gen-css.mjs",
+    "test": "vitest run",
     "clean": "rm -rf dist"
   },
   "devDependencies": {

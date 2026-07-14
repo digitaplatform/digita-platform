@@ -31,7 +31,7 @@
     { "fieldname": "default_view", "fieldtype": "Data", "label": "Default View", "description": "View._id that view-bound cards inherit when their own `view` is omitted.", "idx": 13 },
 
     { "fieldname": "sb_cards", "fieldtype": "SectionBreak", "label": "Cards", "idx": 20 },
-    { "fieldname": "cards", "fieldtype": "JSON", "label": "Cards", "required": true, "description": "WorkspaceCard[] (digita-shared contract). Opaque to the engine.", "idx": 21 }
+    { "fieldname": "cards", "fieldtype": "JSON", "label": "Cards", "required": true, "description": "WorkspaceCard[] (@digitaplatform/shared contract). Opaque to the engine.", "idx": 21 }
   ],
   "indexes": [
     { "fields": ["enabled"], "name": "idx_workspace_enabled" },

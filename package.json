@@ -14,7 +14,7 @@
     "build:engine": "pnpm --filter @digitaplatform/engine build",
     "build:ui": "pnpm --filter @digitaplatform/ui build:vendor && pnpm --filter @digitaplatform/ui build",
     "build:web": "pnpm --filter @digitaplatform/web build",
-    "test": "pnpm --filter @digitaplatform/engine test",
+    "test": "pnpm -r test",
     "clean": "pnpm -r clean"
   },
   "engines": {

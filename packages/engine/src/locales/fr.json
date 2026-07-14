@@ -392,7 +392,7 @@
   "description.View.params": "Paramètres de chaîne de requête typés : [{ name, type, required?, default?, enum_values? }, ...]",
   "description.View.sections": "Tableau de { key, kind, entity, ... } — discriminé par `kind` ∈ {link, list, aggregate}.",
   "description.View.source": "{ entity, param } — entité racine et quelle entrée de `params[]` lie le :rootName de l'URL.",
-  "description.Workspace.cards": "WorkspaceCard[] (contrat digita-shared). Opaque pour le moteur.",
+  "description.Workspace.cards": "WorkspaceCard[] (contrat @digitaplatform/shared). Opaque pour le moteur.",
   "description.Workspace.default_view": "View._id dont héritent les cartes liées à une vue lorsque leur propre `view` est omis.",
   "description.Workspace.icon": "nom d'icône Lucide",
   "description.Workspace.is_default_for_roles": "string[] noms de rôles pour lesquels il s'agit de l'espace de travail PAR DÉFAUT.",

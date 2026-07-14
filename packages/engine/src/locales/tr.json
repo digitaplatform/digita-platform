@@ -394,7 +394,7 @@
   "description.View.params": "Tipli sorgu dizesi parametreleri: [{ name, type, required?, default?, enum_values? }, ...]",
   "description.View.sections": "{ key, kind, entity, ... } dizisi — `kind` ∈ {link, list, aggregate} değerine göre ayrılır.",
   "description.View.source": "{ entity, param } — kök varlık ve hangi `params[]` girdisinin URL :rootName ile bağlandığı.",
-  "description.Workspace.cards": "WorkspaceCard[] (digita-shared sözleşmesi). Motor için opak.",
+  "description.Workspace.cards": "WorkspaceCard[] (@digitaplatform/shared sözleşmesi). Motor için opak.",
   "description.Workspace.default_view": "Görünüme bağlı kartların kendi `view` değeri atlandığında devraldığı View._id.",
   "description.Workspace.icon": "Lucide simge adı",
   "description.Workspace.is_default_for_roles": "Bunun VARSAYILAN çalışma alanı olduğu rol adlarının dizisi (string[]).",

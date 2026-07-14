@@ -18,7 +18,7 @@ import { dirname, join, resolve, basename } from 'node:path';
 import { ENTRY_FILES, SPECIFIER_TO_ENTRY } from './shared-externals.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const root = resolve(here, '..'); // digita-ui
+const root = resolve(here, '..'); // packages/ui
 const entriesDir = join(here, 'entries');
 const outDir = join(root, 'public', 'vendor');
 const importMapPath = join(root, 'public', 'import-map.json');

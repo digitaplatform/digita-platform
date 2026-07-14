@@ -394,7 +394,7 @@
   "description.View.params": "Typisierte Query-String-Parameter: [{ name, type, required?, default?, enum_values? }, ...]",
   "description.View.sections": "Array von { key, kind, entity, ... } — unterschieden durch `kind` ∈ {link, list, aggregate}.",
   "description.View.source": "{ entity, param } — Wurzelentität und welcher `params[]`-Eintrag den URL-Parameter :rootName bindet.",
-  "description.Workspace.cards": "WorkspaceCard[] (digita-shared-Vertrag). Für die Engine undurchsichtig.",
+  "description.Workspace.cards": "WorkspaceCard[] (@digitaplatform/shared-Vertrag). Für die Engine undurchsichtig.",
   "description.Workspace.default_view": "View._id, die ansichtsgebundene Karten erben, wenn ihr eigenes `view` weggelassen wird.",
   "description.Workspace.icon": "Lucide-Icon-Name",
   "description.Workspace.is_default_for_roles": "string[] Rollennamen, für die dies der STANDARD-Arbeitsbereich ist.",

@@ -7,7 +7,7 @@
  * radius / tracking are mode-agnostic literals.
  */
 export const fontFamily = {
-  // 'Twemoji Country Flags' resolves only where digita-ui registers the
+  // 'Twemoji Country Flags' resolves only where packages/ui registers the
   // @font-face (flag-glyphs-only woff2, Windows Chrome ships no flag emoji);
   // everywhere else the unknown family falls through to Inter harmlessly.
   sans: ['Twemoji Country Flags', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
