@@ -1,6 +1,9 @@
 # Digita open core — pnpm workspace. Base packages first; engine/ui/web follow.
 packages:
   - packages/*
+  # plugins/ is a CONTAINER, not a package: the SDK (sdk/) + each first-party
+  # plugin (usermenu/, ...) live one level deeper.
+  - packages/plugins/*
 
 # Match digita-platform supply-chain settings for deterministic installs.
 minimumReleaseAge: 0

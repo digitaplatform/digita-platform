@@ -166,7 +166,7 @@ importers:
         specifier: ^8.21.0
         version: 8.21.0
 
-  packages/plugins:
+  packages/plugins/sdk:
     dependencies:
       react:
         specifier: ^19.0.0
@@ -207,7 +207,7 @@ importers:
         version: link:../components
       '@digitaplatform/plugins':
         specifier: workspace:*
-        version: link:../plugins
+        version: link:../plugins/sdk
       '@digitaplatform/shared':
         specifier: workspace:*
         version: link:../shared
