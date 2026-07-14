@@ -126,13 +126,13 @@ export default defineConfig(({ command, mode }) => {
     ...(isBuild ? { optimizeDeps: { exclude: SHARED_EXTERNALS } } : {}),
     server: {
       port: 5174,
-      // Allow the dev server to serve plugin source from the sibling plugin repos
-      // (digita-plugins-community/* and digita-plugins-premium/*) — needed for the
-      // dev plugin-source glob in registry.tsx.
+      // Allow the dev server to serve PREMIUM plugin source from the sibling repo
+      // (digita-plugins-premium/*) — needed for the dev plugin-source glob in
+      // registry.tsx. First-party FREE plugins are built-in workspace packages
+      // (packages/plugins/*) and are covered by the workspace root.
       fs: {
         allow: [
           searchForWorkspaceRoot(process.cwd()),
-          path.resolve(__dirname, '../../../digita-plugins-community'),
           path.resolve(__dirname, '../../../digita-plugins-premium'),
         ],
       },

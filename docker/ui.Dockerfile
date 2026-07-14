@@ -49,15 +49,17 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/theme/package.json packages/theme/
 COPY packages/components/package.json packages/components/
-COPY packages/plugins/package.json packages/plugins/
+COPY packages/plugins/sdk/package.json packages/plugins/sdk/
+COPY packages/plugins/usermenu/package.json packages/plugins/usermenu/
 COPY packages/engine/package.json packages/engine/
 COPY packages/ui/package.json packages/ui/
 COPY packages/web/package.json packages/web/
 
 # ui (host) + @digitaplatform/theme (design foundation) + @digitaplatform/components
-# (React kit) + @digitaplatform/plugins (SDK) + shared — all in-repo workspace
-# members. The host stays app-agnostic; it bundles NO apps. Plugin bundles
-# are built in digita-plugins-community / digita-plugins-premium and are NOT
+# (React kit) + @digitaplatform/plugins (SDK) + @digitaplatform/usermenu (BUILT-IN
+# first-party plugin — its source compiles into the host bundle) + shared — all
+# in-repo workspace members. The host stays app-agnostic; it bundles NO apps.
+# PREMIUM plugin bundles are built in digita-plugins-premium and are NOT
 # installed as deps — they enter as staged static artifacts (see PLUGIN
 # DELIVERY above).
 RUN --mount=type=bind,source=.npmrc,target=/root/.npmrc \
@@ -66,6 +68,7 @@ RUN --mount=type=bind,source=.npmrc,target=/root/.npmrc \
     --filter @digitaplatform/theme \
     --filter @digitaplatform/components \
     --filter @digitaplatform/plugins \
+    --filter @digitaplatform/usermenu \
     --filter @digitaplatform/ui
 
 # ─── Stage 2: Build ──────────────────────────────────────────

@@ -1,0 +1,36 @@
+{
+  "name": "@digitaplatform/usermenu",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Digita first-party FREE plugin: role-scoped navigation rail. Reads the UserMenu entity via the engine's generic resource API and builds + role-gates the tree client-side (the engine knows nothing about navigation). BUILT-IN: the ui compiles this SOURCE directly into its own module graph (one Vite graph, one React) and registers it at boot via packages/ui/src/plugins/builtins.ts — no vite bundle, no runtime load, no staging.",
+  "exports": {
+    ".": "./src/index.tsx"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/digitaplatform/digita-platform.git",
+    "directory": "packages/plugins/usermenu"
+  },
+  "digita": {
+    "id": "usermenu",
+    "type": "component",
+    "tier": "community",
+    "displayName": "Navigation"
+  },
+  "dependencies": {
+    "@digitaplatform/components": "workspace:*",
+    "@digitaplatform/plugins": "workspace:*",
+    "lucide-react": "^0.562.0"
+  },
+  "peerDependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router": "^7.17.0",
+    "react-router-dom": "^7.17.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "typescript": "^6.0.3"
+  }
+}

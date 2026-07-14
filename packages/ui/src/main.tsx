@@ -10,6 +10,10 @@ import { polyfillCountryFlagEmojis } from 'country-flag-emoji-polyfill';
 // Glyphs: Twemoji, CC-BY 4.0 (c) Twitter — flags only, 76KB.
 import flagFontUrl from './assets/TwemojiCountryFlags.woff2?url';
 import './index.css';
+// Side-effect import: registers the BUILT-IN first-party plugins (usermenu, …)
+// with the plugin registry at module load — before the shell renders, so the
+// layout's regions resolve without any runtime plugin fetch. See builtins.ts.
+import '@/plugins/builtins';
 
 // Windows Chrome renders no flag emoji (Segoe UI Emoji ships none) — the
 // Language switcher's flag_emoji seeds showed as bare letters. This registers

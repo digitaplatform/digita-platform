@@ -14,9 +14,10 @@ import { applyBranding, applyDesign, registerDesign } from '@digitaplatform/them
 import { usePluginLayoutStore } from '@/stores/plugin-state';
 
 // COMPONENT plugins loaded for this session (design plugins live in the theme's
-// runtime design registry — only components render into Regions). The host ships
-// NONE — every plugin is app-provided and loaded at runtime from the composition.
-// A future build-time path could call registerPlugin() directly; the rest is identical.
+// runtime design registry — only components render into Regions). Two ways in:
+// BUILT-IN first-party plugins (builtins.ts) call registerPlugin() directly at
+// boot — their source is compiled into the host bundle; everything else is
+// app-provided and loaded at runtime from the composition. The rest is identical.
 const loaded = new Map<string, FrontendPlugin>();
 
 // Premium plugin ids the tenant is NOT entitled to (per /api/v1/plugins
@@ -39,18 +40,17 @@ export function isPluginLocked(id: string): boolean {
   return locked.has(id);
 }
 
-// Dev only: load plugin implementations from their workspace SOURCE so the whole
-// app is ONE Vite module graph — a single React instance + a single
+// Dev only: load PREMIUM plugin implementations from their sibling-repo SOURCE so
+// the whole app is ONE Vite module graph — a single React instance + a single
 // @digitaplatform/plugins host-services singleton, plus hot-reload of plugin edits. The
 // built /public ESM bundle (the prod federation path) can't be import()ed as a
 // module by the dev server AND would pull a second React. The glob is statically
 // extracted by Vite but the import.meta.env.DEV guard tree-shakes it (and the
 // plugin sources) out of the production build, which keeps using the manifest URL.
+// (First-party FREE plugins need no dev glob — they are BUILT-IN workspace
+// packages registered at boot by builtins.ts, in dev and prod alike.)
 const devPluginSources: Record<string, () => Promise<unknown>> = import.meta.env.DEV
-  ? import.meta.glob([
-      '../../../../../digita-plugins-community/*/src/index.tsx',
-      '../../../../../digita-plugins-premium/*/src/index.tsx',
-    ])
+  ? import.meta.glob(['../../../../../digita-plugins-premium/*/src/index.tsx'])
   : {};
 
 function devSourceLoader(id: string): (() => Promise<unknown>) | undefined {
@@ -209,6 +209,11 @@ export async function loadPlugins(sources: PluginSource[]): Promise<void> {
   await Promise.all(
     sources.map(async (source) => {
       try {
+        // A composition may still list a BUILT-IN plugin id (placement is the
+        // layout's business, not the loader's). Built-ins registered at boot
+        // (builtins.ts) need no loading — skip instead of erroring on a source
+        // that has, by design, no inventory entry and no dev glob hit.
+        if (loaded.has(source.id)) return;
         const plugin = await resolvePlugin(source);
         if (plugin) await integratePlugin(plugin);
       } catch (err) {
