@@ -18,7 +18,7 @@
 # ──────────────────────────────────────────────────────────────
 
 # ─── Stage 1: Install dependencies ───────────────────────────
-FROM node:22-alpine AS deps
+FROM node:24-alpine AS deps
 
 # Pin pnpm to the major the lockfile was written with (lockfileVersion 9.0).
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
@@ -57,7 +57,7 @@ RUN pnpm --filter @digitaplatform/shared build && \
     pnpm --filter @digitaplatform/engine build
 
 # ─── Stage 3: Production image ──────────────────────────────
-FROM node:22-alpine AS production
+FROM node:24-alpine AS production
 
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 

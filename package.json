@@ -18,7 +18,7 @@
     "clean": "pnpm -r clean"
   },
   "engines": {
-    "node": ">=22.0.0",
+    "node": ">=24",
     "pnpm": ">=11.0.0"
   }
 }

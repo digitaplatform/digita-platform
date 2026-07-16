@@ -37,7 +37,7 @@
 # ──────────────────────────────────────────────────────────────
 
 # ─── Stage 1: Install dependencies ───────────────────────────
-FROM node:22-alpine AS deps
+FROM node:24-alpine AS deps
 
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 
