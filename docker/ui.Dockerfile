@@ -50,7 +50,6 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/theme/package.json packages/theme/
 COPY packages/components/package.json packages/components/
 COPY packages/plugins/sdk/package.json packages/plugins/sdk/
-COPY packages/plugins/usermenu/package.json packages/plugins/usermenu/
 COPY packages/engine/package.json packages/engine/
 COPY packages/ui/package.json packages/ui/
 COPY packages/web/package.json packages/web/

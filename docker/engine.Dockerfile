@@ -36,7 +36,6 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/theme/package.json packages/theme/
 COPY packages/components/package.json packages/components/
 COPY packages/plugins/sdk/package.json packages/plugins/sdk/
-COPY packages/plugins/usermenu/package.json packages/plugins/usermenu/
 COPY packages/engine/package.json packages/engine/
 COPY packages/ui/package.json packages/ui/
 COPY packages/web/package.json packages/web/
@@ -56,6 +55,19 @@ COPY packages/engine/ packages/engine/
 RUN pnpm --filter @digitaplatform/shared build && \
     pnpm --filter @digitaplatform/engine build
 
+# ─── Stage 2b: stage the premium plugin bytes from the registry ──
+# TEMPORARY (until the plugin store ships): npm-pack the plugin artifacts from
+# GitHub Packages and stage the PREMIUM ones into /app/staged-premium, which the
+# production stage copies and the engine serves via /api/v1/plugin-assets. They
+# are ungated for now via PLUGINS_LICENSE_DISABLED (see env.ts / app.ts) — flip
+# that off + delete this block to return to the licensed store model.
+# The free inventory side-output (packages/ui/public/plugins) is dead weight here
+# (the ui image builds its own) and is never copied into the engine image.
+COPY plugins.lock.json ./
+COPY tools/plugin-mock/ tools/plugin-mock/
+RUN --mount=type=bind,source=.npmrc,target=/root/.npmrc \
+    node tools/plugin-mock/stage-plugins.mjs --registry
+
 # ─── Stage 3: Production image ──────────────────────────────
 FROM node:24-alpine AS production
 
@@ -71,7 +83,6 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/theme/package.json packages/theme/
 COPY packages/components/package.json packages/components/
 COPY packages/plugins/sdk/package.json packages/plugins/sdk/
-COPY packages/plugins/usermenu/package.json packages/plugins/usermenu/
 COPY packages/engine/package.json packages/engine/
 COPY packages/ui/package.json packages/ui/
 COPY packages/web/package.json packages/web/
@@ -86,6 +97,11 @@ RUN --mount=type=bind,source=.npmrc,target=/root/.npmrc \
 # .ts hook files back in the image and the hook-loader prefers .ts over .js.
 COPY --from=build /app/packages/shared/dist/ packages/shared/dist/
 COPY --from=build /app/packages/engine/dist/ packages/engine/dist/
+
+# TEMPORARY (until the plugin store ships): the staged premium plugin bytes,
+# served by the engine's /api/v1/plugin-assets route (ungated for now via
+# PLUGINS_LICENSE_DISABLED). /app/staged-premium is PLUGINS_PREMIUM_DIR's default.
+COPY --from=build /app/staged-premium/ staged-premium/
 
 RUN mkdir -p /app/uploads && chown -R digita:digita /app
 
