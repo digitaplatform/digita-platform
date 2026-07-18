@@ -34,7 +34,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const VALID_TYPES = new Set(['component', 'design']);
+const VALID_TYPES = new Set(['component', 'design', 'signature']);
 const VALID_TIERS = new Set(['free', 'premium']);
 const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
@@ -106,7 +106,7 @@ for (const p of inventory.plugins) {
   }
   if (seenIds.has(id)) fail(`[${id}] duplicate id in inventory`);
   seenIds.add(id);
-  if (!VALID_TYPES.has(p.type)) fail(`[${id}] invalid type "${p.type}" (expected component|design)`);
+  if (!VALID_TYPES.has(p.type)) fail(`[${id}] invalid type "${p.type}" (expected component|design|signature)`);
   if (!VALID_TIERS.has(p.tier)) fail(`[${id}] invalid tier "${p.tier}" (expected free|premium)`);
   for (const [field, value] of [['id', p.id], ['version', p.version], ['entry', p.entry]]) {
     if (!SAFE_SEGMENT.test(value) || value.includes('..')) {

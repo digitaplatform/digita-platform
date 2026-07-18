@@ -5,14 +5,18 @@
 #     version   X.Y.Z              e.g. 1.4.0
 #     channel   stable | beta | alpha
 #
-# Bumps every workspace package to <version>-<channel> (lockstep), commits, tags
-# v<version>-<channel>, pushes, and opens a GitHub release. The actual publish to
-# GitHub Packages (npm.pkg.github.com) is done by .github/workflows/release.yml
-# when the tag lands — so this needs no local npm auth. Stage-neutral: it takes
-# no environment/stage config, only the version + channel.
+# stable  -> publishes PLAIN X.Y.Z (npm dist-tag 'latest') so consumer caret
+#            ranges (^X.Y.Z) actually resolve it — a prerelease suffix would not.
+# beta    -> publishes X.Y.Z-beta  as a prerelease (dist-tag 'beta').
+# alpha   -> publishes X.Y.Z-alpha as a prerelease (dist-tag 'alpha').
 #
+# Bumps every workspace package to the release version (lockstep), commits, tags,
+# pushes, and opens a GitHub release. The publish to GitHub Packages is done by
+# .github/workflows/release.yml when the tag lands — no local npm auth needed.
+# Stage-neutral: it takes no environment/stage config, only version + channel.
 # The PowerShell twin (release.ps1) drives the same pnpm/npm/git/gh commands.
 set -euo pipefail
+cd "$(cd "$(dirname "$0")" && pwd)" # run from the repo root regardless of cwd
 
 VERSION="${1:-}"
 CHANNEL="${2:-}"
@@ -25,20 +29,21 @@ case "$CHANNEL" in
   *) die "channel must be stable|beta|alpha (got '${CHANNEL:-<none>}')" ;;
 esac
 
-FULL="${VERSION}-${CHANNEL}"
+if [[ "$CHANNEL" == "stable" ]]; then FULL="$VERSION"; else FULL="${VERSION}-${CHANNEL}"; fi
 TAG="v${FULL}"
 
 command -v gh >/dev/null 2>&1 || die "gh (GitHub CLI) is required and must be authenticated"
 [[ -z "$(git status --porcelain)" ]] || die "working tree is not clean — commit or stash first"
-git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null 2>&1 && die "tag ${TAG} already exists"
+git fetch --tags --quiet origin 2>/dev/null || true
+if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null 2>&1; then die "tag ${TAG} already exists locally"; fi
+if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then die "tag ${TAG} already exists on origin"; fi
 
 printf 'Releasing %s …\n' "$TAG"
 
-# Lockstep version bump across every workspace package + the root manifest
-# (install-free walker; private packages are bumped but never published).
+# Lockstep version bump (install-free walker; private packages bumped but never published).
 node scripts/bump-version.mjs "$FULL"
 
-git add -A
+git add -u # only tracked files (the bumped package.json) — never sweep untracked
 git commit -m "release: ${TAG}"
 git tag -a "${TAG}" -m "${TAG}"
 git push origin HEAD
@@ -51,5 +56,5 @@ else
   gh release create "${TAG}" --title "${TAG}" --notes "${NOTES}" --prerelease
 fi
 
-printf 'Done. CI will build + publish to npm.pkg.github.com (dist-tag: %s).\n' \
-  "$([[ "$CHANNEL" == stable ]] && echo latest || echo "$CHANNEL")"
+DIST=$([[ "$CHANNEL" == stable ]] && echo latest || echo "$CHANNEL")
+printf 'Done. CI will build + publish to npm.pkg.github.com (dist-tag: %s).\n' "$DIST"

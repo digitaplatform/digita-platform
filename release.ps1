@@ -5,50 +5,56 @@
 #     version   X.Y.Z              e.g. 1.4.0
 #     channel   stable | beta | alpha
 #
-# Bumps every workspace package to <version>-<channel> (lockstep), commits, tags
-# v<version>-<channel>, pushes, and opens a GitHub release. The actual publish to
-# GitHub Packages (npm.pkg.github.com) is done by .github/workflows/release.yml
-# when the tag lands — so this needs no local npm auth. Stage-neutral: it takes
-# no environment/stage config, only the version + channel.
+# stable  -> publishes PLAIN X.Y.Z (npm dist-tag 'latest') so consumer caret
+#            ranges (^X.Y.Z) actually resolve it — a prerelease suffix would not.
+# beta    -> publishes X.Y.Z-beta  as a prerelease (dist-tag 'beta').
+# alpha   -> publishes X.Y.Z-alpha as a prerelease (dist-tag 'alpha').
 #
-# The bash twin (release.sh) drives the same pnpm/npm/git/gh commands.
+# Bumps every workspace package (lockstep), commits, tags, pushes, and opens a
+# GitHub release. The publish to GitHub Packages is done by the release workflow
+# when the tag lands. Stage-neutral. The bash twin (release.sh) is equivalent.
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true, Position = 0)][string]$Version,
   [Parameter(Mandatory = $true, Position = 1)][ValidateSet('stable', 'beta', 'alpha')][string]$Channel
 )
 $ErrorActionPreference = 'Stop'
+Set-Location $PSScriptRoot # run from the repo root regardless of cwd
 
 function Die($msg) { Write-Error $msg; exit 1 }
+# $ErrorActionPreference='Stop' does NOT catch native-exe failures — check $LASTEXITCODE.
+function Run { & $args[0] @($args[1..($args.Count - 1)]); if ($LASTEXITCODE -ne 0) { Die "command failed ($LASTEXITCODE): $($args -join ' ')" } }
 
 if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { Die "version must be X.Y.Z (got '$Version')" }
 
-$Full = "$Version-$Channel"
+$Full = if ($Channel -eq 'stable') { $Version } else { "$Version-$Channel" }
 $Tag = "v$Full"
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { Die 'gh (GitHub CLI) is required and must be authenticated' }
 if ((git status --porcelain)) { Die 'working tree is not clean — commit or stash first' }
+git fetch --tags --quiet origin 2>$null
 git rev-parse -q --verify "refs/tags/$Tag" 2>$null | Out-Null
-if ($LASTEXITCODE -eq 0) { Die "tag $Tag already exists" }
+if ($LASTEXITCODE -eq 0) { Die "tag $Tag already exists locally" }
+git ls-remote --exit-code --tags origin "refs/tags/$Tag" 2>$null | Out-Null
+if ($LASTEXITCODE -eq 0) { Die "tag $Tag already exists on origin" }
 
 Write-Host "Releasing $Tag ..."
 
-# Lockstep version bump across every workspace package + the root manifest
-# (install-free walker; private packages are bumped but never published).
-node scripts/bump-version.mjs $Full
+# Lockstep version bump (install-free walker; private packages bumped but never published).
+Run node scripts/bump-version.mjs $Full
 
-git add -A
-git commit -m "release: $Tag"
-git tag -a $Tag -m $Tag
-git push origin HEAD
-git push origin $Tag
+Run git add -u   # only tracked files (the bumped package.json) — never sweep untracked
+Run git commit -m "release: $Tag"
+Run git tag -a $Tag -m $Tag
+Run git push origin HEAD
+Run git push origin $Tag
 
 $Notes = "Automated release $Tag. @digitaplatform/* packages publish to GitHub Packages via CI."
 if ($Channel -eq 'stable') {
-  gh release create $Tag --title $Tag --notes $Notes
+  Run gh release create $Tag --title $Tag --notes $Notes
 }
 else {
-  gh release create $Tag --title $Tag --notes $Notes --prerelease
+  Run gh release create $Tag --title $Tag --notes $Notes --prerelease
 }
 
 $dist = if ($Channel -eq 'stable') { 'latest' } else { $Channel }

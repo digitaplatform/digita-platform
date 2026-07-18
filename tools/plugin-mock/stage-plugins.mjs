@@ -19,7 +19,7 @@
  *
  * Two source modes:
  *   --local    (default) read each package's built dist directly from the
- *              sibling repo digita-plugins/<id>/dist. Works with CI down.
+ *              sibling repo digita-plugins-store/<id>/dist. Works with CI down.
  *   --registry `npm pack @digitaplatform/<id>@<version>` into a temp dir
  *              (auth via the existing .npmrc) and read package/dist.
  *
@@ -36,7 +36,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const VALID_TYPES = new Set(['component', 'design']);
+const VALID_TYPES = new Set(['component', 'design', 'signature']);
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const platformRoot = path.resolve(scriptDir, '..', '..');

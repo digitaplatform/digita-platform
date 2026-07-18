@@ -7,9 +7,7 @@ name: release
 on:
   push:
     tags:
-      - 'v*.*.*-stable'
-      - 'v*.*.*-beta'
-      - 'v*.*.*-alpha'
+      - 'v*.*.*'
 
 permissions:
   contents: read
@@ -42,10 +40,11 @@ jobs:
           build
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Derive npm dist-tag from the git tag channel
+      - name: Derive npm dist-tag from the git tag
         id: channel
         run: |
-          channel="${GITHUB_REF_NAME##*-}"   # v1.2.3-beta -> beta
+          ref="${GITHUB_REF_NAME}"           # v1.2.3 (stable) or v1.2.3-beta
+          if [[ "$ref" == *-* ]]; then channel="${ref##*-}"; else channel="stable"; fi
           case "$channel" in
             stable) echo "dist=latest" >>"$GITHUB_OUTPUT" ;;
             beta)   echo "dist=beta"   >>"$GITHUB_OUTPUT" ;;

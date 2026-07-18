@@ -50,7 +50,7 @@ export function isPluginLocked(id: string): boolean {
 // (First-party FREE plugins need no dev glob — they are BUILT-IN workspace
 // packages registered at boot by builtins.ts, in dev and prod alike.)
 const devPluginSources: Record<string, () => Promise<unknown>> = import.meta.env.DEV
-  ? import.meta.glob(['../../../../../digita-plugins/*/src/index.tsx'])
+  ? import.meta.glob(['../../../../../digita-plugins-store/*/src/index.tsx'])
   : {};
 
 function devSourceLoader(id: string): (() => Promise<unknown>) | undefined {
