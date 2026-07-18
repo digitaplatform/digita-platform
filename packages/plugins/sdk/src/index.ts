@@ -74,8 +74,20 @@ export interface DesignPlugin {
   cssUrl: string; // same-origin, version-addressed stylesheet URL
 }
 
-/** A signature — a composable IDENTITY overlay (brand accent + fonts + logo) applied ON TOP
- *  of any design via the branding layer; it COMPOSES, never replaces the design skin. */
+/** A single-token per-mode value: light-mode + dark-mode CSS value. A signature's
+ *  colour world writes it as `--color-<token>: light-dark(light, dark)`; its
+ *  decorative graphics write `--sig-<key>-l` / `--sig-<key>-d` (gradients can't
+ *  use light-dark(), so both modes ship explicitly). */
+export interface SignatureValue {
+  light: string;
+  dark: string;
+}
+
+/** A signature — a composable IDENTITY overlay applied ON TOP of any design via
+ *  the branding layer; it COMPOSES, never replaces the design skin. A THIN
+ *  signature carries just accent + fonts (+ monogram, e.g. simetrix); a FULL
+ *  signature (e.g. digita) also carries the brand colour world + decorative
+ *  graphics + wordmark. Delivered as pure config inlined in the inventory. */
 export interface SignaturePlugin {
   type: 'signature';
   id: string;
@@ -83,6 +95,14 @@ export interface SignaturePlugin {
   accent?: string;
   fonts?: { display?: string; sans?: string; mono?: string };
   logoUrl?: string;
+  /** Inline SVG brand mark (self-contained, `fill="currentColor"`). */
+  monogram?: string;
+  /** Inline SVG wide wordmark lockup (self-contained). */
+  wordmark?: string;
+  /** Brand COLOUR WORLD: semantic token (bg, surface, textMain, …) → {light,dark}. */
+  colors?: Record<string, SignatureValue>;
+  /** Decorative BACKGROUND layers (grid, glow, band, card, panel) → {light,dark}. */
+  graphics?: Record<string, SignatureValue>;
 }
 
 /** The discriminated set of runtime plugin objects — grows one member per type. */
@@ -97,8 +117,9 @@ export interface PluginPackageManifest {
   tier: PluginTier;
   /** Semver range of @digitaplatform/plugins this artifact was built against. */
   sdk: string;
-  /** Primary artifact inside dist/ (component: the ESM file, design: the CSS file). */
-  entry: string;
+  /** Primary artifact inside dist/ (component: the ESM file, design: the CSS
+   *  file). OPTIONAL for signatures — they are pure config with no artifact. */
+  entry?: string;
   displayName: string;
   /** design only: the value written to data-design-variant (component-variant CSS layer). */
   variant?: string;
@@ -111,7 +132,20 @@ export interface PluginPackageManifest {
 export type TypedPluginManifestEntry =
   | { type: 'component'; id: string; version: string; tier: PluginTier; title?: string; url: string }
   | { type: 'design'; id: string; version: string; tier: PluginTier; title?: string; designId: string; variant: string; cssUrl: string }
-  | { type: 'signature'; id: string; version: string; tier: PluginTier; title?: string; accent?: string; fonts?: { display?: string; sans?: string; mono?: string }; logoUrl?: string };
+  | {
+      type: 'signature';
+      id: string;
+      version: string;
+      tier: PluginTier;
+      title?: string;
+      accent?: string;
+      fonts?: { display?: string; sans?: string; mono?: string };
+      logoUrl?: string;
+      monogram?: string;
+      wordmark?: string;
+      colors?: Record<string, SignatureValue>;
+      graphics?: Record<string, SignatureValue>;
+    };
 
 /** Runtime narrowing guard for a dynamically-imported module's plugin export. */
 export function isDigitaPlugin(v: unknown): v is DigitaPlugin {
