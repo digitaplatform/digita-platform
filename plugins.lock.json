@@ -1,7 +1,8 @@
 {
   "schemaVersion": 1,
   "free": {
-    "digita": "0.1.0"
+    "digita": "0.1.0",
+    "minimal": "0.1.0"
   },
   "premium": {
     "editorial": "0.1.0",
