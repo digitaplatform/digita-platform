@@ -81,7 +81,7 @@ const sections = [
   {
     section: 'premium',
     expectedTier: 'premium',
-    siblingRepo: 'digita-plugins',
+    siblingRepo: 'digita-plugins-store',
     stageBase: premiumStageBase,
     urlFor: (id, version, entry) => `/api/v1/plugin-assets/${id}/${version}/${entry}`,
     entries: lock.premium ?? {},
