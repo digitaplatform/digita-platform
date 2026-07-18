@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@digitaplatform/components": "workspace:*",
+    "@digitaplatform/digita": "^0.1.1",
     "@digitaplatform/plugins": "workspace:*",
     "@digitaplatform/shared": "workspace:*",
     "@digitaplatform/theme": "workspace:*",

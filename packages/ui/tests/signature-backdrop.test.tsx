@@ -34,8 +34,11 @@ describe('SignatureBackdrop', () => {
     expect(backdrop.children).toHaveLength(2);
   });
 
-  it('renders nothing for a thin signature (simetrix carries no graphics)', () => {
-    useThemeStore.setState({ signature: 'simetrix' });
+  it('renders nothing for a thin signature (no graphics)', () => {
+    // A thin signature carries no graphics; the backdrop must not fall back to
+    // the default's grid/glow just because this one has none.
+    registerSignature({ id: 'thinbrand', name: 'Thin', accent: '#0E6FB8' });
+    useThemeStore.setState({ signature: 'thinbrand' });
     const { container } = render(<SignatureBackdrop />);
     expect(screen.queryByTestId('signature-backdrop')).toBeNull();
     expect(container).toBeEmptyDOMElement();

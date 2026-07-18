@@ -1,4 +1,4 @@
-import { applyBranding } from '../runtime/runtime.js';
+import { applyBranding, resetBranding } from '../runtime/runtime.js';
 import { cssVarName } from '../tokens/index.js';
 import { getRuntimeSignature } from './runtime-registry.js';
 
@@ -65,15 +65,16 @@ export const SIGNATURES: Record<string, Signature> = {};
 
 export const DEFAULT_SIGNATURE_ID = 'digita';
 
-export const SIGNATURE_LIST = Object.values(SIGNATURES).map((s) => ({ id: s.id, name: s.name }));
-
 /** Resolve a signature id: a runtime-DELIVERED signature (plugin) wins, then a
- *  BAKED one, else the default. So the host applies the delivered brand world
- *  and the shell chrome reads the delivered monogram/wordmark. */
+ *  BAKED one, then the DEFAULT — resolved as a delivered signature too, because
+ *  the default (digita) ships as a bundled plugin, not a baked entry. So a
+ *  stale or unknown stored id still lands on the real default brand instead of
+ *  the accent-less NONE floor. */
 export function getSignature(id: string | null | undefined): Signature {
   const delivered = getRuntimeSignature(id);
   if (delivered) return delivered;
-  return (id != null && SIGNATURES[id]) || SIGNATURES[DEFAULT_SIGNATURE_ID] || NONE;
+  if (id != null && SIGNATURES[id]) return SIGNATURES[id];
+  return getRuntimeSignature(DEFAULT_SIGNATURE_ID) || SIGNATURES[DEFAULT_SIGNATURE_ID] || NONE;
 }
 
 // The token/graphic keys a signature may write — the fixed teardown set, so a
@@ -99,6 +100,12 @@ export function resetSignature(target: HTMLElement = document.documentElement): 
     target.style.removeProperty(`--sig-${key}-l`);
     target.style.removeProperty(`--sig-${key}-d`);
   }
+  // Also clear the branding layer a signature writes via applyBranding — the
+  // accent ramp (--color-primary-*), the primary-container roles, and the
+  // --font-* stacks — so switching to a thinner or accent-less signature leaves
+  // no stale ramp or fonts behind (the caller re-asserts tenant branding, if
+  // any, on top afterwards).
+  resetBranding(target);
 }
 
 /**

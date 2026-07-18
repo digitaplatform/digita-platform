@@ -50,8 +50,11 @@ describe('BrandChrome — signature wordmark', () => {
     expect(screen.getByText('Acme')).toBeInTheDocument();
   });
 
-  it('a thin signature (simetrix) shows the monogram, never a wordmark', () => {
-    useThemeStore.setState({ signature: 'simetrix' });
+  it('a thin signature (accent only, no wordmark) shows the monogram, never a wordmark', () => {
+    // A delivered THIN signature carries no wordmark; the rail must not fall back
+    // to the default's wordmark just because this one lacks one.
+    registerSignature({ id: 'thinbrand', name: 'Thin', accent: '#0E6FB8' });
+    useThemeStore.setState({ signature: 'thinbrand' });
     useSessionStore.setState({ branding: null });
     render(<BrandChrome side="top" />);
     expect(screen.queryByTestId('brand-wordmark')).toBeNull();

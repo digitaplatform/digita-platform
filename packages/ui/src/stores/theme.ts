@@ -6,6 +6,7 @@ import {
   applyDensity,
   applyDesign,
   applySignature,
+  registerSignature,
   resolveInitialMode,
   resolveInitialDensity,
   resolveInitialDesign,
@@ -13,6 +14,7 @@ import {
   type ThemeMode,
   type Density,
 } from '@digitaplatform/theme';
+import { signature as digitaSignature } from '@digitaplatform/digita';
 import { getUserPreference, setUserPreference } from '@/services/userPreference';
 
 const MODE_KEY = 'digita-ui:theme-mode';
@@ -66,8 +68,29 @@ applyDensity(initialDensity);
 // Signature LAST: its accent/fonts (and, for a full signature, the brand colour
 // world + graphics) ride the branding layer (inline vars), which composes ON TOP
 // of the design stamp — 'digita' (the platform's own identity) paints by default.
+//
+// digita is the platform's DEFAULT signature, shipped as a free plugin BUNDLED
+// into the host at build (like usermenu) — NOT network-delivered. Register it
+// here, at module init, BEFORE applying it, so getSignature('digita') resolves
+// its full brand world on the very first paint, including the pre-login screen,
+// with no flash and no dependency on the authenticated plugin composition.
+// Alternate / premium signatures still arrive later via the composition.
+registerSignature(digitaSignature);
 const initialSignature = resolveInitialSignature(SIGNATURE_KEY);
 applySignature(initialSignature);
+
+// Apply signature `id`, then re-assert the tenant's branding on top: a tenant's
+// configured primary colour / fonts WIN over the signature's defaults, and the
+// per-user density is re-asserted too. Every store path that (re)applies the
+// signature goes through here, so the layering — design < signature < tenant
+// branding — is identical everywhere and a re-apply (e.g. after the composition
+// loads) never leaves the signature stomping a tenant's brand.
+function applySignatureLayered(id: string, get: () => ThemeState): void {
+  applySignature(id);
+  const branding = get().branding;
+  if (branding) applyBranding(branding);
+  applyDensity(get().density);
+}
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
   mode: initialMode,
@@ -100,11 +123,11 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   },
   setSignature: (id) => {
     localStorage.setItem(SIGNATURE_KEY, id);
-    applySignature(id);
+    applySignatureLayered(id, get);
     set({ signature: id });
     void setUserPreference(PREF_SIGNATURE, id).catch(() => {});
   },
-  reapplySignature: () => applySignature(get().signature),
+  reapplySignature: () => applySignatureLayered(get().signature, get),
   setTemplateOverride: (key) => {
     localStorage.setItem(TEMPLATE_KEY, key);
     set({ templateOverride: key });
@@ -142,7 +165,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
       }
       if (typeof signature === 'string' && signature) {
         localStorage.setItem(SIGNATURE_KEY, signature);
-        applySignature(signature);
+        applySignatureLayered(signature, get);
         set({ signature });
       }
     } catch {
