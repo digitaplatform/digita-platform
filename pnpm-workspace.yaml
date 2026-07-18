@@ -20,9 +20,3 @@ allowBuilds:
   "@tailwindcss/oxide": true
   mongodb-memory-server: true
 
-# @digitaplatform/* are our own first-party packages on GitHub Packages; exclude
-# them from the release-age/tarball supply-chain verification, which is
-# incompatible with GitHub Packages in CI (rejects legitimate, metadata-matching
-# packages). Access + integrity are otherwise unaffected.
-minimumReleaseAgeExclude:
-  - "@digitaplatform/*"
