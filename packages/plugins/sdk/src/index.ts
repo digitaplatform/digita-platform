@@ -54,7 +54,7 @@ export type PluginType = 'component' | 'design' | 'signature';
 // reserved (future): 'data-source' | 'report' | 'workflow' | 'entity-pack'
 
 /** Commercial tier. Orthogonal to type: gates staging + activation, never integration. */
-export type PluginTier = 'community' | 'premium';
+export type PluginTier = 'free' | 'premium';
 
 /** A component plugin — today's FrontendPlugin, now carrying its discriminator. */
 export interface ComponentPlugin {

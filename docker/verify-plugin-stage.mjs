@@ -6,9 +6,9 @@
  * written by tools/plugin-mock/stage-plugins.mjs):
  *   - inventory shape: schemaVersion 1, non-empty plugins[] with unique ids and
  *     id/type/tier/version/entry/integrity/url; type component|design;
- *     tier community|premium,
+ *     tier free|premium,
  *   - path-safe id/version/entry (single segments — no separators, no ".."),
- *   - community (free) entries: url is EXACTLY the nginx-static shape
+ *   - free entries: url is EXACTLY the nginx-static shape
  *     /plugins/<id>/<version>/<entry>, the artifact exists and its sha384
  *     matches `integrity`,
  *   - premium entries: url is EXACTLY the ENGINE-gated shape
@@ -35,7 +35,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const VALID_TYPES = new Set(['component', 'design']);
-const VALID_TIERS = new Set(['community', 'premium']);
+const VALID_TIERS = new Set(['free', 'premium']);
 const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 function fail(message) {
@@ -107,14 +107,14 @@ for (const p of inventory.plugins) {
   if (seenIds.has(id)) fail(`[${id}] duplicate id in inventory`);
   seenIds.add(id);
   if (!VALID_TYPES.has(p.type)) fail(`[${id}] invalid type "${p.type}" (expected component|design)`);
-  if (!VALID_TIERS.has(p.tier)) fail(`[${id}] invalid tier "${p.tier}" (expected community|premium)`);
+  if (!VALID_TIERS.has(p.tier)) fail(`[${id}] invalid tier "${p.tier}" (expected free|premium)`);
   for (const [field, value] of [['id', p.id], ['version', p.version], ['entry', p.entry]]) {
     if (!SAFE_SEGMENT.test(value) || value.includes('..')) {
       fail(`[${id}] unsafe ${field} segment "${value}" (path traversal / separator)`);
     }
   }
 
-  if (p.tier === 'community') {
+  if (p.tier === 'free') {
     const expectedUrl = `/plugins/${p.id}/${p.version}/${p.entry}`;
     if (p.url !== expectedUrl) {
       fail(`[${id}] free plugin url "${p.url}" must be the nginx-static path "${expectedUrl}"`);
@@ -133,7 +133,7 @@ for (const p of inventory.plugins) {
   }
 }
 
-// --- community-tier image: NO premium bytes ---------------------------------
+// --- free-tier image: NO premium bytes ---------------------------------
 
 if (requireNoPremium && fs.existsSync(premiumBase)) {
   const stack = [premiumBase];
@@ -142,7 +142,7 @@ if (requireNoPremium && fs.existsSync(premiumBase)) {
     for (const dirent of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, dirent.name);
       if (dirent.isDirectory()) stack.push(full);
-      else fail(`community-tier image must ship NO premium bytes, found: ${full}`);
+      else fail(`free-tier image must ship NO premium bytes, found: ${full}`);
     }
   }
 }

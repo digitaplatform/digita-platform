@@ -15,7 +15,7 @@
   "digita": {
     "id": "usermenu",
     "type": "component",
-    "tier": "community",
+    "tier": "free",
     "displayName": "Navigation"
   },
   "dependencies": {
