@@ -265,6 +265,14 @@ export const env = {
     resolve(monorepoRoot, "staged-premium"),
   ),
 
+  // TEMPORARY — remove when the plugin store ships. There is no marketplace /
+  // license flow yet, so gating every premium plugin behind a license would make
+  // them all unreachable. With this ON (the default until the store exists), the
+  // engine entitles EVERY plugin physically staged under PLUGINS_PREMIUM_DIR, so
+  // all delivered designs are usable ungated. Flip to false (or delete this key +
+  // the union block in app.ts) to re-arm the license gate over the same bytes.
+  PLUGINS_LICENSE_DISABLED: getEnvBool("PLUGINS_LICENSE_DISABLED", true),
+
   // ─── PERMISSION SCOPE ────────────────────────────────
   // Gate for declarative permission `scope` enforcement (a generic field-equality
   // narrowing — e.g. an app scoping records by company / department / tenant). OFF

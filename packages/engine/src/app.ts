@@ -63,6 +63,7 @@ import { registerMetaRoutes } from "./core/api/meta-router.js";
 import { registerBootRoutes } from "./core/api/boot-router.js";
 import { loadPluginConfig, type PluginRuntime } from "./core/plugins/plugin-config.js";
 import { loadPluginEntitlements } from "./core/plugins/plugin-license.js";
+import { readdirSync } from "node:fs";
 import { registerPluginAssetRoutes } from "./core/api/plugin-assets-router.js";
 import { registerTranslationRoutes } from "./core/api/translation-router.js";
 import { registerSearchRoutes } from "./core/api/search-router.js";
@@ -762,6 +763,26 @@ export async function createApp(
     //     loadPluginEntitlements never throws — a missing/invalid/expired
     //     license yields [] (premium locked), never a boot failure.
     pluginEntitlements = await loadPluginEntitlements();
+    // TEMPORARY (PLUGINS_LICENSE_DISABLED, default ON — remove when the plugin
+    // store ships): with no marketplace/license yet, entitle EVERY plugin
+    // physically staged under PLUGINS_PREMIUM_DIR so all delivered designs are
+    // usable ungated. Self-limiting — only what is actually staged is opened. The
+    // license loader, the /api/v1/plugin-assets 403 gate, and the client gate are
+    // all left untouched; flipping the flag off re-arms them over the same bytes.
+    if (env.PLUGINS_LICENSE_DISABLED) {
+      let staged: string[] = [];
+      try {
+        staged = readdirSync(env.PLUGINS_PREMIUM_DIR, { withFileTypes: true })
+          .filter((e) => e.isDirectory())
+          .map((e) => e.name);
+      } catch {
+        /* premium dir absent (nothing staged) — nothing to entitle */
+      }
+      pluginEntitlements = [...new Set([...pluginEntitlements, ...staged])];
+      log.warn(
+        `TEMPORARY: plugin license gating disabled (PLUGINS_LICENSE_DISABLED) — entitling all ${staged.length} staged premium plugin(s): ${staged.join(", ") || "(none)"}`,
+      );
+    }
 
     // 6. Load hook modules from all app directories
     await hookRunner.loadHooks(registry.getAll(), moduleDirs);
