@@ -1,6 +1,6 @@
 import { api } from '@/services/api';
 import type { ApiResponse } from '@digitaplatform/shared';
-import type { LayoutConfig, PluginTier, PluginType } from '@digitaplatform/plugins';
+import type { LayoutConfig, PluginTier, PluginType, SignatureValue } from '@digitaplatform/plugins';
 
 /** One plugin the app's COMPOSITION enables (from the merged plugins.config.json).
  *  The engine sends only { id, title? } — the load data (type/tier/URL) comes from
@@ -37,14 +37,22 @@ export interface PluginInventoryEntry {
   type: PluginType;
   tier: PluginTier;
   version: string;
-  entry: string;
+  /** component/design: the artifact filename + its URL + integrity. ABSENT for
+   *  signatures, which are pure config with no artifact to fetch. */
+  entry?: string;
   integrity?: string;
-  url: string;
+  url?: string;
   /** signature only: identity config inlined in the inventory (a signature is
-   *  pure config — no artifact to fetch beyond these fields). */
+   *  pure config — no artifact beyond these fields). A thin signature carries
+   *  accent + fonts (+ monogram); a FULL signature also carries the brand colour
+   *  world + decorative graphics + wordmark. */
   accent?: string;
   fonts?: { display?: string; sans?: string; mono?: string };
   logoUrl?: string;
+  monogram?: string;
+  wordmark?: string;
+  colors?: Record<string, SignatureValue>;
+  graphics?: Record<string, SignatureValue>;
 }
 
 export interface PluginInventory {

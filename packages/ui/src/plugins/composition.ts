@@ -34,10 +34,16 @@ export function joinCompositionWithInventory(
         title: entry.title,
         type: staged.type,
         url: staged.url,
-        // signature only: identity config rides the inventory entry itself.
+        // signature only: identity config rides the inventory entry itself —
+        // accent + fonts (+ monogram) for a thin signature, plus the full brand
+        // colour world + graphics + wordmark for a full one (e.g. digita).
         accent: staged.accent,
         fonts: staged.fonts,
         logoUrl: staged.logoUrl,
+        monogram: staged.monogram,
+        wordmark: staged.wordmark,
+        colors: staged.colors,
+        graphics: staged.graphics,
       });
     } else if (entry.url) {
       // Legacy engine shape: the component bundle url inlined in the composition.

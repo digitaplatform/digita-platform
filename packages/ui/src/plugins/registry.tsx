@@ -7,6 +7,7 @@ import type {
   PluginManifestEntry,
   PluginType,
   SignaturePlugin,
+  SignatureValue,
 } from '@digitaplatform/plugins';
 import { isDigitaPlugin } from '@digitaplatform/plugins';
 import { ErrorBoundary } from '@digitaplatform/components';
@@ -69,10 +70,16 @@ export interface PluginSource {
   title?: string;
   type?: PluginType;
   url?: string;
-  /** signature only: identity config carried by the inventory entry itself. */
+  /** signature only: identity config carried by the inventory entry itself. A
+   *  thin signature carries accent + fonts (+ monogram); a FULL signature also
+   *  carries the brand colour world + decorative graphics + wordmark. */
   accent?: string;
   fonts?: { display?: string; sans?: string; mono?: string };
   logoUrl?: string;
+  monogram?: string;
+  wordmark?: string;
+  colors?: Record<string, SignatureValue>;
+  graphics?: Record<string, SignatureValue>;
 }
 
 /** Normalize a dynamically-imported plugin module to a typed DigitaPlugin.
@@ -177,6 +184,10 @@ async function resolvePlugin(source: PluginSource): Promise<DigitaPlugin | null>
       accent: source.accent,
       fonts: source.fonts,
       logoUrl: source.logoUrl,
+      monogram: source.monogram,
+      wordmark: source.wordmark,
+      colors: source.colors,
+      graphics: source.graphics,
     };
   }
   if (!source.url || !source.type) {
