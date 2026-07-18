@@ -10,8 +10,10 @@
  *   premium -> staged-premium/<id>/<version>/  (repo root, OUTSIDE the web root;
  *              served gated by the engine via /api/v1/plugin-assets)
  *
- * First-party FREE plugins are BUILT-IN workspace packages compiled into the
- * host bundle — they are never staged; only premium plugins stage here.
+ * FREE plugins split by delivery mode: config/CSS plugins (a signature or a
+ * design — e.g. digita, minimal) are DELIVERED and ARE staged here (free ->
+ * public/plugins), inlined into the inventory. Built-in component free plugins
+ * (usermenu) are compiled into the host bundle instead and are never staged.
  *
  * Finally emits the inventory at packages/ui/public/plugins/index.json with
  * same-origin URLs: premium entries under the engine's gated route
