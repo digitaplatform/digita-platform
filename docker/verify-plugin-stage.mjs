@@ -99,7 +99,7 @@ let premiumCount = 0;
 
 for (const p of inventory.plugins) {
   const id = p?.id;
-  for (const field of ['id', 'type', 'tier', 'version', 'entry', 'integrity', 'url']) {
+  for (const field of ['id', 'type', 'tier', 'version']) {
     if (typeof p?.[field] !== 'string' || p[field].length === 0) {
       fail(`[${id ?? '?'}] inventory entry missing/empty field "${field}"`);
     }
@@ -108,10 +108,31 @@ for (const p of inventory.plugins) {
   seenIds.add(id);
   if (!VALID_TYPES.has(p.type)) fail(`[${id}] invalid type "${p.type}" (expected component|design|signature)`);
   if (!VALID_TIERS.has(p.tier)) fail(`[${id}] invalid tier "${p.tier}" (expected free|premium)`);
-  for (const [field, value] of [['id', p.id], ['version', p.version], ['entry', p.entry]]) {
+  for (const [field, value] of [['id', p.id], ['version', p.version]]) {
     if (!SAFE_SEGMENT.test(value) || value.includes('..')) {
       fail(`[${id}] unsafe ${field} segment "${value}" (path traversal / separator)`);
     }
+  }
+
+  // Signatures are pure config inlined in the inventory — no artifact, so no
+  // entry/url/integrity. They only ship free; validate the inlined identity.
+  if (p.type === 'signature') {
+    if (p.tier !== 'free') fail(`[${id}] a signature must be tier "free" (got "${p.tier}")`);
+    if (typeof p.accent !== 'string' || p.accent.length === 0) {
+      fail(`[${id}] signature inventory entry has no accent`);
+    }
+    freeCount += 1;
+    continue;
+  }
+
+  // component/design carry an artifact: entry/integrity/url are required + validated.
+  for (const field of ['entry', 'integrity', 'url']) {
+    if (typeof p?.[field] !== 'string' || p[field].length === 0) {
+      fail(`[${id}] inventory entry missing/empty field "${field}"`);
+    }
+  }
+  if (!SAFE_SEGMENT.test(p.entry) || p.entry.includes('..')) {
+    fail(`[${id}] unsafe entry segment "${p.entry}" (path traversal / separator)`);
   }
 
   if (p.tier === 'free') {

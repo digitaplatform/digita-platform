@@ -79,6 +79,15 @@ if (lock.schemaVersion !== 1) fail(`Unsupported lock schemaVersion ${lock.schema
 
 const sections = [
   {
+    section: 'free',
+    expectedTier: 'free',
+    siblingRepo: 'digita-plugins-free',
+    stageBase: freeStageBase,
+    // Free artifacts (component/design) are served OPENLY from the ui web root.
+    urlFor: (id, version, entry) => `/plugins/${id}/${version}/${entry}`,
+    entries: lock.free ?? {},
+  },
+  {
     section: 'premium',
     expectedTier: 'premium',
     siblingRepo: 'digita-plugins-store',
@@ -155,6 +164,25 @@ function stageOne(section, id, version) {
   if (manifest.version !== undefined && manifest.version !== version) {
     fail(`[${id}] manifest version "${manifest.version}" does not match locked version "${version}"`);
   }
+
+  // Signatures are PURE CONFIG — no artifact to copy or hash. Inline the full
+  // identity (accent + fonts + colour world + graphics + monogram + wordmark)
+  // into the inventory record; the host applies it via applySignature(). No
+  // entry / url / integrity — nothing is fetched beyond these inlined fields.
+  if (manifest.type === 'signature') {
+    const identity = {};
+    for (const key of ['accent', 'fonts', 'logoUrl', 'monogram', 'wordmark', 'colors', 'graphics']) {
+      if (manifest[key] !== undefined) identity[key] = manifest[key];
+    }
+    if (typeof identity.accent !== 'string' || identity.accent.length === 0) {
+      fail(`[${id}] signature manifest has no accent (${manifestPath})`);
+    }
+    return {
+      record: { id, type: 'signature', tier: manifest.tier, version, ...identity },
+      bytes: 0,
+    };
+  }
+
   if (typeof manifest.entry !== 'string' || manifest.entry.length === 0) {
     fail(`[${id}] manifest has no entry (${manifestPath})`);
   }
@@ -206,7 +234,7 @@ for (const section of sections) {
     const { record, bytes } = stageOne(section, id, version);
     plugins.push(record);
     rows.push({ id, tier: record.tier, version, bytes });
-    console.log(`  staged ${record.tier}/${id}@${version} -> ${record.url}`);
+    console.log(`  staged ${record.tier}/${id}@${version} -> ${record.url ?? '(signature: inlined config, no artifact)'}`);
   }
 }
 
