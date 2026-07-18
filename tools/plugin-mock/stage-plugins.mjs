@@ -10,10 +10,11 @@
  *   premium -> staged-premium/<id>/<version>/  (repo root, OUTSIDE the web root;
  *              served gated by the engine via /api/v1/plugin-assets)
  *
- * FREE plugins split by delivery mode: config/CSS plugins (a signature or a
- * design — e.g. digita, minimal) are DELIVERED and ARE staged here (free ->
- * public/plugins), inlined into the inventory. Built-in component free plugins
- * (usermenu) are compiled into the host bundle instead and are never staged.
+ * FREE plugins split by delivery mode: DELIVERED free plugins (a free design
+ * like minimal) are staged here (free -> public/plugins) and inlined into the
+ * inventory. BUILT-IN free plugins (the usermenu component and the digita
+ * default signature) are compiled into the host bundle instead — bundled at
+ * build, present on first paint — and are never staged.
  *
  * Finally emits the inventory at packages/ui/public/plugins/index.json with
  * same-origin URLs: premium entries under the engine's gated route

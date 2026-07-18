@@ -64,7 +64,6 @@ const initialDensity = resolveInitialDensity(DENSITY_KEY);
 const initialDesign = resolveInitialDesign(DESIGN_KEY);
 applyDesign(initialDesign);
 applyMode(initialMode);
-applyDensity(initialDensity);
 // Signature LAST: its accent/fonts (and, for a full signature, the brand colour
 // world + graphics) ride the branding layer (inline vars), which composes ON TOP
 // of the design stamp — 'digita' (the platform's own identity) paints by default.
@@ -78,6 +77,11 @@ applyDensity(initialDensity);
 registerSignature(digitaSignature);
 const initialSignature = resolveInitialSignature(SIGNATURE_KEY);
 applySignature(initialSignature);
+// Density LAST: applySignature's teardown (resetBranding) also clears the
+// data-density attribute (it doubles as a tenant-density override slot), so
+// assert the per-user density AFTER the signature — otherwise a stored compact/
+// spacious density is wiped on the first (pre-auth) paint.
+applyDensity(initialDensity);
 
 // Apply signature `id`, then re-assert the tenant's branding on top: a tenant's
 // configured primary colour / fonts WIN over the signature's defaults, and the
