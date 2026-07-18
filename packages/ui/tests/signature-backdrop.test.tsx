@@ -1,8 +1,23 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
+import { registerSignature } from '@digitaplatform/theme';
 import { SignatureBackdrop } from '@/components/layout/SignatureBackdrop';
 import { useThemeStore } from '@/stores/theme';
+
+// digita is a DELIVERED free signature now (not baked) — register it so
+// getSignature('digita') resolves its graphics, as it would after composition.
+beforeEach(() => {
+  registerSignature({
+    id: 'digita',
+    name: 'Digita',
+    accent: '#2077C8',
+    graphics: {
+      grid: { light: 'linear-gradient(a)', dark: 'linear-gradient(b)' },
+      glow: { light: 'radial-gradient(c)', dark: 'radial-gradient(d)' },
+    },
+  });
+});
 
 afterEach(() => {
   cleanup();

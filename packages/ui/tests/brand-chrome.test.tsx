@@ -1,10 +1,23 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
+import { registerSignature } from '@digitaplatform/theme';
 import { BrandChrome } from '@/components/layout/BrandChrome';
 import { useThemeStore } from '@/stores/theme';
 import { useSessionStore } from '@/stores/session';
 import type { BootBranding } from '@/types';
+
+// digita is a DELIVERED free signature now (not baked) — register it so
+// getSignature('digita') resolves its wordmark + monogram, as after composition.
+beforeEach(() => {
+  registerSignature({
+    id: 'digita',
+    name: 'Digita',
+    accent: '#2077C8',
+    monogram: '<svg viewBox="0 0 24 24"></svg>',
+    wordmark: '<svg viewBox="0 0 90 28"></svg>',
+  });
+});
 
 afterEach(() => {
   cleanup();

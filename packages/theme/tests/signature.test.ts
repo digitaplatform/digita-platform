@@ -39,65 +39,87 @@ describe('branding fonts + signature runtime', () => {
     expect(root.style.getPropertyValue('--font-mono')).toBe('');
   });
 
-  it("applySignature('simetrix') writes a primary ramp AND the three --font-* vars via the branding layer", () => {
+  it('applySignature applies a THIN delivered signature: primary ramp + font vars, no colour-world stamp', () => {
     const root = document.documentElement;
-    applySignature('simetrix');
-    // The accent hex is synthesized into an EXACT ramp (OKLCH, brand at 600) —
-    // simetrix's azure must paint verbatim, not snap to a preset palette.
-    const primarySteps = Array.from(root.style).filter((p) => p.startsWith('--color-primary-'));
-    expect(primarySteps.length).toBeGreaterThan(0);
-    expect(root.style.getPropertyValue('--color-primary-600')).toBe(
-      synthesizeRamp('#0E6FB8')!['600'],
-    );
-    const fonts = SIGNATURES['simetrix']!.fonts!;
-    expect(root.style.getPropertyValue('--font-display')).toBe(fonts.display);
-    expect(root.style.getPropertyValue('--font-sans')).toBe(fonts.sans);
-    expect(root.style.getPropertyValue('--font-mono')).toBe(fonts.mono);
+    registerSignature({
+      id: 'thin1',
+      name: 'Thin',
+      accent: '#0E6FB8',
+      fonts: { display: 'DisplayFont', sans: 'SansFont', mono: 'MonoFont' },
+    });
+    applySignature('thin1');
+    // The accent hex is synthesized into an EXACT ramp (OKLCH, brand at 600).
+    expect(root.style.getPropertyValue('--color-primary-600')).toBe(synthesizeRamp('#0E6FB8')!['600']);
+    expect(root.style.getPropertyValue('--font-display')).toBe('DisplayFont');
+    expect(root.style.getPropertyValue('--font-sans')).toBe('SansFont');
+    expect(root.style.getPropertyValue('--font-mono')).toBe('MonoFont');
+    // Thin: no colour world → no data-signature stamp.
+    expect(root.getAttribute('data-signature')).toBe(null);
   });
 
-  it("resolveInitialSignature() returns 'digita' by default and validates stored ids", () => {
+  it('resolveInitialSignature() returns the default (digita, delivered) and honours a stored id as-is', () => {
     expect(DEFAULT_SIGNATURE_ID).toBe('digita');
     expect(resolveInitialSignature()).toBe('digita');
-    // A valid stored id is honoured.
-    localStorage.setItem('digita-ui:signature', 'simetrix');
-    expect(resolveInitialSignature()).toBe('simetrix');
-    // Unknown stored id falls through to the default, never a silent guess.
-    localStorage.setItem('digita-ui:signature', 'does-not-exist');
-    expect(resolveInitialSignature()).toBe('digita');
+    // A stored id is honoured verbatim — it may be a DELIVERED signature not yet
+    // registered at boot; getSignature resolves it (or the NONE floor) safely.
+    localStorage.setItem('digita-ui:signature', 'anything');
+    expect(resolveInitialSignature()).toBe('anything');
   });
 
-  it("applySignature('digita') stamps data-signature and writes the brand colour world + graphics", () => {
+  it('applySignature applies a FULL delivered signature: stamp + colour world + graphics', () => {
     const root = document.documentElement;
-    applySignature('digita');
-    // The full signature stamps the CSS anchor the shell backdrop keys on.
-    expect(root.getAttribute('data-signature')).toBe('digita');
-    // Accent ramp anchors on the digita mid-blue, exact (not snapped).
-    expect(root.style.getPropertyValue('--color-primary-600')).toBe(synthesizeRamp('#3896E6')!['600']);
-    // Colour world: canvas is a per-mode light-dark() pair (navy in dark).
+    registerSignature({
+      id: 'full1',
+      name: 'Full',
+      accent: '#2077C8',
+      fonts: { display: 'DisplayFont' },
+      colors: {
+        bg: { light: '#F5F8FB', dark: '#050B14' },
+        textMain: { light: '#0D1B2A', dark: '#EAF1F8' },
+      },
+      graphics: {
+        grid: { light: 'linear-gradient(a)', dark: 'linear-gradient(b)' },
+        glow: { light: 'radial-gradient(c)', dark: 'radial-gradient(d)' },
+      },
+    });
+    applySignature('full1');
+    expect(root.getAttribute('data-signature')).toBe('full1');
+    expect(root.style.getPropertyValue('--color-primary-600')).toBe(synthesizeRamp('#2077C8')!['600']);
     expect(root.style.getPropertyValue('--color-bg')).toBe('light-dark(#F5F8FB, #050B14)');
     expect(root.style.getPropertyValue('--color-text-main')).toBe('light-dark(#0D1B2A, #EAF1F8)');
-    // Graphics: the grid ships explicit light + dark values (url()/gradients can't light-dark()).
     expect(root.style.getPropertyValue('--sig-grid-d')).toContain('linear-gradient');
     expect(root.style.getPropertyValue('--sig-glow-l')).toContain('radial-gradient');
-    // Fonts still flow through the branding layer.
-    expect(root.style.getPropertyValue('--font-display')).toBe(SIGNATURES['digita']!.fonts!.display);
+    expect(root.style.getPropertyValue('--font-display')).toBe('DisplayFont');
   });
 
-  it('switching to a thin signature (simetrix) tears down the digita colour world', () => {
+  it('switching FULL -> THIN tears down the colour world, keeps the thin accent', () => {
     const root = document.documentElement;
-    applySignature('digita');
-    applySignature('simetrix');
-    // simetrix carries no colours/graphics → the stamp and every --sig/--color world var are gone.
+    registerSignature({
+      id: 'full2',
+      name: 'Full',
+      accent: '#2077C8',
+      colors: { bg: { light: '#FFFFFF', dark: '#000000' } },
+      graphics: { grid: { light: 'linear-gradient(a)', dark: 'linear-gradient(b)' } },
+    });
+    registerSignature({ id: 'thin2', name: 'Thin', accent: '#0E6FB8' });
+    applySignature('full2');
+    applySignature('thin2');
     expect(root.getAttribute('data-signature')).toBe(null);
     expect(root.style.getPropertyValue('--color-bg')).toBe('');
     expect(root.style.getPropertyValue('--sig-grid-d')).toBe('');
-    // …but simetrix's own accent ramp is applied.
     expect(root.style.getPropertyValue('--color-primary-600')).toBe(synthesizeRamp('#0E6FB8')!['600']);
   });
 
   it('resetSignature() removes the stamp and every signature-owned var', () => {
     const root = document.documentElement;
-    applySignature('digita');
+    registerSignature({
+      id: 'full3',
+      name: 'Full',
+      accent: '#2077C8',
+      colors: { bg: { light: '#FFFFFF', dark: '#000000' } },
+      graphics: { glow: { light: 'radial-gradient(c)', dark: 'radial-gradient(d)' } },
+    });
+    applySignature('full3');
     resetSignature();
     expect(root.getAttribute('data-signature')).toBe(null);
     expect(root.style.getPropertyValue('--color-bg')).toBe('');
