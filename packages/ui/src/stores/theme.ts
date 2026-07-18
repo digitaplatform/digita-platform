@@ -42,6 +42,10 @@ interface ThemeState {
   setDensity: (density: Density) => void;
   setDesign: (design: string) => void;
   setSignature: (id: string) => void;
+  /** Re-apply the ACTIVE signature — call after the plugin composition loads so a
+   *  DELIVERED signature (registered by the host loader) replaces the boot-time
+   *  fallback and its full brand world lands. */
+  reapplySignature: () => void;
   setTemplateOverride: (key: string) => void;
   setBranding: (branding: BootBranding) => void;
   /** Pull mode + density + design from UserPreference (server) so they roam across
@@ -100,6 +104,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     set({ signature: id });
     void setUserPreference(PREF_SIGNATURE, id).catch(() => {});
   },
+  reapplySignature: () => applySignature(get().signature),
   setTemplateOverride: (key) => {
     localStorage.setItem(TEMPLATE_KEY, key);
     set({ templateOverride: key });

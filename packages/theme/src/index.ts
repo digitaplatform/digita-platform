@@ -8,3 +8,4 @@ export * from './tokens/index.js';
 export * from './runtime/runtime.js';
 export * from './designs/index.js';
 export * from './signatures/index.js';
+export * from './signatures/runtime-registry.js';

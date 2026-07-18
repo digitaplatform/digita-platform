@@ -1,5 +1,6 @@
 import { applyBranding } from '../runtime/runtime.js';
 import { cssVarName } from '../tokens/index.js';
+import { getRuntimeSignature } from './runtime-registry.js';
 
 /**
  * SIGNATURES — built-in identity overlays. A signature is NOT a design: it is a
@@ -144,7 +145,12 @@ export const DEFAULT_SIGNATURE_ID = 'digita';
 
 export const SIGNATURE_LIST = Object.values(SIGNATURES).map((s) => ({ id: s.id, name: s.name }));
 
+/** Resolve a signature id: a runtime-DELIVERED signature (plugin) wins, then a
+ *  BAKED one, else the default. So the host applies the delivered brand world
+ *  and the shell chrome reads the delivered monogram/wordmark. */
 export function getSignature(id: string | null | undefined): Signature {
+  const delivered = getRuntimeSignature(id);
+  if (delivered) return delivered;
   return (id != null && SIGNATURES[id]) || SIGNATURES[DEFAULT_SIGNATURE_ID]!;
 }
 

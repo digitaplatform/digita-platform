@@ -5,6 +5,7 @@ import { getPluginInventory, getPluginManifest } from '@/services/plugins';
 import type { CompositionPluginEntry, PluginInventory } from '@/services/plugins';
 import { defaultLayout } from '@/config/layout';
 import { resolveTemplate } from '@/templates/template-registry';
+import { useThemeStore } from '@/stores/theme';
 
 /**
  * Join the engine COMPOSITION (which plugins this app enables — /api/v1/plugins)
@@ -97,6 +98,10 @@ export async function loadAppComposition(
       );
       setLockedPlugins(lockedIds);
       await loadPlugins(sources);
+      // Delivered signatures are now registered in the theme's runtime registry;
+      // re-apply the active signature so a delivered default (e.g. digita) lands
+      // its full brand world over the boot-time fallback.
+      useThemeStore.getState().reapplySignature();
       if (res.data.layout) {
         layout = res.data.layout;
       } else if (brandingDefaultTemplate) {

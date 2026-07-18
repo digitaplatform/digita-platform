@@ -9,6 +9,8 @@ import {
   synthesizeRamp,
   SIGNATURES,
   DEFAULT_SIGNATURE_ID,
+  registerSignature,
+  getSignature,
 } from '../src/index.js';
 
 describe('branding fonts + signature runtime', () => {
@@ -100,5 +102,29 @@ describe('branding fonts + signature runtime', () => {
     expect(root.getAttribute('data-signature')).toBe(null);
     expect(root.style.getPropertyValue('--color-bg')).toBe('');
     expect(root.style.getPropertyValue('--sig-glow-d')).toBe('');
+  });
+
+  it('registerSignature: a runtime-DELIVERED signature is resolved by getSignature and applied in full', () => {
+    const root = document.documentElement;
+    // A delivered id unknown to the baked SIGNATURES record.
+    expect('acme' in SIGNATURES).toBe(false);
+    registerSignature({
+      id: 'acme',
+      name: 'Acme',
+      accent: '#2077C8',
+      fonts: { display: "'X', sans-serif" },
+      monogram: '<svg viewBox="0 0 1 1"></svg>',
+      colors: { bg: { light: '#FFFFFF', dark: '#000000' } },
+      graphics: { glow: { light: 'radial-gradient(#fff)', dark: 'radial-gradient(#000)' } },
+    });
+    // getSignature resolves the delivered config (not the default fallback).
+    expect(getSignature('acme').id).toBe('acme');
+    expect(getSignature('acme').monogram).toContain('<svg');
+    // applySignature writes the delivered brand world in full.
+    applySignature('acme');
+    expect(root.getAttribute('data-signature')).toBe('acme');
+    expect(root.style.getPropertyValue('--color-bg')).toBe('light-dark(#FFFFFF, #000000)');
+    expect(root.style.getPropertyValue('--sig-glow-l')).toBe('radial-gradient(#fff)');
+    expect(root.style.getPropertyValue('--color-primary-600')).toBe(synthesizeRamp('#2077C8')!['600']);
   });
 });

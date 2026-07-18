@@ -11,7 +11,7 @@ import type {
 } from '@digitaplatform/plugins';
 import { isDigitaPlugin } from '@digitaplatform/plugins';
 import { ErrorBoundary } from '@digitaplatform/components';
-import { applyBranding, applyDesign, registerDesign } from '@digitaplatform/theme';
+import { applyDesign, registerDesign, registerSignature } from '@digitaplatform/theme';
 import { usePluginLayoutStore } from '@/stores/plugin-state';
 
 // COMPONENT plugins loaded for this session (design plugins live in the theme's
@@ -127,9 +127,23 @@ const integrateHandlers: IntegrateHandlers = {
   // data-design — a signature COMPOSES on top of whatever design skin is active,
   // so flipping the design keeps the signature and vice versa.
   signature: (plugin: SignaturePlugin) => {
-    applyBranding({ primary_color: plugin.accent ?? null, fonts: plugin.fonts });
-    // TODO(plugin.logoUrl): swap the shell's logo chrome (header/sidebar brand
-    // slot) to the signature's logo once the shell exposes that slot.
+    // Register the DELIVERED identity into the theme's runtime signature registry
+    // so getSignature(id) resolves it — the full brand world (accent + fonts +
+    // colour world + graphics) that applySignature() writes, and the monogram/
+    // wordmark the shell chrome reads. The theme store re-applies the ACTIVE
+    // signature after composition, so a delivered default lands its full world.
+    // A thin signature carries no colours/graphics — applySignature stays thin.
+    registerSignature({
+      id: plugin.id,
+      name: plugin.title ?? plugin.id,
+      accent: plugin.accent ?? '',
+      fonts: plugin.fonts,
+      logoUrl: plugin.logoUrl,
+      monogram: plugin.monogram,
+      wordmark: plugin.wordmark,
+      colors: plugin.colors,
+      graphics: plugin.graphics,
+    });
   },
 };
 
