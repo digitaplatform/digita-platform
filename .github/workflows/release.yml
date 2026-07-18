@@ -1,0 +1,58 @@
+name: release
+
+# Fires when release.sh / release.ps1 pushes a v<X.Y.Z>-<channel> tag.
+# Builds and publishes the foundation packages — theme, components, shared,
+# plugins — to GitHub Packages (npm.pkg.github.com). The private app packages
+# (ui, engine, web, usermenu) are skipped by pnpm publish automatically.
+on:
+  push:
+    tags:
+      - 'v*.*.*-stable'
+      - 'v*.*.*-beta'
+      - 'v*.*.*-alpha'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@digitaplatform'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build the publishable foundation packages
+        run: >-
+          pnpm
+          --filter '@digitaplatform/shared'
+          --filter '@digitaplatform/theme'
+          --filter '@digitaplatform/components'
+          --filter '@digitaplatform/plugins'
+          build
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Derive npm dist-tag from the git tag channel
+        id: channel
+        run: |
+          channel="${GITHUB_REF_NAME##*-}"   # v1.2.3-beta -> beta
+          case "$channel" in
+            stable) echo "dist=latest" >>"$GITHUB_OUTPUT" ;;
+            beta)   echo "dist=beta"   >>"$GITHUB_OUTPUT" ;;
+            alpha)  echo "dist=alpha"  >>"$GITHUB_OUTPUT" ;;
+            *) echo "unknown channel '$channel' in tag ${GITHUB_REF_NAME}" >&2; exit 1 ;;
+          esac
+      - name: Publish @digitaplatform/* to GitHub Packages
+        run: pnpm -r publish --tag "${{ steps.channel.outputs.dist }}" --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

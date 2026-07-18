@@ -1,0 +1,42 @@
+name: ci
+
+# Build check for the PUBLISHABLE foundation packages only (theme, components,
+# shared, plugins). The apps (ui, engine, web) are private and built/tested via
+# their own pipelines — this workflow exists for the npm-release surface.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@digitaplatform'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build the publishable foundation packages
+        run: >-
+          pnpm
+          --filter '@digitaplatform/shared'
+          --filter '@digitaplatform/theme'
+          --filter '@digitaplatform/components'
+          --filter '@digitaplatform/plugins'
+          build
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
