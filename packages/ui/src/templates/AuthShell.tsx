@@ -13,7 +13,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
 
   return (
     <div
-      className="relative flex min-h-screen items-center justify-center bg-background p-4"
+      className="relative flex min-h-screen items-center justify-center bg-background bg-cover p-4 bg-[image:var(--sig-panel-l)] dark:bg-[image:var(--sig-panel-d)]"
       style={branding?.login_background ? { backgroundImage: `url(${branding.login_background})`, backgroundSize: 'cover' } : undefined}
     >
       <div className="absolute right-4 top-4">

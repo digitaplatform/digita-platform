@@ -4,6 +4,7 @@ import {
   applyBranding,
   resetBranding,
   applySignature,
+  resetSignature,
   resolveInitialSignature,
   synthesizeRamp,
   SIGNATURES,
@@ -52,11 +53,52 @@ describe('branding fonts + signature runtime', () => {
     expect(root.style.getPropertyValue('--font-mono')).toBe(fonts.mono);
   });
 
-  it("resolveInitialSignature() returns 'simetrix' by default and validates stored ids", () => {
-    expect(DEFAULT_SIGNATURE_ID).toBe('simetrix');
+  it("resolveInitialSignature() returns 'digita' by default and validates stored ids", () => {
+    expect(DEFAULT_SIGNATURE_ID).toBe('digita');
+    expect(resolveInitialSignature()).toBe('digita');
+    // A valid stored id is honoured.
+    localStorage.setItem('digita-ui:signature', 'simetrix');
     expect(resolveInitialSignature()).toBe('simetrix');
     // Unknown stored id falls through to the default, never a silent guess.
     localStorage.setItem('digita-ui:signature', 'does-not-exist');
-    expect(resolveInitialSignature()).toBe('simetrix');
+    expect(resolveInitialSignature()).toBe('digita');
+  });
+
+  it("applySignature('digita') stamps data-signature and writes the brand colour world + graphics", () => {
+    const root = document.documentElement;
+    applySignature('digita');
+    // The full signature stamps the CSS anchor the shell backdrop keys on.
+    expect(root.getAttribute('data-signature')).toBe('digita');
+    // Accent ramp anchors on the digita mid-blue, exact (not snapped).
+    expect(root.style.getPropertyValue('--color-primary-600')).toBe(synthesizeRamp('#3896E6')!['600']);
+    // Colour world: canvas is a per-mode light-dark() pair (navy in dark).
+    expect(root.style.getPropertyValue('--color-bg')).toBe('light-dark(#F5F8FB, #050B14)');
+    expect(root.style.getPropertyValue('--color-text-main')).toBe('light-dark(#0D1B2A, #EAF1F8)');
+    // Graphics: the grid ships explicit light + dark values (url()/gradients can't light-dark()).
+    expect(root.style.getPropertyValue('--sig-grid-d')).toContain('linear-gradient');
+    expect(root.style.getPropertyValue('--sig-glow-l')).toContain('radial-gradient');
+    // Fonts still flow through the branding layer.
+    expect(root.style.getPropertyValue('--font-display')).toBe(SIGNATURES['digita']!.fonts!.display);
+  });
+
+  it('switching to a thin signature (simetrix) tears down the digita colour world', () => {
+    const root = document.documentElement;
+    applySignature('digita');
+    applySignature('simetrix');
+    // simetrix carries no colours/graphics → the stamp and every --sig/--color world var are gone.
+    expect(root.getAttribute('data-signature')).toBe(null);
+    expect(root.style.getPropertyValue('--color-bg')).toBe('');
+    expect(root.style.getPropertyValue('--sig-grid-d')).toBe('');
+    // …but simetrix's own accent ramp is applied.
+    expect(root.style.getPropertyValue('--color-primary-600')).toBe(synthesizeRamp('#0E6FB8')!['600']);
+  });
+
+  it('resetSignature() removes the stamp and every signature-owned var', () => {
+    const root = document.documentElement;
+    applySignature('digita');
+    resetSignature();
+    expect(root.getAttribute('data-signature')).toBe(null);
+    expect(root.style.getPropertyValue('--color-bg')).toBe('');
+    expect(root.style.getPropertyValue('--sig-glow-d')).toBe('');
   });
 });

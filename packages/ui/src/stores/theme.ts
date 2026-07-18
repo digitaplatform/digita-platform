@@ -59,8 +59,9 @@ const initialDesign = resolveInitialDesign(DESIGN_KEY);
 applyDesign(initialDesign);
 applyMode(initialMode);
 applyDensity(initialDensity);
-// Signature LAST: its accent/fonts ride the branding layer (inline vars), which
-// composes ON TOP of the design stamp — 'simetrix' paints by default.
+// Signature LAST: its accent/fonts (and, for a full signature, the brand colour
+// world + graphics) ride the branding layer (inline vars), which composes ON TOP
+// of the design stamp — 'digita' (the platform's own identity) paints by default.
 const initialSignature = resolveInitialSignature(SIGNATURE_KEY);
 applySignature(initialSignature);
 

@@ -45,7 +45,10 @@ export function CardShell({ label, icon, width, status, error, children }: CardS
   const span = WIDTH_SPAN[clampWidth(width)];
 
   return (
-    <Card className={cn('flex min-h-[8rem] flex-col', span)}>
+    // The active signature's `card` gradient rides on top of the design's card
+    // surface when present (a full signature like digita); an unset var falls
+    // back to the plain surface, so thin signatures are visually unchanged.
+    <Card className={cn('flex min-h-[8rem] flex-col bg-[image:var(--sig-card-l)] dark:bg-[image:var(--sig-card-d)]', span)}>
       <div className="mb-3 flex items-start gap-3">
         {icon && (
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-card bg-subtle text-textMuted" aria-hidden="true">

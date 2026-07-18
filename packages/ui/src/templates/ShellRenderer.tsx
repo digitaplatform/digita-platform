@@ -6,6 +6,7 @@ import type { LayoutConfig, RegionDefinition, RegionSide, TemplateDefinition } f
 import { useUiStore } from '@/stores/ui';
 import { Topbar } from '@/components/layout/Topbar';
 import { BrandChrome } from '@/components/layout/BrandChrome';
+import { SignatureBackdrop } from '@/components/layout/SignatureBackdrop';
 import { Region } from '@/plugins/registry';
 import { useChrome } from '@/lib/chrome-i18n';
 import { tid } from '@/lib/testid';
@@ -200,7 +201,9 @@ export function ShellRenderer() {
   const drawerRail = [...left, ...right].find((r) => (r.mobile ?? 'drawer') === 'drawer');
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background" {...tid.component('app-shell')}>
+    <div className="relative isolate flex h-screen flex-col overflow-hidden bg-background" {...tid.component('app-shell')}>
+      {/* The active signature's decorative grid + glow, behind every region. */}
+      <SignatureBackdrop />
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-primary-600 focus:px-3 focus:py-2 focus:text-sm focus:text-white"
