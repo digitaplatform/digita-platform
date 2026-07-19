@@ -20,11 +20,14 @@ export function SignatureBackdrop() {
 
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" data-testid="signature-backdrop">
+      {/* The layers are the signature's REAL background vectors (data-URI SVGs):
+          the grid tiles at its intrinsic size (40px pattern baked into the file);
+          the glow is ONE top-anchored panel scaled to the page width. */}
       {graphics.grid && (
-        <div className="absolute inset-0 bg-[image:var(--sig-grid-l)] bg-[length:40px_40px] dark:bg-[image:var(--sig-grid-d)]" />
+        <div className="absolute inset-0 bg-[image:var(--sig-grid-l)] dark:bg-[image:var(--sig-grid-d)]" />
       )}
       {graphics.glow && (
-        <div className="absolute inset-0 bg-[image:var(--sig-glow-l)] dark:bg-[image:var(--sig-glow-d)]" />
+        <div className="absolute inset-0 bg-[image:var(--sig-glow-l)] bg-[length:100%_auto] bg-top bg-no-repeat dark:bg-[image:var(--sig-glow-d)]" />
       )}
     </div>
   );

@@ -13,7 +13,11 @@ export function AuthShell({ children }: { children: ReactNode }) {
 
   return (
     <div
-      className="relative flex min-h-screen items-center justify-center bg-background bg-cover p-4 bg-[image:var(--sig-panel-l)] dark:bg-[image:var(--sig-panel-d)]"
+      // The signature's `panel` layer is the REAL panel-contact vector (a
+      // stretch-adapted data-URI SVG, preserveAspectRatio=none) — painted
+      // 100%×100% like the sites stretch the panel over its section. A tenant
+      // login_background (inline style below) still wins with `cover`.
+      className="relative flex min-h-screen items-center justify-center bg-background bg-no-repeat bg-[length:100%_100%] p-4 bg-[image:var(--sig-panel-l)] dark:bg-[image:var(--sig-panel-d)]"
       style={branding?.login_background ? { backgroundImage: `url(${branding.login_background})`, backgroundSize: 'cover' } : undefined}
     >
       <div className="absolute right-4 top-4">
