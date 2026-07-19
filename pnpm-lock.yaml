@@ -206,8 +206,8 @@ importers:
         specifier: workspace:*
         version: link:../components
       '@digitaplatform/digita':
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.1.1
+        version: 0.1.1
       '@digitaplatform/plugins':
         specifier: workspace:*
         version: link:../plugins/sdk
@@ -590,8 +590,8 @@ packages:
     resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
     engines: {node: '>=20.19.0'}
 
-  '@digitaplatform/digita@0.1.0':
-    resolution: {integrity: sha512-+npWuUV78JbVJf9EB0Jxjm9tRiJnsWVusVjhkioLNokaLnYIrSl4ank9uTtEo5Ck/kCv5YAkDtvqqXSn9LDDTQ==, tarball: https://npm.pkg.github.com/download/@digitaplatform/digita/0.1.0/79e76d04d680c33713f69a90fae0aca2bb8b4406}
+  '@digitaplatform/digita@0.1.1':
+    resolution: {integrity: sha512-zBPnDmsv30+vzvEJcJeOnun24iJbJHVX1ZlGXnuE15iUDAIvZCE6webnED73XzvtgXc/m9xSfmsWwRJ/rd/QIg==, tarball: https://npm.pkg.github.com/download/@digitaplatform/digita/0.1.1/71cc0f9618cb5a4a142cd31098e15f15b6d026ed}
 
   '@digitaplatform/usermenu@0.1.0':
     resolution: {integrity: sha512-Y60BboH7SAdLEcdxYOg9A5iylv3znC5uYJrkQQEma2YUi3bWMP1urRPHnYZckSKryZJ+7Q14rtxrEYyAhf14/g==, tarball: https://npm.pkg.github.com/download/@digitaplatform/usermenu/0.1.0/913598463650e383ddd40d6db2e992cd92388c31}
@@ -4283,7 +4283,7 @@ snapshots:
 
   '@csstools/css-tokenizer@4.0.0': {}
 
-  '@digitaplatform/digita@0.1.0': {}
+  '@digitaplatform/digita@0.1.1': {}
 
   '@digitaplatform/usermenu@0.1.0(@digitaplatform/components@packages+components)(@digitaplatform/plugins@packages+plugins+sdk)(lucide-react@0.562.0(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react-router-dom@7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-router@7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)':
     dependencies:
