@@ -73,6 +73,24 @@ function getEnvArray(key: string, fallback: string[]): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Read a closed-enum env var. Unset/empty → fallback; any value outside
+ * `allowed` throws at boot rather than silently degrading. This closes the
+ * storage foot-gun: an engine given an UPLOAD_STORAGE value it does not know
+ * (e.g. a typo, or "r2" on an image predating that mode) must fail loud, not
+ * fall through to pod-local disk and lose customer files on the next restart.
+ */
+function getEnvOneOf<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  const val = process.env[key];
+  if (val === undefined || val === "") return fallback;
+  if (!allowed.includes(val as T)) {
+    throw new Error(
+      `Environment variable ${key} must be one of ${allowed.join(", ")}, got: ${val}`,
+    );
+  }
+  return val as T;
+}
+
 // Expand each "apps root" in APPS_DIRS into the list of its immediate app
 // subdirectories. This makes app loading DYNAMIC: adding a new app is just
 // dropping a folder into the root (locally the sibling digita-apps/apps
@@ -219,13 +237,19 @@ export const env = {
 
   // ─── FILE UPLOADS ────────────────────────────────────
   UPLOAD_MAX_SIZE: getEnv("UPLOAD_MAX_SIZE", "25mb"),
-  UPLOAD_STORAGE: getEnv("UPLOAD_STORAGE", "local") as "local" | "s3",
+  UPLOAD_STORAGE: getEnvOneOf("UPLOAD_STORAGE", ["local", "s3", "r2"] as const, "local"),
   UPLOAD_LOCAL_PATH: getEnv("UPLOAD_LOCAL_PATH", "./uploads"),
   UPLOAD_S3_BUCKET: getEnv("UPLOAD_S3_BUCKET", ""),
   UPLOAD_S3_REGION: getEnv("UPLOAD_S3_REGION", ""),
   UPLOAD_S3_ENDPOINT: getEnv("UPLOAD_S3_ENDPOINT", ""),
   UPLOAD_S3_KEY: getEnv("UPLOAD_S3_KEY", ""),
   UPLOAD_S3_SECRET: getEnv("UPLOAD_S3_SECRET", ""),
+  // Cloudflare R2 (UPLOAD_STORAGE=r2). The S3-API endpoint is derived in
+  // storage-factory from the account id (+ optional EU jurisdiction) unless
+  // UPLOAD_S3_ENDPOINT is set explicitly; region defaults to R2's fixed "auto".
+  // Credentials + bucket reuse the UPLOAD_S3_KEY/SECRET/BUCKET vars.
+  UPLOAD_R2_ACCOUNT_ID: getEnv("UPLOAD_R2_ACCOUNT_ID", ""),
+  UPLOAD_R2_JURISDICTION: getEnvOneOf("UPLOAD_R2_JURISDICTION", ["", "eu"] as const, ""),
   // NOTE: deliberately NOT "text/*" — text/html is browser-executable (stored
   // XSS via the download route). Active-content types (text/html, image/svg+xml,
   // XML flavors) are additionally hard-blocked in the upload router regardless

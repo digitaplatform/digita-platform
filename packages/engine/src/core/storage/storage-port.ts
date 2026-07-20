@@ -20,13 +20,15 @@ export interface StorageGetResult {
   contentLength?: number;
 }
 
-export type StorageBackend = "local" | "s3";
+export type StorageBackend = "local" | "s3" | "r2";
 
 /**
  * Storage seam for uploaded files (mirrors the email-port pattern in
  * digita-auth). Implementations: LocalStoragePort (dev default, flat files
- * under UPLOAD_LOCAL_PATH) and S3StoragePort (Garage / any S3-compatible
- * store). Selected at boot by createStoragePort() from env.UPLOAD_STORAGE.
+ * under UPLOAD_LOCAL_PATH) and S3StoragePort, which serves any S3-compatible
+ * store — Garage (backend "s3") and Cloudflare R2 (backend "r2", the platform
+ * object store for tenants). Selected at boot by createStoragePort() from
+ * env.UPLOAD_STORAGE.
  */
 export interface StoragePort {
   /** Which backend this port writes to — recorded on each File doc as storage_backend. */

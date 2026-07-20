@@ -45,6 +45,10 @@ describe("S3StoragePort", () => {
     expect(makePort().backend).toBe("s3");
   });
 
+  it("reports backend 'r2' when configured for Cloudflare R2", () => {
+    expect(new S3StoragePort({ ...config, backend: "r2" }).backend).toBe("r2");
+  });
+
   it("configures the client for Garage: path-style addressing + literal region", async () => {
     const port = makePort();
     // Garage REQUIRES path-style — virtual-host bucket DNS does not exist there.

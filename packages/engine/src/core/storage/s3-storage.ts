@@ -13,6 +13,13 @@ export interface S3StorageConfig {
   endpoint: string;
   accessKeyId: string;
   secretAccessKey: string;
+  /**
+   * Which backend to record on each File doc as storage_backend. Defaults to
+   * "s3" (Garage). The R2 preset in createStoragePort() passes "r2" so logs
+   * and File metadata name the real store, even though the wire client is
+   * identical (R2 is S3-compatible).
+   */
+  backend?: "s3" | "r2";
 }
 
 function isNotFound(err: unknown): boolean {
@@ -25,18 +32,23 @@ function isNotFound(err: unknown): boolean {
 }
 
 /**
- * S3-compatible storage backend, targeting Garage as the platform object
- * store. Garage specifics: region is literally "garage" and PATH-STYLE
- * addressing is REQUIRED — virtual-host bucket DNS does not exist there,
- * so `forcePathStyle: true` is non-negotiable.
+ * S3-compatible storage backend. Serves two stores through one wire client:
+ * Garage (region literally "garage") and Cloudflare R2 (region "auto",
+ * per-account endpoint). PATH-STYLE addressing is REQUIRED for Garage
+ * (virtual-host bucket DNS does not exist there) and ACCEPTED by R2, so
+ * `forcePathStyle: true` is safe for both; the two checksum options below are
+ * likewise required by BOTH Garage and R2 to avoid the multipart-CRC32
+ * download-corruption bug on newer SDKs. The `backend` label ("s3"|"r2") only
+ * distinguishes what gets recorded on File docs — the behavior is identical.
  */
 export class S3StoragePort implements StoragePort {
-  readonly backend = "s3" as const;
+  readonly backend: "s3" | "r2";
   /** Exposed for unit tests (client config assertions) — do not use directly elsewhere. */
   readonly client: S3Client;
   private readonly bucket: string;
 
   constructor(config: S3StorageConfig) {
+    this.backend = config.backend ?? "s3";
     this.bucket = config.bucket;
     this.client = new S3Client({
       endpoint: config.endpoint,
