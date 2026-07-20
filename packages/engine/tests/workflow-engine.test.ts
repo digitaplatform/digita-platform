@@ -54,12 +54,12 @@ const admin = { _id: "a", email: "a@x", roles: [SYSTEM_ROLES.ADMINISTRATOR] };
 
 describe("WorkflowEngine — initial state", () => {
   it("getInitialState returns the is_initial state", () => {
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     expect(w.getInitialState(expenseEntity())).toBe("Draft");
   });
 
   it("getInitialState returns undefined when no is_initial declared", () => {
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     const e = expenseEntity();
     e.states = e.states!.map((s) => ({ ...s, is_initial: false }));
     expect(w.getInitialState(e)).toBeUndefined();
@@ -68,21 +68,21 @@ describe("WorkflowEngine — initial state", () => {
 
 describe("WorkflowEngine — validateTransition", () => {
   it("allows a declared transition for an authorised user", () => {
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     expect(() =>
       w.validateTransition(expenseEntity(), { amount: 100 }, "Draft", "Approved", manager as never),
     ).not.toThrow();
   });
 
   it("rejects a transition for a user without an allowed role", () => {
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     expect(() =>
       w.validateTransition(expenseEntity(), { amount: 100 }, "Draft", "Approved", sales as never),
     ).toThrow(IllegalTransitionError);
   });
 
   it("rejects an undeclared transition (Approved → Draft)", () => {
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     // Approved is_terminal AND no declared Approved→Draft transition → from_terminal.
     expect(() =>
       w.validateTransition(expenseEntity(), {}, "Approved", "Draft", manager as never),
@@ -92,27 +92,27 @@ describe("WorkflowEngine — validateTransition", () => {
   it("allows a DECLARED transition out of a terminal state (Reopen)", () => {
     const e = expenseEntity();
     e.transitions!.push({ from: "Approved", to: "Draft", action: "reopen", allowed_roles: ["Manager"] });
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     const t = w.validateTransition(e, {}, "Approved", "Draft", manager as never);
     expect(t?.action).toBe("reopen");
   });
 
   it("rejects when condition fails", () => {
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     expect(() =>
       w.validateTransition(expenseEntity(), { amount: 0 }, "Draft", "Rejected", manager as never),
     ).toThrow(IllegalTransitionError);
   });
 
   it("wildcard from: '*' transitions match any prior state", () => {
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     expect(() =>
       w.validateTransition(expenseEntity(), {}, "Rejected", "Cancelled", sales as never),
     ).not.toThrow();
   });
 
   it("Administrator bypasses role/condition gates", () => {
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     expect(() =>
       w.validateTransition(expenseEntity(), { amount: 0 }, "Draft", "Rejected", admin as never),
     ).not.toThrow();
@@ -126,7 +126,7 @@ describe("WorkflowEngine — applyTransition + side_effects", () => {
     // (the latent dirty-tracking bug this fixes).
     const e = expenseEntity();
     e.transitions![0]!.side_effects = { set: { approved_at: "2026-04-29", approved_by: "m@x" } };
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     const doc: Record<string, unknown> = { amount: 100 };
     const result = await w.applyTransition(
       e,
@@ -150,7 +150,7 @@ describe("WorkflowEngine — applyTransition + side_effects", () => {
       { from: "Draft", to: "Approved", action: "approve", allowed_roles: ["Manager"], side_effects: { set: { approved_by: "m@x" } } },
       { from: "Draft", to: "Approved", action: "cfo_sign", allowed_roles: ["CFO"], side_effects: { set: { cfo_signed: true } } },
     ] as unknown as EntityDefinition["transitions"];
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     const doc: Record<string, unknown> = { amount: 100 };
     const t = w.validateTransition(e, doc, "Draft", "Approved", manager as never);
     const result = await w.applyTransition(e, doc, t, "Draft", "Approved", manager as never, undefined as never);
@@ -160,7 +160,7 @@ describe("WorkflowEngine — applyTransition + side_effects", () => {
 
   it("fires on_workflow_transition rule event", async () => {
     const ruleEngine = { execute: vi.fn().mockResolvedValue({}) };
-    const w = new WorkflowEngine(registry, ruleEngine as never);
+    const w = new WorkflowEngine(ruleEngine as never);
     await w.applyTransition(
       expenseEntity(),
       { amount: 100 },
@@ -184,13 +184,13 @@ describe("WorkflowEngine — resolveStateOverride", () => {
   it("returns the per-role override for the doc's current state", () => {
     const e = expenseEntity();
     e.states![0] = { ...e.states![0]!, permissions: [{ role: "Salesperson", write: 0 }] } as never;
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     const override = w.resolveStateOverride(e, { status: "Draft" }, "Salesperson");
     expect(override?.write).toBe(0);
   });
 
   it("returns null when state has no override for the role", () => {
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     const override = w.resolveStateOverride(expenseEntity(), { status: "Draft" }, "Salesperson");
     expect(override).toBeNull();
   });
@@ -200,7 +200,7 @@ describe("WorkflowEngine — validateDefinition (boot warnings)", () => {
   it("flags multiple is_initial states", () => {
     const e = expenseEntity();
     e.states![1] = { ...e.states![1]!, is_initial: true } as never;
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     const warnings = w.validateDefinition(e);
     expect(warnings.some((s) => s.includes("multiple is_initial"))).toBe(true);
   });
@@ -208,7 +208,7 @@ describe("WorkflowEngine — validateDefinition (boot warnings)", () => {
   it("flags transition.to referencing unknown state", () => {
     const e = expenseEntity();
     e.transitions!.push({ from: "Draft", to: "Phantom", allowed_roles: ["Manager"] });
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     const warnings = w.validateDefinition(e);
     expect(warnings.some((s) => s.includes('"Phantom"'))).toBe(true);
   });
@@ -216,14 +216,14 @@ describe("WorkflowEngine — validateDefinition (boot warnings)", () => {
   it("does NOT flag a DECLARED transition out of a terminal state (Reopen is permitted)", () => {
     const e = expenseEntity();
     e.transitions!.push({ from: "Approved", to: "Draft", allowed_roles: ["Manager"] });
-    const w = new WorkflowEngine(registry);
+    const w = new WorkflowEngine();
     const warnings = w.validateDefinition(e);
     expect(warnings.some((s) => s.includes("terminal state"))).toBe(false);
   });
 });
 
 describe("WorkflowEngine — getStateForDocStatus (B6: explicit declaration, no order guessing)", () => {
-  const w = new WorkflowEngine(registry);
+  const w = new WorkflowEngine();
   const mk = (states: unknown[]): EntityDefinition =>
     ({
       name: "W",

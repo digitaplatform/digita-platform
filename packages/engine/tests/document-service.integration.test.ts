@@ -94,7 +94,7 @@ beforeAll(async () => {
   const viewLogService = new ViewLogService(db);
   const activityLogService = new ActivityLogService(db);
   const translationService = new TranslationService(db);
-  const workflowEngine = new WorkflowEngine(registry);
+  const workflowEngine = new WorkflowEngine();
 
   docService = new DocumentService({
     registry,

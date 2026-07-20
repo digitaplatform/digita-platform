@@ -135,7 +135,7 @@ export class RuleEngine {
       case "update_document":
         return executeUpdateDocument(action, exec, this.documentService, session);
       case "validate":
-        return executeValidate(action, exec, this.db, this.registry, session);
+        return executeValidate(action, exec);
       case "set_value":
         return executeSetValue(action, exec);
       default:

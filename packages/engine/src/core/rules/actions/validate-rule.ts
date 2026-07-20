@@ -1,6 +1,3 @@
-import type { ClientSession } from "mongodb";
-import type { MongoDBService } from "../../database/mongodb-service.js";
-import type { EntityRegistry } from "../../entity/entity-registry.js";
 import type { RuleAction, RuleExecContext } from "../rule-types.js";
 import { evaluateExpression } from "../rule-expression.js";
 
@@ -15,9 +12,6 @@ import { evaluateExpression } from "../rule-expression.js";
 export async function executeValidate(
   action: RuleAction,
   exec: RuleExecContext,
-  _db: MongoDBService,
-  _registry: EntityRegistry,
-  _session: ClientSession,
 ): Promise<void> {
   if (!action.condition) throw new Error("validate: condition required");
   const rawMessage =

@@ -84,7 +84,7 @@ beforeAll(async () => {
   const permissionChecker = new PermissionChecker(registry);
   const hookRunner = new HookRunner();
   hookRunner.setServices({ db, registry });
-  const workflowEngine = new WorkflowEngine(registry);
+  const workflowEngine = new WorkflowEngine();
   docService = new DocumentService({
     registry,
     db,

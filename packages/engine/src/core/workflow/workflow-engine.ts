@@ -6,7 +6,6 @@ import type {
   TransitionDefinition,
 } from "@digitaplatform/shared";
 import { SYSTEM_ROLES } from "@digitaplatform/shared";
-import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { RuleEngine } from "../rules/rule-engine.js";
 import type { UserContext } from "../permissions/types.js";
 import { evaluateExpression } from "../expression/expression-evaluator.js";
@@ -86,10 +85,7 @@ export class AmbiguousDocStatusStateError extends Error {
 }
 
 export class WorkflowEngine {
-  constructor(
-    private registry: EntityRegistry,
-    private ruleEngine?: RuleEngine,
-  ) {}
+  constructor(private ruleEngine?: RuleEngine) {}
 
   setRuleEngine(ruleEngine: RuleEngine): void {
     this.ruleEngine = ruleEngine;

@@ -144,7 +144,7 @@ export async function createApp(
   const fetchFromResolver = new FetchFromResolver(registry, db);
   const snapshotResolver = new SnapshotResolver(registry, db);
   // RuleEngine is constructed below; late-bind to avoid forward reference.
-  const workflowEngine = new WorkflowEngine(registry);
+  const workflowEngine = new WorkflowEngine();
   // Late-bind state override resolution so per-state permission strips
   // (`state.permissions: [{ role, read?:0, write?:0, ... }]`) are enforced
   // server-side, not just FE-side.
