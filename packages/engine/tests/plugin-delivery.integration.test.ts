@@ -8,7 +8,7 @@ import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 vi.mock("../src/core/config/env.js", async () => {
   const { fileURLToPath } = await import("node:url");
   const { dirname, join, resolve } = await import("node:path");
-  const { mkdtempSync, writeFileSync } = await import("node:fs");
+  const { mkdtempSync, writeFileSync, mkdirSync, existsSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
 
   const appDir = mkdtempSync(join(tmpdir(), "digita-plugin-delivery-"));
@@ -26,6 +26,23 @@ vi.mock("../src/core/config/env.js", async () => {
 
   // tests/ → packages/engine → packages → monorepo root
   const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+
+  // Premium artifact store: use the developer's real staged-premium/ when it has
+  // been staged locally; otherwise (fresh checkout / CI, where staged-premium is
+  // gitignored and absent) fabricate a minimal fixture so the gated delivery
+  // route can be exercised hermetically — the route streams whatever bytes are on
+  // disk, so a fixture proves the mechanism as well as the real artifact does.
+  const realPremiumDir = join(repoRoot, "staged-premium");
+  let premiumDir = realPremiumDir;
+  if (!existsSync(join(realPremiumDir, "editorial", "0.1.0", "editorial.css"))) {
+    premiumDir = mkdtempSync(join(tmpdir(), "digita-premium-"));
+    mkdirSync(join(premiumDir, "editorial", "0.1.0"), { recursive: true });
+    writeFileSync(
+      join(premiumDir, "editorial", "0.1.0", "editorial.css"),
+      "/* editorial design — test fixture (staged-premium absent) */\n",
+      "utf-8",
+    );
+  }
 
   return { env: {
     NODE_ENV: "test", APP_VERSION: "0.1.0", SERVICE_NAME: "digita-test", PORT: 0, HOST: "127.0.0.1",
@@ -55,7 +72,7 @@ vi.mock("../src/core/config/env.js", async () => {
     DIGITA_PLUGIN_LICENSE: "",
     DIGITA_PLUGIN_LICENSE_FILE: join(repoRoot, "tools", "plugin-mock", "dev-sample-license.jwt"),
     DIGITA_PLUGIN_LICENSE_PUBKEY_FILE: join(repoRoot, "tools", "plugin-mock", "keys", "dev-sample-ed25519-public.pem"),
-    PLUGINS_PREMIUM_DIR: join(repoRoot, "staged-premium"),
+    PLUGINS_PREMIUM_DIR: premiumDir,
   } };
 });
 vi.mock("../src/core/logging/logger.js", () => ({
