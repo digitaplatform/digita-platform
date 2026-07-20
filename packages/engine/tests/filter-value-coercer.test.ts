@@ -30,18 +30,18 @@ describe("coerceDateFilterValues — date/datetime filter coercion", () => {
 
   it("Datetime field + string value → BSON Date (the sibling bug)", () => {
     const out = coerce([["created_at", ">=", "2026-07-01"]])!;
-    expect(out[0][2]).toBeInstanceOf(Date);
-    expect((out[0][2] as Date).toISOString().slice(0, 10)).toBe("2026-07-01");
+    expect(out[0]![2]).toBeInstanceOf(Date);
+    expect((out[0]![2] as Date).toISOString().slice(0, 10)).toBe("2026-07-01");
   });
 
   it("Datetime field + Date value → left as a Date (already correct)", () => {
     const d = new Date("2026-07-01T00:00:00Z");
-    expect(coerce([["created_at", "<", d]])![0][2]).toBe(d);
+    expect(coerce([["created_at", "<", d]])![0]![2]).toBe(d);
   });
 
   it("creation/modified meta fields are treated as Datetime", () => {
     const out = coerce([["creation", ">=", "2026-07-01"]])!;
-    expect(out[0][2]).toBeInstanceOf(Date);
+    expect(out[0]![2]).toBeInstanceOf(Date);
   });
 
   it("non-date field is untouched", () => {

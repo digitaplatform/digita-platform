@@ -869,7 +869,7 @@ describe("update — workflow side_effects.set persist to the DB (E3 latent-bug 
     transitions: [
       { from: "Draft", to: "Active", action: "activate", side_effects: { set: { activated_flag: "YES" } } },
     ],
-  } as Partial<EntityDefinition>);
+  } as unknown as Partial<EntityDefinition>);
 
   beforeEach(async () => {
     registry.register(wfEntity);

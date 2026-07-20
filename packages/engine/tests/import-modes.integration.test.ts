@@ -107,7 +107,7 @@ const Item: EntityDefinition = {
 } as unknown as EntityDefinition;
 
 const bearer = (tok: string) => ({ authorization: `Bearer ${tok}` });
-const imp = (doctype: string, tok: string, payload: unknown) =>
+const imp = (doctype: string, tok: string, payload: object) =>
   app.inject({ method: "POST", url: `/api/v1/import/${doctype}`, headers: bearer(tok), payload });
 
 beforeAll(async () => {
