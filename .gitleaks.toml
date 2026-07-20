@@ -1,0 +1,21 @@
+# gitleaks config for the platform build's credential-scan gate.
+#
+# The engine test suite embeds DELIBERATELY-FAKE secrets (integration tests fixture
+# JWTs / API keys), and tools/plugin-mock ships a dev-sample license JWT + a
+# dev-sample ed25519 private key used only to exercise plugin signing locally.
+# Those trip gitleaks' default rules (jwt, private-key, generic-api-key) as false
+# positives. Allowlist the test suites + the plugin-mock samples; NON-test, non-mock
+# source must stay clean (a real leak there still fails the build).
+title = "digita-platform"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "fake secrets in test fixtures + plugin-mock dev samples"
+paths = [
+  '''.*\.test\.ts$''',
+  '''.*\.spec\.ts$''',
+  '''e2e/.*''',
+  '''tools/plugin-mock/.*''',
+]
