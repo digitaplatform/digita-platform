@@ -1,8 +1,9 @@
 name: ci
 
-# Build check for the PUBLISHABLE foundation packages only (theme, components,
-# shared, plugins). The apps (ui, engine, web) are private and built/tested via
-# their own pipelines — this workflow exists for the npm-release surface.
+# Build check for the publishable foundation packages (shared, theme,
+# components, plugins) AND a full gate for the engine (typecheck, dependency
+# rules, build, and the vitest suite). ui/web are private apps and remain
+# excluded here — they do not yet have a CI gate.
 on:
   push:
     branches: [master]
@@ -38,3 +39,38 @@ jobs:
           build
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Engine gate: typecheck (src + tests), dependency rules (dependency-cruiser),
+  # build, and the full vitest suite (unit + mongodb-memory-server replica-set
+  # integration tests — each integration file boots its own 1-node replset, so
+  # the runner needs egress to the mongod download mirror on a cold cache).
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@digitaplatform'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build @digitaplatform/shared (the engine's workspace dependency)
+        run: pnpm --filter '@digitaplatform/shared' build
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Typecheck the engine (tsconfig.test.json covers src/ and tests/)
+        run: pnpm --filter '@digitaplatform/engine' typecheck
+      - name: Dependency rules (dependency-cruiser)
+        run: pnpm --filter '@digitaplatform/engine' depcruise
+      - name: Build the engine
+        run: pnpm --filter '@digitaplatform/engine' build
+      - name: Engine test suite
+        run: pnpm --filter '@digitaplatform/engine' test
+        env:
+          # Mirrors the 2-fork CI scenario the vitest.config.ts isolation
+          # comment documents (worker isolation must stay ON).
+          VITEST_MAX_WORKERS: '2'
