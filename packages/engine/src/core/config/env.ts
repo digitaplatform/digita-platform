@@ -212,9 +212,6 @@ export const env = {
     "token",
     "authorization",
   ]),
-  LOG_SEQ_ENABLED: getEnvBool("LOG_SEQ_ENABLED", false),
-  LOG_SEQ_URL: getEnv("LOG_SEQ_URL", "http://localhost:5341"),
-  LOG_SEQ_API_KEY: getEnv("LOG_SEQ_API_KEY", ""),
 
   // ─── LOCALE / i18n ───────────────────────────────────
   BOOTSTRAP_LOCALE: getEnv("BOOTSTRAP_LOCALE", "en"),

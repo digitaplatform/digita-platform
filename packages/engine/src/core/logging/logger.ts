@@ -1,4 +1,3 @@
-import { fileURLToPath } from "url";
 import pino, { type Logger as PinoLogger, type TransportTargetOptions } from "pino";
 import { env } from "../config/env.js";
 
@@ -39,17 +38,6 @@ function buildTransport(): pino.TransportMultiOptions | pino.TransportSingleOpti
       options: {
         destination: `${env.LOG_FILE_PATH}/app.log`,
         mkdir: true,
-      },
-      level: env.LOG_LEVEL,
-    });
-  }
-
-  if (env.LOG_SEQ_ENABLED) {
-    targets.push({
-      target: fileURLToPath(import.meta.resolve("./seq-transport.cjs")),
-      options: {
-        serverUrl: env.LOG_SEQ_URL,
-        ...(env.LOG_SEQ_API_KEY ? { apiKey: env.LOG_SEQ_API_KEY } : {}),
       },
       level: env.LOG_LEVEL,
     });

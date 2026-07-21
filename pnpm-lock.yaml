@@ -125,9 +125,6 @@ importers:
       pino-pretty:
         specifier: ^13.1.3
         version: 13.1.3
-      pino-seq:
-        specifier: ^4.0.0
-        version: 4.0.0(pino@10.3.1)
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
@@ -3262,12 +3259,6 @@ packages:
     resolution: {integrity: sha512-ttXRkkOz6WWC95KeY9+xxWL6AtImwbyMHrL1mSwqwW9u+vLp/WIElvHvCSDg0xO/Dzrggz1zv3rN5ovTRVowKg==}
     hasBin: true
 
-  pino-seq@4.0.0:
-    resolution: {integrity: sha512-w9V+y6tqpke/xbywC4/foRPPDa44w39Yi3dOufacbe3gBWCdYpSN8Y1R7RJ8NmuaDFVsK2HLeKOh9gJ4ugA/MQ==}
-    engines: {node: '>=18.0.0'}
-    peerDependencies:
-      pino: 10.x
-
   pino-std-serializers@7.1.0:
     resolution: {integrity: sha512-BndPH67/JxGExRgiX1dX0w1FvZck5Wa4aal9198SrRhZjH3GxKQUKIBnYJTdj2HDN3UQAS06HlfcSbQj2OHmaw==}
 
@@ -3581,10 +3572,6 @@ packages:
     resolution: {integrity: sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==}
     engines: {node: '>=10'}
     hasBin: true
-
-  seq-logging@3.0.0:
-    resolution: {integrity: sha512-ys5QV0745vxBCWuZBPSkgoobuLoUMxTSz1g7ZclHqX1tXXKFLyRIIn8V89EPgDnfRiWfoSo4KSxy/E0MtOYYyw==}
-    engines: {node: '>=14.18'}
 
   server-only@0.0.1:
     resolution: {integrity: sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA==}
@@ -6969,13 +6956,6 @@ snapshots:
       sonic-boom: 4.2.1
       strip-json-comments: 5.0.3
 
-  pino-seq@4.0.0(pino@10.3.1):
-    dependencies:
-      pino: 10.3.1
-      seq-logging: 3.0.0
-    transitivePeerDependencies:
-      - encoding
-
   pino-std-serializers@7.1.0: {}
 
   pino@10.3.1:
@@ -7284,13 +7264,6 @@ snapshots:
   semver@6.3.1: {}
 
   semver@7.8.5: {}
-
-  seq-logging@3.0.0:
-    dependencies:
-      abort-controller: 3.0.0
-      node-fetch: 2.7.0
-    transitivePeerDependencies:
-      - encoding
 
   server-only@0.0.1: {}
 
