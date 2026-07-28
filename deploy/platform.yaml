@@ -1,0 +1,41 @@
+# ConsumerManifest for digita-platform (consumer contract, schema:
+# digita-controller/shared/consumer.ts ConsumerManifestSchema).
+#
+# BUILD-ONLY: no `chart:` — this repo deploys nothing of its own. The three images it
+# produces are run by the digita-deploy charts digita-engine, digita-ui and digita-web,
+# which pin them as builds[]{name,image,tag} in values-<stage>.yaml; the release bump
+# writes the tag there.
+#
+# `name` is the UNIT name: it must equal basename(repoURL) and the registration directory
+# (digita-cloud/registrations/digita-platform/build.yaml). The release pipeline compares
+# the two before it probes, builds or pushes anything, and it also rejects any build name
+# below that the same build.yaml does not attest.
+#
+# The build names are FLAT image names, not paths: each one IS the repo it pushes to in
+# the central registry and is what the charts carry as builds[].image. Renaming one points
+# it at a different repo and makes it invisible to the release bump's search over those
+# pins, so the running chart would silently stay on the old image.
+#
+# All three build from the REPO ROOT, which is the default context — their COPY paths are
+# workspace-relative and each install validates the frozen lockfile against every
+# workspace member.
+apiVersion: digitacloud.app/v1
+kind: ConsumerManifest
+name: digita-platform
+owner: platform
+envs: [dev, test, prod]
+builds:
+  # The generic engine (packages/engine, Fastify). No apps are baked in — they arrive at
+  # runtime from the mounted digita-apps bundle. plugins.lock.json plus tools/plugin-mock
+  # stage the premium plugin bytes this image serves.
+  - name: digita-engine
+    containerfile: docker/engine.Dockerfile
+  # The operator SPA (packages/ui) served by nginx. Built against theme, components and
+  # the plugin SDK; docker/verify-plugin-stage.mjs asserts the staged free plugin tree
+  # reached dist/ and that no premium bytes entered the web root.
+  - name: digita-ui
+    containerfile: docker/ui.Dockerfile
+  # The public website (packages/web, Next.js standalone server). Built against theme and
+  # shared only.
+  - name: digita-web
+    containerfile: docker/web.Dockerfile
