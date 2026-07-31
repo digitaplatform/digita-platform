@@ -16,11 +16,13 @@
 # in the workspace deps (@digitaplatform/theme, @digitaplatform/shared) and the
 # pnpm-symlinked node_modules.
 #
-# Registry auth: the build pipeline writes an authenticated .npmrc
-# (@digitaplatform scope → GitHub Packages + read token) into the build-context
-# root. It is BIND-MOUNTED into the deps install below — never COPY'd — so the
-# token can never land in an image layer. The production stage copies build
-# artifacts only → no mount there.
+# Registry auth for the private @digitaplatform scope: the build pipeline hands
+# buildah the authenticated .npmrc as a BUILD SECRET (--secret id=npmrc,
+# mounted from outside the build context), and each pnpm install below mounts
+# it at /root/.npmrc for the length of that one RUN. It is never part of the
+# context and never COPY'd, so the credential can reach no image layer and no
+# `COPY . .` in this file.
+# The production stage copies build artifacts only → no mount there.
 # ──────────────────────────────────────────────────────────────
 
 # ─── Stage 1: Install dependencies ───────────────────────────
@@ -49,7 +51,7 @@ COPY packages/web/package.json packages/web/
 # web (Next.js host) + @digitaplatform/theme (design foundation, provides the
 # imported theme.css) + shared. devDeps included (tailwind/postcss/tsc needed by
 # `next build`).
-RUN --mount=type=bind,source=.npmrc,target=/root/.npmrc \
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     pnpm install --frozen-lockfile \
     --filter @digitaplatform/shared \
     --filter @digitaplatform/theme \

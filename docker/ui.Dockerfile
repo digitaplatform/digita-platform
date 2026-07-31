@@ -29,11 +29,13 @@
 # engine image/chart, which points it at the staged-premium dir) after verifying
 # the tenant's license entitlements. This ui image ALWAYS ships free-only.
 #
-# Registry auth: the build pipeline writes an authenticated .npmrc
-# (@digitaplatform scope → GitHub Packages + read token) into the build-context
-# root. It is BIND-MOUNTED into the deps install below — never COPY'd — so the
-# token can never land in an image layer. The nginx stage copies artifacts
-# only → no mount there.
+# Registry auth for the private @digitaplatform scope: the build pipeline hands
+# buildah the authenticated .npmrc as a BUILD SECRET (--secret id=npmrc,
+# mounted from outside the build context), and each pnpm install below mounts
+# it at /root/.npmrc for the length of that one RUN. It is never part of the
+# context and never COPY'd, so the credential can reach no image layer and no
+# `COPY . .` in this file.
+# The nginx stage copies artifacts only → no mount there.
 # ──────────────────────────────────────────────────────────────
 
 # ─── Stage 1: Install dependencies ───────────────────────────
@@ -61,7 +63,7 @@ COPY packages/web/package.json packages/web/
 # PREMIUM plugin bundles are built in digita-plugins and are NOT
 # installed as deps — they enter as staged static artifacts (see PLUGIN
 # DELIVERY above).
-RUN --mount=type=bind,source=.npmrc,target=/root/.npmrc \
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     pnpm install --frozen-lockfile \
     --filter @digitaplatform/shared \
     --filter @digitaplatform/theme \
@@ -96,8 +98,9 @@ COPY docker/verify-plugin-stage.mjs docker/
 #     is intentionally absent here (engine-mounted; see PLUGIN DELIVERY). Both
 #     staged trees are GITIGNORED — a fresh clone must run staging before build.
 #   PLUGINS_SOURCE=registry: stage inside the build via `npm pack` from the
-#     registry (--registry mode; auth via the bind-mounted .npmrc). Premium lands
-#     in /app/staged-premium and is likewise ignored by this free-only image.
+#     registry (--registry mode; auth via the mounted npmrc build secret).
+#     Premium lands in /app/staged-premium and is likewise ignored by this
+#     free-only image.
 # Either way the FREE staged tree is then verified against the inventory (files
 # exist, sha384 integrity matches, free/premium URL shapes correct, and NO
 # premium bytes in the web root) so a broken/partial stage fails the build here,
@@ -106,7 +109,7 @@ COPY docker/verify-plugin-stage.mjs docker/
 # below) skips staging entirely and ships a plugin-less image.
 ARG WITH_PLUGINS=1
 ARG PLUGINS_SOURCE=prestaged
-RUN --mount=type=bind,source=.npmrc,target=/root/.npmrc \
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     set -eu; \
     if [ "$WITH_PLUGINS" != "1" ]; then \
       echo "WITH_PLUGINS=0: skipping plugin staging (emergency escape hatch)"; \

@@ -11,10 +11,12 @@
 # every app folder under APPS_DIRS (see env.ts). See the digita-deploy
 # digita-engine chart for the mount wiring.
 #
-# Registry auth: the build pipeline writes an authenticated .npmrc
-# (@digitaplatform scope → GitHub Packages + read token) into the build-context
-# root. It is BIND-MOUNTED into each pnpm install below — never COPY'd — so the
-# token can never land in an image layer.
+# Registry auth for the private @digitaplatform scope: the build pipeline hands
+# buildah the authenticated .npmrc as a BUILD SECRET (--secret id=npmrc,
+# mounted from outside the build context), and each pnpm install below mounts
+# it at /root/.npmrc for the length of that one RUN. It is never part of the
+# context and never COPY'd, so the credential can reach no image layer and no
+# `COPY . .` in this file.
 # ──────────────────────────────────────────────────────────────
 
 # ─── Stage 1: Install dependencies ───────────────────────────
@@ -40,7 +42,7 @@ COPY packages/engine/package.json packages/engine/
 COPY packages/ui/package.json packages/ui/
 COPY packages/web/package.json packages/web/
 
-RUN --mount=type=bind,source=.npmrc,target=/root/.npmrc \
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     pnpm install --frozen-lockfile --filter @digitaplatform/shared --filter @digitaplatform/engine
 
 # ─── Stage 2: Build ──────────────────────────────────────────
@@ -65,7 +67,7 @@ RUN pnpm --filter @digitaplatform/shared build && \
 # (the ui image builds its own) and is never copied into the engine image.
 COPY plugins.lock.json ./
 COPY tools/plugin-mock/ tools/plugin-mock/
-RUN --mount=type=bind,source=.npmrc,target=/root/.npmrc \
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     node tools/plugin-mock/stage-plugins.mjs --registry
 
 # ─── Stage 3: Production image ──────────────────────────────
@@ -89,7 +91,7 @@ COPY packages/web/package.json packages/web/
 
 # Production deps only (argon2 is allowed to run its build script via
 # allowBuilds — it resolves a prebuilt musl binary, no compiler).
-RUN --mount=type=bind,source=.npmrc,target=/root/.npmrc \
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     pnpm install --frozen-lockfile --prod --filter @digitaplatform/shared --filter @digitaplatform/engine
 
 # Built output. engine dist/ already contains entities/, locales/, modules/
