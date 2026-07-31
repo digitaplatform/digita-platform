@@ -73,7 +73,7 @@ function inlineImportMap(isBuild: boolean): Plugin {
 // remote`) — or any `UI_BACKEND=<url>` — proxies EVERYTHING to that one origin,
 // and the remote ingress performs the /api/v1/auth→IdP, /api→engine split itself,
 // exactly like prod. UI_BACKEND wins over --mode so you can target any cluster.
-const REMOTE_DEFAULT = 'https://erp.dev.digitaplatform.com';
+const REMOTE_DEFAULT = 'https://erp.dev.example.invalid';
 
 export default defineConfig(({ command, mode }) => {
   const isBuild = command === 'build';

@@ -7,11 +7,11 @@ import { jobsBaseUrl, jobsRole, longRunningActions } from '@/services/jobs';
 
 describe('jobs service', () => {
   it('derives the satellite host from the app host', () => {
-    expect(jobsBaseUrl('erp.simetrix.dev.digitaplatform.com')).toBe(
-      'https://jobs.simetrix.dev.digitaplatform.com',
+    expect(jobsBaseUrl('erp.acme.dev.example.com')).toBe(
+      'https://jobs.acme.dev.example.com',
     );
-    expect(jobsBaseUrl('buildproject.acme.digitaplatform.com')).toBe(
-      'https://jobs.acme.digitaplatform.com',
+    expect(jobsBaseUrl('buildproject.acme.example.com')).toBe(
+      'https://jobs.acme.example.com',
     );
   });
 
