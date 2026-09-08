@@ -19,7 +19,7 @@
 # All three build from the REPO ROOT, which is the default context — their COPY paths are
 # workspace-relative and each install validates the frozen lockfile against every
 # workspace member.
-apiVersion: digitacloud.app/v1
+apiVersion: hostyour.cloud/v1
 kind: ConsumerManifest
 name: digita-platform
 owner: platform
