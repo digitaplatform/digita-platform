@@ -91,14 +91,17 @@ COPY docker/verify-plugin-stage.mjs docker/
 # DELIVERY above) must exist NOW. `stage-plugins.mjs --local` reads built
 # dists from the SIBLING repo (digita-plugins) which lives OUTSIDE this build
 # context, so it cannot run in here. Two supported paths:
-#   PLUGINS_SOURCE=prestaged (default): staging already ran on the HOST
+#   PLUGINS_SOURCE=prestaged: staging already ran on the HOST
 #     (`node tools/plugin-mock/stage-plugins.mjs --local`) and the FREE staged
 #     tree (public/plugins/) entered via `COPY packages/ui/` above. Premium was
 #     staged to <repoRoot>/staged-premium/ — OUTSIDE this build context — so it
 #     is intentionally absent here (engine-mounted; see PLUGIN DELIVERY). Both
 #     staged trees are GITIGNORED — a fresh clone must run staging before build.
-#   PLUGINS_SOURCE=registry: stage inside the build via `npm pack` from the
-#     registry (--registry mode; auth via the mounted npmrc build secret).
+#   PLUGINS_SOURCE=registry (default): stage inside the build via `npm pack`
+#     from the registry (--registry mode; auth via the mounted npmrc build
+#     secret). The default, because the platform's build plane clones a tagged
+#     commit and hands the build only that secret: the staged tree is gitignored
+#     and no build-arg reaches buildah there.
 #     Premium lands in /app/staged-premium and is likewise ignored by this
 #     free-only image.
 # Either way the FREE staged tree is then verified against the inventory (files
@@ -108,7 +111,7 @@ COPY docker/verify-plugin-stage.mjs docker/
 # WITH_PLUGINS=0 (emergency escape hatch, also honoured by the deploy guard
 # below) skips staging entirely and ships a plugin-less image.
 ARG WITH_PLUGINS=1
-ARG PLUGINS_SOURCE=prestaged
+ARG PLUGINS_SOURCE=registry
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     set -eu; \
     if [ "$WITH_PLUGINS" != "1" ]; then \
