@@ -1,9 +1,13 @@
-name: release
+name: publish-packages
 
 # Fires when release.sh / release.ps1 pushes a v<X.Y.Z>-<channel> tag.
 # Builds and publishes the foundation packages — theme, components, shared,
 # plugins — to GitHub Packages (npm.pkg.github.com). The private app packages
 # (ui, engine, web, usermenu) are skipped by pnpm publish automatically.
+# The path .github/workflows/release.yml belongs to the platform's release kit,
+# which the Manager injects at onboarding and whose tags carry no v prefix
+# (<x.y.z>-<channel>-<ts>), so this workflow keeps its own name beside it and
+# its tag pattern never fires on the kit's.
 on:
   push:
     tags:
