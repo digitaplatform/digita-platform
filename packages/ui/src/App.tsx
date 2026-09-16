@@ -120,9 +120,9 @@ export default function App() {
         if (data?.user) {
           // Authenticated on load: backend (data) translations are auth-gated, so
           // load them here (the login screen needs only static chrome strings).
-          // Then the app's plugin composition + layout. Shared with
-          // session.reloadAuthenticatedLayout, which re-runs both after an in-app
-          // login. Fail loud on an unknown template id (→ the error screen).
+          // Then the app's plugin composition + layout. A sign-in comes back from
+          // the IdP as a full page load, so this boot is the only place that runs
+          // both. Fail loud on an unknown template id (→ the error screen).
           await loadI18n(resolved);
           // Active audience is `internal` today (the only wired SPA runtime).
           await loadAppComposition('internal', data.branding?.default_template);

@@ -1,22 +1,20 @@
 import { SESSION_COOKIE, CSRF_HEADER } from '@digitaplatform/shared';
 import { toApiError, ApiClientError } from '@/lib/errors';
+import { authUrl, redirectToIdpLogin } from '@/lib/authConfig';
 
 /**
  * HTTP client for the engine + IdP. Session tokens live in httpOnly cookies
  * (decided: XSS-safe, never in JS). Every request sends `credentials:'include'`;
  * mutations carry the CSRF double-submit header read from the readable CSRF
  * cookie. On a 401 (expired access cookie) a single shared `/auth/refresh` call
- * rotates the cookie and the request retries once.
+ * rotates the cookie and the request retries once. Engine calls are relative to
+ * this SPA's own host; the IdP calls carry the ABSOLUTE IdP URL (lib/authConfig.ts).
  */
 
-// Auth-FLOW endpoints where a 401 is a real failure (bad credentials / spent
-// pending/refresh token), NOT an expired access cookie — never refresh-retry.
-const AUTH_FLOW_PREFIXES = [
-  '/api/v1/auth/login',
-  '/api/v1/auth/refresh',
-  '/api/v1/auth/logout',
-  '/api/v1/auth/2fa/verify-login',
-];
+// Auth-FLOW endpoints where a 401 is a real failure (a spent refresh token),
+// NOT an expired access cookie — never refresh-retry. Matched with `includes`,
+// so the absolute IdP URLs match as well as the bare paths.
+const AUTH_FLOW_PREFIXES = ['/api/v1/auth/refresh', '/api/v1/auth/logout'];
 function isAuthFlowUrl(url: string): boolean {
   return AUTH_FLOW_PREFIXES.some((p) => url.includes(p));
 }
@@ -71,7 +69,7 @@ let refreshInFlight: Promise<boolean> | null = null;
 export async function attemptRefresh(): Promise<boolean> {
   if (!readCookie(SESSION_COOKIE.CSRF)) return false;
   if (!refreshInFlight) {
-    refreshInFlight = fetch('/api/v1/auth/refresh', {
+    refreshInFlight = fetch(authUrl('/api/v1/auth/refresh'), {
       method: 'POST',
       credentials: 'include',
       headers: buildHeaders('POST', true),
@@ -88,8 +86,11 @@ export async function attemptRefresh(): Promise<boolean> {
   return refreshInFlight;
 }
 
+/** The session is gone for good — hand the browser to the IdP login. On /login
+ *  the page itself already redirects, carrying the route the user wanted; a
+ *  second jump from here would replace that target with /login. */
 function redirectToLogin(): void {
-  if (window.location.pathname !== '/login') window.location.href = '/login';
+  if (window.location.pathname !== '/login') redirectToIdpLogin();
 }
 
 interface RequestOptions {

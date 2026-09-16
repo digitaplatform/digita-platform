@@ -12,6 +12,11 @@
          NOTE: keep no importmap-script literal in this comment — Vite would parse
          it as a real tag and emit a duplicate, broken map. -->
     <script type="importmap" src="/import-map.json"></script>
+    <!-- Runtime config: public/env.js ships empty and the container entrypoint
+         rewrites it from its AUTH_URL env (docker/ui-env.sh), so ONE image serves
+         every tenant. It must load before the bundle — src/lib/authConfig.ts reads
+         window.__AUTH_URL__ at module scope. -->
+    <script src="/env.js"></script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="color-scheme" content="light dark" />

@@ -1,25 +1,14 @@
 import { api } from '@/services/api';
-import type { LoginRequest, LoginResponse, VerifyTwoFactorLoginRequest } from '@digitaplatform/shared';
-
-const AUTH = '/api/v1/auth';
+import { authUrl } from '@/lib/authConfig';
 
 /**
- * Password step. On success the IdP sets httpOnly session cookies and returns
- * `status: 'authenticated'`; if 2FA is enabled it returns
- * `status: 'two_factor_required'` with a single-use `pending_token` (NOT a
- * cookie — passed back to the verify step). Any token fields in the body are
- * ignored — the session lives in the cookies.
+ * Session endpoints of the tenant IdP (digita-auth). The password and 2FA steps
+ * are NOT here: the IdP owns them behind its own login page (lib/authConfig.ts
+ * redirects there). Identity is resolved from the engine's /boot via the
+ * httpOnly access cookie, so the logout half is all that is left.
  */
-export function login(body: LoginRequest): Promise<LoginResponse> {
-  return api.post<LoginResponse>(`${AUTH}/login`, body);
-}
 
-/** Second step: exchange the pending token + TOTP/recovery code for a session. */
-export function verifyTwoFactorLogin(body: VerifyTwoFactorLoginRequest): Promise<LoginResponse> {
-  return api.post<LoginResponse>(`${AUTH}/2fa/verify-login`, body);
-}
-
-/** Revoke the session server-side and clear the cookies. */
+/** Revoke the session server-side and clear the zone cookies. */
 export function logout(): Promise<unknown> {
-  return api.post<unknown>(`${AUTH}/logout`, {});
+  return api.post<unknown>(authUrl('/api/v1/auth/logout'), {});
 }

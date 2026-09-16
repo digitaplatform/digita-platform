@@ -8,9 +8,10 @@
 #
 # nginx serves the SPA + the plugin runtime (/vendor shared ESM, /plugins app
 # plugin bundles, /import-map.json). API path routing happens at the INGRESS:
-#   /api/v1/auth → digita-auth-backend :3100, /api + /health → engine :3000,
-#   /            → this SPA
-# (see the digita-deploy digita-ui chart ingress).
+#   /api + /health → engine :3000, / → this SPA
+# (see the digita-deploy digita-ui chart ingress). Auth is NOT on this host: the
+# SPA redirects to the tenant IdP's login and calls refresh/logout at the
+# absolute AUTH_URL (see the env.js step in stage 3).
 #
 # PLUGIN DELIVERY: this image bakes ONLY the FREE staged plugin artifacts into
 # the SPA web root. tools/plugin-mock/stage-plugins.mjs stages the set pinned in
@@ -193,6 +194,16 @@ FROM nginx:alpine AS production
 # path routing).
 COPY docker/nginx-ui.conf /etc/nginx/nginx.conf
 COPY --from=build /app/packages/ui/dist/ /usr/share/nginx/html/
+
+# Runtime config channel: nginx runs every executable in /docker-entrypoint.d/
+# before it starts, so this rewrites /env.js from the AUTH_URL env at container
+# start (index.html loads it before the bundle) and ONE image serves every
+# tenant. env.js itself ships empty from packages/ui/public — the non-root
+# `nginx` user cannot create a file in the root-owned web root, it can only
+# rewrite an existing one it owns.
+COPY docker/ui-env.sh /docker-entrypoint.d/40-digita-env.sh
+RUN chmod +x /docker-entrypoint.d/40-digita-env.sh && \
+    chown nginx:nginx /usr/share/nginx/html/env.js
 
 # Pin the inline import-map's CSP sha256 (emitted by the vite build into
 # dist/csp-importmap-sha256.txt) into the nginx CSP `script-src`, replacing the

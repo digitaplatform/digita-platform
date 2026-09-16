@@ -10,9 +10,9 @@ import type {
   BootRealtime,
 } from '@/types';
 import { getBoot } from '@/services/boot';
-import { login as apiLogin, verifyTwoFactorLogin, logout as apiLogout } from '@/services/auth';
+import { logout as apiLogout } from '@/services/auth';
 import { attemptRefresh } from '@/services/api';
-import { loadAppComposition } from '@/plugins/composition';
+import { redirectToIdpLogin } from '@/lib/authConfig';
 import { useThemeStore } from '@/stores/theme';
 import { useI18nStore } from '@/stores/i18n';
 import { setUserPreference } from '@/services/userPreference';
@@ -52,8 +52,9 @@ export function getBrowserLocale(): string | null {
 /**
  * The session: who the user is + the boot payload. Identity is resolved from
  * the engine's `/boot` via the httpOnly access cookie (never a JS-readable
- * token). `bootstrap()` is the single entry point; login/2FA set the cookies
- * server-side and then re-bootstrap.
+ * token). `bootstrap()` is the single entry point. Signing IN is not here: the
+ * tenant IdP owns the login and 2FA halves and sets the cookies before the
+ * browser comes back (lib/authConfig.ts).
  */
 interface SessionState {
   status: SessionStatus;
@@ -75,7 +76,6 @@ interface SessionState {
   /** Live-sync (WebSocket) config from /boot; null until resolved, or when the
    *  engine has realtime disabled. */
   realtime: BootRealtime | null;
-  pendingToken: string | null;
 
   hasRole: (role: string) => boolean;
   bootstrap: () => Promise<BootData | null>;
@@ -90,16 +90,11 @@ interface SessionState {
    *  locale at once, so every Intl formatter refreshes without a reboot. An empty
    *  format_locale falls back to the UI language (mirrors the engine resolver). */
   setLocaleFormat: (formatLocale: string | null, timezone: string | null) => Promise<void>;
-  login: (email: string, password: string) => Promise<{ requires2fa: boolean }>;
-  verify2fa: (code: string) => Promise<void>;
+  /** Revoke the session at the IdP, then leave for the IdP login. */
   logout: () => Promise<void>;
   /** Narrow re-apply of /boot-derived state (branding + default_workspace) after a
    *  settings write — NOT a full bootstrap (keeps user/locale/status/in-flight). */
   refreshBranding: () => Promise<void>;
-  /** (Re)load the app's plugin composition + layout after an in-app login. The
-   *  anonymous boot had no user and loaded no plugins; without this the nav region
-   *  stays empty until a full page reload. Fail-soft. */
-  reloadAuthenticatedLayout: () => Promise<void>;
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
@@ -113,7 +108,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   settings: null,
   default_workspace: null,
   realtime: null,
-  pendingToken: null,
 
   hasRole: (role) => !!get().user?.roles.includes(role),
 
@@ -193,36 +187,16 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     });
   },
 
-  login: async (email, password) => {
-    const res = await apiLogin({ email, password });
-    if (res.status === 'two_factor_required') {
-      set({ pendingToken: res.pending_token });
-      return { requires2fa: true };
-    }
-    // authenticated — the server set the session cookies; re-resolve identity,
-    // then load the plugin composition so the nav paints without a reload.
-    await get().bootstrap();
-    await get().reloadAuthenticatedLayout();
-    return { requires2fa: false };
-  },
-
-  verify2fa: async (code) => {
-    const pending = get().pendingToken;
-    if (!pending) throw new Error('No pending two-factor login.');
-    const res = await verifyTwoFactorLogin({ pending_token: pending, code });
-    if (res.status === 'two_factor_required') throw new Error('Two-factor verification failed.');
-    set({ pendingToken: null });
-    await get().bootstrap();
-    await get().reloadAuthenticatedLayout();
-  },
-
   logout: async () => {
     try {
       await apiLogout();
     } catch {
       // best effort — the cookies are cleared server-side
     }
-    set({ user: null, tiers: null, status: 'anonymous', pendingToken: null });
+    set({ user: null, tiers: null, status: 'anonymous' });
+    // The IdP holds the session for every app of the zone, so signing out ends
+    // on its login page (with this app's home as the bounce-back target).
+    redirectToIdpLogin(`${window.location.origin}/`);
   },
 
   refreshBranding: async () => {
@@ -231,21 +205,5 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (!data) return;
     set({ branding: data.branding ?? null, default_workspace: data.default_workspace ?? null });
     if (data.branding) useThemeStore.getState().setBranding(data.branding);
-  },
-
-  reloadAuthenticatedLayout: async () => {
-    // Fail-soft: a layout/template problem must not break an otherwise-successful
-    // login (resolveTemplate inside loadAppComposition can throw on a bad id).
-    try {
-      // Backend (data) translations are auth-gated — load them now that we're
-      // authenticated (the login screen needs only the static chrome strings).
-      await useI18nStore.getState().load(get().locale?.code ?? document.documentElement.lang ?? 'en');
-      // Active audience is the constant `internal` today — the only wired SPA
-      // runtime (dual-grant users default to internal, roadmap 2.3). Phase 5 adds
-      // external/anonymous SPA arms via resolveActiveAudience(get().tiers).
-      await loadAppComposition('internal', get().branding?.default_template);
-    } catch (e) {
-      console.error('[session] post-login layout load failed — navigation may be unavailable', e);
-    }
   },
 }));
