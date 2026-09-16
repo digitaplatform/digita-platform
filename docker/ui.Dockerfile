@@ -195,16 +195,6 @@ FROM nginx:alpine AS production
 COPY docker/nginx-ui.conf /etc/nginx/nginx.conf
 COPY --from=build /app/packages/ui/dist/ /usr/share/nginx/html/
 
-# Runtime config channel: nginx runs every executable in /docker-entrypoint.d/
-# before it starts, so this rewrites /env.js from the AUTH_URL env at container
-# start (index.html loads it before the bundle) and ONE image serves every
-# tenant. env.js itself ships empty from packages/ui/public — the non-root
-# `nginx` user cannot create a file in the root-owned web root, it can only
-# rewrite an existing one it owns.
-COPY docker/ui-env.sh /docker-entrypoint.d/40-digita-env.sh
-RUN chmod +x /docker-entrypoint.d/40-digita-env.sh && \
-    chown nginx:nginx /usr/share/nginx/html/env.js
-
 # Pin the inline import-map's CSP sha256 (emitted by the vite build into
 # dist/csp-importmap-sha256.txt) into the nginx CSP `script-src`, replacing the
 # __IMPORTMAP_SHA256__ placeholder — so script-src needs NO 'unsafe-inline'. Fail
@@ -215,6 +205,19 @@ RUN HASH="$(cat /usr/share/nginx/html/csp-importmap-sha256.txt)"; \
     sed -i "s|__IMPORTMAP_SHA256__|${HASH}|" /etc/nginx/nginx.conf; \
     ! grep -q '__IMPORTMAP_SHA256__' /etc/nginx/nginx.conf || { echo "ERROR: CSP placeholder not replaced"; exit 1; }; \
     rm /usr/share/nginx/html/csp-importmap-sha256.txt
+
+# Runtime config channel: nginx runs every executable in /docker-entrypoint.d/
+# before it starts, so this writes /env.js from the AUTH_URL env (index.html
+# loads it before the bundle) and substitutes the CSP's zone wildcard from the
+# same env — both per CONTAINER, because ONE image serves every tenant and each
+# tenant has its own zone. The two files it rewrites ship with the image and are
+# handed to the non-root `nginx` user here: that user may not create a file in
+# /usr/share/nginx/html or /etc/nginx, only rewrite one it owns. The chown comes
+# AFTER the sha256 step above — that `sed -i` replaces nginx.conf with a fresh
+# root-owned file.
+COPY docker/ui-env.sh /docker-entrypoint.d/40-digita-env.sh
+RUN chmod +x /docker-entrypoint.d/40-digita-env.sh && \
+    chown nginx:nginx /usr/share/nginx/html/env.js /etc/nginx/nginx.conf
 
 # Non-root: the official image ships the `nginx` user; the config keeps
 # every writable path under /tmp.
