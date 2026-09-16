@@ -17,6 +17,7 @@ import {
   createAuthMiddleware,
   createOptionalAuthMiddleware,
   createCsrfMiddleware,
+  cookieNames,
 } from "./core/auth/auth-middleware.js";
 import { RemoteAuthnAdapter } from "./core/auth/remote-authn-adapter.js";
 import { callerIsInternal } from "./core/auth/audience.js";
@@ -35,7 +36,6 @@ import { LinkValidator } from "./core/link/link-validator.js";
 import { LinkTitleResolver } from "./core/link/link-title-resolver.js";
 import { RealtimeService } from "./core/realtime/realtime-service.js";
 import fastifyWebsocket from "@fastify/websocket";
-import { SESSION_COOKIE } from "@digitaplatform/shared";
 import { LinkSearchService } from "./core/link/link-search-service.js";
 import { FetchFromResolver } from "./core/fetch/fetch-from-resolver.js";
 import { SnapshotResolver } from "./core/snapshot/snapshot-resolver.js";
@@ -506,7 +506,7 @@ export async function createApp(
       instance.get(env.WS_PATH, { websocket: true }, async (socket, request) => {
         // Authenticate the handshake (httpOnly cookie rides the upgrade; Bearer +
         // ?token= for non-browser clients). Reject invalid sockets.
-        const cookieTok = request.cookies?.[SESSION_COOKIE.ACCESS];
+        const cookieTok = request.cookies?.[cookieNames.ACCESS];
         const authHeader = request.headers.authorization;
         const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
         const queryTok = (request.query as Record<string, string> | undefined)?.["token"];

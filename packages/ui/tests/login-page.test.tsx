@@ -12,6 +12,7 @@ import LoginPage from '@/pages/LoginPage';
 const redirectToIdpLogin = vi.fn();
 vi.mock('@/lib/authConfig', () => ({
   AUTH_URL: 'https://auth.acme.example',
+  AUTH_COOKIE_SUFFIX: '',
   authUrl: (path: string) => `https://auth.acme.example${path}`,
   redirectToIdpLogin: (...args: unknown[]) => redirectToIdpLogin(...args),
 }));

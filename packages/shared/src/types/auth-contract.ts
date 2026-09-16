@@ -329,6 +329,34 @@ export const SESSION_COOKIE = {
   CSRF: "digita_csrf",
 } as const;
 
+/** The alphabet a cookie-name suffix may use — the tenant guid's, twelve
+ *  lowercase alphanumerics. Nothing else passes, so a suffix can never carry a
+ *  separator and forge a second cookie name. */
+const COOKIE_SUFFIX_PATTERN = /^[a-z0-9]{1,32}$/;
+
+/**
+ * The session cookie names one unit reads and writes. Two identity providers
+ * stand under one apex: the platform's on `digitacloud.app`, a tenant's on
+ * `<sub>.digitacloud.app`. The browser sends the platform's cookies to every
+ * host of the tenant zone too, and under the bare names of
+ * {@link SESSION_COOKIE} the older platform cookie arrives first and shadows
+ * the tenant's — the server reads it, verifies it against the tenant's JWKS
+ * and fails. A tenant therefore carries its guid in the names
+ * (`digita_at_<suffix>`). An empty suffix is {@link SESSION_COOKIE} itself,
+ * which the platform IdP and its consumers keep.
+ */
+export function sessionCookieNames(suffix?: string): { ACCESS: string; REFRESH: string; CSRF: string } {
+  if (!suffix) return { ...SESSION_COOKIE };
+  if (!COOKIE_SUFFIX_PATTERN.test(suffix)) {
+    throw new Error(`Invalid session cookie suffix: ${suffix}`);
+  }
+  return {
+    ACCESS: `${SESSION_COOKIE.ACCESS}_${suffix}`,
+    REFRESH: `${SESSION_COOKIE.REFRESH}_${suffix}`,
+    CSRF: `${SESSION_COOKIE.CSRF}_${suffix}`,
+  };
+}
+
 /** Header carrying the CSRF token on cookie-authenticated mutations. */
 export const CSRF_HEADER = "x-csrf-token";
 

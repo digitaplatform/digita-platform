@@ -189,6 +189,12 @@ export const env = {
   // (not a boot crash — minting is a per-hook feature, not core), and the chart
   // sets AUTH_URL explicitly per stage. Short TTL — the token is used immediately.
   AUTH_URL: getEnv("AUTH_URL", ""),
+  // The suffix on this unit's session cookie names — the tenant guid, empty on
+  // the platform. Set, the engine reads ONLY `digita_at_<suffix>`: the platform
+  // IdP scopes its bare-named cookie to the apex, so the browser sends it to
+  // every host of the tenant zone too, where it would be verified against this
+  // tenant's JWKS and fail.
+  AUTH_COOKIE_SUFFIX: getEnv("AUTH_COOKIE_SUFFIX", ""),
   DELEGATION_TTL_SEC: getEnvInt("ENGINE_DELEGATION_TTL_SEC", 300),
   // Trusted-service keys (comma-separated → seamless rotation). A request
   // carrying a listed X-Engine-Api-Key plus X-On-Behalf-Of/-Roles headers runs

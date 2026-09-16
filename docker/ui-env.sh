@@ -19,6 +19,13 @@ set -eu
 escaped=$(printf '%s' "${AUTH_URL:-}" | sed 's/[\\"]/\\&/g')
 printf 'window.__AUTH_URL__="%s";\n' "$escaped" > /usr/share/nginx/html/env.js
 
+# ── The session cookie suffix for the page ──────────────────────────────
+# The tenant guid the tenant IdP suffixes its session cookie names with. The
+# page reads the CSRF cookie by the composed name, so it never picks up the
+# platform IdP's bare-named cookie, which the browser sends to this host too.
+suffix=$(printf '%s' "${AUTH_COOKIE_SUFFIX:-}" | sed 's/[\\"]/\\&/g')
+printf 'window.__AUTH_COOKIE_SUFFIX__="%s";\n' "$suffix" >> /usr/share/nginx/html/env.js
+
 # ── The zone for the CSP ────────────────────────────────────────────────
 # connect-src must allow the cross-origin refresh/logout calls to the IdP and
 # frame-src the embedded report preview, both on sibling hosts of this unit's

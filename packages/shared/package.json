@@ -1,6 +1,6 @@
 {
   "name": "@digitaplatform/shared",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Digita shared contracts: TypeScript types (ApiResponse, EntityDefinition, FieldTypes, Permissions), the cross-service auth contract, and the plugin-SDK surface. Consumed by every Digita service.",
   "main": "./dist/index.js",

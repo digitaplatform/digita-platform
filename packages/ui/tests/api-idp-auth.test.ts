@@ -13,6 +13,7 @@ const IDP = 'https://auth.acme.example';
 const redirectToIdpLogin = vi.fn();
 vi.mock('@/lib/authConfig', () => ({
   AUTH_URL: IDP,
+  AUTH_COOKIE_SUFFIX: '',
   authUrl: (path: string) => `${IDP}${path}`,
   redirectToIdpLogin: (...args: unknown[]) => redirectToIdpLogin(...args),
 }));

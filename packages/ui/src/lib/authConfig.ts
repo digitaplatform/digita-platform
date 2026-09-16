@@ -24,6 +24,21 @@ export const AUTH_URL: string = (
 ).replace(/\/+$/, '');
 
 /**
+ * The suffix the tenant IdP puts on its session cookie names (the tenant guid;
+ * empty on the platform, which keeps the bare names). Same three-step
+ * resolution and the same runtime channel as AUTH_URL, so ONE image serves
+ * every tenant. Without it the page would read the platform IdP's CSRF cookie,
+ * which the browser sends to every host of the zone under the bare name.
+ */
+const injectedSuffix =
+  typeof window !== 'undefined'
+    ? ((window as unknown as Record<string, unknown>).__AUTH_COOKIE_SUFFIX__ as string | undefined)
+    : undefined;
+
+export const AUTH_COOKIE_SUFFIX: string =
+  injectedSuffix || (import.meta.env.VITE_AUTH_COOKIE_SUFFIX as string | undefined) || '';
+
+/**
  * Absolute IdP endpoint URL. Auth calls MUST be absolute — the session cookies
  * are scoped to the tenant zone, so `credentials: 'include'` carries them to
  * the IdP host.

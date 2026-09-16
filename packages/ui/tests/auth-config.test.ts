@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 interface FakeWindow {
   location: { href: string; assign: (url: string) => void };
   __AUTH_URL__?: string;
+  __AUTH_COOKIE_SUFFIX__?: string;
 }
 
 function stubWindow(injected?: string, href = 'https://erp.acme.example/orders'): FakeWindow {
@@ -58,6 +59,19 @@ describe('authConfig', () => {
     stubWindow();
     const { AUTH_URL } = await loadAuthConfig();
     expect(AUTH_URL).toBe('http://localhost:5175');
+  });
+
+  it('takes the cookie suffix from the runtime channel, and falls back to the build then to none', async () => {
+    const win = stubWindow('https://auth.acme.example');
+    win.__AUTH_COOKIE_SUFFIX__ = 'a1b2c3d4e5f6';
+    vi.stubEnv('VITE_AUTH_COOKIE_SUFFIX', 'buildtime1234');
+    expect((await loadAuthConfig()).AUTH_COOKIE_SUFFIX).toBe('a1b2c3d4e5f6');
+
+    win.__AUTH_COOKIE_SUFFIX__ = '';
+    expect((await loadAuthConfig()).AUTH_COOKIE_SUFFIX).toBe('buildtime1234');
+
+    vi.unstubAllEnvs();
+    expect((await loadAuthConfig()).AUTH_COOKIE_SUFFIX).toBe('');
   });
 
   it('redirectToIdpLogin sends the browser to <AUTH_URL>/login with an encoded bounce-back', async () => {

@@ -1,6 +1,9 @@
-import { SESSION_COOKIE, CSRF_HEADER } from '@digitaplatform/shared';
+import { sessionCookieNames, CSRF_HEADER } from '@digitaplatform/shared';
 import { toApiError, ApiClientError } from '@/lib/errors';
-import { authUrl, redirectToIdpLogin } from '@/lib/authConfig';
+import { authUrl, redirectToIdpLogin, AUTH_COOKIE_SUFFIX } from '@/lib/authConfig';
+
+/** This unit's session cookie names — the tenant's, never the platform IdP's. */
+const cookieNames = sessionCookieNames(AUTH_COOKIE_SUFFIX);
 
 /**
  * HTTP client for the engine + IdP. Session tokens live in httpOnly cookies
@@ -48,7 +51,7 @@ function buildHeaders(method: string, hasBody: boolean): HeadersInit {
   const lang = document.documentElement.lang;
   if (lang) headers['Accept-Language'] = lang;
   if (method !== 'GET' && method !== 'HEAD') {
-    const csrf = readCookie(SESSION_COOKIE.CSRF);
+    const csrf = readCookie(cookieNames.CSRF);
     if (csrf) headers[CSRF_HEADER] = csrf;
   }
   return headers;
@@ -67,7 +70,7 @@ let refreshInFlight: Promise<boolean> | null = null;
  * refresh, so we avoid a guaranteed 400 on every login-screen load.
  */
 export async function attemptRefresh(): Promise<boolean> {
-  if (!readCookie(SESSION_COOKIE.CSRF)) return false;
+  if (!readCookie(cookieNames.CSRF)) return false;
   if (!refreshInFlight) {
     refreshInFlight = fetch(authUrl('/api/v1/auth/refresh'), {
       method: 'POST',
@@ -158,7 +161,7 @@ export const api = {
     const headers: Record<string, string> = {};
     const lang = document.documentElement.lang;
     if (lang) headers['Accept-Language'] = lang;
-    const csrf = readCookie(SESSION_COOKIE.CSRF);
+    const csrf = readCookie(cookieNames.CSRF);
     if (csrf) headers[CSRF_HEADER] = csrf;
 
     const exec = (): Promise<Response> =>

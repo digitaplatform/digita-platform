@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { SESSION_COOKIE, CSRF_HEADER, ENGINE_SERVICE_HEADERS, type DelegationScope } from "@digitaplatform/shared";
+import { sessionCookieNames, CSRF_HEADER, ENGINE_SERVICE_HEADERS, type DelegationScope } from "@digitaplatform/shared";
 import type { AuthnPort } from "./authn-port.js";
 import type { UserContext } from "../permissions/types.js";
 import { env } from "../config/env.js";
@@ -8,6 +8,10 @@ import { createLogger } from "../logging/logger.js";
 
 const log = createLogger("auth-middleware");
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/** The session cookie names this unit reads — composed once from
+ *  {@link env.AUTH_COOKIE_SUFFIX}, and the only place the engine composes them. */
+export const cookieNames = sessionCookieNames(env.AUTH_COOKIE_SUFFIX);
 
 // Extend Fastify request with user context
 declare module "fastify" {
@@ -30,7 +34,7 @@ declare module "fastify" {
  * drives CSRF enforcement: only cookie-borne auth is a CSRF vector.
  */
 function extractToken(request: FastifyRequest): { token: string | null; fromCookie: boolean } {
-  const cookie = request.cookies?.[SESSION_COOKIE.ACCESS];
+  const cookie = request.cookies?.[cookieNames.ACCESS];
   if (cookie) return { token: cookie, fromCookie: true };
   const authHeader = request.headers.authorization;
   if (authHeader?.startsWith("Bearer ")) return { token: authHeader.slice(7), fromCookie: false };
@@ -247,7 +251,7 @@ export function createCsrfMiddleware() {
   return async function csrf(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     if (!request.authViaCookie) return;
     if (!MUTATING.has(request.method)) return;
-    const cookie = request.cookies?.[SESSION_COOKIE.CSRF];
+    const cookie = request.cookies?.[cookieNames.CSRF];
     const raw = request.headers[CSRF_HEADER];
     const header = Array.isArray(raw) ? raw[0] : raw;
     if (!cookie || cookie !== header) {
