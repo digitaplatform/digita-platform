@@ -40,6 +40,57 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Every publishable package whose version is not yet in GitHub Packages, on every push to
+  # master: a version that is already there is skipped, so a push without a bump publishes
+  # nothing, and a bumped package.json is the whole release. No tag, no script, no hand.
+  publish:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@digitaplatform'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build the publishable foundation packages
+        run: >-
+          pnpm
+          --filter '@digitaplatform/shared'
+          --filter '@digitaplatform/theme'
+          --filter '@digitaplatform/components'
+          --filter '@digitaplatform/plugins'
+          build
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish what is not yet published
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          for dir in $(pnpm -r ls --json --depth -1 | jq -r '.[].path'); do
+            name="$(jq -r .name "$dir/package.json")"
+            version="$(jq -r .version "$dir/package.json")"
+            [ "$(jq -r '.private // false' "$dir/package.json")" = "true" ] && continue
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is published already"
+              continue
+            fi
+            tag=latest
+            case "$version" in *-*) tag="${version#*-}"; tag="${tag%%.*}" ;; esac
+            echo "publishing $name@$version with dist-tag $tag"
+            (cd "$dir" && pnpm publish --no-git-checks --tag "$tag")
+          done
+
   # Engine gate: typecheck (src + tests), dependency rules (dependency-cruiser),
   # build, and the full vitest suite (unit + mongodb-memory-server replica-set
   # integration tests — each integration file boots its own 1-node replset, so
