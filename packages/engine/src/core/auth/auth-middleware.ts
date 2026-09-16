@@ -37,6 +37,19 @@ function extractToken(request: FastifyRequest): { token: string | null; fromCook
   return { token: null, fromCookie: false };
 }
 
+/** What a rejected token is logged with: the error's name and message, where the token came from
+ *  and which request carried it — never the token. */
+function rejection(err: unknown, fromCookie: boolean, request: FastifyRequest): Record<string, unknown> {
+  const e = err as { name?: unknown; message?: unknown; code?: unknown } | null;
+  return {
+    reason: e && typeof e === "object" ? `${String(e.name ?? "Error")}: ${String(e.message ?? "")}` : String(err),
+    ...(e && typeof e === "object" && e.code !== undefined ? { code: String(e.code) } : {}),
+    source: fromCookie ? "cookie" : "bearer",
+    method: request.method,
+    url: request.url,
+  };
+}
+
 function headerValue(request: FastifyRequest, name: string): string | undefined {
   const raw = request.headers[name];
   return Array.isArray(raw) ? raw[0] : raw;
@@ -193,7 +206,7 @@ export function createAuthMiddleware(authn: AuthnPort) {
       request.authViaCookie = fromCookie;
       request.rawAccessToken = token; // engine-side only — for on-behalf minting
     } catch (err) {
-      log.debug({ err }, "Token verification failed");
+      log.warn(rejection(err, fromCookie, request), "session token rejected");
       unauthorized(
         request,
         reply,
@@ -215,8 +228,11 @@ export function createOptionalAuthMiddleware(authn: AuthnPort) {
       request.user = identity.user;
       request.locale = identity.language;
       request.authViaCookie = fromCookie;
-    } catch {
-      // Token invalid — proceed as guest
+    } catch (err) {
+      // A guest visit carries no token and says nothing; a token that fails is worth one line —
+      // the reason (JWKS, issuer, audience, typ, expiry, signature) is otherwise invisible and a
+      // signed-in operator reads as anonymous with nothing to go on. Never the token itself.
+      log.warn(rejection(err, fromCookie, request), "session token rejected — proceeding as guest");
     }
   };
 }
