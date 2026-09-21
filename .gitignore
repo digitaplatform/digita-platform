@@ -30,6 +30,7 @@ dist/csp-importmap-sha256.txt
 /.claude/
 /.mcp.json
 /.agents/
+/.codex/
 /.openhands/microagents/
 /.gemini/
 /.cursorrules
