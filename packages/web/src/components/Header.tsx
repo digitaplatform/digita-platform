@@ -14,12 +14,14 @@ export function Header({
   locale,
   site,
   nav,
+  apps,
   logo,
   monogram,
 }: {
   locale: Locale;
   site: WebSite | null;
   nav: WebNavMenu | null;
+  apps: string[];
   logo?: string;
   monogram?: string;
 }) {
@@ -44,7 +46,7 @@ export function Header({
         </Link>
 
         <nav className="hidden flex-1 items-center gap-1 md:flex" aria-label="Primary">
-          <NavLinks locale={locale} items={items} />
+          <NavLinks locale={locale} items={items} apps={apps} />
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
@@ -53,6 +55,7 @@ export function Header({
           <MobileNav
             locale={locale}
             items={items}
+            apps={apps}
             openLabel={t(locale, "openMenu")}
             closeLabel={t(locale, "closeMenu")}
           />

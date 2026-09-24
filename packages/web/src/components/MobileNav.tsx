@@ -6,21 +6,26 @@ import { useEffect, useState } from "react";
 import type { NavItem } from "@/lib/types";
 import { navHref } from "@/lib/nav";
 
+const LINK = "rounded-xl px-4 py-3 text-base font-medium text-textMain transition-colors hover:bg-bgHover";
+
 /**
  * Mobile (hamburger) navigation — the phone counterpart to the desktop NavLinks,
  * which is `hidden md:flex`. Renders a toggle button visible only below `md`; when
  * open, a full-width panel drops below the header with the nav items stacked. The
  * active page is highlighted with the same accent pill as the desktop nav. Closes
  * on route change, on Escape, and on backdrop tap; locks body scroll while open.
+ * The tenant's apps follow the nav items as plain links to `/<name>/`.
  */
 export function MobileNav({
   locale,
   items,
+  apps,
   openLabel,
   closeLabel,
 }: {
   locale: string;
   items: NavItem[];
+  apps: string[];
   openLabel: string;
   closeLabel: string;
 }) {
@@ -48,7 +53,7 @@ export function MobileNav({
     };
   }, [open]);
 
-  if (!items.length) return null;
+  if (!items.length && !apps.length) return null;
 
   return (
     <div className="md:hidden">
@@ -92,13 +97,18 @@ export function MobileNav({
                     className={
                       active
                         ? "rounded-xl bg-primary-50 px-4 py-3 text-base font-semibold text-primary-600"
-                        : "rounded-xl px-4 py-3 text-base font-medium text-textMain transition-colors hover:bg-bgHover"
+                        : LINK
                     }
                   >
                     {item.label}
                   </Link>
                 );
               })}
+              {apps.map((app) => (
+                <a key={app} href={`/${app}/`} className={LINK}>
+                  {app}
+                </a>
+              ))}
             </nav>
           </div>
         </>

@@ -5,13 +5,16 @@ import { usePathname } from "next/navigation";
 import type { NavItem } from "@/lib/types";
 import { navHref } from "@/lib/nav";
 
+const LINK = "rounded-full px-3 py-1.5 text-sm font-medium text-textMuted transition-colors hover:bg-bgHover hover:text-textMain";
+
 /**
  * Header nav links with an ACTIVE state for the current page. Client-side because
  * it needs the current path (the Header is server-rendered in the layout and
  * can't know the active page). Home matches exactly; other items match the page
- * or any of its sub-paths.
+ * or any of its sub-paths. The tenant's apps follow as plain links: each one leaves the website
+ * for the app at `/<name>/` on the same host.
  */
-export function NavLinks({ locale, items }: { locale: string; items: NavItem[] }) {
+export function NavLinks({ locale, items, apps }: { locale: string; items: NavItem[]; apps: string[] }) {
   const pathname = usePathname();
   const homeHref = `/${locale}`;
 
@@ -29,13 +32,18 @@ export function NavLinks({ locale, items }: { locale: string; items: NavItem[] }
             className={
               active
                 ? "rounded-full bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-600"
-                : "rounded-full px-3 py-1.5 text-sm font-medium text-textMuted transition-colors hover:bg-bgHover hover:text-textMain"
+                : LINK
             }
           >
             {item.label}
           </Link>
         );
       })}
+      {apps.map((app) => (
+        <a key={app} href={`/${app}/`} className={LINK}>
+          {app}
+        </a>
+      ))}
     </>
   );
 }

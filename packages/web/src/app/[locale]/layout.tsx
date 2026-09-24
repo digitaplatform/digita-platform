@@ -64,6 +64,7 @@ export default async function LocaleLayout({
             locale={locale as Locale}
             site={site}
             nav={headerNav}
+            apps={getConfig().tenantApps}
             logo={branding?.logo ? mediaUrl(branding.logo) : undefined}
             monogram={digitaSignature.monogram}
           />

@@ -37,6 +37,9 @@ export interface ServerConfig extends PublicSiteConfig {
   revalidateSeconds: number;
   /** On-publish revalidation secret. Explicitly OPTIONAL: null → that feature is off. */
   revalidateSecret: string | null;
+  /** The tenant's apps the header links to (TENANT_APPS, comma separated). Explicitly OPTIONAL:
+   *  a site that is no tenant's entry has none. */
+  tenantApps: string[];
 }
 
 let cached: ServerConfig | null = null;
@@ -50,6 +53,7 @@ export function getConfig(): ServerConfig {
     publicEngineUrl: noTrailing(reqDefined("PUBLIC_ENGINE_URL")),
     revalidateSeconds: reqInt("REVALIDATE_SECONDS"),
     revalidateSecret: process.env.REVALIDATE_SECRET || null,
+    tenantApps: (process.env.TENANT_APPS ?? "").split(",").map((name) => name.trim()).filter(Boolean),
     locales: getLocales(),
     defaultLocale: getDefaultLocale(),
   };
