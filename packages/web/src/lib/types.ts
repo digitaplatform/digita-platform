@@ -44,7 +44,6 @@ export interface WebSite {
   _id: string;
   site_name: string;
   domain?: string;
-  theme?: string;
   default_locale?: string;
   enabled_locales?: string[];
   default_og_image?: string;
@@ -64,4 +63,12 @@ export interface WebNavMenu {
   locale: string;
   location: string;
   items?: NavItem[];
+}
+
+/** The tenant branding the engine's anonymous boot returns: the fields the website renders. */
+export interface WebBranding {
+  primary_color?: string | null;
+  accent_palette?: string | null;
+  density?: "comfortable" | "compact" | null;
+  logo?: string;
 }

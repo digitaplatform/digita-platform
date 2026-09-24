@@ -70,14 +70,14 @@ export function LocaleSwitcher({ current, enabled, label }: { current: Locale; e
         aria-label={label}
         disabled={pending}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 text-sm text-fg transition-colors hover:bg-hover focus-visible:border-line-strong"
+        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-sm text-textMain transition-colors hover:bg-bgHover focus-visible:border-borderStrong"
       >
-        <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4 text-fg-muted" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4 text-textMuted" fill="none" stroke="currentColor" strokeWidth="1.6">
           <circle cx="12" cy="12" r="9" />
           <path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18" />
         </svg>
         <span>{labelFor(current)}</span>
-        <svg aria-hidden viewBox="0 0 24 24" className={`h-3.5 w-3.5 text-fg-muted transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2">
+        <svg aria-hidden viewBox="0 0 24 24" className={`h-3.5 w-3.5 text-textMuted transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M6 9l6 6 6-6" />
         </svg>
       </button>
@@ -86,7 +86,7 @@ export function LocaleSwitcher({ current, enabled, label }: { current: Locale; e
         <ul
           role="listbox"
           aria-label={label}
-          className="absolute right-0 z-50 mt-2 min-w-[11rem] overflow-hidden rounded-xl border border-line bg-card py-1 shadow-lg"
+          className="absolute right-0 z-50 mt-2 min-w-[11rem] overflow-hidden rounded-xl border border-border bg-surface py-1 shadow-lg"
         >
           {options.map((loc) => {
             const active = loc === current;
@@ -96,12 +96,12 @@ export function LocaleSwitcher({ current, enabled, label }: { current: Locale; e
                   type="button"
                   onClick={() => pick(loc)}
                   className={`flex w-full items-center justify-between gap-4 px-3 py-2 text-left text-sm transition-colors ${
-                    active ? "bg-primary-soft font-medium text-primary" : "text-fg hover:bg-hover"
+                    active ? "bg-primary-50 font-medium text-primary-600" : "text-textMain hover:bg-bgHover"
                   }`}
                 >
                   <span>{labelFor(loc)}</span>
                   {active && (
-                    <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4 text-primary" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4 text-primary-600" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M5 13l4 4L19 7" />
                     </svg>
                   )}

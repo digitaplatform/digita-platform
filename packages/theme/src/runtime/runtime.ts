@@ -31,15 +31,31 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 export type Density = 'comfortable' | 'compact' | 'spacious';
 
 const STEPS = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
-const DEFAULT_MODE_KEY = 'digita-ui:theme-mode';
-const DEFAULT_DENSITY_KEY = 'digita-ui:density';
-const DEFAULT_DESIGN_KEY = 'digita-ui:design';
-const DEFAULT_TINT_KEY_PREFIX = 'digita-ui:tint';
 
-function setRamp(target: HTMLElement, name: 'primary' | 'accent', palette: Record<string, string>): void {
+/** The localStorage keys of the per-browser theme choices. The app and the website are served
+ *  from one origin, so each key is one setting for both. */
+export const MODE_STORAGE_KEY = 'digita-ui:theme-mode';
+export const DENSITY_STORAGE_KEY = 'digita-ui:density';
+export const DESIGN_STORAGE_KEY = 'digita-ui:design';
+export const TINT_STORAGE_KEY_PREFIX = 'digita-ui:tint';
+
+/** What an identity layer writes onto the document root: attributes and inline CSS custom
+ *  properties. A plain value, so a server render and the DOM runtime compute one identity. */
+export interface IdentityStyle {
+  attributes: Record<string, string>;
+  properties: Record<string, string>;
+}
+
+/** Write an identity style onto `target`. */
+export function writeIdentityStyle(style: IdentityStyle, target: HTMLElement = document.documentElement): void {
+  for (const [name, value] of Object.entries(style.attributes)) target.setAttribute(name, value);
+  for (const [name, value] of Object.entries(style.properties)) target.style.setProperty(name, value);
+}
+
+function rampProperties(name: 'primary' | 'accent', palette: Record<string, string>, properties: Record<string, string>): void {
   for (const step of STEPS) {
     const value = palette[step];
-    if (value) target.style.setProperty(cssVarName(`${name}-${step}`), value);
+    if (value) properties[cssVarName(`${name}-${step}`)] = value;
   }
 }
 
@@ -58,16 +74,44 @@ function clearRamp(target: HTMLElement, name: 'primary' | 'accent'): void {
  * toggle with zero JS. Steps mirror the semantic defaults: container =
  * ramp 100 (light) / 800 (dark), on-container = ramp 900 (light) / 100 (dark).
  */
-function setContainerRoles(target: HTMLElement, ramp: Record<string, string>): void {
+function containerRoleProperties(ramp: Record<string, string>, properties: Record<string, string>): void {
   const { 100: c100, 800: c800, 900: c900 } = ramp;
   if (!c100 || !c800 || !c900) return;
-  target.style.setProperty(cssVarName('primaryContainer'), `light-dark(${c100}, ${c800})`);
-  target.style.setProperty(cssVarName('onPrimaryContainer'), `light-dark(${c900}, ${c100})`);
+  properties[cssVarName('primaryContainer')] = `light-dark(${c100}, ${c800})`;
+  properties[cssVarName('onPrimaryContainer')] = `light-dark(${c900}, ${c100})`;
 }
 
 function clearContainerRoles(target: HTMLElement): void {
   target.style.removeProperty(cssVarName('primaryContainer'));
   target.style.removeProperty(cssVarName('onPrimaryContainer'));
+}
+
+/** The attributes and properties a branding writes (only brandable vars). */
+export function brandingStyle(branding: BrandingInput | null | undefined): IdentityStyle {
+  const style: IdentityStyle = { attributes: {}, properties: {} };
+  if (!branding) return style;
+  if (branding.accent_palette && branding.accent_palette in COLOR_PALETTES) {
+    rampProperties('accent', COLOR_PALETTES[branding.accent_palette as PaletteName], style.properties);
+  }
+  if (branding.primary_color) {
+    // The primary ramp is SYNTHESIZED exactly from the brand hex (OKLCH, brand
+    // at step 600) — no longer snapped to the nearest preset palette.
+    const ramp = synthesizeRamp(branding.primary_color);
+    if (ramp) {
+      rampProperties('primary', ramp, style.properties);
+      // P3: tonal container roles follow the applied primary ramp.
+      containerRoleProperties(ramp, style.properties);
+    }
+  }
+  if (branding.density) style.attributes['data-density'] = branding.density;
+  if (branding.fonts) {
+    for (const key of ['display', 'sans', 'mono'] as const) {
+      const v = branding.fonts[key];
+      // NOT cssVarName() — font vars are --font-*, exactly what the preset reads.
+      if (typeof v === 'string' && v) style.properties[`--font-${key}`] = v;
+    }
+  }
+  return style;
 }
 
 /** Apply branding overrides (idempotent; writes only brandable vars).
@@ -78,28 +122,7 @@ export function applyBranding(
   branding: BrandingInput | null | undefined,
   target: HTMLElement = document.documentElement,
 ): void {
-  if (!branding) return;
-  if (branding.accent_palette && branding.accent_palette in COLOR_PALETTES) {
-    setRamp(target, 'accent', COLOR_PALETTES[branding.accent_palette as PaletteName]);
-  }
-  if (branding.primary_color) {
-    // The primary ramp is SYNTHESIZED exactly from the brand hex (OKLCH, brand
-    // at step 600) — no longer snapped to the nearest preset palette.
-    const ramp = synthesizeRamp(branding.primary_color);
-    if (ramp) {
-      setRamp(target, 'primary', ramp);
-      // P3: tonal container roles follow the applied primary ramp.
-      setContainerRoles(target, ramp);
-    }
-  }
-  if (branding.density) target.setAttribute('data-density', branding.density);
-  if (branding.fonts) {
-    for (const key of ['display', 'sans', 'mono'] as const) {
-      const v = branding.fonts[key];
-      // NOT cssVarName() — font vars are --font-*, exactly what the preset reads.
-      if (typeof v === 'string' && v) target.style.setProperty(`--font-${key}`, v);
-    }
-  }
+  writeIdentityStyle(brandingStyle(branding), target);
 }
 
 /** Clear all runtime branding overrides (back to the default token values). */
@@ -184,7 +207,7 @@ export function applyTint(tint: TintKey | null, target: HTMLElement = document.d
  *  against TINT_PALETTES; anything unknown/missing → null (= default blue). */
 export function resolveInitialTint(
   designId: string,
-  keyPrefix: string = DEFAULT_TINT_KEY_PREFIX,
+  keyPrefix: string = TINT_STORAGE_KEY_PREFIX,
 ): TintKey | null {
   try {
     const stored = localStorage.getItem(`${keyPrefix}:${designId}`);
@@ -196,7 +219,7 @@ export function resolveInitialTint(
 }
 
 /** Initial design from localStorage, else the default. */
-export function resolveInitialDesign(storageKey: string = DEFAULT_DESIGN_KEY): string {
+export function resolveInitialDesign(storageKey: string = DESIGN_STORAGE_KEY): string {
   try {
     const stored = localStorage.getItem(storageKey);
     if (stored) return stored;
@@ -232,7 +255,7 @@ export function pointerDefaultDensity(): Density {
  *  pointer type (see pointerDefaultDensity). Resolution is synchronous — call
  *  `applyDensity(resolveInitialDensity())` once in the boot script before
  *  first paint, so the value is applied exactly once (no double-apply flash). */
-export function resolveInitialDensity(storageKey: string = DEFAULT_DENSITY_KEY): Density {
+export function resolveInitialDensity(storageKey: string = DENSITY_STORAGE_KEY): Density {
   try {
     const stored = localStorage.getItem(storageKey);
     if (stored === 'comfortable' || stored === 'compact' || stored === 'spacious') return stored;
@@ -243,7 +266,7 @@ export function resolveInitialDensity(storageKey: string = DEFAULT_DENSITY_KEY):
 }
 
 /** Initial mode from localStorage, else `system` (follow the OS preference live). */
-export function resolveInitialMode(storageKey: string = DEFAULT_MODE_KEY): ThemeMode {
+export function resolveInitialMode(storageKey: string = MODE_STORAGE_KEY): ThemeMode {
   try {
     const stored = localStorage.getItem(storageKey);
     if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;

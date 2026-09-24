@@ -28,8 +28,8 @@ export function NavLinks({ locale, items }: { locale: string; items: NavItem[] }
             aria-current={active ? "page" : undefined}
             className={
               active
-                ? "rounded-full bg-primary-soft px-3 py-1.5 text-sm font-semibold text-primary"
-                : "rounded-full px-3 py-1.5 text-sm font-medium text-fg-muted transition-colors hover:bg-hover hover:text-fg"
+                ? "rounded-full bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-600"
+                : "rounded-full px-3 py-1.5 text-sm font-medium text-textMuted transition-colors hover:bg-bgHover hover:text-textMain"
             }
           >
             {item.label}

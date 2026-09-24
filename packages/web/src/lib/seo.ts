@@ -3,6 +3,7 @@ import { getConfig } from "@/config/env";
 import type { WebPage, WebSite } from "./types";
 import { listPages } from "./engine-client";
 import { mediaUrl } from "./media";
+import { jsonForScript } from "./json-script";
 
 export function pagePath(locale: string, slug: string): string {
   return slug ? `/${locale}/${slug}` : `/${locale}`;
@@ -63,7 +64,7 @@ export async function buildPageMetadata(page: WebPage, site: WebSite | null): Pr
 
 /** Minimal WebPage JSON-LD for richer search results. */
 export function pageJsonLd(page: WebPage, site: WebSite | null): string {
-  return JSON.stringify({
+  return jsonForScript({
     "@context": "https://schema.org",
     "@type": "WebPage",
     name: page.meta_title || page.title,

@@ -1,5 +1,5 @@
 import { getConfig } from "@/config/env";
-import type { WebSite, WebPage, WebNavMenu } from "./types";
+import type { WebSite, WebPage, WebNavMenu, WebBranding } from "./types";
 
 /**
  * Server-side client for the engine's GENERIC public read API
@@ -98,4 +98,24 @@ export async function getNav(locale: string, location: "header" | "footer"): Pro
     [`web:nav:${site}:${locale}`],
   );
   return rows[0] ?? null;
+}
+
+/** The tenant branding of this site's engine, from its anonymous boot. Null when the engine
+ *  cannot answer: the page then renders in the signature's identity alone, and the log says why. */
+export async function getBranding(): Promise<WebBranding | null> {
+  const { engineUrl, revalidateSeconds } = getConfig();
+  try {
+    const res = await fetch(`${engineUrl}/api/v1/boot`, {
+      next: { revalidate: revalidateSeconds, tags: ["web:branding"] },
+    });
+    if (!res.ok) {
+      console.error(`[digita-web] boot answered HTTP ${res.status}; rendering without tenant branding`);
+      return null;
+    }
+    const json = (await res.json()) as { data?: { branding?: WebBranding } };
+    return json.data?.branding ?? null;
+  } catch (err) {
+    console.error("[digita-web] boot unreachable; rendering without tenant branding:", err);
+    return null;
+  }
 }

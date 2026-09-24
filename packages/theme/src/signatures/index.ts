@@ -1,4 +1,4 @@
-import { applyBranding, resetBranding } from '../runtime/runtime.js';
+import { brandingStyle, resetBranding, writeIdentityStyle, type IdentityStyle } from '../runtime/runtime.js';
 import { cssVarName } from '../tokens/index.js';
 import { getRuntimeSignature } from './runtime-registry.js';
 
@@ -109,41 +109,51 @@ export function resetSignature(target: HTMLElement = document.documentElement): 
 }
 
 /**
- * Apply a signature's identity via the branding layer. Always sets the accent
- * ramp + fonts (applyBranding). A FULL signature additionally stamps
+ * The attributes and properties a signature writes. Always the accent ramp +
+ * fonts (through the branding layer). A FULL signature additionally stamps
  * `data-signature` and writes its colour world (`--color-*` as light-dark()) and
- * decorative graphics (`--sig-*-l/-d`). Clears any previous signature's world
- * first, so switching signatures never leaves stale vars.
+ * decorative graphics (`--sig-*-l/-d`).
+ */
+export function signatureStyle(s: Signature): IdentityStyle {
+  // A NONE / accent-less baseline passes null → no ramp override, so the active
+  // design's own primary shows through (the token floor).
+  const style = brandingStyle({ primary_color: s.accent || null, fonts: s.fonts });
+  if (!s.colors && !s.graphics) return style;
+  style.attributes['data-signature'] = s.id;
+  if (s.colors) {
+    for (const [token, value] of Object.entries(s.colors)) {
+      style.properties[cssVarName(token)] = `light-dark(${value.light}, ${value.dark})`;
+    }
+  }
+  if (s.graphics) {
+    for (const [key, value] of Object.entries(s.graphics)) {
+      style.properties[`--sig-${key}-l`] = value.light;
+      style.properties[`--sig-${key}-d`] = value.dark;
+    }
+  }
+  return style;
+}
+
+/**
+ * Apply a signature's identity (see signatureStyle). Clears any previous
+ * signature's world first, so switching signatures never leaves stale vars.
  */
 export function applySignature(
   id: string | null | undefined,
   target: HTMLElement = document.documentElement,
 ): void {
-  const s = getSignature(id);
   resetSignature(target);
-  // A NONE / accent-less baseline passes null → no ramp override, so the active
-  // design's own primary shows through (the token floor).
-  applyBranding({ primary_color: s.accent || null, fonts: s.fonts }, target);
-  if (!s.colors && !s.graphics) return;
-  target.setAttribute('data-signature', s.id);
-  if (s.colors) {
-    for (const [token, value] of Object.entries(s.colors)) {
-      target.style.setProperty(cssVarName(token), `light-dark(${value.light}, ${value.dark})`);
-    }
-  }
-  if (s.graphics) {
-    for (const [key, value] of Object.entries(s.graphics)) {
-      target.style.setProperty(`--sig-${key}-l`, value.light);
-      target.style.setProperty(`--sig-${key}-d`, value.dark);
-    }
-  }
+  writeIdentityStyle(signatureStyle(getSignature(id)), target);
 }
+
+/** The localStorage key of the per-browser signature choice. */
+export const SIGNATURE_STORAGE_KEY = 'digita-ui:signature';
 
 /** Initial signature from localStorage, else the default. A stored id is honoured
  *  as-is (it may be a DELIVERED signature not yet registered at this moment), and
  *  the default is the intended active signature (digita) — delivered, not baked.
  *  getSignature() resolves both to a real config (or the NONE floor) safely. */
-export function resolveInitialSignature(keyPrefix = 'digita-ui:signature'): string {
+export function resolveInitialSignature(keyPrefix = SIGNATURE_STORAGE_KEY): string {
   try {
     const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(keyPrefix) : null;
     if (stored) return stored;

@@ -58,7 +58,7 @@ export function MobileNav({
         aria-expanded={open}
         aria-controls="mobile-nav-panel"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-line text-fg-muted transition-colors hover:bg-hover hover:text-fg"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-textMuted transition-colors hover:bg-bgHover hover:text-textMain"
       >
         <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
           {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
@@ -76,7 +76,7 @@ export function MobileNav({
           />
           <div
             id="mobile-nav-panel"
-            className="fixed inset-x-0 top-16 z-40 max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-line bg-card shadow-lg md:hidden"
+            className="fixed inset-x-0 top-16 z-40 max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-border bg-surface shadow-lg md:hidden"
           >
             <nav aria-label="Primary" className="mx-auto flex max-w-6xl flex-col gap-1 px-6 py-4">
               {items.map((item, i) => {
@@ -91,8 +91,8 @@ export function MobileNav({
                     onClick={() => setOpen(false)}
                     className={
                       active
-                        ? "rounded-xl bg-primary-soft px-4 py-3 text-base font-semibold text-primary"
-                        : "rounded-xl px-4 py-3 text-base font-medium text-fg transition-colors hover:bg-hover"
+                        ? "rounded-xl bg-primary-50 px-4 py-3 text-base font-semibold text-primary-600"
+                        : "rounded-xl px-4 py-3 text-base font-medium text-textMain transition-colors hover:bg-bgHover"
                     }
                   >
                     {item.label}

@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import type { BlockType } from "@/lib/types";
 
 /**
- * Self-describing contracts for blocks, plugins and themes. A future visual
+ * Self-describing contracts for blocks and plugins. A future visual
  * builder reads these (via /api/catalog) to ENUMERATE what's available,
  * CONFIGURE each via its `props` schema, and PLACE it on a page — without
  * knowing the renderer's internals. Kept deliberately close to the engine's own
@@ -55,19 +55,10 @@ export interface PluginManifest {
   component: RenderComponent;
 }
 
-export interface ThemeManifest {
-  id: string;
-  name: string;
-  description?: string;
-  /** Class applied to <html> so the theme's CSS overrides the design tokens. */
-  htmlClass?: string;
-}
-
 /** Serializable catalog entry (no component) — what /api/catalog returns. */
 export type CatalogBlock = Omit<BlockManifest, "component">;
 export type CatalogPlugin = Omit<PluginManifest, "component">;
 export interface Catalog {
   blocks: CatalogBlock[];
   plugins: CatalogPlugin[];
-  themes: ThemeManifest[];
 }

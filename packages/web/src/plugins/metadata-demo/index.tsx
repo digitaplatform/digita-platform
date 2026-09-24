@@ -29,10 +29,10 @@ const GRAND = SUBTOTAL + TAX;
 
 function Panel({ title, badge, children }: { title: string; badge: string; children: React.ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-card">
-      <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-        <span className="font-mono text-xs text-fg-muted">{title}</span>
-        <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+    <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+      <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+        <span className="font-mono text-xs text-textMuted">{title}</span>
+        <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary-600">
           {badge}
         </span>
       </div>
@@ -69,48 +69,48 @@ export default function MetadataDemo() {
         {/* Source: the entity definition */}
         <motion.div variants={card}>
           <Panel title="salesOrder.entity.json" badge="define">
-            <pre className="overflow-x-auto font-mono text-[12.5px] leading-relaxed text-fg">
+            <pre className="overflow-x-auto font-mono text-[12.5px] leading-relaxed text-textMain">
               <code>
-                <span className="text-fg-muted">{"{"}</span>
+                <span className="text-textMuted">{"{"}</span>
                 <motion.span variants={row(0)} className="block">
                   {"  "}
-                  <span className="text-primary">&quot;naming&quot;</span>: <span className="text-fg">&quot;SO-{"{####:fiscal_year}"}&quot;</span>,
+                  <span className="text-primary-600">&quot;naming&quot;</span>: <span className="text-textMain">&quot;SO-{"{####:fiscal_year}"}&quot;</span>,
                 </motion.span>
                 <motion.span variants={row(1)} className="block">
                   {"  "}
-                  <span className="text-primary">&quot;is_submittable&quot;</span>: <span className="text-fg">true</span>,{"  "}
-                  <span className="text-fg-muted">// docstatus + workflow</span>
+                  <span className="text-primary-600">&quot;is_submittable&quot;</span>: <span className="text-textMain">true</span>,{"  "}
+                  <span className="text-textMuted">// docstatus + workflow</span>
                 </motion.span>
                 <motion.span variants={row(2)} className="block">
                   {"  "}
-                  <span className="text-primary">&quot;states&quot;</span>: [draft → confirmed → delivered],
+                  <span className="text-primary-600">&quot;states&quot;</span>: [draft → confirmed → delivered],
                 </motion.span>
                 <motion.span variants={row(3)} className="block">
                   {"  "}
-                  <span className="text-primary">&quot;fields&quot;</span>: [
+                  <span className="text-primary-600">&quot;fields&quot;</span>: [
                 </motion.span>
                 <motion.span variants={row(4)} className="block">
                   {"    { customer, "}
-                  <span className="text-fg-muted">Link→Customer </span>
+                  <span className="text-textMuted">Link→Customer </span>
                   {"},"}
                 </motion.span>
                 <motion.span variants={row(5)} className="block">
                   {"    { lines, "}
-                  <span className="text-fg-muted">Table[ product, qty, unit_price,</span>
+                  <span className="text-textMuted">Table[ product, qty, unit_price,</span>
                 </motion.span>
                 <motion.span variants={row(6)} className="block">
                   {"             line_total ] },"}
                 </motion.span>
                 <motion.span variants={row(7)} className="block">
                   {"    { grand_total, "}
-                  <span className="text-fg-muted">computed </span>
+                  <span className="text-textMuted">computed </span>
                   {"} ],"}
                 </motion.span>
                 <motion.span variants={row(8)} className="block">
                   {"  "}
-                  <span className="text-primary">&quot;hooks&quot;</span>: {"{ computeTotals, checkCreditLimit }"}
+                  <span className="text-primary-600">&quot;hooks&quot;</span>: {"{ computeTotals, checkCreditLimit }"}
                 </motion.span>
-                <span className="text-fg-muted">{"}"}</span>
+                <span className="text-textMuted">{"}"}</span>
               </code>
             </pre>
           </Panel>
@@ -119,8 +119,8 @@ export default function MetadataDemo() {
         {/* Connector */}
         <div className="flex items-center justify-center py-2 lg:h-full lg:flex-col lg:py-0">
           <div className="flex flex-col items-center gap-1">
-            <span className="rounded-full border border-line bg-card px-3 py-1 text-xs font-medium text-fg">Digita</span>
-            <span aria-hidden className="text-fg-muted">
+            <span className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-textMain">Digita</span>
+            <span aria-hidden className="text-textMuted">
               <span className="lg:hidden">↓</span>
               <span className="hidden lg:inline">→</span>
             </span>
@@ -131,21 +131,21 @@ export default function MetadataDemo() {
         <div className="grid gap-5">
           <motion.div variants={card}>
             <Panel title="POST /api/v1/resource/SalesOrder" badge="api">
-              <pre className="overflow-x-auto font-mono text-[12.5px] leading-relaxed text-fg">
+              <pre className="overflow-x-auto font-mono text-[12.5px] leading-relaxed text-textMain">
                 <code>
-                  <span className="text-fg-muted">{"{"}</span>
+                  <span className="text-textMuted">{"{"}</span>
                   <motion.span variants={row(0)} className="block">
                     {"  "}
-                    <span className="text-primary">&quot;_id&quot;</span>: <span className="text-fg">&quot;SO-2026-0042&quot;</span>,{"  "}
-                    <span className="text-fg-muted">// naming series</span>
+                    <span className="text-primary-600">&quot;_id&quot;</span>: <span className="text-textMain">&quot;SO-2026-0042&quot;</span>,{"  "}
+                    <span className="text-textMuted">// naming series</span>
                   </motion.span>
                   <motion.span variants={row(1)} className="block">
                     {"  "}
-                    <span className="text-primary">&quot;customer&quot;</span>: <span className="text-fg">&quot;ACME GmbH&quot;</span>,
+                    <span className="text-primary-600">&quot;customer&quot;</span>: <span className="text-textMain">&quot;ACME GmbH&quot;</span>,
                   </motion.span>
                   <motion.span variants={row(2)} className="block">
                     {"  "}
-                    <span className="text-primary">&quot;lines&quot;</span>: [
+                    <span className="text-primary-600">&quot;lines&quot;</span>: [
                   </motion.span>
                   {LINES.map((l, i) => (
                     <motion.span key={l.product} variants={row(3 + i)} className="block">
@@ -159,15 +159,15 @@ export default function MetadataDemo() {
                   </motion.span>
                   <motion.span variants={row(6)} className="block">
                     {"  "}
-                    <span className="text-primary">&quot;grand_total&quot;</span>: <span className="text-fg">{GRAND.toFixed(2)}</span>,{"  "}
-                    <span className="text-fg-muted">// raw (JSON)</span>
+                    <span className="text-primary-600">&quot;grand_total&quot;</span>: <span className="text-textMain">{GRAND.toFixed(2)}</span>,{"  "}
+                    <span className="text-textMuted">// raw (JSON)</span>
                   </motion.span>
                   <motion.span variants={row(7)} className="block">
                     {"  "}
-                    <span className="text-primary">&quot;status&quot;</span>: <span className="text-fg">&quot;confirmed&quot;</span>,{" "}
-                    <span className="text-primary">&quot;docstatus&quot;</span>: <span className="text-fg">1</span>
+                    <span className="text-primary-600">&quot;status&quot;</span>: <span className="text-textMain">&quot;confirmed&quot;</span>,{" "}
+                    <span className="text-primary-600">&quot;docstatus&quot;</span>: <span className="text-textMain">1</span>
                   </motion.span>
-                  <span className="text-fg-muted">{"}"}</span>
+                  <span className="text-textMuted">{"}"}</span>
                 </code>
               </pre>
             </Panel>
@@ -177,15 +177,15 @@ export default function MetadataDemo() {
             <Panel title="Admin form" badge="ui">
               <div className="space-y-3">
                 <motion.div variants={row(0)}>
-                  <label className="mb-1 block text-xs font-medium text-fg-muted">Customer</label>
-                  <div className="flex h-9 items-center justify-between rounded-lg border border-line bg-muted-bg px-3 text-sm text-fg">
-                    ACME GmbH <span aria-hidden className="text-fg-muted">▾</span>
+                  <label className="mb-1 block text-xs font-medium text-textMuted">Customer</label>
+                  <div className="flex h-9 items-center justify-between rounded-lg border border-border bg-subtle px-3 text-sm text-textMain">
+                    ACME GmbH <span aria-hidden className="text-textMuted">▾</span>
                   </div>
                 </motion.div>
 
                 {/* line grid — money formatted for the current locale */}
-                <motion.div variants={row(1)} className="overflow-hidden rounded-lg border border-line">
-                  <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-line bg-muted-bg px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+                <motion.div variants={row(1)} className="overflow-hidden rounded-lg border border-border">
+                  <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-border bg-subtle px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-textMuted">
                     <span>Product</span>
                     <span className="text-right">Qty</span>
                     <span className="text-right">Line total</span>
@@ -194,18 +194,18 @@ export default function MetadataDemo() {
                     <motion.div
                       key={l.product}
                       variants={row(2 + i)}
-                      className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-1.5 text-sm text-fg"
+                      className="grid grid-cols-[1fr_auto_auto] gap-2 px-3 py-1.5 text-sm text-textMain"
                     >
                       <span>{l.product}</span>
-                      <span className="text-right tabular-nums text-fg-muted">{l.qty}</span>
+                      <span className="text-right tabular-nums text-textMuted">{l.qty}</span>
                       <span className="text-right tabular-nums">{formatCurrency(lineTotal(l), locale, CURRENCY)}</span>
                     </motion.div>
                   ))}
                 </motion.div>
 
                 <motion.div variants={row(4)} className="flex items-center justify-between px-1 text-sm">
-                  <span className="font-medium text-fg-muted">Grand total</span>
-                  <span className="font-semibold tabular-nums text-fg">{formatCurrency(GRAND, locale, CURRENCY)}</span>
+                  <span className="font-medium text-textMuted">Grand total</span>
+                  <span className="font-semibold tabular-nums text-textMain">{formatCurrency(GRAND, locale, CURRENCY)}</span>
                 </motion.div>
 
                 {/* workflow bar */}
@@ -215,14 +215,14 @@ export default function MetadataDemo() {
                       <span
                         className={
                           i === 1
-                            ? "rounded-full bg-primary px-2.5 py-1 font-medium text-white"
-                            : "rounded-full border border-line px-2.5 py-1 text-fg-muted"
+                            ? "rounded-full bg-primary-600 px-2.5 py-1 font-medium text-white"
+                            : "rounded-full border border-border px-2.5 py-1 text-textMuted"
                         }
                       >
                         {s}
                       </span>
                       {i < 2 && (
-                        <span aria-hidden className="text-fg-muted">
+                        <span aria-hidden className="text-textMuted">
                           →
                         </span>
                       )}

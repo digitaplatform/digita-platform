@@ -11,17 +11,17 @@ import {
   resolveInitialDensity,
   resolveInitialDesign,
   resolveInitialSignature,
+  MODE_STORAGE_KEY,
+  DENSITY_STORAGE_KEY,
+  DESIGN_STORAGE_KEY,
+  SIGNATURE_STORAGE_KEY,
   type ThemeMode,
   type Density,
 } from '@digitaplatform/theme';
 import { signature as digitaSignature } from '@digitaplatform/digita';
 import { getUserPreference, setUserPreference } from '@/services/userPreference';
 
-const MODE_KEY = 'digita-ui:theme-mode';
 const TEMPLATE_KEY = 'digita-ui:template';
-const DENSITY_KEY = 'digita-ui:density';
-const DESIGN_KEY = 'digita-ui:design';
-const SIGNATURE_KEY = 'digita-ui:signature';
 const PREF_MODE = 'ui.theme_mode';
 const PREF_DENSITY = 'ui.density';
 const PREF_DESIGN = 'ui.design';
@@ -59,9 +59,9 @@ interface ThemeState {
 // Mode + density + branding are applied by @digitaplatform/theme's framework-agnostic
 // runtime; this store only owns React state. Pre-mount set avoids a flash;
 // localStorage is the fast device-local default until the server prefs roam in.
-const initialMode = resolveInitialMode(MODE_KEY);
-const initialDensity = resolveInitialDensity(DENSITY_KEY);
-const initialDesign = resolveInitialDesign(DESIGN_KEY);
+const initialMode = resolveInitialMode(MODE_STORAGE_KEY);
+const initialDensity = resolveInitialDensity(DENSITY_STORAGE_KEY);
+const initialDesign = resolveInitialDesign(DESIGN_STORAGE_KEY);
 applyDesign(initialDesign);
 applyMode(initialMode);
 // Signature LAST: its accent/fonts (and, for a full signature, the brand colour
@@ -75,7 +75,7 @@ applyMode(initialMode);
 // with no flash and no dependency on the authenticated plugin composition.
 // Alternate / premium signatures still arrive later via the composition.
 registerSignature(digitaSignature);
-const initialSignature = resolveInitialSignature(SIGNATURE_KEY);
+const initialSignature = resolveInitialSignature(SIGNATURE_STORAGE_KEY);
 applySignature(initialSignature);
 // Density LAST: applySignature's teardown (resetBranding) also clears the
 // data-density attribute (it doubles as a tenant-density override slot), so
@@ -104,7 +104,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   templateOverride: localStorage.getItem(TEMPLATE_KEY),
   branding: null,
   setMode: (mode) => {
-    localStorage.setItem(MODE_KEY, mode);
+    localStorage.setItem(MODE_STORAGE_KEY, mode);
     applyMode(mode);
     set({ mode });
     void setUserPreference(PREF_MODE, mode).catch(() => {});
@@ -114,19 +114,19 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     get().setMode(order[(order.indexOf(get().mode) + 1) % order.length]!);
   },
   setDensity: (density) => {
-    localStorage.setItem(DENSITY_KEY, density);
+    localStorage.setItem(DENSITY_STORAGE_KEY, density);
     applyDensity(density);
     set({ density });
     void setUserPreference(PREF_DENSITY, density).catch(() => {});
   },
   setDesign: (design) => {
-    localStorage.setItem(DESIGN_KEY, design);
+    localStorage.setItem(DESIGN_STORAGE_KEY, design);
     applyDesign(design);
     set({ design });
     void setUserPreference(PREF_DESIGN, design).catch(() => {});
   },
   setSignature: (id) => {
-    localStorage.setItem(SIGNATURE_KEY, id);
+    localStorage.setItem(SIGNATURE_STORAGE_KEY, id);
     applySignatureLayered(id, get);
     set({ signature: id });
     void setUserPreference(PREF_SIGNATURE, id).catch(() => {});
@@ -153,22 +153,22 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         getUserPreference<string>(PREF_SIGNATURE),
       ]);
       if (mode === 'light' || mode === 'dark' || mode === 'system') {
-        localStorage.setItem(MODE_KEY, mode);
+        localStorage.setItem(MODE_STORAGE_KEY, mode);
         applyMode(mode);
         set({ mode });
       }
       if (density === 'comfortable' || density === 'compact' || density === 'spacious') {
-        localStorage.setItem(DENSITY_KEY, density);
+        localStorage.setItem(DENSITY_STORAGE_KEY, density);
         applyDensity(density);
         set({ density });
       }
       if (typeof design === 'string' && design) {
-        localStorage.setItem(DESIGN_KEY, design);
+        localStorage.setItem(DESIGN_STORAGE_KEY, design);
         applyDesign(design);
         set({ design });
       }
       if (typeof signature === 'string' && signature) {
-        localStorage.setItem(SIGNATURE_KEY, signature);
+        localStorage.setItem(SIGNATURE_STORAGE_KEY, signature);
         applySignatureLayered(signature, get);
         set({ signature });
       }

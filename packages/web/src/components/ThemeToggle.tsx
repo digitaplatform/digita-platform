@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { applyMode, MODE_STORAGE_KEY } from "@digitaplatform/theme";
 
 /**
- * Light/dark toggle. Persists to localStorage and flips the `.dark` class on
- * <html> (the @digitaplatform/theme convention). The pre-hydration script in layout.tsx
- * sets the initial class to avoid a flash; this only handles user toggles.
+ * Light/dark toggle. Pins the mode under the app's key (one origin, one setting for website and
+ * app) and applies it through the theme runtime. The pre-paint script in layout.tsx sets the
+ * initial class; this only handles user toggles.
  */
-const KEY = "digita-web-mode";
-
 export function ThemeToggle({ label }: { label: string }) {
   const [dark, setDark] = useState(false);
 
@@ -17,11 +16,11 @@ export function ThemeToggle({ label }: { label: string }) {
   }, []);
 
   function toggle() {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.classList.toggle("dark", next);
+    const next = dark ? "light" : "dark";
+    setDark(next === "dark");
+    applyMode(next);
     try {
-      localStorage.setItem(KEY, next ? "dark" : "light");
+      localStorage.setItem(MODE_STORAGE_KEY, next);
     } catch {
       /* ignore storage failures (private mode) */
     }
@@ -33,7 +32,7 @@ export function ThemeToggle({ label }: { label: string }) {
       onClick={toggle}
       aria-label={label}
       aria-pressed={dark}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-line text-fg-muted transition-colors hover:bg-hover hover:text-fg"
+      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-textMuted transition-colors hover:bg-bgHover hover:text-textMain"
     >
       <span aria-hidden className="text-base leading-none">
         {dark ? "☀" : "☾"}
