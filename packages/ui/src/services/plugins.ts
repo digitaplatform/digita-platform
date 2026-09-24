@@ -1,4 +1,5 @@
 import { api } from '@/services/api';
+import { appUrl } from '@/lib/appBase';
 import type { ApiResponse } from '@digitaplatform/shared';
 import type { LayoutConfig, PluginTier, PluginType, SignatureValue } from '@digitaplatform/plugins';
 
@@ -66,7 +67,7 @@ export interface PluginInventory {
  *  (inline bundle urls / the dev workspace source glob). */
 export async function getPluginInventory(): Promise<PluginInventory | null> {
   try {
-    const res = await fetch('/plugins/index.json', { headers: { Accept: 'application/json' } });
+    const res = await fetch(appUrl('/plugins/index.json'), { headers: { Accept: 'application/json' } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const inventory = (await res.json()) as PluginInventory;
     if (!Array.isArray(inventory.plugins)) throw new Error('malformed inventory: no "plugins" array');

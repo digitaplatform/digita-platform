@@ -54,13 +54,14 @@ async function main() {
     write: true,
   });
 
-  // Map each entry name → its hashed output file via the metafile.
-  const entryOutputs = {}; // entryName → '/vendor/<file>'
+  // Map each entry name → its hashed output file via the metafile. Relative, so the
+  // document's <base href> (the app's base path) resolves it like every other asset.
+  const entryOutputs = {}; // entryName → './vendor/<file>'
   for (const [outPath, meta] of Object.entries(result.metafile.outputs)) {
     if (!meta.entryPoint) continue;
     const srcName = basename(meta.entryPoint, '.js'); // e.g. 'react-dom'
     const entryName = Object.keys(ENTRY_FILES).find((n) => ENTRY_FILES[n] === `${srcName}.js`);
-    if (entryName) entryOutputs[entryName] = `/vendor/${basename(outPath)}`;
+    if (entryName) entryOutputs[entryName] = `./vendor/${basename(outPath)}`;
   }
 
   const imports = {};

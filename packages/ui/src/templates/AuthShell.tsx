@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { useSessionStore } from '@/stores/session';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
+import { appUrl } from '@/lib/appBase';
 
 /** Unauthenticated chrome — a centered card on the branded background. The logo
  *  and app name come from the branding payload (falls back to the platform
@@ -18,7 +19,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
       // 100%×100% like the sites stretch the panel over its section. A tenant
       // login_background (inline style below) still wins with `cover`.
       className="relative flex min-h-screen items-center justify-center bg-background bg-no-repeat bg-[length:100%_100%] p-4 bg-[image:var(--sig-panel-l)] dark:bg-[image:var(--sig-panel-d)]"
-      style={branding?.login_background ? { backgroundImage: `url(${branding.login_background})`, backgroundSize: 'cover' } : undefined}
+      style={branding?.login_background ? { backgroundImage: `url(${appUrl(branding.login_background)})`, backgroundSize: 'cover' } : undefined}
     >
       <div className="absolute right-4 top-4">
         <LanguageSwitcher />
@@ -26,7 +27,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-2">
           {branding?.logo ? (
-            <img src={branding.logo} alt="" className="h-10" />
+            <img src={appUrl(branding.logo)} alt="" className="h-10" />
           ) : (
             <div className="flex h-10 w-10 items-center justify-center rounded-card bg-primary-600 text-lg font-bold text-white shadow-sm">
               {appName.charAt(0).toUpperCase()}

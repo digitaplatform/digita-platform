@@ -7,11 +7,11 @@
 #   docker build -f docker/ui.Dockerfile -t digita-ui .
 #
 # nginx serves the SPA + the plugin runtime (/vendor shared ESM, /plugins app
-# plugin bundles, /import-map.json). API path routing happens at the INGRESS:
-#   /api + /health → engine :3000, / → this SPA
-# (see the digita-deploy digita-ui chart ingress). Auth is NOT on this host: the
-# SPA redirects to the tenant IdP's login and calls refresh/logout at the
-# absolute AUTH_URL (see the env.js step in stage 3).
+# plugin bundles, /import-map.json). Path routing happens at the INGRESS, which
+# strips the app's base path first:
+#   /<app>/api + /<app>/health → engine :3000, /<app>/ → this SPA
+# (see the digita-deploy digita-ui chart ingress). The SPA reaches the tenant IdP,
+# jobs and report at the URLs in env.js (see the env.js step in stage 3).
 #
 # PLUGIN DELIVERY: this image bakes ONLY the FREE staged plugin artifacts into
 # the SPA web root. tools/plugin-mock/stage-plugins.mjs stages the set pinned in
@@ -207,17 +207,15 @@ RUN HASH="$(cat /usr/share/nginx/html/csp-importmap-sha256.txt)"; \
     rm /usr/share/nginx/html/csp-importmap-sha256.txt
 
 # Runtime config channel: nginx runs every executable in /docker-entrypoint.d/
-# before it starts, so this writes /env.js from the AUTH_URL env (index.html
-# loads it before the bundle) and substitutes the CSP's zone wildcard from the
-# same env — both per CONTAINER, because ONE image serves every tenant and each
-# tenant has its own zone. The two files it rewrites ship with the image and are
-# handed to the non-root `nginx` user here: that user may not create a file in
-# /usr/share/nginx/html or /etc/nginx, only rewrite one it owns. The chown comes
-# AFTER the sha256 step above — that `sed -i` replaces nginx.conf with a fresh
-# root-owned file.
+# before it starts, so this writes /env.js from the chart's envs (index.html
+# loads it before the bundle) and sets the <base href> of index.html to the
+# app's base path — both per CONTAINER, because ONE image serves every tenant
+# and every app. The two files it rewrites ship with the image and are handed to
+# the non-root `nginx` user here: that user may not create a file in
+# /usr/share/nginx/html, only rewrite one it owns.
 COPY docker/ui-env.sh /docker-entrypoint.d/40-digita-env.sh
 RUN chmod +x /docker-entrypoint.d/40-digita-env.sh && \
-    chown nginx:nginx /usr/share/nginx/html/env.js /etc/nginx/nginx.conf
+    chown nginx:nginx /usr/share/nginx/html/env.js /usr/share/nginx/html/index.html
 
 # Non-root: the official image ships the `nginx` user; the config keeps
 # every writable path under /tmp.

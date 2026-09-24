@@ -3,26 +3,28 @@ import type { EntityReportLink } from '@digitaplatform/shared';
 /**
  * Entity↔report links (metadata-driven print buttons): URL building and
  * doc-side resolution for the digita-report service. Auth rides on the
- * shared parent-domain SSO cookie — the report host is same-site, so the
- * embedded/openend render is authenticated automatically.
+ * tenant session cookie, so the embedded/opened render is authenticated
+ * automatically.
  */
 
 type Doc = Record<string, unknown>;
 
 /**
- * The report service lives at report.<tenant-host>: swap the first host
- * label (erp./admin./…) — single-origin dev setups fall back to the local
- * report backend port.
+ * The report service's base URL. Resolution order, as for AUTH_URL (lib/authConfig.ts):
+ *   1. window.__REPORT_URL__ — written into /env.js from the REPORT_URL env (docker/ui-env.sh);
+ *   2. VITE_REPORT_URL — build-time override for local setups;
+ *   3. http://localhost:3400 — the digita-report backend dev server.
  */
-export function reportBaseUrl(): string {
-  const { protocol, hostname } = window.location;
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `${protocol}//${hostname}:3400`;
-  }
-  const labels = hostname.split('.');
-  labels[0] = 'report';
-  return `${protocol}//${labels.join('.')}`;
-}
+const injectedReportUrl =
+  typeof window !== 'undefined'
+    ? ((window as unknown as Record<string, unknown>).__REPORT_URL__ as string | undefined)
+    : undefined;
+
+export const REPORT_URL: string = (
+  injectedReportUrl ||
+  (import.meta.env.VITE_REPORT_URL as string | undefined) ||
+  'http://localhost:3400'
+).replace(/\/+$/, '');
 
 /** Resolve `param_map` (report param -> doc field path) against the doc. */
 export function resolveReportParams(link: EntityReportLink, doc: Doc): Record<string, string> {
@@ -45,7 +47,7 @@ export function reportRenderUrl(
 ): string {
   const query = new URLSearchParams({ format, ...params });
   if (opts.print) query.set('print', '1');
-  return `${reportBaseUrl()}/api/v1/report/definitions/${encodeURIComponent(report)}/render?${query.toString()}`;
+  return `${REPORT_URL}/api/v1/report/definitions/${encodeURIComponent(report)}/render?${query.toString()}`;
 }
 
 /**

@@ -1,11 +1,9 @@
 import type { ActionDefinition } from '@digitaplatform/shared';
 
 /**
- * Client for the per-tenant digita-jobs satellite. The service is OPT-IN per
- * tenant: the UI derives its URL from the app host (erp.<sub>.<domain> →
- * jobs.<sub>.<domain>) and probes /health once per session — no service, no
- * jobs UI (menu entry and route stay hidden). Auth rides the platform
- * session cookie (domain-wide, verified by the satellite via JWKS).
+ * Client for the per-tenant digita-jobs satellite. The UI probes /health once
+ * per session — no service, no jobs UI (menu entry and route stay hidden). Auth
+ * rides the tenant session cookie (verified by the satellite via JWKS).
  */
 
 export interface JobDef {
@@ -49,14 +47,25 @@ export interface JobInput {
   enabled?: boolean;
 }
 
-/** jobs.<rest-of-host> — the platform's satellite host convention. */
-export function jobsBaseUrl(host: string = window.location.host): string {
-  const rest = host.split('.').slice(1).join('.');
-  return `https://jobs.${rest}`;
-}
+/**
+ * The jobs satellite's base URL. Resolution order, as for AUTH_URL (lib/authConfig.ts):
+ *   1. window.__JOBS_URL__ — written into /env.js from the JOBS_URL env (docker/ui-env.sh);
+ *   2. VITE_JOBS_URL — build-time override for local setups;
+ *   3. http://localhost:3500 — the digita-jobs dev server.
+ */
+const injectedJobsUrl =
+  typeof window !== 'undefined'
+    ? ((window as unknown as Record<string, unknown>).__JOBS_URL__ as string | undefined)
+    : undefined;
+
+export const JOBS_URL: string = (
+  injectedJobsUrl ||
+  (import.meta.env.VITE_JOBS_URL as string | undefined) ||
+  'http://localhost:3500'
+).replace(/\/+$/, '');
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${jobsBaseUrl()}${path}`, {
+  const res = await fetch(`${JOBS_URL}${path}`, {
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
     ...init,
@@ -71,7 +80,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 /** Availability gate: true only when the satellite answers its open /health. */
 export async function jobsAlive(): Promise<boolean> {
   try {
-    const res = await fetch(`${jobsBaseUrl()}/health`, { signal: AbortSignal.timeout(4000) });
+    const res = await fetch(`${JOBS_URL}/health`, { signal: AbortSignal.timeout(4000) });
     return res.ok;
   } catch {
     return false;

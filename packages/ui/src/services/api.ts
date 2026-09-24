@@ -1,6 +1,7 @@
 import { sessionCookieNames, CSRF_HEADER } from '@digitaplatform/shared';
 import { toApiError, ApiClientError } from '@/lib/errors';
 import { authUrl, redirectToIdpLogin, AUTH_COOKIE_SUFFIX } from '@/lib/authConfig';
+import { appUrl } from '@/lib/appBase';
 
 /** This unit's session cookie names — the tenant's, never the platform IdP's. */
 const cookieNames = sessionCookieNames(AUTH_COOKIE_SUFFIX);
@@ -10,8 +11,9 @@ const cookieNames = sessionCookieNames(AUTH_COOKIE_SUFFIX);
  * (decided: XSS-safe, never in JS). Every request sends `credentials:'include'`;
  * mutations carry the CSRF double-submit header read from the readable CSRF
  * cookie. On a 401 (expired access cookie) a single shared `/auth/refresh` call
- * rotates the cookie and the request retries once. Engine calls are relative to
- * this SPA's own host; the IdP calls carry the ABSOLUTE IdP URL (lib/authConfig.ts).
+ * rotates the cookie and the request retries once. Engine calls are root paths of
+ * this app, put under its base path here (lib/appBase.ts); the IdP calls carry the
+ * ABSOLUTE IdP URL (lib/authConfig.ts) and pass unchanged.
  */
 
 // Auth-FLOW endpoints where a 401 is a real failure (a spent refresh token),
@@ -93,7 +95,7 @@ export async function attemptRefresh(): Promise<boolean> {
  *  the page itself already redirects, carrying the route the user wanted; a
  *  second jump from here would replace that target with /login. */
 function redirectToLogin(): void {
-  if (window.location.pathname !== '/login') redirectToIdpLogin();
+  if (window.location.pathname !== appUrl('/login')) redirectToIdpLogin();
 }
 
 interface RequestOptions {
@@ -115,7 +117,7 @@ async function parseBody(response: Response): Promise<unknown> {
 
 async function request<T>(method: string, url: string, opts: RequestOptions = {}): Promise<T> {
   const exec = (): Promise<Response> =>
-    fetch(`${url}${buildQueryString(opts.params)}`, {
+    fetch(`${appUrl(url)}${buildQueryString(opts.params)}`, {
       method,
       credentials: 'include',
       headers: { ...buildHeaders(method, opts.body !== undefined), ...(opts.headers ?? {}) },
@@ -165,7 +167,7 @@ export const api = {
     if (csrf) headers[CSRF_HEADER] = csrf;
 
     const exec = (): Promise<Response> =>
-      fetch(url, { method: 'POST', credentials: 'include', headers, body: form });
+      fetch(appUrl(url), { method: 'POST', credentials: 'include', headers, body: form });
 
     let response = await exec();
     if (response.status === 401 && !isAuthFlowUrl(url)) {

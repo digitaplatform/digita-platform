@@ -204,8 +204,14 @@ export function ShellRenderer() {
     <div className="relative isolate flex h-screen flex-col overflow-hidden bg-background" {...tid.component('app-shell')}>
       {/* The active signature's decorative grid + glow, behind every region. */}
       <SignatureBackdrop />
+      {/* The page carries a <base href> (the app's base path), so a bare fragment
+          would navigate to the base; the skip moves focus itself instead. */}
       <a
         href="#main-content"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById('main-content')?.focus();
+        }}
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-primary-600 focus:px-3 focus:py-2 focus:text-sm focus:text-white"
       >
         {tc('ui.nav.skipToContent')}

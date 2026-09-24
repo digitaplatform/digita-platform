@@ -1,5 +1,6 @@
 import { queryClient } from '@/lib/query-client';
 import { qkPrefix } from '@/lib/query-keys';
+import { appUrl } from '@/lib/appBase';
 
 /**
  * Live-sync client (one per tab). After a committed write on the engine, the WS
@@ -69,7 +70,7 @@ class RealtimeClient {
 
   private url(): string {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${proto}//${window.location.host}${this.path}`;
+    return `${proto}//${window.location.host}${appUrl(this.path)}`;
   }
 
   private open(): void {

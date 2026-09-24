@@ -8,6 +8,7 @@ import { AudienceShell } from '@/templates/AudienceShell';
 import { registerBuiltinTemplates } from '@/templates/template-registry';
 import { installHostServices } from '@/plugins/host-services';
 import { loadAppComposition } from '@/plugins/composition';
+import { APP_BASE_PATH } from '@/lib/appBase';
 import LoginPage from '@/pages/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
 import RecordPage from '@/pages/RecordPage';
@@ -88,7 +89,7 @@ const router = createBrowserRouter([
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },
-]);
+], { basename: APP_BASE_PATH || '/' });
 
 export default function App() {
   const bootstrap = useSessionStore((s) => s.bootstrap);

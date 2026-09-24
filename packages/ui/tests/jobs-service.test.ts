@@ -1,18 +1,17 @@
 // @vitest-environment jsdom
-// Jobs satellite client: host derivation (erp.<sub>.<domain> → jobs.…),
-// role gate mirroring the satellite RBAC, long_running catalog filter.
-import { describe, it, expect } from 'vitest';
+// Jobs satellite client: its injected URL, role gate mirroring the satellite
+// RBAC, long_running catalog filter.
+import { describe, it, expect, vi } from 'vitest';
 import type { ActionDefinition } from '@digitaplatform/shared';
-import { jobsBaseUrl, jobsRole, longRunningActions } from '@/services/jobs';
+import { jobsRole, longRunningActions } from '@/services/jobs';
 
 describe('jobs service', () => {
-  it('derives the satellite host from the app host', () => {
-    expect(jobsBaseUrl('erp.acme.dev.example.com')).toBe(
-      'https://jobs.acme.dev.example.com',
-    );
-    expect(jobsBaseUrl('buildproject.acme.example.com')).toBe(
-      'https://jobs.acme.example.com',
-    );
+  it('reads the satellite URL the container injects, without a trailing slash', async () => {
+    (window as unknown as Record<string, unknown>).__JOBS_URL__ = 'https://acme.example.com/jobs/';
+    vi.resetModules();
+    const { JOBS_URL } = await import('@/services/jobs');
+    expect(JOBS_URL).toBe('https://acme.example.com/jobs');
+    delete (window as unknown as Record<string, unknown>).__JOBS_URL__;
   });
 
   it('gates roles like the satellite (Admin > Viewer > none)', () => {

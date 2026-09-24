@@ -2,6 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- The app's base path on the tenant's one host (e.g. /erp/). Every URL below
+         and every built asset is relative to it. The container entrypoint rewrites
+         it from its APP_BASE_PATH env (docker/ui-env.sh); the dev server serves /. -->
+    <base href="/" />
     <!-- Shared-singleton resolution for runtime-loaded plugins: maps react,
          react-dom, react-router(+dom), and digita-plugins to the self-hosted
          vendor ESM so the host and every plugin use ONE instance of each. The
@@ -11,13 +15,14 @@
          map needs CSP script-src to allow it (docker/nginx-ui.conf).
          NOTE: keep no importmap-script literal in this comment — Vite would parse
          it as a real tag and emit a duplicate, broken map. -->
-    <script type="importmap" src="/import-map.json"></script>
+    <script type="importmap" src="import-map.json"></script>
     <!-- Runtime config: public/env.js ships empty and the container entrypoint
-         rewrites it from its AUTH_URL env (docker/ui-env.sh), so ONE image serves
-         every tenant. It must load before the bundle — src/lib/authConfig.ts reads
-         window.__AUTH_URL__ at module scope. -->
-    <script src="/env.js"></script>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+         rewrites it from its envs (docker/ui-env.sh), so ONE image serves every
+         tenant and app. It must load before the bundle — src/lib/authConfig.ts,
+         src/lib/appBase.ts, src/services/jobs.ts and src/lib/report-link.ts read
+         it at module scope. -->
+    <script src="env.js"></script>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#2563eb" />

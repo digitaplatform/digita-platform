@@ -4,6 +4,7 @@ import { getSignature } from '@digitaplatform/theme';
 import { useSessionStore } from '@/stores/session';
 import { useThemeStore } from '@/stores/theme';
 import { useChrome } from '@/lib/chrome-i18n';
+import { appUrl } from '@/lib/appBase';
 
 interface BrandChromeProps {
   /** Where the host region docks — drives vertical (rail) vs horizontal (bar) chrome. */
@@ -42,7 +43,7 @@ export function BrandChrome({ side, collapsed, collapsible, onToggleCollapse, on
   // monogram (an inline currentColor SVG, painted with the accent) is the
   // default-brand fallback; the initial-letter tile is the last resort.
   const logo = branding?.logo ? (
-    <img src={branding.logo} alt="" className="h-7 w-7 shrink-0 rounded" />
+    <img src={appUrl(branding.logo)} alt="" className="h-7 w-7 shrink-0 rounded" />
   ) : monogram ? (
     <div
       aria-hidden="true"

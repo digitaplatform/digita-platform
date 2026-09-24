@@ -13,6 +13,7 @@ import { isDigitaPlugin } from '@digitaplatform/plugins';
 import { ErrorBoundary } from '@digitaplatform/components';
 import { applyDesign, registerDesign, registerSignature } from '@digitaplatform/theme';
 import { usePluginLayoutStore } from '@/stores/plugin-state';
+import { appUrl } from '@/lib/appBase';
 
 // COMPONENT plugins loaded for this session (design plugins live in the theme's
 // runtime design registry — only components render into Regions). Two ways in:
@@ -219,10 +220,10 @@ async function resolvePlugin(source: PluginSource): Promise<DigitaPlugin | null>
       title: source.title,
       designId: source.id,
       variant: source.id,
-      cssUrl: source.url,
+      cssUrl: appUrl(source.url),
     };
   }
-  return normalizeModulePlugin(await import(/* @vite-ignore */ source.url), source.id);
+  return normalizeModulePlugin(await import(/* @vite-ignore */ appUrl(source.url)), source.id);
 }
 
 /**
