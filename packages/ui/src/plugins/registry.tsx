@@ -5,13 +5,12 @@ import type {
   FrontendPlugin,
   LayoutConfig,
   PluginManifestEntry,
-  PluginType,
+  PluginSource,
   SignaturePlugin,
-  SignatureValue,
 } from '@digitaplatform/plugins';
-import { isDigitaPlugin } from '@digitaplatform/plugins';
+import { designFromSource, isDigitaPlugin } from '@digitaplatform/plugins';
 import { ErrorBoundary } from '@digitaplatform/components';
-import { applyDesign, registerDesign, registerSignature } from '@digitaplatform/theme';
+import { loadDeliveredDesign, registerDeliveredSignature } from '@digitaplatform/theme';
 import { usePluginLayoutStore } from '@/stores/plugin-state';
 import { appUrl } from '@/lib/appBase';
 
@@ -60,29 +59,6 @@ function devSourceLoader(id: string): (() => Promise<unknown>) | undefined {
   return key ? devPluginSources[key] : undefined;
 }
 
-/**
- * One plugin to load, as produced by the composition ⋈ inventory join
- * (plugins/composition.ts): the composition contributes id/title, the inventory
- * contributes type/url. Both may be absent for a dev-source-only plugin — the
- * workspace glob needs no URL and the module's own export carries the type.
- */
-export interface PluginSource {
-  id: string;
-  title?: string;
-  type?: PluginType;
-  url?: string;
-  /** signature only: identity config carried by the inventory entry itself. A
-   *  thin signature carries accent + fonts (+ monogram); a FULL signature also
-   *  carries the brand colour world + decorative graphics + wordmark. */
-  accent?: string;
-  fonts?: { display?: string; sans?: string; mono?: string };
-  logoUrl?: string;
-  monogram?: string;
-  wordmark?: string;
-  colors?: Record<string, SignatureValue>;
-  graphics?: Record<string, SignatureValue>;
-}
-
 /** Normalize a dynamically-imported plugin module to a typed DigitaPlugin.
  *  Back-compat: a legacy FrontendPlugin export (no `type` discriminator) is a
  *  component plugin — wrapped here instead of forcing every plugin to migrate. */
@@ -111,69 +87,22 @@ const integrateHandlers: IntegrateHandlers = {
   component: (plugin: ComponentPlugin) => {
     registerPlugin(plugin);
   },
-  // design: inject the same-origin stylesheet, then register {designId, variant}
-  // with the theme so applyDesign()/data-design + the DesignMenu work for it.
-  design: async (plugin: DesignPlugin) => {
-    await injectDesignStylesheet(plugin);
-    registerDesign(plugin.designId, plugin.variant, { name: plugin.title ?? plugin.designId });
-    // If this design is the ACTIVE one (persisted pick applied at boot, before
-    // the plugin loaded), the variant stamp was resolved without the registry —
-    // re-apply so data-design-variant reflects the now-registered variant.
-    if (document.documentElement.getAttribute('data-design') === plugin.designId) {
-      applyDesign(plugin.designId);
-    }
-  },
+  // design: the stylesheet, then {designId, variant} registered with the theme so
+  // applyDesign()/data-design + the DesignMenu work for it (the website loads a
+  // delivered design through the same theme function).
+  design: (plugin: DesignPlugin) => loadDeliveredDesign(plugin),
   // signature: an IDENTITY overlay (accent + fonts) applied via the BRANDING
   // layer (inline --color-primary-* / --font-* vars). CRITICAL: it never touches
   // data-design — a signature COMPOSES on top of whatever design skin is active,
-  // so flipping the design keeps the signature and vice versa.
-  signature: (plugin: SignaturePlugin) => {
-    // Register the DELIVERED identity into the theme's runtime signature registry
-    // so getSignature(id) resolves it — the full brand world (accent + fonts +
-    // colour world + graphics) that applySignature() writes, and the monogram/
-    // wordmark the shell chrome reads. The theme store re-applies the ACTIVE
-    // signature after composition, so a delivered default lands its full world.
-    // A thin signature carries no colours/graphics — applySignature stays thin.
-    registerSignature({
-      id: plugin.id,
-      name: plugin.title ?? plugin.id,
-      accent: plugin.accent ?? '',
-      fonts: plugin.fonts,
-      logoUrl: plugin.logoUrl,
-      monogram: plugin.monogram,
-      wordmark: plugin.wordmark,
-      colors: plugin.colors,
-      graphics: plugin.graphics,
-    });
-  },
+  // so flipping the design keeps the signature and vice versa. Registered here;
+  // the theme store re-applies the ACTIVE signature after composition, so a
+  // delivered default lands its full world.
+  signature: (plugin: SignaturePlugin) => registerDeliveredSignature(plugin),
 };
 
 async function integratePlugin(plugin: DigitaPlugin): Promise<void> {
   const handler = integrateHandlers[plugin.type] as (p: DigitaPlugin) => void | Promise<void>;
   await handler(plugin);
-}
-
-/** Idempotent stylesheet injection for a design plugin (marker: the
- *  data-design-plugin attribute). Resolves once the CSS is loaded; on a load
- *  failure the dead link is removed and the promise rejects, so a broken design
- *  never registers in the picker. */
-function injectDesignStylesheet(plugin: DesignPlugin): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (document.head.querySelector(`link[data-design-plugin="${CSS.escape(plugin.designId)}"]`)) {
-      resolve();
-      return;
-    }
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = plugin.cssUrl;
-    link.setAttribute('data-design-plugin', plugin.designId);
-    link.onload = () => resolve();
-    link.onerror = () => {
-      link.remove();
-      reject(new Error(`stylesheet failed to load: ${plugin.cssUrl}`));
-    };
-    document.head.appendChild(link);
-  });
 }
 
 /**
@@ -209,20 +138,7 @@ async function resolvePlugin(source: PluginSource): Promise<DigitaPlugin | null>
     console.error(`[plugins] "${source.id}" has no inventory entry (and no dev source) — cannot load`);
     return null;
   }
-  if (source.type === 'design') {
-    // Inventory schemaVersion 1 carries no designId/variant, so both derive from
-    // the plugin id — every shipped design plugin declares meta.variant === id
-    // (its dist/digita-plugin.json agrees). When a design whose variant differs
-    // from its id ships, the inventory gains explicit designId/variant fields.
-    return {
-      type: 'design',
-      id: source.id,
-      title: source.title,
-      designId: source.id,
-      variant: source.id,
-      cssUrl: appUrl(source.url),
-    };
-  }
+  if (source.type === 'design') return designFromSource(source, appUrl(source.url));
   return normalizeModulePlugin(await import(/* @vite-ignore */ appUrl(source.url)), source.id);
 }
 

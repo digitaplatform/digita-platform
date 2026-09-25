@@ -59,3 +59,15 @@ export function bootIdentity(options: BootIdentityOptions = {}): BootedIdentity 
   applyDensity(density, target);
   return { design, mode, signature, density };
 }
+
+/** The id of the <script type="application/json"> a server-rendered page writes its
+ *  identity data into: { signatures, branding }, the options its pre-paint boot runs with. */
+export const PAGE_IDENTITY_ELEMENT_ID = 'digita-identity';
+
+/** The identity data this server-rendered page carries, or null on a page without it. */
+export function readPageIdentity(doc: Document = document): Pick<BootIdentityOptions, 'signatures' | 'branding'> | null {
+  return JSON.parse(doc.getElementById(PAGE_IDENTITY_ELEMENT_ID)?.textContent || 'null') as Pick<
+    BootIdentityOptions,
+    'signatures' | 'branding'
+  > | null;
+}

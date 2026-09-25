@@ -1,6 +1,6 @@
 {
   "name": "@digitaplatform/theme",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Digita central design FOUNDATION (framework-agnostic, no React): design tokens as the single source of truth, generated theme.css (CSS variables light/dark + Inter fonts + resets) + a Tailwind preset from ONE transform, and a pure-DOM branding/theming runtime (applyBranding/applyMode). Consumed by every Digita frontend + plugin.",
   "main": "./dist/index.js",

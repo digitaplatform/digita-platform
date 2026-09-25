@@ -103,6 +103,7 @@ jobs:
           --filter '@digitaplatform/shared'
           --filter '@digitaplatform/theme'
           --filter '@digitaplatform/components'
+          --filter '@digitaplatform/plugins'
           build
       - name: Typecheck the web site
         run: pnpm --filter '@digitaplatform/web' typecheck

@@ -278,3 +278,5 @@ export function useHost(): HostServices {
   if (!host) throw new Error('Host services are not available — provideHostServices() was not called.');
   return host;
 }
+
+export * from './composition.js';

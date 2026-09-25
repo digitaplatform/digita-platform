@@ -72,6 +72,7 @@ export {
   TOKEN_TTL_REFERENCE,
   SESSION_COOKIE,
   sessionCookieNames,
+  findCookie,
   CSRF_HEADER,
   REFRESH_COOKIE_PATH,
   DELEGATION_MINT_PATH,

@@ -40,6 +40,13 @@ export interface ServerConfig extends PublicSiteConfig {
   /** The tenant's apps the header links to (TENANT_APPS, comma separated). Explicitly OPTIONAL:
    *  a site that is no tenant's entry has none. */
   tenantApps: string[];
+  /** The tenant IdP's public base URL (AUTH_URL), where the page refreshes a signed-in
+   *  visitor's expired session before it asks an app for their design. Explicitly OPTIONAL:
+   *  null → no refresh, so a visitor whose access cookie expired sees the default. */
+  authUrl: string | null;
+  /** The tenant's session cookie suffix (AUTH_COOKIE_SUFFIX, sessionCookieNames). Explicitly
+   *  OPTIONAL: null → the unsuffixed names. */
+  authCookieSuffix: string | null;
 }
 
 let cached: ServerConfig | null = null;
@@ -54,6 +61,8 @@ export function getConfig(): ServerConfig {
     revalidateSeconds: reqInt("REVALIDATE_SECONDS"),
     revalidateSecret: process.env.REVALIDATE_SECRET || null,
     tenantApps: (process.env.TENANT_APPS ?? "").split(",").map((name) => name.trim()).filter(Boolean),
+    authUrl: process.env.AUTH_URL ? noTrailing(process.env.AUTH_URL) : null,
+    authCookieSuffix: process.env.AUTH_COOKIE_SUFFIX || null,
     locales: getLocales(),
     defaultLocale: getDefaultLocale(),
   };

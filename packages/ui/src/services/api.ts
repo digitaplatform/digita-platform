@@ -1,4 +1,4 @@
-import { sessionCookieNames, CSRF_HEADER } from '@digitaplatform/shared';
+import { findCookie, sessionCookieNames, CSRF_HEADER } from '@digitaplatform/shared';
 import { toApiError, ApiClientError } from '@/lib/errors';
 import { authUrl, redirectToIdpLogin, AUTH_COOKIE_SUFFIX } from '@/lib/authConfig';
 import { appUrl } from '@/lib/appBase';
@@ -37,10 +37,7 @@ function buildQueryString(params?: QueryParams): string {
 }
 
 function readCookie(name: string): string | null {
-  const escaped = name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1');
-  const match = document.cookie.match(new RegExp('(?:^|; )' + escaped + '=([^;]*)'));
-  const raw = match?.[1];
-  return raw === undefined ? null : decodeURIComponent(raw);
+  return findCookie(document.cookie, name);
 }
 
 function buildHeaders(method: string, hasBody: boolean): HeadersInit {

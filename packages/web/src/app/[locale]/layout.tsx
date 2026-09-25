@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { brandingStyle, signatureStyle } from "@digitaplatform/theme";
+import { brandingStyle, signatureStyle, PAGE_IDENTITY_ELEMENT_ID } from "@digitaplatform/theme";
 import { IDENTITY_BOOT_SCRIPT } from "@digitaplatform/theme/identity-boot";
 import favicon from "@digitaplatform/theme/favicon.svg";
 import { SignatureBackdrop } from "@digitaplatform/components";
@@ -17,6 +17,7 @@ import { jsonForScript } from "@/lib/json-script";
 import { mediaUrl } from "@/lib/media";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { DeliveredIdentity } from "@/components/DeliveredIdentity";
 
 // Rendered on-demand (config + content are runtime, never baked at build); engine
 // fetches are cache-tagged with a runtime TTL (see engine-client).
@@ -33,7 +34,8 @@ export default async function LocaleLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  if (!isLocale(locale, getConfig().locales)) notFound();
+  const config = getConfig();
+  if (!isLocale(locale, config.locales)) notFound();
 
   const [site, headerNav, footerNav, branding] = await Promise.all([
     getSite(),
@@ -57,7 +59,7 @@ export default async function LocaleLayout({
       <head>
         <script
           type="application/json"
-          id="digita-identity"
+          id={PAGE_IDENTITY_ELEMENT_ID}
           dangerouslySetInnerHTML={{ __html: jsonForScript({ signatures: [defaultSignature], branding }) }}
         />
         <script dangerouslySetInnerHTML={{ __html: IDENTITY_BOOT_SCRIPT }} />
@@ -76,7 +78,7 @@ export default async function LocaleLayout({
               locale={locale as Locale}
               site={site}
               nav={headerNav}
-              apps={getConfig().tenantApps}
+              apps={config.tenantApps}
               brand={{
                 name: branding?.app_name ?? site?.site_name ?? "Digita",
                 logoUrl: branding?.logo ? mediaUrl(branding.logo) : undefined,
@@ -88,6 +90,7 @@ export default async function LocaleLayout({
               {children}
             </main>
             <Footer locale={locale as Locale} site={site} nav={footerNav} />
+            <DeliveredIdentity apps={config.tenantApps} authUrl={config.authUrl} authCookieSuffix={config.authCookieSuffix} />
           </div>
         </ConfigProvider>
       </body>

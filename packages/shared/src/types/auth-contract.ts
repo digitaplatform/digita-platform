@@ -357,6 +357,15 @@ export function sessionCookieNames(suffix?: string): { ACCESS: string; REFRESH: 
   };
 }
 
+/** The value of the cookie `name` in a cookie string as `document.cookie` holds it, or null
+ *  when there is none (e.g. no session: the CSRF cookie is the one a script can read). */
+export function findCookie(cookies: string, name: string): string | null {
+  const escaped = name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1');
+  const match = cookies.match(new RegExp('(?:^|; )' + escaped + '=([^;]*)'));
+  const raw = match?.[1];
+  return raw === undefined ? null : decodeURIComponent(raw);
+}
+
 /** Header carrying the CSRF token on cookie-authenticated mutations. */
 export const CSRF_HEADER = "x-csrf-token";
 
