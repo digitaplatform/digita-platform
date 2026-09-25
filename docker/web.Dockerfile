@@ -13,8 +13,8 @@
 #
 # packages/web/next.config.mjs sets outputFileTracingRoot to the REPO ROOT
 # (two levels up from packages/web = /app here), so the standalone bundle pulls
-# in the workspace deps (@digitaplatform/theme, @digitaplatform/shared) and the
-# pnpm-symlinked node_modules.
+# in the workspace deps (@digitaplatform/shared, @digitaplatform/theme,
+# @digitaplatform/components) and the pnpm-symlinked node_modules.
 #
 # Registry auth for the private @digitaplatform scope: the build pipeline hands
 # buildah the authenticated .npmrc as a BUILD SECRET (--secret id=npmrc,
@@ -49,12 +49,14 @@ COPY packages/ui/package.json packages/ui/
 COPY packages/web/package.json packages/web/
 
 # web (Next.js host) + @digitaplatform/theme (design foundation, provides the
-# imported theme.css) + shared. devDeps included (tailwind/postcss/tsc needed by
-# `next build`).
+# imported theme.css, the identity boot and the favicon) + @digitaplatform/components
+# (the app's component kit the site renders with) + shared. devDeps included
+# (tailwind/postcss/tsc/esbuild needed by the builds below).
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     pnpm install --frozen-lockfile \
     --filter @digitaplatform/shared \
     --filter @digitaplatform/theme \
+    --filter @digitaplatform/components \
     --filter @digitaplatform/web
 
 # ─── Stage 2: Build ──────────────────────────────────────────
@@ -62,13 +64,16 @@ FROM deps AS build
 
 COPY packages/shared/ packages/shared/
 COPY packages/theme/ packages/theme/
+COPY packages/components/ packages/components/
 COPY packages/web/ packages/web/
 
-# theme MUST be built before the host (web imports @digitaplatform/theme/theme.css
-# = dist/theme.css). The engine is unreachable at build time → the engine-client
-# returns [] and pages prerender gracefully (ISR fills real content at runtime).
+# theme and components MUST be built before the host (web imports their dist/, e.g.
+# @digitaplatform/theme/theme.css = dist/theme.css). The engine is unreachable at
+# build time → the engine-client returns [] and pages prerender gracefully (ISR
+# fills real content at runtime).
 RUN pnpm --filter @digitaplatform/shared build && \
     pnpm --filter @digitaplatform/theme build && \
+    pnpm --filter @digitaplatform/components build && \
     pnpm --filter @digitaplatform/web build
 
 # ─── Stage 3: Production image ──────────────────────────────

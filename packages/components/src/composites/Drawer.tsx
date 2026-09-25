@@ -17,8 +17,9 @@ export interface DrawerProps {
 /**
  * A modal side drawer over the page: a dimmed, blurred scrim that closes it, and a
  * panel docked to one edge that is a labelled dialog — Escape closes it, focus moves
- * in on open, stays trapped inside, and returns to the opener on close. The app's
- * mobile navigation and the website's open through it.
+ * in on open, stays trapped inside, and returns to the opener on close; the page behind
+ * does not scroll while it is open. The app's mobile navigation and the website's
+ * open through it.
  */
 export function Drawer({ open, onClose, label, side = 'left', className, children }: DrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -32,6 +33,16 @@ export function Drawer({ open, onClose, label, side = 'left', className, childre
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [open, onClose]);
+
+  // A scroll gesture on the scrim would otherwise scroll a page that scrolls on the body.
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
 
   if (!open) return null;
   return (

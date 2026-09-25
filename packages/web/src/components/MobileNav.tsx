@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
-import { BrandMark, Drawer, NavList, navLeafClass, topBarButtonClass, type BrandMarkProps } from "@digitaplatform/components";
+import { BrandMark, Drawer, NavList, navLeafClass, railButtonClass, topBarButtonClass, type BrandMarkProps } from "@digitaplatform/components";
 import type { NavItem } from "@/lib/types";
 import { navHref } from "@/lib/nav";
 import { isActiveHref } from "./NavLinks";
@@ -54,7 +54,7 @@ export function MobileNav({
         <div className="flex h-full w-72 flex-col border-r border-border bg-surface">
           <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
             <BrandMark {...brand} fill />
-            <button type="button" className="rounded p-1 text-textMuted hover:bg-subtle" onClick={() => setOpen(false)} aria-label={closeLabel}>
+            <button type="button" className={railButtonClass} onClick={() => setOpen(false)} aria-label={closeLabel}>
               <X className="h-5 w-5" />
             </button>
           </div>

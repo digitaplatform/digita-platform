@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { brandingStyle, signatureStyle } from "@digitaplatform/theme";
 import { IDENTITY_BOOT_SCRIPT } from "@digitaplatform/theme/identity-boot";
+import favicon from "@digitaplatform/theme/favicon.svg";
 import { SignatureBackdrop } from "@digitaplatform/components";
 import "../globals.css";
 import type { Locale } from "@/i18n/config";
@@ -56,6 +57,7 @@ export default async function LocaleLayout({
           dangerouslySetInnerHTML={{ __html: jsonForScript({ signatures: [defaultSignature], branding }) }}
         />
         <script dangerouslySetInnerHTML={{ __html: IDENTITY_BOOT_SCRIPT }} />
+        <link rel="icon" type="image/svg+xml" href={favicon.src} />
       </head>
       <body className="bg-background text-textMain antialiased">
         <ConfigProvider value={publicConfig()}>

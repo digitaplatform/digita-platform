@@ -6,6 +6,11 @@ import { cn } from '../lib/cn.js';
 export const topBarButtonClass =
   'rounded-md p-1.5 text-textMuted transition-colors duration-base ease-smooth hover:bg-bgHover focus-visible:shadow-focus focus-visible:outline-none';
 
+/** The classes of a borderless icon control in a rail's header row (close, collapse,
+ *  expand): the app's brand chrome and the website's mobile drawer render theirs the
+ *  same way. */
+export const railButtonClass = 'rounded p-1 text-textMuted hover:bg-subtle';
+
 /**
  * The top bar: one sticky row on the surface, divided from the page by a border.
  * `data-ui="topbar"` is the element a design restyles (the iOS design turns it

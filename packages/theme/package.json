@@ -16,13 +16,15 @@
     },
     "./theme.css": "./dist/theme.css",
     "./fonts/*": "./dist/fonts/*",
+    "./favicon.svg": "./assets/favicon.svg",
     "./identity-boot": {
       "types": "./dist/identity-boot.d.ts",
       "import": "./dist/identity-boot.js"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "assets/favicon.svg"
   ],
   "repository": {
     "type": "git",

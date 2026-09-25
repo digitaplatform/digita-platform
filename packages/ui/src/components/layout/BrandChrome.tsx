@@ -1,7 +1,7 @@
 import { X, PanelLeft, PanelLeftClose } from 'lucide-react';
 import type { RegionSide } from '@digitaplatform/plugins';
 import { getSignature } from '@digitaplatform/theme';
-import { BrandMark } from '@digitaplatform/components';
+import { BrandMark, cn, railButtonClass } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
 import { useThemeStore } from '@/stores/theme';
 import { useChrome } from '@/lib/chrome-i18n';
@@ -57,7 +57,7 @@ export function BrandChrome({ side, collapsed, collapsible, onToggleCollapse, on
       {collapsed ? (
         <button
           type="button"
-          className="mx-auto rounded p-1.5 text-textMuted hover:bg-subtle"
+          className={cn(railButtonClass, 'mx-auto p-1.5')}
           onClick={onToggleCollapse}
           aria-label={tc('ui.nav.expand')}
         >
@@ -69,7 +69,7 @@ export function BrandChrome({ side, collapsed, collapsible, onToggleCollapse, on
           {onClose && (
             <button
               type="button"
-              className="rounded p-1 text-textMuted hover:bg-subtle lg:hidden"
+              className={cn(railButtonClass, 'lg:hidden')}
               onClick={onClose}
               aria-label={tc('ui.nav.close')}
             >
@@ -79,7 +79,7 @@ export function BrandChrome({ side, collapsed, collapsible, onToggleCollapse, on
           {collapsible && onToggleCollapse && (
             <button
               type="button"
-              className="hidden rounded p-1 text-textMuted hover:bg-subtle lg:inline-flex"
+              className={cn(railButtonClass, 'hidden lg:inline-flex')}
               onClick={onToggleCollapse}
               aria-label={tc('ui.nav.collapse')}
             >

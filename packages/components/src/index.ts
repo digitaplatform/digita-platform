@@ -85,7 +85,7 @@ export { Watermark } from './composites/Watermark.js';
 export type { WatermarkProps, WatermarkTone, WatermarkDensity } from './composites/Watermark.js';
 export { SignatureBackdrop } from './composites/SignatureBackdrop.js';
 export type { SignatureBackdropGraphics } from './composites/SignatureBackdrop.js';
-export { TopBar, topBarButtonClass } from './composites/TopBar.js';
+export { TopBar, railButtonClass, topBarButtonClass } from './composites/TopBar.js';
 export { BrandMark } from './composites/BrandMark.js';
 export type { BrandMarkProps } from './composites/BrandMark.js';
 export { LanguageMenu } from './composites/LanguageMenu.js';

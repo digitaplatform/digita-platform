@@ -100,6 +100,14 @@ describe('Drawer', () => {
     fireEvent.click(container.querySelector('[aria-hidden="true"]')!);
     expect(onClose).toHaveBeenCalledTimes(2);
   });
+
+  it('keeps the page behind from scrolling while open, and restores it on close', () => {
+    document.body.style.overflow = 'auto';
+    const { rerender } = render(<Drawer open onClose={() => {}} label="Navigation">item</Drawer>);
+    expect(document.body.style.overflow).toBe('hidden');
+    rerender(<Drawer open={false} onClose={() => {}} label="Navigation">item</Drawer>);
+    expect(document.body.style.overflow).toBe('auto');
+  });
 });
 
 describe('Card', () => {
