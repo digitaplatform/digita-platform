@@ -1,6 +1,6 @@
 {
   "name": "digita-platform",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "private": true,
   "type": "module",
   "description": "Digita open core: the engine, shared contracts, the plugin-SDK, app and web, plus the base packages (theme, components, shared). Engine/app/web land here as part of the digita-platform consolidation.",
