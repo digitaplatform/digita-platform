@@ -208,14 +208,16 @@ RUN HASH="$(cat /usr/share/nginx/html/csp-importmap-sha256.txt)"; \
 
 # Runtime config channel: nginx runs every executable in /docker-entrypoint.d/
 # before it starts, so this writes /env.js from the chart's envs (index.html
-# loads it before the bundle) and sets the <base href> of index.html to the
-# app's base path — both per CONTAINER, because ONE image serves every tenant
-# and every app. The two files it rewrites ship with the image and are handed to
-# the non-root `nginx` user here: that user may not create a file in
-# /usr/share/nginx/html, only rewrite one it owns.
+# loads it before the bundle), sets the <base href> of index.html to the app's
+# base path and fills the CSP's service origins in nginx.conf — all per
+# CONTAINER, because ONE image serves every tenant and every app. The three files
+# it rewrites ship with the image and are handed to the non-root `nginx` user
+# here: that user may not create a file in /usr/share/nginx/html or /etc/nginx,
+# only rewrite one it owns. The chown comes AFTER the sha256 step above — that
+# `sed -i` replaces nginx.conf with a fresh root-owned file.
 COPY docker/ui-env.sh /docker-entrypoint.d/40-digita-env.sh
 RUN chmod +x /docker-entrypoint.d/40-digita-env.sh && \
-    chown nginx:nginx /usr/share/nginx/html/env.js /usr/share/nginx/html/index.html
+    chown nginx:nginx /usr/share/nginx/html/env.js /usr/share/nginx/html/index.html /etc/nginx/nginx.conf
 
 # Non-root: the official image ships the `nginx` user; the config keeps
 # every writable path under /tmp.
