@@ -5,15 +5,21 @@
 // planted innocent neighbours.
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const WEB = fileURLToPath(new URL("..", import.meta.url));
 const SRC = join(WEB, "src");
 
-/** Tailwind's default palette; the theme's own colour names (primary, neutral, accent, …) are not in it. */
-const PALETTE = "slate|gray|zinc|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose";
+/** Tailwind's default palette and its v2 names; the theme's own colour names (primary, neutral,
+ *  accent, …) are not in it. */
+const PALETTE =
+  "slate|gray|zinc|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|lightBlue|warmGray|trueGray|coolGray|blueGray";
+/** The CSS named colours (white, red, rebeccapurple, …), as the CSS standard lists them. */
+const NAMED = `(?:${Object.keys(createRequire(import.meta.url)("color-name") as Record<string, unknown>).join("|")})`;
 const COLOUR_UTILITY = String.raw`(?:bg|text|border(?:-[xytrblse])?|ring(?:-offset)?|divide|outline|decoration|accent|caret|fill|stroke|from|via|to|placeholder|shadow)`;
+const STYLE_COLOUR_KEY = String.raw`(?:color|background(?:Color|Image)?|border(?:Top|Right|Bottom|Left)?(?:Color)?|outline(?:Color)?|boxShadow|textShadow|fill|stroke|stopColor|caretColor|accentColor)`;
 const CSS_LIKE = /\.(css|svg)$/;
 const SCRIPT = /\.(tsx?|mjs)$/;
 
@@ -25,18 +31,26 @@ const RULES: { name: string; pattern: RegExp; files?: RegExp }[] = [
     pattern: new RegExp(String.raw`\b${COLOUR_UTILITY}-(?:white|black|(?:${PALETTE})-\d{2,3})\b`),
   },
   {
-    name: "named colour in CSS",
-    pattern: /\b(?:color|background(?:-color)?|fill|stroke|stop-color|outline-color|border(?:-(?:top|right|bottom|left))?-color)\s*:\s*(?!var\(|currentColor|transparent|inherit|initial|unset|none)[a-zA-Z]+\s*(?:[;}!]|$)/i,
+    name: "named colour in a CSS value",
+    pattern: new RegExp(String.raw`:[^;{}]*\b${NAMED}\b`, "i"),
     files: CSS_LIKE,
   },
   {
     name: "named colour in an SVG or JSX attribute",
-    pattern: /\b(?:fill|stroke|stop-color|stopColor|flood-color|floodColor)\s*=\s*\{?\s*["'](?!none|currentColor|transparent|inherit|url\()[a-zA-Z]+["']/,
+    pattern: new RegExp(String.raw`\b(?:fill|stroke|stop-color|stopColor|flood-color|floodColor|color)\s*=\s*\{?\s*["']${NAMED}["']`, "i"),
   },
   {
-    name: "named colour in a style object",
-    pattern: /\b(?:color|background(?:Color)?|fill|stroke|stopColor|outlineColor|border(?:Top|Right|Bottom|Left)?Color)\s*:\s*["'](?!var\(|currentColor|transparent|inherit|none)[a-zA-Z]+["']/,
+    name: "named colour in a style value",
+    pattern: new RegExp(String.raw`\b${STYLE_COLOUR_KEY}\s*:\s*["'\x60][^"'\x60]*\b${NAMED}\b`, "i"),
     files: SCRIPT,
+  },
+  {
+    name: "ring width without a ring colour (Tailwind's default blue)",
+    pattern: /^(?!.*\bring-(?!\d|inset\b|offset)[a-zA-Z]).*(?<![\w-])ring(?:-\d)?(?![\w-])/,
+  },
+  {
+    name: "arbitrary design property",
+    pattern: /\[(?:color|background(?:-color)?|border(?:-[a-z]+)*|box-shadow|text-shadow|outline(?:-color)?|fill|stroke|font(?:-family)?)\s*:/,
   },
   { name: "radius outside the theme tokens", pattern: /(?<![\w-])rounded(?:-[trblse]{1,2})?(?:-(?:none|sm|md|lg|xl|2xl|3xl))?(?![\w-])/ },
   { name: "shadow outside the theme tokens", pattern: /\bdrop-shadow\b|(?<![\w-])shadow(?:-(?:xl|2xl|inner))?(?![\w-])/ },
@@ -89,10 +103,19 @@ describe("PROBES: each rule catches its shape and nothing else", () => {
       ["x.tsx", `className="bg-gray-100"`],
       ["x.tsx", `className="hover:text-red-500"`],
       ["x.tsx", `className="border-slate-300"`],
+      ["x.tsx", `className="bg-lightBlue-500"`],
       ["x.css", `a { color: white; }`],
+      ["x.css", `a { border: 1px solid red; }`],
+      ["x.css", `a { background: linear-gradient(red, blue); }`],
       ["x.svg", `<rect width="32" height="32" fill="white" />`],
+      ["x.svg", `<path style="fill:white" d="M0 0h1" />`],
       ["x.tsx", `<path stroke="red" />`],
+      ["x.tsx", `<Heart color="red" />`],
       ["x.tsx", `style={{ color: "white" }}`],
+      ["x.tsx", `style={{ border: "1px solid red" }}`],
+      ["x.tsx", `style={{ boxShadow: "0 0 4px red" }}`],
+      ["x.tsx", `className="focus:ring-2"`],
+      ["x.tsx", `className="[color:red]"`],
       ["x.tsx", `className="rounded-2xl border"`],
       ["x.tsx", `className="rounded-t-xl"`],
       ["x.tsx", `className="rounded-md"`],
@@ -120,11 +143,15 @@ describe("PROBES: each rule catches its shape and nothing else", () => {
       ["x.tsx", `className="text-micro text-xs md:text-6xl"`],
       ["x.tsx", `className="shadow-md shadow-none focus-visible:shadow-focus"`],
       ["x.tsx", `className="font-mono font-sans font-display font-medium"`],
+      ["x.tsx", `className="focus:ring-2 focus:ring-primary-500"`],
+      ["x.tsx", `<Badge color="primary" size="sm">`],
+      ["x.tsx", `const label = "Red team";`],
+      ["x.ts", `interface Props { color: string; }`],
+      ["x.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">`],
       ["x.svg", `<path fill="currentColor" stroke="none" />`],
       ["x.svg", `<rect fill="url(#grad)" />`],
-      ["x.tsx", `<Badge color="primary" size="sm">`],
-      ["x.ts", `interface Props { color: string; }`],
       ["x.css", `a { color: var(--color-textMain); box-shadow: var(--shadow-md); }`],
+      ["x.css", `@media (prefers-color-scheme: dark) { a { font-weight: 600; } }`],
     ]) {
       expect(violations(file, innocent), innocent).toEqual([]);
     }

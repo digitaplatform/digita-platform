@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef } from 'react';
 import { cn } from '../lib/cn.js';
+import { lockBodyScroll } from '../lib/body-scroll-lock.js';
 import { useFocusTrap } from '../lib/use-focus-trap.js';
 
 export interface DrawerProps {
@@ -35,19 +36,12 @@ export function Drawer({ open, onClose, label, side = 'left', className, childre
   }, [open, onClose]);
 
   // A scroll gesture on the scrim would otherwise scroll a page that scrolls on the body.
-  useEffect(() => {
-    if (!open) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, [open]);
+  useEffect(() => (open ? lockBodyScroll() : undefined), [open]);
 
   if (!open) return null;
   return (
     <div className={cn('fixed inset-0 z-40', className)}>
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-[color:var(--color-scrim,rgba(0,0,0,0.30))] backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div
         ref={panelRef}
         role="dialog"

@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../lib/cn.js';
+import { lockBodyScroll } from '../lib/body-scroll-lock.js';
 
 const SIZES = {
   sm: 'max-w-sm',
@@ -75,12 +76,6 @@ export interface BaseDialogProps {
 
 const FOCUSABLE =
   'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-
-// Count of open dialogs (body scroll-lock lifetime). "Which dialog is on top"
-// is answered by DOM order instead of a stack: portals append to body in
-// OPEN order, while React runs child effects before parent effects — a stack
-// filled in effect order would be upside down for nested dialogs.
-let openDialogCount = 0;
 
 /**
  * Generic modal shell — the foundation every dialog builds on (SearchDialog and
@@ -262,8 +257,7 @@ export function BaseDialog({
 
   useEffect(() => {
     if (!open) return;
-    openDialogCount += 1;
-    document.body.style.overflow = 'hidden';
+    const unlockScroll = lockBodyScroll();
     // Topmost = the LAST open dialog overlay in the DOM (portals append in
     // open order — independent of React's child-before-parent effect order).
     const isTop = () => {
@@ -312,8 +306,7 @@ export function BaseDialog({
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      openDialogCount -= 1;
-      if (openDialogCount === 0) document.body.style.overflow = '';
+      unlockScroll();
       if (restoreFocusRef.current) restoreRef.current?.focus?.();
     };
     // initialFocusRef is a ref (stable identity by contract) — open is the

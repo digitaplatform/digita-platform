@@ -4,7 +4,7 @@
 // kit's button.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
-import { BrandMark, Card, Drawer, LanguageMenu, ModeButton, TopBar, buttonAttributes, nextMode } from '../src/index.js';
+import { BaseDialog, BrandMark, Card, Drawer, LanguageMenu, ModeButton, TopBar, buttonAttributes, nextMode } from '../src/index.js';
 
 afterEach(cleanup);
 
@@ -107,6 +107,19 @@ describe('Drawer', () => {
     expect(document.body.style.overflow).toBe('hidden');
     rerender(<Drawer open={false} onClose={() => {}} label="Navigation">item</Drawer>);
     expect(document.body.style.overflow).toBe('auto');
+  });
+
+  it('keeps the page locked until the last overlay over it closes', () => {
+    document.body.style.overflow = '';
+    const drawer = render(<Drawer open onClose={() => {}} label="Navigation">item</Drawer>);
+    const dialog = render(<BaseDialog open onClose={() => {}} title="D"><div>body</div></BaseDialog>);
+    dialog.unmount();
+    expect(document.body.style.overflow).toBe('hidden');
+    const second = render(<Drawer open onClose={() => {}} label="Second">item</Drawer>);
+    drawer.unmount();
+    expect(document.body.style.overflow).toBe('hidden');
+    second.unmount();
+    expect(document.body.style.overflow).toBe('');
   });
 });
 

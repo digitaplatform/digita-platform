@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { brandingStyle, signatureStyle } from "@digitaplatform/theme";
 import { IDENTITY_BOOT_SCRIPT } from "@digitaplatform/theme/identity-boot";
@@ -20,6 +21,9 @@ import { Footer } from "@/components/Footer";
 // Rendered on-demand (config + content are runtime, never baked at build); engine
 // fetches are cache-tagged with a runtime TTL (see engine-client).
 export const dynamic = "force-dynamic";
+
+// The favicon the app loads too, as metadata so every response carries it, 404s included.
+export const metadata: Metadata = { icons: { icon: { url: favicon.src, type: "image/svg+xml" } } };
 
 export default async function LocaleLayout({
   children,
@@ -57,7 +61,6 @@ export default async function LocaleLayout({
           dangerouslySetInnerHTML={{ __html: jsonForScript({ signatures: [defaultSignature], branding }) }}
         />
         <script dangerouslySetInnerHTML={{ __html: IDENTITY_BOOT_SCRIPT }} />
-        <link rel="icon" type="image/svg+xml" href={favicon.src} />
       </head>
       <body className="bg-background text-textMain antialiased">
         <ConfigProvider value={publicConfig()}>

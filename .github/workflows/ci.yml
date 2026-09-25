@@ -4,7 +4,7 @@ name: ci
 # components, plugins), a full gate for the engine (typecheck, dependency
 # rules, build, and the vitest suite), and the gates of the two frontends: the
 # ui app (lint, typecheck, tests, build) and the web site (typecheck, tests,
-# build).
+# build, and its image from docker/web.Dockerfile).
 on:
   push:
     branches: [master]
@@ -110,6 +110,20 @@ jobs:
         run: pnpm --filter '@digitaplatform/web' test
       - name: Build the web site
         run: pnpm --filter '@digitaplatform/web' build
+
+  # The web site's image, built from docker/web.Dockerfile as the cluster builds it. The job above
+  # installs the whole workspace, so a workspace package the site imports but the Dockerfile does
+  # not install, copy or build would pass there and fail only at release; here it fails.
+  web-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write the registry credential the build mounts as a secret
+        run: printf '@digitaplatform:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=%s\n' "$NODE_AUTH_TOKEN" > "$RUNNER_TEMP/npmrc"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build the web image
+        run: docker build -f docker/web.Dockerfile --secret id=npmrc,src="$RUNNER_TEMP/npmrc" -t digita-web:ci .
 
   # Every publishable package whose version is not yet in GitHub Packages, on every push to
   # master: a version that is already there is skipped, so a push without a bump publishes
