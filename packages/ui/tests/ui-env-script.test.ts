@@ -32,7 +32,9 @@ const cspHeader = (dir: string) =>
   readFileSync(join(dir, 'nginx.conf'), 'utf8').split('\n').find((l) => l.includes('add_header Content-Security-Policy')) ?? '';
 const csp = (dir: string, directive: string) => cspHeader(dir).match(new RegExp(`${directive} ([^;]*);`))?.[1];
 
-describe('docker/ui-env.sh', () => {
+// Each case starts a shell; on Windows under a parallel test run that alone can pass vitest's
+// default 5 s.
+describe('docker/ui-env.sh', { timeout: 30_000 }, () => {
   it('allows the IdP, jobs and report hosts of the host layout, and keeps the page at the root', () => {
     const dir = stage();
     const r = run(dir, {
