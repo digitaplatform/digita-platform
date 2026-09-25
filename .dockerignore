@@ -1,5 +1,5 @@
 # Docker build context excludes. The build context is the repo ROOT (both
-# docker/ui.Dockerfile and docker/engine.Dockerfile build from here).
+# docker/app.Dockerfile and docker/engine.Dockerfile build from here).
 #
 # CRITICAL: dependencies are installed FRESH inside each image (pnpm install in
 # the deps stage). The host's node_modules are pnpm symlink farms pointing at the
@@ -16,12 +16,12 @@ node_modules
 
 # Generated plugin-runtime bits: the vendor ESM bundle + import-map are produced
 # by `build:vendor` INSIDE the image. The FREE staged plugin tree
-# (packages/ui/public/plugins/) is deliberately NOT ignored — the prestaged
-# docker path needs it in the context (see ui.Dockerfile).
-packages/ui/public/vendor
-packages/ui/public/import-map.json
+# (packages/app/public/plugins/) is deliberately NOT ignored — the prestaged
+# docker path needs it in the context (see app.Dockerfile).
+packages/app/public/vendor
+packages/app/public/import-map.json
 
-# Premium plugin bytes never belong in the ui image (they are engine-mounted).
+# Premium plugin bytes never belong in the app image (they are engine-mounted).
 staged-premium
 
 # VCS, tooling, test and editor artifacts (context bloat / irrelevant to a build).

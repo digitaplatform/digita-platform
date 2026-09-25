@@ -17,8 +17,8 @@ next-env.d.ts
 !.env.example
 
 # Generated build artifacts
-packages/ui/public/vendor/
-packages/ui/public/import-map.json
+packages/app/public/vendor/
+packages/app/public/import-map.json
 packages/*/public/plugins/
 staged-premium/
 dist/csp-importmap-sha256.txt

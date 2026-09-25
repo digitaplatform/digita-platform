@@ -16,7 +16,7 @@
  * default signature) are compiled into the host bundle instead — bundled at
  * build, present on first paint — and are never staged.
  *
- * Finally emits the inventory at packages/ui/public/plugins/index.json with
+ * Finally emits the inventory at packages/app/public/plugins/index.json with
  * same-origin URLs: premium entries under the engine's gated route
  * /api/v1/plugin-assets/... .
  *
@@ -46,9 +46,9 @@ const platformRoot = path.resolve(scriptDir, '..', '..');
 const siblingsRoot = path.dirname(platformRoot);
 const lockPath = path.join(platformRoot, 'plugins.lock.json');
 
-const publicDir = path.join(platformRoot, 'packages', 'ui', 'public');
+const publicDir = path.join(platformRoot, 'packages', 'app', 'public');
 const freeStageBase = path.join(publicDir, 'plugins');
-// Premium artifacts must NEVER live under the ui web root (nginx would serve
+// Premium artifacts must NEVER live under the app web root (nginx would serve
 // them openly, bypassing the license gate). They stage into a repo-root dir
 // that no web server serves; the engine streams them via /api/v1/plugin-assets.
 const premiumStageBase = path.join(platformRoot, 'staged-premium');
@@ -86,7 +86,7 @@ const sections = [
     expectedTier: 'free',
     siblingRepo: 'digita-plugins-free',
     stageBase: freeStageBase,
-    // Free artifacts (component/design) are served OPENLY from the ui web root.
+    // Free artifacts (component/design) are served OPENLY from the app web root.
     urlFor: (id, version, entry) => `/plugins/${id}/${version}/${entry}`,
     entries: lock.free ?? {},
   },

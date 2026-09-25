@@ -1,4 +1,4 @@
-// Runtime config placeholder. The container entrypoint (docker/ui-env.sh)
+// Runtime config placeholder. The container entrypoint (docker/app-env.sh)
 // rewrites this file at start from its APP_BASE_PATH, AUTH_URL,
 // AUTH_COOKIE_SUFFIX, JOBS_URL and REPORT_URL envs. Empty values fall through
 // to the dev defaults — the root path, the dev IdP, the bare cookie names, the

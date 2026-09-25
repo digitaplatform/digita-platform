@@ -1,4 +1,4 @@
-// The image's start script (docker/ui-env.sh), run against a temporary web root and a copy of the
+// The image's start script (docker/app-env.sh), run against a temporary web root and a copy of the
 // real nginx.conf: the CSP allows exactly the origins of the page's IdP, jobs and report URLs, in
 // the host layout (hosts of their own) and in the path layout (the page's own host), and a value
 // that is not a plain URL stops the start before it reaches a response header.
@@ -9,8 +9,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const script = fileURLToPath(new URL('../../../docker/ui-env.sh', import.meta.url));
-const realConf = fileURLToPath(new URL('../../../docker/nginx-ui.conf', import.meta.url));
+const script = fileURLToPath(new URL('../../../docker/app-env.sh', import.meta.url));
+const realConf = fileURLToPath(new URL('../../../docker/nginx-app.conf', import.meta.url));
 const slash = (p: string) => p.replace(/\\/g, '/');
 
 function stage() {
@@ -23,7 +23,7 @@ function stage() {
 
 function run(dir: string, env: Record<string, string>) {
   return spawnSync('sh', [slash(script)], {
-    env: { ...process.env, UI_ENV_HTML: slash(dir), UI_ENV_NGINX_CONF: slash(join(dir, 'nginx.conf')), AUTH_COOKIE_SUFFIX: 'g1', ...env },
+    env: { ...process.env, APP_ENV_HTML: slash(dir), APP_ENV_NGINX_CONF: slash(join(dir, 'nginx.conf')), AUTH_COOKIE_SUFFIX: 'g1', ...env },
     encoding: 'utf8',
   });
 }
@@ -34,7 +34,7 @@ const csp = (dir: string, directive: string) => cspHeader(dir).match(new RegExp(
 
 // Each case starts a shell; on Windows under a parallel test run that alone can pass vitest's
 // default 5 s.
-describe('docker/ui-env.sh', { timeout: 30_000 }, () => {
+describe('docker/app-env.sh', { timeout: 30_000 }, () => {
   it('allows the IdP, jobs and report hosts of the host layout, and keeps the page at the root', () => {
     const dir = stage();
     const r = run(dir, {

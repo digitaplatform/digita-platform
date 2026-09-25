@@ -62,7 +62,7 @@ describe('branding fonts + signature runtime', () => {
     expect(resolveInitialSignature()).toBe('digita');
     // A stored id is honoured verbatim — it may be a DELIVERED signature not yet
     // registered at boot; getSignature resolves it (or the NONE floor) safely.
-    localStorage.setItem('digita-ui:signature', 'anything');
+    localStorage.setItem('digita-app:signature', 'anything');
     expect(resolveInitialSignature()).toBe('anything');
   });
 

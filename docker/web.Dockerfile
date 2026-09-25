@@ -46,7 +46,7 @@ COPY packages/theme/package.json packages/theme/
 COPY packages/components/package.json packages/components/
 COPY packages/plugins/sdk/package.json packages/plugins/sdk/
 COPY packages/engine/package.json packages/engine/
-COPY packages/ui/package.json packages/ui/
+COPY packages/app/package.json packages/app/
 COPY packages/web/package.json packages/web/
 
 # web (Next.js host) + @digitaplatform/theme (design foundation, provides the

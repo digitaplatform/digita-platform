@@ -3,6 +3,7 @@ import {
   applyDensity,
   applyDesign,
   applyMode,
+  moveFormerStorageKeys,
   paintMode,
   resolveInitialDensity,
   resolveInitialDesign,
@@ -46,6 +47,7 @@ export interface BootIdentityOptions {
  */
 export function bootIdentity(options: BootIdentityOptions = {}): BootedIdentity {
   const target = options.target ?? document.documentElement;
+  moveFormerStorageKeys();
   for (const signature of options.signatures ?? []) registerSignature(signature);
   const design = resolveInitialDesign();
   applyDesign(design, target);

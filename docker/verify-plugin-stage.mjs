@@ -13,7 +13,7 @@
  *     matches `integrity`,
  *   - premium entries: url is EXACTLY the ENGINE-gated shape
  *     /api/v1/plugin-assets/<id>/<version>/<entry> — premium must NEVER point
- *     at the open /plugins/ path. The ui image is FREE-ONLY, so it is verified
+ *     at the open /plugins/ path. The app image is FREE-ONLY, so it is verified
  *     with --require-no-premium: the plugins-premium dir under the web root must
  *     be absent/empty (premium is staged to <repoRoot>/staged-premium, OUTSIDE
  *     this build context, and mounted by the engine). Without --require-no-premium
@@ -22,12 +22,12 @@
  *
  * Usage (cwd = repo root, node builtins only):
  *   node docker/verify-plugin-stage.mjs --staged --require-no-premium
- *       validate packages/ui/public (before the vite build) — free-only
+ *       validate packages/app/public (before the vite build) — free-only
  *   node docker/verify-plugin-stage.mjs --dist --require-no-premium
- *       validate packages/ui/dist (after the vite build / before nginx COPY)
+ *       validate packages/app/dist (after the vite build / before nginx COPY)
  *
  * Exits non-zero with a precise message on the first violation.
- * Used by docker/ui.Dockerfile.
+ * Used by docker/app.Dockerfile.
  */
 
 import { createHash } from 'node:crypto';
@@ -55,7 +55,7 @@ for (const arg of process.argv.slice(2)) {
 }
 if (!mode) fail('Missing mode. Usage: verify-plugin-stage.mjs (--staged | --dist) [--require-no-premium]');
 
-const baseDir = path.join('packages', 'ui', mode === 'staged' ? 'public' : 'dist');
+const baseDir = path.join('packages', 'app', mode === 'staged' ? 'public' : 'dist');
 const freeBase = path.join(baseDir, 'plugins');
 const premiumBase = path.join(baseDir, 'plugins-premium');
 const inventoryPath = path.join(freeBase, 'index.json');

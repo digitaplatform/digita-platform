@@ -39,7 +39,7 @@ COPY packages/theme/package.json packages/theme/
 COPY packages/components/package.json packages/components/
 COPY packages/plugins/sdk/package.json packages/plugins/sdk/
 COPY packages/engine/package.json packages/engine/
-COPY packages/ui/package.json packages/ui/
+COPY packages/app/package.json packages/app/
 COPY packages/web/package.json packages/web/
 
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
@@ -63,8 +63,8 @@ RUN pnpm --filter @digitaplatform/shared build && \
 # production stage copies and the engine serves via /api/v1/plugin-assets. They
 # are ungated for now via PLUGINS_LICENSE_DISABLED (see env.ts / app.ts) — flip
 # that off + delete this block to return to the licensed store model.
-# The free inventory side-output (packages/ui/public/plugins) is dead weight here
-# (the ui image builds its own) and is never copied into the engine image.
+# The free inventory side-output (packages/app/public/plugins) is dead weight here
+# (the app image builds its own) and is never copied into the engine image.
 COPY plugins.lock.json ./
 COPY tools/plugin-mock/ tools/plugin-mock/
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
@@ -86,7 +86,7 @@ COPY packages/theme/package.json packages/theme/
 COPY packages/components/package.json packages/components/
 COPY packages/plugins/sdk/package.json packages/plugins/sdk/
 COPY packages/engine/package.json packages/engine/
-COPY packages/ui/package.json packages/ui/
+COPY packages/app/package.json packages/app/
 COPY packages/web/package.json packages/web/
 
 # Production deps only (argon2 is allowed to run its build script via

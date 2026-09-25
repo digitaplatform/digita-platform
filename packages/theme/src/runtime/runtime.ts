@@ -34,10 +34,34 @@ const STEPS = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '90
 
 /** The localStorage keys of the per-browser theme choices. The app and the website are served
  *  from one origin, so each key is one setting for both. */
-export const MODE_STORAGE_KEY = 'digita-ui:theme-mode';
-export const DENSITY_STORAGE_KEY = 'digita-ui:density';
-export const DESIGN_STORAGE_KEY = 'digita-ui:design';
-export const TINT_STORAGE_KEY_PREFIX = 'digita-ui:tint';
+export const MODE_STORAGE_KEY = 'digita-app:theme-mode';
+export const DENSITY_STORAGE_KEY = 'digita-app:density';
+export const DESIGN_STORAGE_KEY = 'digita-app:design';
+export const TINT_STORAGE_KEY_PREFIX = 'digita-app:tint';
+
+/** Browsers still hold the choices under the app's former name, digita-ui. */
+const FORMER_STORAGE_PREFIX = 'digita-ui:';
+const STORAGE_PREFIX = 'digita-app:';
+
+/**
+ * Move every choice this browser stored under the app's former name to its current key, so the
+ * rename resets no one's choices; a value already under the current key wins. bootIdentity runs
+ * it first, in the app and in the website's pre-paint script.
+ */
+export function moveFormerStorageKeys(): void {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(FORMER_STORAGE_PREFIX)) continue;
+      const current = STORAGE_PREFIX + key.slice(FORMER_STORAGE_PREFIX.length);
+      const value = localStorage.getItem(key);
+      if (value !== null && localStorage.getItem(current) === null) localStorage.setItem(current, value);
+      localStorage.removeItem(key);
+    }
+  } catch {
+    /* storage unavailable (private mode): nothing to move */
+  }
+}
 
 /** What an identity layer writes onto the document root: attributes and inline CSS custom
  *  properties. A plain value, so a server render and the DOM runtime compute one identity. */

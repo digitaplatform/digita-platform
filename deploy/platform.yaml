@@ -2,7 +2,7 @@
 # digita-controller/shared/consumer.ts ConsumerManifestSchema).
 #
 # BUILD-ONLY: no `chart:` — this repo deploys nothing of its own. The three images it
-# produces are run by the digita-deploy charts digita-engine, digita-ui and digita-web,
+# produces are run by the digita-deploy charts digita-engine, digita-app and digita-web,
 # which pin them as builds[]{name,image,tag} in values-<stage>.yaml; the release bump
 # writes the tag there.
 #
@@ -30,11 +30,11 @@ builds:
   # stage the premium plugin bytes this image serves.
   - name: digita-engine
     containerfile: docker/engine.Dockerfile
-  # The operator SPA (packages/ui) served by nginx. Built against theme, components and
+  # The operator SPA (packages/app) served by nginx. Built against theme, components and
   # the plugin SDK; docker/verify-plugin-stage.mjs asserts the staged free plugin tree
   # reached dist/ and that no premium bytes entered the web root.
-  - name: digita-ui
-    containerfile: docker/ui.Dockerfile
+  - name: digita-app
+    containerfile: docker/app.Dockerfile
   # The public website (packages/web, Next.js standalone server). Built against theme and
   # shared only.
   - name: digita-web

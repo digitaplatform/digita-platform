@@ -4,7 +4,7 @@
  * app's own root paths under it.
  *
  * Resolution: window.__APP_BASE_PATH__, written into /env.js by the container entrypoint
- * (docker/ui-env.sh) from the required APP_BASE_PATH env. The dev env.js leaves it empty: the dev
+ * (docker/app-env.sh) from the required APP_BASE_PATH env. The dev env.js leaves it empty: the dev
  * server serves the app at the root.
  */
 const injected =

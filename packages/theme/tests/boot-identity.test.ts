@@ -69,6 +69,18 @@ describe('bootIdentity', () => {
     expect(booted.density).toBe('comfortable');
     expect(root().getAttribute('data-density')).toBe('comfortable');
   });
+  it("moves the choices stored under the app's former name to the current keys, where a current one wins", () => {
+    localStorage.clear();
+    localStorage.setItem('digita-ui:theme-mode', 'dark');
+    localStorage.setItem('digita-ui:tint:minimal', 'teal');
+    localStorage.setItem('digita-ui:design', 'material');
+    localStorage.setItem(DESIGN_STORAGE_KEY, DEFAULT_DESIGN_ID);
+    const booted = bootIdentity();
+    expect(booted.mode).toBe('dark');
+    expect(booted.design).toBe(DEFAULT_DESIGN_ID);
+    expect(root().getAttribute('data-tint')).toBe('teal');
+    expect(Object.keys(localStorage).filter((key) => key.startsWith('digita-ui:'))).toEqual([]);
+  });
 });
 
 describe('the pre-paint script', () => {

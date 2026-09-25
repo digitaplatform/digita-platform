@@ -108,7 +108,7 @@ export default defineConfig(({ command, mode }) => {
 
   return {
     // Relative asset URLs: the served index.html carries a <base href> of the app's
-    // base path (docker/ui-env.sh), so one build serves /erp/, /buildproject/, ….
+    // base path (docker/app-env.sh), so one build serves /erp/, /buildproject/, ….
     base: './',
     plugins: [react(), inlineImportMap(isBuild)],
     resolve: {

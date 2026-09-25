@@ -155,8 +155,8 @@ function block(selector, vars) {
   return `${selector} {\n${lines}\n}`;
 }
 
-// Static (non-token) base layer — transcribed verbatim from the legacy
-// digita-ui public/theme/base.css. Font urls stay absolute /fonts/* (apps
+// Static (non-token) base layer — transcribed verbatim from the
+// app's former public/theme/base.css. Font urls stay absolute /fonts/* (apps
 // serve them from their public/fonts in Phase 1).
 const BASE_CSS = `/* Self-hosted Inter font */
 @font-face {

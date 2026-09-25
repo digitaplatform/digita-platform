@@ -147,7 +147,7 @@ export function applySignature(
 }
 
 /** The localStorage key of the per-browser signature choice. */
-export const SIGNATURE_STORAGE_KEY = 'digita-ui:signature';
+export const SIGNATURE_STORAGE_KEY = 'digita-app:signature';
 
 /** Initial signature from localStorage, else the default. A stored id is honoured
  *  as-is (it may be a DELIVERED signature not yet registered at this moment), and

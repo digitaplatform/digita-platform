@@ -1,23 +1,23 @@
 # syntax=docker/dockerfile:1
 # ──────────────────────────────────────────────────────────────
-# Digita Platform — Operator Frontend (packages/ui, React SPA)
+# Digita Platform — Operator Frontend (packages/app, React SPA)
 # Generic, app-agnostic UI — renders any engine app from metadata.
 # Multi-stage build: deps → build → nginx static serving (:8080)
 # Build context is the digita-platform REPO ROOT (the repo carries its own docker/):
-#   docker build -f docker/ui.Dockerfile -t digita-ui .
+#   docker build -f docker/app.Dockerfile -t digita-app .
 #
 # nginx serves the SPA + the plugin runtime (/vendor shared ESM, /plugins app
 # plugin bundles, /import-map.json). Path routing happens at the INGRESS, which
 # strips the app's base path first:
 #   /<app>/api + /<app>/health → engine :3000, /<app>/ → this SPA
-# (see the digita-deploy digita-ui chart ingress). The SPA reaches the tenant IdP,
+# (see the digita-deploy digita-app chart ingress). The SPA reaches the tenant IdP,
 # jobs and report at the URLs in env.js (see the env.js step in stage 3).
 #
 # PLUGIN DELIVERY: this image bakes ONLY the FREE staged plugin artifacts into
 # the SPA web root. tools/plugin-mock/stage-plugins.mjs stages the set pinned in
 # plugins.lock.json, splitting the two tiers by DESTINATION so premium bytes can
 # never enter this image's web root:
-#   packages/ui/public/plugins/<id>/<ver>/<entry> + /plugins/index.json
+#   packages/app/public/plugins/<id>/<ver>/<entry> + /plugins/index.json
 #                                       (free    — nginx-static, baked into this image)
 #   <repoRoot>/staged-premium/<id>/<ver>/<entry>
 #                                       (premium — OUTSIDE this build context;
@@ -28,7 +28,7 @@
 # served by nginx and NEVER ride in this image: the engine streams them at
 # /api/v1/plugin-assets/... from PLUGINS_PREMIUM_DIR (engine env — owned by the
 # engine image/chart, which points it at the staged-premium dir) after verifying
-# the tenant's license entitlements. This ui image ALWAYS ships free-only.
+# the tenant's license entitlements. This app image ALWAYS ships free-only.
 #
 # Registry auth for the private @digitaplatform scope: the build pipeline hands
 # buildah the authenticated .npmrc as a BUILD SECRET (--secret id=npmrc,
@@ -54,10 +54,10 @@ COPY packages/theme/package.json packages/theme/
 COPY packages/components/package.json packages/components/
 COPY packages/plugins/sdk/package.json packages/plugins/sdk/
 COPY packages/engine/package.json packages/engine/
-COPY packages/ui/package.json packages/ui/
+COPY packages/app/package.json packages/app/
 COPY packages/web/package.json packages/web/
 
-# ui (host) + @digitaplatform/theme (design foundation) + @digitaplatform/components
+# app (host) + @digitaplatform/theme (design foundation) + @digitaplatform/components
 # (React kit) + @digitaplatform/plugins (SDK) + @digitaplatform/usermenu (BUILT-IN
 # first-party plugin — its source compiles into the host bundle) + shared — all
 # in-repo workspace members. The host stays app-agnostic; it bundles NO apps.
@@ -71,7 +71,7 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     --filter @digitaplatform/components \
     --filter @digitaplatform/plugins \
     --filter @digitaplatform/usermenu \
-    --filter @digitaplatform/ui
+    --filter @digitaplatform/app
 
 # ─── Stage 2: Build ──────────────────────────────────────────
 FROM deps AS build
@@ -80,7 +80,7 @@ COPY packages/shared/ packages/shared/
 COPY packages/theme/ packages/theme/
 COPY packages/components/ packages/components/
 COPY packages/plugins/ packages/plugins/
-COPY packages/ui/ packages/ui/
+COPY packages/app/ packages/app/
 
 # Staging inputs: the pinned plugin set + the staging script + the build guard.
 COPY plugins.lock.json ./
@@ -94,7 +94,7 @@ COPY docker/verify-plugin-stage.mjs docker/
 # context, so it cannot run in here. Two supported paths:
 #   PLUGINS_SOURCE=prestaged: staging already ran on the HOST
 #     (`node tools/plugin-mock/stage-plugins.mjs --local`) and the FREE staged
-#     tree (public/plugins/) entered via `COPY packages/ui/` above. Premium was
+#     tree (public/plugins/) entered via `COPY packages/app/` above. Premium was
 #     staged to <repoRoot>/staged-premium/ — OUTSIDE this build context — so it
 #     is intentionally absent here (engine-mounted; see PLUGIN DELIVERY). Both
 #     staged trees are GITIGNORED — a fresh clone must run staging before build.
@@ -123,8 +123,8 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
       node tools/plugin-mock/stage-plugins.mjs --registry; \
     elif [ "$PLUGINS_SOURCE" != "prestaged" ]; then \
       echo "ERROR: PLUGINS_SOURCE must be 'prestaged' or 'registry' (got '$PLUGINS_SOURCE')"; exit 1; \
-    elif [ ! -s packages/ui/public/plugins/index.json ]; then \
-      echo "ERROR: packages/ui/public/plugins/index.json missing from the build context."; \
+    elif [ ! -s packages/app/public/plugins/index.json ]; then \
+      echo "ERROR: packages/app/public/plugins/index.json missing from the build context."; \
       echo "  Run 'node tools/plugin-mock/stage-plugins.mjs --local' before 'docker build',"; \
       echo "  or build with --build-arg PLUGINS_SOURCE=registry (published packages + .npmrc)."; \
       exit 1; \
@@ -133,14 +133,14 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
 
 # Order matters: shared → theme (tsc + gen-css) → components (React kit) →
 # plugins SDK (tsc) → build:vendor (vendor ESM singletons + import-map.json
-# staged into packages/ui/public) → host build (vite copies public/ → dist/,
+# staged into packages/app/public) → host build (vite copies public/ → dist/,
 # inlines the import-map, imports @digitaplatform/theme/theme.css).
 RUN pnpm --filter @digitaplatform/shared build && \
     pnpm --filter @digitaplatform/theme build && \
     pnpm --filter @digitaplatform/components build && \
     pnpm --filter @digitaplatform/plugins build && \
-    pnpm --filter @digitaplatform/ui build:vendor && \
-    pnpm --filter @digitaplatform/ui build
+    pnpm --filter @digitaplatform/app build:vendor && \
+    pnpm --filter @digitaplatform/app build
 
 # Deploy guard: the plugin runtime MUST be in the image, or runtime plugin
 # loading 404s / the SPA fails to boot only in prod. Assert the EXACT artifacts:
@@ -148,7 +148,7 @@ RUN pnpm --filter @digitaplatform/shared build && \
 #  - the vendor ESM dir is populated,
 #  - WITH_PLUGINS=1 (default): dist/plugins/index.json — the inventory the host
 #    joins against GET /api/v1/plugins — made it into dist/, and EVERY free
-#    artifact it lists exists with a matching sha384 integrity. This ui image is
+#    artifact it lists exists with a matching sha384 integrity. This app image is
 #    ALWAYS free-only: dist/plugins-premium is stripped (a no-op — premium was
 #    staged to <repoRoot>/staged-premium, OUTSIDE this build context) and the
 #    ABSENCE of premium bytes is asserted (verify-plugin-stage.mjs --dist
@@ -161,27 +161,27 @@ RUN pnpm --filter @digitaplatform/shared build && \
 #    dynamic-require or unreplaced process.env/jsxDEV = a deploy-only white screen).
 # (WITH_PLUGINS is declared before the staging step above and stays in scope.)
 RUN set -eu; \
-    grep -q '<script type="importmap">' packages/ui/dist/index.html \
+    grep -q '<script type="importmap">' packages/app/dist/index.html \
       || { echo "ERROR: import-map not inlined into dist/index.html"; exit 1; }; \
-    ! grep -q 'type="importmap" src=' packages/ui/dist/index.html \
+    ! grep -q 'type="importmap" src=' packages/app/dist/index.html \
       || { echo "ERROR: dist/index.html still has a non-working external import map"; exit 1; }; \
-    [ -n "$(ls -A packages/ui/dist/vendor 2>/dev/null)" ] \
+    [ -n "$(ls -A packages/app/dist/vendor 2>/dev/null)" ] \
       || { echo "ERROR: dist/vendor is empty"; exit 1; }; \
     if [ "$WITH_PLUGINS" = "1" ]; then \
-      test -s packages/ui/dist/plugins/index.json \
+      test -s packages/app/dist/plugins/index.json \
         || { echo "ERROR: dist/plugins/index.json (plugin inventory) missing — staging did not reach dist/"; exit 1; }; \
-      rm -rf packages/ui/dist/plugins-premium; \
+      rm -rf packages/app/dist/plugins-premium; \
       node docker/verify-plugin-stage.mjs --dist --require-no-premium; \
     else \
       echo "WITH_PLUGINS=0: shipping a plugin-less image (emergency escape hatch)"; \
-      rm -rf packages/ui/dist/plugins packages/ui/dist/plugins-premium; \
+      rm -rf packages/app/dist/plugins packages/app/dist/plugins-premium; \
     fi; \
     PLUGIN_DIR=""; \
-    if [ -d packages/ui/dist/plugins ]; then PLUGIN_DIR="packages/ui/dist/plugins"; fi; \
-    if grep -rEl 'Dynamic require of|Calling `require`' packages/ui/dist/assets packages/ui/dist/vendor $PLUGIN_DIR; then \
+    if [ -d packages/app/dist/plugins ]; then PLUGIN_DIR="packages/app/dist/plugins"; fi; \
+    if grep -rEl 'Dynamic require of|Calling `require`' packages/app/dist/assets packages/app/dist/vendor $PLUGIN_DIR; then \
       echo "ERROR: throwing dynamic-require shim leaked into a shipped bundle (CJS dep + externalized react)"; exit 1; \
     fi; \
-    if grep -rEl 'jsxDEV' packages/ui/dist/assets $PLUGIN_DIR; then \
+    if grep -rEl 'jsxDEV' packages/app/dist/assets $PLUGIN_DIR; then \
       echo "ERROR: dev JSX runtime leaked into the host/plugin bundle (NODE_ENV not production in a lib build)"; exit 1; \
     fi
 
@@ -192,8 +192,8 @@ FROM nginx:alpine AS production
 # images use): adds the /vendor + /plugins locations + an enforced CSP.
 # listen 8080, /tmp paths, SPA fallback, NO api proxying (the ingress owns
 # path routing).
-COPY docker/nginx-ui.conf /etc/nginx/nginx.conf
-COPY --from=build /app/packages/ui/dist/ /usr/share/nginx/html/
+COPY docker/nginx-app.conf /etc/nginx/nginx.conf
+COPY --from=build /app/packages/app/dist/ /usr/share/nginx/html/
 
 # Pin the inline import-map's CSP sha256 (emitted by the vite build into
 # dist/csp-importmap-sha256.txt) into the nginx CSP `script-src`, replacing the
@@ -215,7 +215,7 @@ RUN HASH="$(cat /usr/share/nginx/html/csp-importmap-sha256.txt)"; \
 # here: that user may not create a file in /usr/share/nginx/html or /etc/nginx,
 # only rewrite one it owns. The chown comes AFTER the sha256 step above — that
 # `sed -i` replaces nginx.conf with a fresh root-owned file.
-COPY docker/ui-env.sh /docker-entrypoint.d/40-digita-env.sh
+COPY docker/app-env.sh /docker-entrypoint.d/40-digita-env.sh
 RUN chmod +x /docker-entrypoint.d/40-digita-env.sh && \
     chown nginx:nginx /usr/share/nginx/html/env.js /usr/share/nginx/html/index.html /etc/nginx/nginx.conf
 

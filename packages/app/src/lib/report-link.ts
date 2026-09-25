@@ -11,7 +11,7 @@ type Doc = Record<string, unknown>;
 
 /**
  * The report service's base URL. Resolution order, as for AUTH_URL (lib/authConfig.ts):
- *   1. window.__REPORT_URL__ — written into /env.js from the REPORT_URL env (docker/ui-env.sh);
+ *   1. window.__REPORT_URL__ — written into /env.js from the REPORT_URL env (docker/app-env.sh);
  *   2. VITE_REPORT_URL — build-time override for local setups;
  *   3. http://localhost:3400 — the digita-report backend dev server.
  */

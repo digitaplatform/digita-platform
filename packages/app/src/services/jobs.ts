@@ -49,7 +49,7 @@ export interface JobInput {
 
 /**
  * The jobs satellite's base URL. Resolution order, as for AUTH_URL (lib/authConfig.ts):
- *   1. window.__JOBS_URL__ — written into /env.js from the JOBS_URL env (docker/ui-env.sh);
+ *   1. window.__JOBS_URL__ — written into /env.js from the JOBS_URL env (docker/app-env.sh);
  *   2. VITE_JOBS_URL — build-time override for local setups;
  *   3. http://localhost:3500 — the digita-jobs dev server.
  */

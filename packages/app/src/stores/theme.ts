@@ -20,7 +20,7 @@ import { signature as digitaSignature } from '@digitaplatform/digita';
 import { nextMode } from '@digitaplatform/components';
 import { getUserPreference, setUserPreference } from '@/services/userPreference';
 
-const TEMPLATE_KEY = 'digita-ui:template';
+const TEMPLATE_KEY = 'digita-app:template';
 
 interface ThemeState {
   mode: ThemeMode;

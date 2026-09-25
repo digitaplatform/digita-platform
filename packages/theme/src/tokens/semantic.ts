@@ -1,7 +1,7 @@
 /**
  * Mode-specific semantic tokens — the single definition of the :root (light) and
- * .dark CSS-variable blocks. Values are transcribed VERBATIM from the legacy
- * digita-ui public/theme/variables.css (the build-time equality guard in
+ * .dark CSS-variable blocks. Values are transcribed VERBATIM from the
+ * app's former public/theme/variables.css (the build-time equality guard in
  * gen-css.mjs asserts they still match, so the extraction can never silently
  * drift the original design). Keys are camelCase; gen-css + the preset map them
  * to --color-<kebab> via the single cssVarName() transform.

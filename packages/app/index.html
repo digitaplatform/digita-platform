@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <!-- The app's base path on the tenant's one host (e.g. /erp/). Every URL below
          and every built asset is relative to it. The container entrypoint rewrites
-         it from its APP_BASE_PATH env (docker/ui-env.sh); the dev server serves /. -->
+         it from its APP_BASE_PATH env (docker/app-env.sh); the dev server serves /. -->
     <base href="/" />
     <!-- Shared-singleton resolution for runtime-loaded plugins: maps react,
          react-dom, react-router(+dom), and digita-plugins to the self-hosted
@@ -12,12 +12,12 @@
          build (vite inlineImportMap plugin) replaces the tag below with an INLINE
          import map from public/import-map.json (external import maps via src are
          unsupported by browsers). It MUST precede any module script; the inline
-         map needs CSP script-src to allow it (docker/nginx-ui.conf).
+         map needs CSP script-src to allow it (docker/nginx-app.conf).
          NOTE: keep no importmap-script literal in this comment — Vite would parse
          it as a real tag and emit a duplicate, broken map. -->
     <script type="importmap" src="import-map.json"></script>
     <!-- Runtime config: public/env.js ships empty and the container entrypoint
-         rewrites it from its envs (docker/ui-env.sh), so ONE image serves every
+         rewrites it from its envs (docker/app-env.sh), so ONE image serves every
          tenant and app. It must load before the bundle — src/lib/authConfig.ts,
          src/lib/appBase.ts, src/services/jobs.ts and src/lib/report-link.ts read
          it at module scope. -->

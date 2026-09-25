@@ -102,7 +102,7 @@ describe('design registry + runtime', () => {
     expect(resolveInitialDesign()).toBe('minimal');
     // A stored premium pick is returned verbatim — the runtime registry + plugin
     // CSS make it real after composition load.
-    localStorage.setItem('digita-ui:design', 'material');
+    localStorage.setItem('digita-app:design', 'material');
     expect(resolveInitialDesign()).toBe('material');
   });
 

@@ -3,7 +3,7 @@ name: ci
 # Build and test of the publishable foundation packages (shared, theme,
 # components, plugins), a full gate for the engine (typecheck, dependency
 # rules, build, and the vitest suite), and the gates of the two frontends: the
-# ui app (lint, typecheck, tests, build) and the web site (typecheck, tests,
+# app (lint, typecheck, tests, build) and the web site (typecheck, tests,
 # build, and its image from docker/web.Dockerfile).
 on:
   push:
@@ -43,10 +43,10 @@ jobs:
       - name: Test the theme and the component kit
         run: pnpm --filter '@digitaplatform/theme' --filter '@digitaplatform/components' test
 
-  # The ui app's gate: lint (eslint --max-warnings 0, type-aware over src and tests), typecheck,
+  # The app's gate: lint (eslint --max-warnings 0, type-aware over src and tests), typecheck,
   # tests and the production build. It resolves the workspace packages' types, so the foundation
   # packages are built first; the build needs the vendor bundles build:vendor writes.
-  ui:
+  app:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -70,16 +70,16 @@ jobs:
           build
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Lint the ui app
-        run: pnpm --filter '@digitaplatform/ui' lint
-      - name: Typecheck the ui app
-        run: pnpm --filter '@digitaplatform/ui' typecheck
-      - name: Test the ui app
-        run: pnpm --filter '@digitaplatform/ui' test
-      - name: Build the ui app
+      - name: Lint the app
+        run: pnpm --filter '@digitaplatform/app' lint
+      - name: Typecheck the app
+        run: pnpm --filter '@digitaplatform/app' typecheck
+      - name: Test the app
+        run: pnpm --filter '@digitaplatform/app' test
+      - name: Build the app
         run: >-
-          pnpm --filter '@digitaplatform/ui' build:vendor &&
-          pnpm --filter '@digitaplatform/ui' build
+          pnpm --filter '@digitaplatform/app' build:vendor &&
+          pnpm --filter '@digitaplatform/app' build
 
   # The web site's gate: typecheck, tests (among them the guard that it carries no design value of
   # its own) and the production build, over the built foundation packages it renders with.

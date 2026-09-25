@@ -6,7 +6,7 @@
  *
  * Resolution order:
  *   1. window.__AUTH_URL__ — runtime channel: the nginx entrypoint writes
- *      /env.js from the AUTH_URL env (docker/ui-env.sh), so ONE image serves
+ *      /env.js from the AUTH_URL env (docker/app-env.sh), so ONE image serves
  *      every tenant and stage.
  *   2. VITE_AUTH_URL — build-time override for local setups.
  *   3. http://localhost:5175 — the digita-auth frontend dev server (it serves
