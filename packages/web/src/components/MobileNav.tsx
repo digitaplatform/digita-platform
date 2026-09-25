@@ -3,29 +3,33 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Menu, X } from "lucide-react";
+import { BrandMark, Drawer, NavList, navLeafClass, topBarButtonClass, type BrandMarkProps } from "@digitaplatform/components";
 import type { NavItem } from "@/lib/types";
 import { navHref } from "@/lib/nav";
-
-const LINK = "rounded-xl px-4 py-3 text-base font-medium text-textMain transition-colors hover:bg-bgHover";
+import { isActiveHref } from "./NavLinks";
 
 /**
- * Mobile (hamburger) navigation — the phone counterpart to the desktop NavLinks,
- * which is `hidden md:flex`. Renders a toggle button visible only below `md`; when
- * open, a full-width panel drops below the header with the nav items stacked. The
- * active page is highlighted with the same accent pill as the desktop nav. Closes
- * on route change, on Escape, and on backdrop tap; locks body scroll while open.
- * The tenant's apps follow the nav items as plain links to `/<name>/`.
+ * Mobile navigation — the phone counterpart to the desktop NavLinks, which is `hidden md:flex`.
+ * It opens the app's mobile drawer (the kit's Drawer): a rail with the brand row and the nav items
+ * as the app's nav list. Closes on route change, on Escape and on a scrim tap. The tenant's apps
+ * follow the nav items as plain links to `/<name>/`.
  */
 export function MobileNav({
   locale,
   items,
   apps,
+  brand,
+  label,
   openLabel,
   closeLabel,
 }: {
   locale: string;
   items: NavItem[];
   apps: string[];
+  brand: BrandMarkProps;
+  /** Accessible name of the drawer. */
+  label: string;
   openLabel: string;
   closeLabel: string;
 }) {
@@ -33,86 +37,51 @@ export function MobileNav({
   const [open, setOpen] = useState(false);
   const homeHref = `/${locale}`;
 
-  // Close when the route changes (a link inside the panel was followed).
+  // Close when the route changes (a link inside the drawer was followed).
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
-
-  // While open: Escape closes, and the page behind is scroll-locked.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [open]);
 
   if (!items.length && !apps.length) return null;
 
   return (
     <div className="md:hidden">
-      <button
-        type="button"
-        aria-label={open ? closeLabel : openLabel}
-        aria-expanded={open}
-        aria-controls="mobile-nav-panel"
-        onClick={() => setOpen((o) => !o)}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-textMuted transition-colors hover:bg-bgHover hover:text-textMain"
-      >
-        <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-          {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
-        </svg>
+      <button type="button" aria-label={openLabel} aria-expanded={open} onClick={() => setOpen(true)} className={topBarButtonClass}>
+        <Menu className="h-5 w-5" />
       </button>
 
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-hidden
-            tabIndex={-1}
-            onClick={() => setOpen(false)}
-            className="fixed inset-x-0 bottom-0 top-16 z-30 bg-black/30 md:hidden"
-          />
-          <div
-            id="mobile-nav-panel"
-            className="fixed inset-x-0 top-16 z-40 max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-border bg-surface shadow-lg md:hidden"
-          >
-            <nav aria-label="Primary" className="mx-auto flex max-w-6xl flex-col gap-1 px-6 py-4">
+      <Drawer open={open} onClose={() => setOpen(false)} label={label} className="md:hidden">
+        <div className="flex h-full w-72 flex-col border-r border-border bg-surface">
+          <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3">
+            <BrandMark {...brand} fill />
+            <button type="button" className="rounded p-1 text-textMuted hover:bg-subtle" onClick={() => setOpen(false)} aria-label={closeLabel}>
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <nav aria-label="Primary" className="min-h-0 flex-1 overflow-y-auto p-2">
+            <NavList>
               {items.map((item, i) => {
                 const href = navHref(locale, item);
-                const active =
-                  href === homeHref ? pathname === homeHref : pathname === href || pathname.startsWith(href + "/");
+                const active = isActiveHref(pathname, href, homeHref);
                 return (
-                  <Link
-                    key={`${item.label}-${i}`}
-                    href={href}
-                    aria-current={active ? "page" : undefined}
-                    onClick={() => setOpen(false)}
-                    className={
-                      active
-                        ? "rounded-xl bg-primary-50 px-4 py-3 text-base font-semibold text-primary-600"
-                        : LINK
-                    }
-                  >
-                    {item.label}
-                  </Link>
+                  <li key={`${item.label}-${i}`}>
+                    <Link href={href} aria-current={active ? "page" : undefined} data-ui="nav-leaf" className={navLeafClass(active)}>
+                      {item.label}
+                    </Link>
+                  </li>
                 );
               })}
               {apps.map((app) => (
-                <a key={app} href={`/${app}/`} className={LINK}>
-                  {app}
-                </a>
+                <li key={app}>
+                  <a href={`/${app}/`} data-ui="nav-leaf" className={navLeafClass(false)}>
+                    {app}
+                  </a>
+                </li>
               ))}
-            </nav>
-          </div>
-        </>
-      )}
+            </NavList>
+          </nav>
+        </div>
+      </Drawer>
     </div>
   );
 }

@@ -67,6 +67,8 @@ export interface WebNavMenu {
 
 /** The tenant branding the engine's anonymous boot returns: the fields the website renders. */
 export interface WebBranding {
+  /** The name the tenant gave itself; a set name renders as text, never under the signature's wordmark. */
+  app_name?: string;
   primary_color?: string | null;
   accent_palette?: string | null;
   density?: "comfortable" | "compact" | null;

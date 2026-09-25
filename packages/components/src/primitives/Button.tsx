@@ -31,6 +31,33 @@ const SIZES: Record<Size, string> = {
 };
 
 /**
+ * The attributes that make an element the kit's button: its classes and the
+ * `data-ui` markers a design styles buttons by. Button spreads them; a link that
+ * must look and restyle exactly like one (a call to action on a page) spreads
+ * them too.
+ */
+export function buttonAttributes({
+  variant = 'primary',
+  size = 'md',
+  className,
+}: { variant?: Variant; size?: Size; className?: string } = {}) {
+  return {
+    'data-ui': 'button',
+    'data-variant': variant,
+    'data-size': size,
+    className: cn(
+      'inline-flex items-center justify-center rounded-btn font-medium',
+      'transition duration-base ease-smooth active:scale-[0.97] active:opacity-90',
+      'focus-visible:outline-none focus-visible:shadow-focus',
+      'disabled:cursor-not-allowed disabled:active:scale-100',
+      SIZES[size],
+      VARIANTS[variant],
+      className,
+    ),
+  };
+}
+
+/**
  * The one button for every React frontend. Token-styled, with variants, sizes, a
  * loading state, and optional leading/trailing icons (icon nodes are passed in —
  * no icon-library dependency in the kit). For icon-only buttons use IconButton.
@@ -42,20 +69,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   return (
     <button
       ref={ref}
-      data-ui="button"
-      data-variant={variant}
-      data-size={size}
+      {...buttonAttributes({ variant, size, className })}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={cn(
-        'inline-flex items-center justify-center rounded-btn font-medium',
-        'transition duration-base ease-smooth active:scale-[0.97] active:opacity-90',
-        'focus-visible:outline-none focus-visible:shadow-focus',
-        'disabled:cursor-not-allowed disabled:active:scale-100',
-        SIZES[size],
-        VARIANTS[variant],
-        className,
-      )}
       {...props}
     >
       {loading ? (

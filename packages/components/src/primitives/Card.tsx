@@ -22,15 +22,21 @@ const VARIANT: Record<CardVariant, string> = {
   flat: 'border border-transparent bg-subtle',
 };
 
+/** The active signature's card graphic (`--sig-card-l` / `--sig-card-d`), stretched
+ *  over the card; a signature without one leaves the card as it is. */
+const GRAPHIC = 'bg-no-repeat bg-[length:100%_100%] bg-[image:var(--sig-card-l)] dark:bg-[image:var(--sig-card-d)]';
+
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   elevation?: Elevation;
+  /** Paint the signature's card graphic behind the content (dashboard and page cards). */
+  graphic?: boolean;
   /** Opt into a framed card (border + subparts own padding). Omit for the
    *  default weightless, padded card. */
   variant?: CardVariant;
 }
 
 export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
-  { className, elevation = 'flat', variant, ...props },
+  { className, elevation = 'flat', variant, graphic = false, ...props },
   ref,
 ) {
   return (
@@ -40,8 +46,8 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
       data-variant={variant ?? 'plain'}
       className={
         variant
-          ? cn('rounded-card', VARIANT[variant], className)
-          : cn('rounded-card bg-surface p-[var(--density-pad)]', ELEVATION[elevation], className)
+          ? cn('rounded-card', VARIANT[variant], graphic && GRAPHIC, className)
+          : cn('rounded-card bg-surface p-[var(--density-pad)]', ELEVATION[elevation], graphic && GRAPHIC, className)
       }
       {...props}
     />

@@ -50,7 +50,7 @@ export function CardShell({ label, icon, width, status, error, children }: CardS
     // vector as a stretch-adapted data-URI SVG, painted 100%×100%); an unset
     // var falls back to the plain surface, so thin signatures are visually
     // unchanged.
-    <Card className={cn('flex min-h-[8rem] flex-col bg-no-repeat bg-[length:100%_100%] bg-[image:var(--sig-card-l)] dark:bg-[image:var(--sig-card-d)]', span)}>
+    <Card graphic className={cn('flex min-h-[8rem] flex-col', span)}>
       <div className="mb-3 flex items-start gap-3">
         {icon && (
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-card bg-subtle text-textMuted" aria-hidden="true">

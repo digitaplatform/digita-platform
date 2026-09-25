@@ -1,5 +1,5 @@
 import { Globe } from 'lucide-react';
-import { Menu, MenuItem } from '@digitaplatform/components';
+import { LanguageMenu } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
 import { useChrome } from '@/lib/chrome-i18n';
 
@@ -22,32 +22,12 @@ export function LanguageSwitcher() {
   if (!allow || languages.length < 2) return null;
 
   return (
-    <Menu
+    <LanguageMenu
       label={tc('ui.lang.label')}
-      align="end"
-      panelClassName="w-56"
-      triggerClassName="flex items-center gap-1 rounded-md p-1.5 text-textMuted transition-colors duration-base ease-smooth hover:bg-bgHover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
-      trigger={
-        <>
-          <Globe className="h-5 w-5" aria-hidden="true" />
-          <span className="text-xs font-medium uppercase">{current ?? ''}</span>
-        </>
-      }
-    >
-      {(close) =>
-        languages.map((l) => (
-          <MenuItem
-            key={l.code}
-            checked={l.code === current}
-            onSelect={() => {
-              void setLocale(l.code);
-              close();
-            }}
-          >
-            {`${l.flag_emoji ? `${l.flag_emoji} ` : ''}${l.native_name}`}
-          </MenuItem>
-        ))
-      }
-    </Menu>
+      current={current}
+      icon={<Globe className="h-5 w-5" aria-hidden="true" />}
+      languages={languages.map((l) => ({ code: l.code, label: `${l.flag_emoji ? `${l.flag_emoji} ` : ''}${l.native_name}` }))}
+      onSelect={(code) => void setLocale(code)}
+    />
   );
 }

@@ -15,7 +15,11 @@
       "import": "./dist/preset.js"
     },
     "./theme.css": "./dist/theme.css",
-    "./fonts/*": "./dist/fonts/*"
+    "./fonts/*": "./dist/fonts/*",
+    "./identity-boot": {
+      "types": "./dist/identity-boot.d.ts",
+      "import": "./dist/identity-boot.js"
+    }
   },
   "files": [
     "dist"
@@ -30,13 +34,14 @@
     "access": "restricted"
   },
   "scripts": {
-    "build": "tsc && node build/gen-css.mjs",
+    "build": "tsc && node build/gen-css.mjs && node build/gen-boot.mjs",
     "test": "vitest run",
     "clean": "rm -rf dist"
   },
   "devDependencies": {
     "jsdom": "^29.1.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "esbuild": "^0.28.1"
   }
 }

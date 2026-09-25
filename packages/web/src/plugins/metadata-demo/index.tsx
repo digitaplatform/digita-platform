@@ -29,10 +29,10 @@ const GRAND = SUBTOTAL + TAX;
 
 function Panel({ title, badge, children }: { title: string; badge: string; children: React.ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+    <div className="overflow-hidden rounded-card border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
         <span className="font-mono text-xs text-textMuted">{title}</span>
-        <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary-600">
+        <span className="rounded-full bg-primary-50 px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-primary-600">
           {badge}
         </span>
       </div>
@@ -69,7 +69,7 @@ export default function MetadataDemo() {
         {/* Source: the entity definition */}
         <motion.div variants={card}>
           <Panel title="salesOrder.entity.json" badge="define">
-            <pre className="overflow-x-auto font-mono text-[12.5px] leading-relaxed text-textMain">
+            <pre className="overflow-x-auto font-mono text-xs leading-relaxed text-textMain">
               <code>
                 <span className="text-textMuted">{"{"}</span>
                 <motion.span variants={row(0)} className="block">
@@ -131,7 +131,7 @@ export default function MetadataDemo() {
         <div className="grid gap-5">
           <motion.div variants={card}>
             <Panel title="POST /api/v1/resource/SalesOrder" badge="api">
-              <pre className="overflow-x-auto font-mono text-[12.5px] leading-relaxed text-textMain">
+              <pre className="overflow-x-auto font-mono text-xs leading-relaxed text-textMain">
                 <code>
                   <span className="text-textMuted">{"{"}</span>
                   <motion.span variants={row(0)} className="block">
@@ -178,14 +178,14 @@ export default function MetadataDemo() {
               <div className="space-y-3">
                 <motion.div variants={row(0)}>
                   <label className="mb-1 block text-xs font-medium text-textMuted">Customer</label>
-                  <div className="flex h-9 items-center justify-between rounded-lg border border-border bg-subtle px-3 text-sm text-textMain">
+                  <div className="flex h-9 items-center justify-between rounded-input border border-border bg-subtle px-3 text-sm text-textMain">
                     ACME GmbH <span aria-hidden className="text-textMuted">▾</span>
                   </div>
                 </motion.div>
 
                 {/* line grid — money formatted for the current locale */}
-                <motion.div variants={row(1)} className="overflow-hidden rounded-lg border border-border">
-                  <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-border bg-subtle px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-textMuted">
+                <motion.div variants={row(1)} className="overflow-hidden rounded-card border border-border">
+                  <div className="grid grid-cols-[1fr_auto_auto] gap-2 border-b border-border bg-subtle px-3 py-1.5 text-micro font-medium uppercase tracking-wide text-textMuted">
                     <span>Product</span>
                     <span className="text-right">Qty</span>
                     <span className="text-right">Line total</span>
@@ -215,7 +215,7 @@ export default function MetadataDemo() {
                       <span
                         className={
                           i === 1
-                            ? "rounded-full bg-primary-600 px-2.5 py-1 font-medium text-white"
+                            ? "rounded-full bg-primary-600 px-2.5 py-1 font-medium text-onPrimary"
                             : "rounded-full border border-border px-2.5 py-1 text-textMuted"
                         }
                       >

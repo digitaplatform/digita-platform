@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { buttonAttributes } from "@digitaplatform/components";
 
 /** In-locale 404 — rendered inside the locale chrome (header/footer). */
 export default function LocaleNotFound() {
@@ -9,7 +10,7 @@ export default function LocaleNotFound() {
       <p className="mt-3 text-textMuted">The page you’re looking for doesn’t exist or was moved.</p>
       <Link
         href="/"
-        className="mt-8 inline-flex items-center justify-center rounded-full bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-700"
+        {...buttonAttributes({ className: "mt-8" })}
       >
         Go home
       </Link>

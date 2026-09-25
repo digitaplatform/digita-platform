@@ -1,4 +1,5 @@
 import { Menu, Moon, Sun, Monitor, Search } from 'lucide-react';
+import { ModeButton, TopBar, topBarButtonClass, cn } from '@digitaplatform/components';
 import { useThemeStore } from '@/stores/theme';
 import { useUiStore } from '@/stores/ui';
 import { useChrome } from '@/lib/chrome-i18n';
@@ -22,12 +23,12 @@ export function Topbar({ showMenuButton = true }: { showMenuButton?: boolean }) 
   const tc = useChrome();
 
   return (
-    <header data-ui="topbar" className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-border bg-surface px-4">
+    <TopBar>
       <div className="flex min-w-0 items-center gap-2">
         {showMenuButton ? (
           <button
             type="button"
-            className="rounded-md p-1.5 text-textMuted transition-colors duration-base ease-smooth hover:bg-bgHover focus-visible:shadow-focus focus-visible:outline-none lg:hidden"
+            className={cn(topBarButtonClass, 'lg:hidden')}
             onClick={() => setMobileNav(true)}
             aria-label={tc('ui.nav.open')}
           >
@@ -40,7 +41,7 @@ export function Topbar({ showMenuButton = true }: { showMenuButton?: boolean }) 
       <div className="flex items-center gap-1">
         <button
           type="button"
-          className="flex items-center gap-2 rounded-md p-1.5 text-textMuted transition-colors duration-base ease-smooth hover:bg-bgHover focus-visible:shadow-focus focus-visible:outline-none"
+          className={cn(topBarButtonClass, 'flex items-center gap-2')}
           onClick={() => setCommandPalette(true)}
           aria-label={tc('ui.cmd.title')}
         >
@@ -51,23 +52,14 @@ export function Topbar({ showMenuButton = true }: { showMenuButton?: boolean }) 
         <DesignMenu />
         <SignatureMenu />
         <DensityMenu />
-        <button
-          type="button"
-          className="rounded-md p-1.5 text-textMuted transition-colors duration-base ease-smooth hover:bg-bgHover focus-visible:shadow-focus focus-visible:outline-none"
-          onClick={cycleMode}
-          aria-label={tc('ui.theme.toggle')}
-          title={`${tc('ui.theme.toggle')} — ${mode}`}
-        >
-          {mode === 'system' ? (
-            <Monitor className="h-5 w-5" />
-          ) : mode === 'dark' ? (
-            <Moon className="h-5 w-5" />
-          ) : (
-            <Sun className="h-5 w-5" />
-          )}
-        </button>
+        <ModeButton
+          mode={mode}
+          onCycle={cycleMode}
+          label={tc('ui.theme.toggle')}
+          icons={{ light: <Sun className="h-5 w-5" />, dark: <Moon className="h-5 w-5" />, system: <Monitor className="h-5 w-5" /> }}
+        />
         <AppMenu />
       </div>
-    </header>
+    </TopBar>
   );
 }

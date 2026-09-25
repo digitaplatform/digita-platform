@@ -19,6 +19,13 @@ const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
   // No images.remotePatterns: media is rendered with a plain <img> (runtime
   // PUBLIC_ENGINE_URL), so there is no build-time, site-specific host to bake in.
+  experimental: {
+    // The component kit is one barrel of every component, including the ones with
+    // hooks. Rewriting its imports to the modules actually used lets a server
+    // component render the hook-free ones (Card, Badge, TopBar, BrandMark, …) without
+    // pulling a client-only module into its graph.
+    optimizePackageImports: ["@digitaplatform/components"],
+  },
 };
 
 export default nextConfig;

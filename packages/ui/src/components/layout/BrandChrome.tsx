@@ -1,6 +1,7 @@
 import { X, PanelLeft, PanelLeftClose } from 'lucide-react';
 import type { RegionSide } from '@digitaplatform/plugins';
 import { getSignature } from '@digitaplatform/theme';
+import { BrandMark } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
 import { useThemeStore } from '@/stores/theme';
 import { useChrome } from '@/lib/chrome-i18n';
@@ -30,55 +31,23 @@ export function BrandChrome({ side, collapsed, collapsible, onToggleCollapse, on
   const platformName = useSessionStore((s) => s.settings?.platform_name);
   const appName = branding?.app_name ?? platformName ?? 'Digita';
   const signatureId = useThemeStore((s) => s.signature);
-  const sig = getSignature(signatureId);
-  const monogram = sig.monogram;
-
-  // The signature's wide wordmark lockup replaces monogram + name, but ONLY when
-  // nothing overrides the signature's own identity: no tenant logo AND no
-  // tenant-set app name (a custom name must render as text, never under a lockup
-  // that spells a different brand). Collapsed rails fall back to the monogram.
-  const wordmark = !branding?.logo && !branding?.app_name ? sig.wordmark : undefined;
-
-  // Precedence: a tenant-provided logo ALWAYS wins; the active signature's
-  // monogram (an inline currentColor SVG, painted with the accent) is the
-  // default-brand fallback; the initial-letter tile is the last resort.
-  const logo = branding?.logo ? (
-    <img src={appUrl(branding.logo)} alt="" className="h-7 w-7 shrink-0 rounded" />
-  ) : monogram ? (
-    <div
-      aria-hidden="true"
-      className="h-7 w-7 shrink-0 text-primary-600 [&>svg]:h-full [&>svg]:w-full"
-      dangerouslySetInnerHTML={{ __html: monogram }}
+  // One precedence for every frontend (the kit's BrandMark): the signature's
+  // wordmark when the tenant set neither a logo nor a name; otherwise the tenant's
+  // logo, else the signature's monogram, else the initial — each with the name.
+  const brand = (fill: boolean) => (
+    <BrandMark
+      name={appName}
+      logoUrl={branding?.logo ? appUrl(branding.logo) : undefined}
+      nameIsCustom={Boolean(branding?.app_name)}
+      signature={getSignature(signatureId)}
+      fill={fill}
     />
-  ) : (
-    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-primary-600 text-sm font-bold text-white">
-      {appName.charAt(0).toUpperCase()}
-    </div>
   );
-
-  // The wordmark lockup: a self-contained SVG sized to the h-7 chrome row; its
-  // own accessible name is the app name (the inner SVG is aria-hidden).
-  const wordmarkLockup = wordmark ? (
-    <div
-      role="img"
-      aria-label={appName}
-      data-testid="brand-wordmark"
-      className="h-7 text-textMain [&>svg]:h-full [&>svg]:w-auto"
-      dangerouslySetInnerHTML={{ __html: wordmark }}
-    />
-  ) : null;
 
   // Top/bottom bar: compact, inline, no border (the bar owns its border).
   if (side === 'top' || side === 'bottom') {
     return (
-      <div className="flex shrink-0 items-center gap-2 px-2">
-        {wordmarkLockup ?? (
-          <>
-            {logo}
-            <span className="truncate text-sm font-semibold text-textMain">{appName}</span>
-          </>
-        )}
-      </div>
+      <div className="flex shrink-0 items-center gap-2 px-2">{brand(false)}</div>
     );
   }
 
@@ -96,14 +65,7 @@ export function BrandChrome({ side, collapsed, collapsible, onToggleCollapse, on
         </button>
       ) : (
         <>
-          {wordmarkLockup ? (
-            <div className="flex-1">{wordmarkLockup}</div>
-          ) : (
-            <>
-              {logo}
-              <span className="flex-1 truncate text-sm font-semibold text-textMain">{appName}</span>
-            </>
-          )}
+          {brand(true)}
           {onClose && (
             <button
               type="button"

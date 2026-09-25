@@ -13,7 +13,7 @@ export function PluginBlock({ props }: { props?: Record<string, unknown> }) {
   if (!Plugin) {
     if (process.env.NODE_ENV !== "production" && id) {
       return (
-        <div className="mx-auto my-8 max-w-3xl rounded-xl border border-dashed border-border px-6 py-8 text-center text-sm text-textMuted">
+        <div className="mx-auto my-8 max-w-3xl rounded-card border border-dashed border-border px-6 py-8 text-center text-sm text-textMuted">
           Plugin <code className="text-textMain">{id}</code> is not registered.
         </div>
       );

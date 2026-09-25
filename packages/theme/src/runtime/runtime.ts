@@ -143,6 +143,13 @@ function prefersDark(): boolean {
   return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
 }
 
+/** Set the `.dark` class for `mode` once, without following the OS afterwards:
+ *  what a page's pre-paint script does before its own runtime takes over with
+ *  applyMode (a second live listener would outlive the user's next pin). */
+export function paintMode(mode: ThemeMode, target: HTMLElement = document.documentElement): void {
+  target.classList.toggle('dark', mode === 'dark' || (mode === 'system' && prefersDark()));
+}
+
 /** Apply the theme mode via the `.dark` class (class-based dark mode, unchanged
  *  across all apps). `system` resolves from the OS preference and keeps following
  *  it live; `light`/`dark` pin the choice and detach the OS listener. */
@@ -152,8 +159,7 @@ export function applyMode(mode: ThemeMode, target: HTMLElement = document.docume
     systemMql = null;
     systemHandler = null;
   }
-  const dark = mode === 'dark' || (mode === 'system' && prefersDark());
-  target.classList.toggle('dark', dark);
+  paintMode(mode, target);
   if (mode === 'system' && typeof window !== 'undefined' && window.matchMedia) {
     systemMql = window.matchMedia('(prefers-color-scheme: dark)');
     systemHandler = () => target.classList.toggle('dark', systemMql!.matches);

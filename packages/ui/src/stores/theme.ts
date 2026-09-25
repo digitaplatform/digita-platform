@@ -6,11 +6,7 @@ import {
   applyDensity,
   applyDesign,
   applySignature,
-  registerSignature,
-  resolveInitialMode,
-  resolveInitialDensity,
-  resolveInitialDesign,
-  resolveInitialSignature,
+  bootIdentity,
   MODE_STORAGE_KEY,
   DENSITY_STORAGE_KEY,
   DESIGN_STORAGE_KEY,
@@ -19,6 +15,7 @@ import {
   type Density,
 } from '@digitaplatform/theme';
 import { signature as digitaSignature } from '@digitaplatform/digita';
+import { nextMode } from '@digitaplatform/components';
 import { getUserPreference, setUserPreference } from '@/services/userPreference';
 
 const TEMPLATE_KEY = 'digita-ui:template';
@@ -56,32 +53,19 @@ interface ThemeState {
   loadRemotePrefs: () => Promise<void>;
 }
 
-// Mode + density + branding are applied by @digitaplatform/theme's framework-agnostic
-// runtime; this store only owns React state. Pre-mount set avoids a flash;
-// localStorage is the fast device-local default until the server prefs roam in.
-const initialMode = resolveInitialMode(MODE_STORAGE_KEY);
-const initialDensity = resolveInitialDensity(DENSITY_STORAGE_KEY);
-const initialDesign = resolveInitialDesign(DESIGN_STORAGE_KEY);
-applyDesign(initialDesign);
-applyMode(initialMode);
-// Signature LAST: its accent/fonts (and, for a full signature, the brand colour
-// world + graphics) ride the branding layer (inline vars), which composes ON TOP
-// of the design stamp — 'digita' (the platform's own identity) paints by default.
+// Design, mode, signature and density are applied by @digitaplatform/theme's
+// framework-agnostic runtime — bootIdentity, the same function the website runs
+// before its first paint; this store only owns React state. Pre-mount set avoids a
+// flash; localStorage is the fast device-local default until the server prefs roam
+// in. The branding follows when /boot answers (setBranding).
 //
 // digita is the platform's DEFAULT signature, shipped as a free plugin BUNDLED
-// into the host at build (like usermenu) — NOT network-delivered. Register it
-// here, at module init, BEFORE applying it, so getSignature('digita') resolves
-// its full brand world on the very first paint, including the pre-login screen,
-// with no flash and no dependency on the authenticated plugin composition.
-// Alternate / premium signatures still arrive later via the composition.
-registerSignature(digitaSignature);
-const initialSignature = resolveInitialSignature(SIGNATURE_STORAGE_KEY);
-applySignature(initialSignature);
-// Density LAST: applySignature's teardown (resetBranding) also clears the
-// data-density attribute (it doubles as a tenant-density override slot), so
-// assert the per-user density AFTER the signature — otherwise a stored compact/
-// spacious density is wiped on the first (pre-auth) paint.
-applyDensity(initialDensity);
+// into the host at build (like usermenu) — NOT network-delivered. It is registered
+// before the stored id is applied, so getSignature('digita') resolves its full
+// brand world on the very first paint, including the pre-login screen, with no
+// flash and no dependency on the authenticated plugin composition. Alternate /
+// premium signatures still arrive later via the composition.
+const initial = bootIdentity({ signatures: [digitaSignature] });
 
 // Apply signature `id`, then re-assert the tenant's branding on top: a tenant's
 // configured primary colour / fonts WIN over the signature's defaults, and the
@@ -97,10 +81,10 @@ function applySignatureLayered(id: string, get: () => ThemeState): void {
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
-  mode: initialMode,
-  density: initialDensity,
-  design: initialDesign,
-  signature: initialSignature,
+  mode: initial.mode,
+  density: initial.density,
+  design: initial.design,
+  signature: initial.signature,
   templateOverride: localStorage.getItem(TEMPLATE_KEY),
   branding: null,
   setMode: (mode) => {
@@ -109,10 +93,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     set({ mode });
     void setUserPreference(PREF_MODE, mode).catch(() => {});
   },
-  cycleMode: () => {
-    const order: ThemeMode[] = ['light', 'dark', 'system'];
-    get().setMode(order[(order.indexOf(get().mode) + 1) % order.length]!);
-  },
+  cycleMode: () => get().setMode(nextMode(get().mode)),
   setDensity: (density) => {
     localStorage.setItem(DENSITY_STORAGE_KEY, density);
     applyDensity(density);

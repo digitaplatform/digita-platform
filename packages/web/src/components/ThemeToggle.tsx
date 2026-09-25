@@ -1,42 +1,42 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { applyMode, MODE_STORAGE_KEY } from "@digitaplatform/theme";
+import { Monitor, Moon, Sun } from "lucide-react";
+import { ModeButton, nextMode } from "@digitaplatform/components";
+import { applyMode, resolveInitialMode, MODE_STORAGE_KEY, type ThemeMode } from "@digitaplatform/theme";
 
 /**
- * Light/dark toggle. Pins the mode under the app's key (one origin, one setting for website and
- * app) and applies it through the theme runtime. The pre-paint script in layout.tsx sets the
- * initial class; this only handles user toggles.
+ * The app's colour-mode button (the kit's ModeButton): light → dark → system. The mode is stored
+ * under the app's key (one origin, one setting for website and app) and applied through the theme
+ * runtime, which in `system` keeps following the OS. The pre-paint identity boot set the initial
+ * class; this takes over from it.
  */
 export function ThemeToggle({ label }: { label: string }) {
-  const [dark, setDark] = useState(false);
+  const [mode, setMode] = useState<ThemeMode>("system");
 
   useEffect(() => {
-    setDark(document.documentElement.classList.contains("dark"));
+    const initial = resolveInitialMode();
+    applyMode(initial);
+    setMode(initial);
   }, []);
 
-  function toggle() {
-    const next = dark ? "light" : "dark";
-    setDark(next === "dark");
-    applyMode(next);
+  function cycle() {
+    const next = nextMode(mode);
     try {
       localStorage.setItem(MODE_STORAGE_KEY, next);
     } catch {
       /* ignore storage failures (private mode) */
     }
+    applyMode(next);
+    setMode(next);
   }
 
   return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-label={label}
-      aria-pressed={dark}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-textMuted transition-colors hover:bg-bgHover hover:text-textMain"
-    >
-      <span aria-hidden className="text-base leading-none">
-        {dark ? "☀" : "☾"}
-      </span>
-    </button>
+    <ModeButton
+      mode={mode}
+      onCycle={cycle}
+      label={label}
+      icons={{ light: <Sun className="h-5 w-5" />, dark: <Moon className="h-5 w-5" />, system: <Monitor className="h-5 w-5" /> }}
+    />
   );
 }

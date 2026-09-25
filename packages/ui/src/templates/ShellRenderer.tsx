@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { CommandPalette } from '@/components/command/CommandPalette';
 import { useHotkey } from '@/lib/use-hotkey';
@@ -6,14 +6,15 @@ import type { LayoutConfig, RegionDefinition, RegionSide, TemplateDefinition } f
 import { useUiStore } from '@/stores/ui';
 import { Topbar } from '@/components/layout/Topbar';
 import { BrandChrome } from '@/components/layout/BrandChrome';
-import { SignatureBackdrop } from '@/components/layout/SignatureBackdrop';
 import { Region } from '@/plugins/registry';
 import { useChrome } from '@/lib/chrome-i18n';
 import { tid } from '@/lib/testid';
 import { usePluginLayoutStore } from '@/stores/plugin-state';
 import { resolveTemplate } from '@/templates/template-registry';
 import { useRealtimeConnection } from '@/hooks/useRealtime';
-import { cn } from '@digitaplatform/components';
+import { cn, Drawer, SignatureBackdrop } from '@digitaplatform/components';
+import { getSignature } from '@digitaplatform/theme';
+import { useThemeStore } from '@/stores/theme';
 
 /**
  * A region is painted only if it's the main outlet, has a placed plugin, or
@@ -92,73 +93,28 @@ function Bar({ region }: { region: RegionDefinition }) {
   );
 }
 
-const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-
 /**
- * One mobile overlay drawer, driven by the single mobileNavOpen flag. Targets
- * the first drawer-mode rail (left before right) — multi-drawer is deferred.
- * It is a proper modal dialog: labelled, Escape-to-close, focus moved in on
- * open, focus trapped within, and restored to the opener on close.
+ * One mobile overlay drawer (the kit's Drawer), driven by the single mobileNavOpen
+ * flag. Targets the first drawer-mode rail (left before right) — multi-drawer is
+ * deferred.
  */
 function MobileDrawer({ rail }: { rail: RegionDefinition | undefined }) {
   const tc = useChrome();
   const mobileNavOpen = useUiStore((s) => s.mobileNavOpen);
   const setMobileNav = useUiStore((s) => s.setMobileNav);
-  const panelRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!mobileNavOpen || !rail) return;
-    const opener = document.activeElement as HTMLElement | null;
-    const panel = panelRef.current;
-    const focusables = () => (panel ? Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)) : []);
-    (focusables()[0] ?? panel)?.focus();
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setMobileNav(false);
-        return;
-      }
-      if (e.key === 'Tab' && panel) {
-        const items = focusables();
-        const first = items[0];
-        const last = items[items.length - 1];
-        if (!first || !last) {
-          e.preventDefault();
-          panel.focus();
-          return;
-        }
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      opener?.focus?.();
-    };
-  }, [mobileNavOpen, rail, setMobileNav]);
-
-  if (!mobileNavOpen || !rail) return null;
+  if (!rail) return null;
   const side: 'left' | 'right' = rail.side === 'right' ? 'right' : 'left';
   return (
-    <div className="fixed inset-0 z-40 lg:hidden">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setMobileNav(false)} aria-hidden="true" />
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={rail.label ?? tc('ui.nav.label')}
-        tabIndex={-1}
-        className={cn('absolute inset-y-0 shadow-md focus:outline-none focus-visible:shadow-focus', side === 'right' ? 'right-0' : 'left-0')}
-      >
-        <Rail region={rail} side={side} inDrawer />
-      </div>
-    </div>
+    <Drawer
+      open={mobileNavOpen}
+      onClose={() => setMobileNav(false)}
+      label={rail.label ?? tc('ui.nav.label')}
+      side={side}
+      className="lg:hidden"
+    >
+      <Rail region={rail} side={side} inDrawer />
+    </Drawer>
   );
 }
 
@@ -176,6 +132,8 @@ export function ShellRenderer() {
   const layout = usePluginLayoutStore((s) => s.layout);
   const def = resolveTemplate(layout.template);
   const tc = useChrome();
+  // The active signature's decorative layers (a thin signature has none).
+  const signatureGraphics = getSignature(useThemeStore((s) => s.signature)).graphics;
 
   // One live-sync socket for the whole authenticated session (no-op when the
   // engine has realtime off); views declare their entity via useRealtimeEntity.
@@ -203,7 +161,7 @@ export function ShellRenderer() {
   return (
     <div className="relative isolate flex h-screen flex-col overflow-hidden bg-background" {...tid.component('app-shell')}>
       {/* The active signature's decorative grid + glow, behind every region. */}
-      <SignatureBackdrop />
+      <SignatureBackdrop graphics={signatureGraphics} />
       {/* The page carries a <base href> (the app's base path), so a bare fragment
           would navigate to the base; the skip moves focus itself instead. */}
       <a
