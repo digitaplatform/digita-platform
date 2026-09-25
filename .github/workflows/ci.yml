@@ -1,9 +1,9 @@
 name: ci
 
 # Build check for the publishable foundation packages (shared, theme,
-# components, plugins) AND a full gate for the engine (typecheck, dependency
-# rules, build, and the vitest suite). ui/web are private apps and remain
-# excluded here — they do not yet have a CI gate.
+# components, plugins), a full gate for the engine (typecheck, dependency
+# rules, build, and the vitest suite), and the lint of the ui app. web has no
+# CI gate yet.
 on:
   push:
     branches: [master]
@@ -39,6 +39,35 @@ jobs:
           build
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The ui app's lint (eslint --max-warnings 0, type-aware over src and tests). It resolves the
+  # workspace packages' types, so the foundation packages are built first.
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@digitaplatform'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build the foundation packages
+        run: >-
+          pnpm
+          --filter '@digitaplatform/shared'
+          --filter '@digitaplatform/theme'
+          --filter '@digitaplatform/components'
+          --filter '@digitaplatform/plugins'
+          build
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Lint the ui app
+        run: pnpm --filter '@digitaplatform/ui' lint
 
   # Every publishable package whose version is not yet in GitHub Packages, on every push to
   # master: a version that is already there is skipped, so a push without a bump publishes

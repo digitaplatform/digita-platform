@@ -28,7 +28,6 @@ export function AudienceShell() {
   // Evaluated for its seam/observability only — intentionally not used to gate.
   const mayEnter = canEnterAudience(active, tiers ?? undefined);
   if (!mayEnter && import.meta.env.DEV) {
-    // eslint-disable-next-line no-console
     console.debug(
       `[audience] rendering "${active}" shell though canEnterAudience is false ` +
         `(grants=${JSON.stringify(tiers)}) — chrome-only, RBAC is the boundary (ADR-A3).`,

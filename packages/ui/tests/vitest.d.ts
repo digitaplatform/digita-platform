@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-empty-object-type -- the empty interface bodies are the augmentation: they merge jest-dom's matchers into vitest's interfaces */
 // Make the @testing-library/jest-dom matchers visible to `tsc` (pnpm typecheck),
 // not just to the vitest runtime. tests/setup.ts loads them at runtime via
 // `import '@testing-library/jest-dom/vitest'`, but that node_modules side-effect

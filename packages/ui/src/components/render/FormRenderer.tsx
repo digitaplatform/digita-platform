@@ -69,12 +69,6 @@ export function FormRenderer({
   const [activeTab, setActiveTab] = useState<string>(tabs[0]?.key ?? '_details');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-  if (tabs.length === 0) {
-    return <p className="text-sm text-textMuted">{tc('ui.form.noFields')}</p>;
-  }
-
-  const current = tabs.find((t) => t.key === activeTab) ?? tabs[0]!;
-
   // Count validation errors per tab (doc-driven Zod validates ALL fields, even
   // those on an unmounted tab) so the tab strip can surface where the problem is.
   const errorsByTab = useMemo(() => {
@@ -103,6 +97,14 @@ export function FormRenderer({
     const firstBad = tabs.find((t) => (errorsByTab[t.key] ?? 0) > 0);
     if (firstBad && firstBad.key !== activeTab) setActiveTab(firstBad.key);
   }, [errors, errorsByTab, activeTab, tabs]);
+
+  // After every hook: a form whose fields arrive after its first render must call the same hooks
+  // on both renders.
+  if (tabs.length === 0) {
+    return <p className="text-sm text-textMuted">{tc('ui.form.noFields')}</p>;
+  }
+
+  const current = tabs.find((t) => t.key === activeTab) ?? tabs[0]!;
 
   return (
     <div className="space-y-4">
