@@ -8,6 +8,7 @@ export * from './tokens/index.js';
 export * from './runtime/runtime.js';
 export * from './runtime/boot-identity.js';
 export * from './runtime/delivered-identity.js';
+export * from './runtime/identity-preferences.js';
 export * from './designs/index.js';
 export * from './signatures/index.js';
 export * from './signatures/runtime-registry.js';

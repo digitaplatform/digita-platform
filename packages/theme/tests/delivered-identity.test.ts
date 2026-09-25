@@ -9,7 +9,13 @@ import {
   loadDeliveredDesign,
   readPageIdentity,
   registerDeliveredSignature,
+  storeIdentityPreferences,
+  DENSITY_STORAGE_KEY,
+  DESIGN_STORAGE_KEY,
+  IDENTITY_PREFERENCE_KEYS,
+  MODE_STORAGE_KEY,
   PAGE_IDENTITY_ELEMENT_ID,
+  SIGNATURE_STORAGE_KEY,
 } from '../src/index.js';
 
 const root = () => document.documentElement;
@@ -67,5 +73,27 @@ describe('readPageIdentity', () => {
     script.textContent = JSON.stringify({ branding: { app_name: 'Acme' } });
     document.body.appendChild(script);
     expect(readPageIdentity()).toEqual({ branding: { app_name: 'Acme' } });
+  });
+});
+
+describe('storeIdentityPreferences', () => {
+  it("keeps the server's valid choices as this browser's own, and ignores the rest", () => {
+    localStorage.clear();
+    localStorage.setItem(MODE_STORAGE_KEY, 'light');
+    const stored = storeIdentityPreferences({ mode: 'dark', density: 'huge', design: 'material', signature: '' });
+    expect(stored).toEqual({ mode: 'dark', design: 'material' });
+    expect(localStorage.getItem(MODE_STORAGE_KEY)).toBe('dark');
+    expect(localStorage.getItem(DESIGN_STORAGE_KEY)).toBe('material');
+    expect(localStorage.getItem(DENSITY_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(SIGNATURE_STORAGE_KEY)).toBeNull();
+  });
+
+  it('names the UserPreference keys the app and the website read', () => {
+    expect(IDENTITY_PREFERENCE_KEYS).toEqual({
+      mode: 'ui.theme_mode',
+      density: 'ui.density',
+      design: 'ui.design',
+      signature: 'ui.signature',
+    });
   });
 });

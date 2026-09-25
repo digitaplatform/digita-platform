@@ -7,6 +7,8 @@ import {
   applyDesign,
   applySignature,
   bootIdentity,
+  storeIdentityPreferences,
+  IDENTITY_PREFERENCE_KEYS,
   MODE_STORAGE_KEY,
   DENSITY_STORAGE_KEY,
   DESIGN_STORAGE_KEY,
@@ -19,10 +21,6 @@ import { nextMode } from '@digitaplatform/components';
 import { getUserPreference, setUserPreference } from '@/services/userPreference';
 
 const TEMPLATE_KEY = 'digita-ui:template';
-const PREF_MODE = 'ui.theme_mode';
-const PREF_DENSITY = 'ui.density';
-const PREF_DESIGN = 'ui.design';
-const PREF_SIGNATURE = 'ui.signature';
 
 interface ThemeState {
   mode: ThemeMode;
@@ -91,26 +89,26 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     localStorage.setItem(MODE_STORAGE_KEY, mode);
     applyMode(mode);
     set({ mode });
-    void setUserPreference(PREF_MODE, mode).catch(() => {});
+    void setUserPreference(IDENTITY_PREFERENCE_KEYS.mode, mode).catch(() => {});
   },
   cycleMode: () => get().setMode(nextMode(get().mode)),
   setDensity: (density) => {
     localStorage.setItem(DENSITY_STORAGE_KEY, density);
     applyDensity(density);
     set({ density });
-    void setUserPreference(PREF_DENSITY, density).catch(() => {});
+    void setUserPreference(IDENTITY_PREFERENCE_KEYS.density, density).catch(() => {});
   },
   setDesign: (design) => {
     localStorage.setItem(DESIGN_STORAGE_KEY, design);
     applyDesign(design);
     set({ design });
-    void setUserPreference(PREF_DESIGN, design).catch(() => {});
+    void setUserPreference(IDENTITY_PREFERENCE_KEYS.design, design).catch(() => {});
   },
   setSignature: (id) => {
     localStorage.setItem(SIGNATURE_STORAGE_KEY, id);
     applySignatureLayered(id, get);
     set({ signature: id });
-    void setUserPreference(PREF_SIGNATURE, id).catch(() => {});
+    void setUserPreference(IDENTITY_PREFERENCE_KEYS.signature, id).catch(() => {});
   },
   reapplySignature: () => applySignatureLayered(get().signature, get),
   setTemplateOverride: (key) => {
@@ -128,30 +126,27 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   loadRemotePrefs: async () => {
     try {
       const [mode, density, design, signature] = await Promise.all([
-        getUserPreference<ThemeMode>(PREF_MODE),
-        getUserPreference<Density>(PREF_DENSITY),
-        getUserPreference<string>(PREF_DESIGN),
-        getUserPreference<string>(PREF_SIGNATURE),
+        getUserPreference(IDENTITY_PREFERENCE_KEYS.mode),
+        getUserPreference(IDENTITY_PREFERENCE_KEYS.density),
+        getUserPreference(IDENTITY_PREFERENCE_KEYS.design),
+        getUserPreference(IDENTITY_PREFERENCE_KEYS.signature),
       ]);
-      if (mode === 'light' || mode === 'dark' || mode === 'system') {
-        localStorage.setItem(MODE_STORAGE_KEY, mode);
-        applyMode(mode);
-        set({ mode });
+      const stored = storeIdentityPreferences({ mode, density, design, signature });
+      if (stored.mode) {
+        applyMode(stored.mode);
+        set({ mode: stored.mode });
       }
-      if (density === 'comfortable' || density === 'compact' || density === 'spacious') {
-        localStorage.setItem(DENSITY_STORAGE_KEY, density);
-        applyDensity(density);
-        set({ density });
+      if (stored.density) {
+        applyDensity(stored.density);
+        set({ density: stored.density });
       }
-      if (typeof design === 'string' && design) {
-        localStorage.setItem(DESIGN_STORAGE_KEY, design);
-        applyDesign(design);
-        set({ design });
+      if (stored.design) {
+        applyDesign(stored.design);
+        set({ design: stored.design });
       }
-      if (typeof signature === 'string' && signature) {
-        localStorage.setItem(SIGNATURE_STORAGE_KEY, signature);
-        applySignatureLayered(signature, get);
-        set({ signature });
+      if (stored.signature) {
+        applySignatureLayered(stored.signature, get);
+        set({ signature: stored.signature });
       }
     } catch {
       /* offline or unset — keep the localStorage default */
