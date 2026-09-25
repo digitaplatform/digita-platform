@@ -7,6 +7,7 @@ import { useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
 import { resolveIcon } from '@/lib/icon-registry';
 import { tid } from '@/lib/testid';
+import { appUrl } from '@/lib/appBase';
 import { useDialogHost } from '@/components/overlay/DialogHost';
 import { useActions, useRunAction } from '@/hooks/useActions';
 import { ActionDialog } from './ActionDialog';
@@ -67,8 +68,10 @@ export function ActionBar({
         a.click();
         URL.revokeObjectURL(a.href);
       }
+      // The engine sits behind the ingress that strips the app's base path, so a URL it
+      // returns is one of its root paths; only the client knows the base to put it under.
       if (typeof result?.open_url === 'string') {
-        window.open(result.open_url, '_blank', 'noopener');
+        window.open(appUrl(result.open_url), '_blank', 'noopener');
       }
     } catch (e) {
       dialog.toast(toUiMessages(e, t)[0]?.text ?? tc('ui.status.somethingWrong'), 'error');

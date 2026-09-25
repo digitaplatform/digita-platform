@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { redirectToIdpLogin } from '@/lib/authConfig';
+import { appUrl } from '@/lib/appBase';
 import { AuthShell } from '@/templates/AuthShell';
 import { useChrome } from '@/lib/chrome-i18n';
 import { tid } from '@/lib/testid';
@@ -22,7 +23,7 @@ export default function LoginPage() {
   const wanted = from ? `${from.pathname}${from.search ?? ''}` : '/';
 
   useEffect(() => {
-    redirectToIdpLogin(`${window.location.origin}${wanted}`);
+    redirectToIdpLogin(`${window.location.origin}${appUrl(wanted)}`);
   }, [wanted]);
 
   return (

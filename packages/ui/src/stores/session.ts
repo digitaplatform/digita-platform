@@ -13,6 +13,7 @@ import { getBoot } from '@/services/boot';
 import { logout as apiLogout } from '@/services/auth';
 import { attemptRefresh } from '@/services/api';
 import { redirectToIdpLogin } from '@/lib/authConfig';
+import { appUrl } from '@/lib/appBase';
 import { useThemeStore } from '@/stores/theme';
 import { useI18nStore } from '@/stores/i18n';
 import { setUserPreference } from '@/services/userPreference';
@@ -196,7 +197,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({ user: null, tiers: null, status: 'anonymous' });
     // The IdP holds the session for every app of the zone, so signing out ends
     // on its login page (with this app's home as the bounce-back target).
-    redirectToIdpLogin(`${window.location.origin}/`);
+    redirectToIdpLogin(`${window.location.origin}${appUrl('/')}`);
   },
 
   refreshBranding: async () => {
