@@ -1,6 +1,6 @@
 {
   "name": "@digitaplatform/web",
-  "version": "0.1.0",
+  "version": "0.1.14",
   "private": true,
   "description": "Digita Web — public, multilingual website renderer (Next.js App Router). Consumes the engine's generic public read API; multi-theme + frontend-plugin extensible.",
   "type": "module",

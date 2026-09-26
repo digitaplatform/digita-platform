@@ -1,6 +1,6 @@
 {
   "name": "@digitaplatform/app",
-  "version": "0.1.0",
+  "version": "0.1.14",
   "private": true,
   "type": "module",
   "description": "Digita Frontend — generic, app-agnostic operator UI. Renders whatever app the engine runs, 100% from metadata. React/Vite/Tailwind; httpOnly-cookie sessions via digita-auth.",

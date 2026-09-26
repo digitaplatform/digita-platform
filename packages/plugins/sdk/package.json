@@ -1,6 +1,6 @@
 {
   "name": "@digitaplatform/plugins",
-  "version": "0.1.1",
+  "version": "0.1.14",
   "type": "module",
   "description": "Digita frontend plugin SDK: the host's only import surface — the provideHostServices/useHost DI singleton plus the FrontendPlugin / PluginManifest / Layout / Template contracts. The host (ui) provides the singleton instance; plugin bundles consume it as an import-map singleton at runtime.",
   "main": "./dist/index.js",
