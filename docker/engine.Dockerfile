@@ -6,7 +6,7 @@
 #   docker build -f docker/engine.Dockerfile -t digita-engine .
 #
 # The image ships ONLY the generic engine (dist/) — NO apps baked in. Apps live
-# in the separate digita-apps repo and are delivered at runtime as a mounted
+# in the separate digita-catalog repo and are delivered at runtime as a mounted
 # app-bundle (initContainer → emptyDir → APPS_DIRS); the engine auto-discovers
 # every app folder under APPS_DIRS (see env.ts). See the digita-deploy
 # digita-engine chart for the mount wiring.
@@ -52,7 +52,7 @@ COPY packages/shared/ packages/shared/
 COPY packages/engine/ packages/engine/
 
 # shared → engine (tsc + copy-assets: entity/locale .json + .cjs land in dist/).
-# No apps are built here — they live in the digita-apps repo and ship as a
+# No apps are built here — they live in the digita-catalog repo and ship as a
 # separately-built app-bundle mounted at runtime under APPS_DIRS.
 RUN pnpm --filter @digitaplatform/shared build && \
     pnpm --filter @digitaplatform/engine build

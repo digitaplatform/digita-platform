@@ -93,7 +93,7 @@ function getEnvOneOf<T extends string>(key: string, allowed: readonly T[], fallb
 
 // Expand each "apps root" in APPS_DIRS into the list of its immediate app
 // subdirectories. This makes app loading DYNAMIC: adding a new app is just
-// dropping a folder into the root (locally the sibling digita-apps/apps
+// dropping a folder into the root (locally the sibling digita-catalog/apps
 // checkout, in the cluster the mounted app bundle) — no per-app config
 // anywhere. Boot-time sync scan; missing/unreadable roots and dotfile /
 // node_modules entries are skipped silently. Paths stay relative to the

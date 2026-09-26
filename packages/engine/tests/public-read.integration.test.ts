@@ -27,7 +27,7 @@ vi.mock("../src/core/config/env.js", () => {
     JOBS_ENABLED: false, JOBS_CONCURRENCY: 1, JOBS_RETRY_ATTEMPTS: 1, JOBS_RETRY_DELAY_MS: 1000,
     REALTIME_ENABLED: false, WS_PATH: "/ws", WS_PING_INTERVAL_MS: 25000,
     IMPORT_MAX_ROWS: 100, EXPORT_MAX_ROWS: 100,
-    APP_DIRS: ["../../../digita-apps/web"], ENTITIES_DIR: "./src/entities", MODULES_DIR: "./src/modules", LOCALES_DIR: "./src/locales",
+    APP_DIRS: ["../../../digita-catalog/web"], ENTITIES_DIR: "./src/entities", MODULES_DIR: "./src/modules", LOCALES_DIR: "./src/locales",
     AUTO_MIGRATE: true, TRACK_CHANGES_DEFAULT: false, PERMISSION_SCOPE_ENABLED: false,
     SEED_APP_DATA_ON_BOOT: false, SEED_DEMO_DATA_ON_BOOT: false,
   } };
@@ -54,10 +54,10 @@ import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { existsSync } from "node:fs";
 
-// The web-content app now lives in the separate digita-apps repo. This is a
-// cross-repo integration test (engine + the web app): run it when digita-apps is
+// The web-content app now lives in the separate digita-catalog repo. This is a
+// cross-repo integration test (engine + the web app): run it when digita-catalog is
 // checked out as a sibling (local / integration), skip it in engine-only CI.
-const APPS_PRESENT = existsSync("../../../digita-apps/web");
+const APPS_PRESENT = existsSync("../../../digita-catalog/web");
 
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;

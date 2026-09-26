@@ -201,12 +201,12 @@ describe("EntityRegistry.auditAttachStoragePaths (boot lint)", () => {
 
   it("the real loaded entity tree is clean: every Attach entity declares storage_path", async () => {
     // Regression net for the engine's own definitions. The erp app now lives in
-    // the separate digita-apps repo — include it when checked out as a sibling
+    // the separate digita-catalog repo — include it when checked out as a sibling
     // (local / integration), skip it in engine-only CI (the erp tree is audited
-    // by digita-apps' own CI). The engine-entity audit always runs.
+    // by digita-catalog' own CI). The engine-entity audit always runs.
     const reg = new EntityRegistry();
     await reg.loadAll("./src/entities");
-    const erp = "../../../digita-apps/erp";
+    const erp = "../../../digita-catalog/erp";
     if (existsSync(erp)) await reg.loadAll(erp);
     expect(reg.auditAttachStoragePaths()).toEqual([]);
   });
