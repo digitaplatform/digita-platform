@@ -9,6 +9,15 @@
 # this repo's external push webhook (Settings -> Webhooks -> build.<domain>)
 # into the platform's build plane, which runs the release build. This job only
 # mints the release tag and pushes the deploy ref.
+#
+# CI AFTER A RELEASE. The release commit is pushed with GITHUB_TOKEN, and GitHub
+# starts no workflow from such a push. A repository whose CI must run after a
+# release (for example to publish its packages) subscribes to this workflow:
+#   on:
+#     workflow_run:
+#       workflows: [Release]
+#       types: [completed]
+# and runs its job only where github.event.workflow_run.conclusion is success.
 name: Release
 
 # Show the released version+channel in the Actions run list (otherwise every run
@@ -40,14 +49,6 @@ on:
           - dev
           - test
           - prod
-      target:
-        description: "deploy puts the release on the stage; build only builds it for the stage and writes no pin (the Manager's per-tenant build)"
-        required: false
-        type: choice
-        default: deploy
-        options:
-          - deploy
-          - build
 
 permissions:
   contents: write
@@ -67,4 +68,4 @@ jobs:
           git config user.email "218061504+example-release[bot]@users.noreply.github.com"
 
       - name: Mint the release tag and push the deploy ref
-        run: bash release/release.sh "${{ inputs.version }}" "${{ inputs.channel }}" "${{ inputs.stage }}" "${{ inputs.target || 'deploy' }}"
+        run: bash release/release.sh "${{ inputs.version }}" "${{ inputs.channel }}" "${{ inputs.stage }}"
