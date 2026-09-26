@@ -5,7 +5,7 @@
 # (same folder). The two are held byte-for-byte equivalent in behaviour.
 #
 # USAGE (run from the repo root)
-#   ./release/release.sh <x.y.z> <stable|beta|alpha> <dev|test|prod>
+#   ./release/release.sh <x.y.z> <stable|beta|alpha> <dev|test|prod> [deploy|build]
 #
 # THE THREE INPUTS
 #   version  — x.y.z, no leading zeros.
@@ -14,6 +14,11 @@
 #              release tag; the stage is NOT.
 #   stage    — WHERE this run puts the release. One release, one image, any
 #              number of stages.
+#   target   — optional, `deploy` (the default) or `build`. `build` builds the
+#              images for the stage and pins NOTHING: the delivery branch stays
+#              where it is and the ref pushed is refs/tags/build/<stage>/<tag>,
+#              which the platform builds, scans and verifies without writing the
+#              stage's pin. The Manager uses it to build one tenant's version.
 #
 # WHAT IT DOES
 #   1. Validates version, channel and stage.
@@ -61,7 +66,8 @@
 # ===========================================================================
 set -euo pipefail
 
-# WHAT THIS SCRIPT PRINTS, AND WHO WRITES THE NEWLINE. Every printed line is ASCII and ends with the
+# WHAT THIS SCRIPT PRINTS, AND WHO WRITES THE NEWLINE. Every line it composes is ASCII, a path it names
+# is printed as UTF-8, and every line ends with the
 # one \n written here, because neither is the host's to choose. A PowerShell host ends a line with
 # two bytes where a shell writes one, and [Console]::Error.WriteLine writes in the console's code
 # page, which turns a printed em dash into a different byte on a Windows console — so the twins
@@ -78,26 +84,40 @@ die() { warn "$*"; exit 1; }
 # the tag, so a package.json still declaring an older number labels the artifact with a version
 # nobody released. The write happens BEFORE the tag is created: a tag placed first would point at
 # the commit that still carries the old number, and a release does not move a tag afterwards.
-# Only the FIRST "version" line is touched. That is the manifest's own; a version further down
-# belongs to a dependency and is not this release's to move.
-# A repository with no package.json, or one that declares no version, has nothing that could go
+# EVERY package.json the repository tracks is stamped, in the one commit: a workspace publishes its
+# packages at the numbers they declare, and a package left at an older number is skipped by a publish
+# that finds that number already published.
+# Only the FIRST "version" line of a file is touched. That is the manifest's own; a version further
+# down belongs to a dependency and is not this release's to move. perl rewrites it, because it keeps
+# the file's line endings and byte order mark as they are and runs the same on BSD and GNU systems,
+# where `sed -i` differs. Paths come unquoted, so a name with a non-ASCII byte is the file itself.
+# A repository with no package.json, or a file that declares no version, has nothing that could go
 # stale — that is said out loud and the release continues, because a unit written in another
 # language is the ordinary case here and not a broken one.
 stamp_manifest_version() {
-  file="$ROOT/package.json"
-  if [ ! -f "$file" ]; then
+  manifests=$(git -c core.quotePath=false -C "$ROOT" ls-files -- 'package.json' '*/package.json')
+  if [ -z "$manifests" ]; then
     say "this repository carries no package.json - no version manifest to stamp"
     return 0
   fi
-  if ! grep -qE '^[[:space:]]*"version":[[:space:]]*"' "$file"; then
-    say "package.json declares no version - nothing to stamp"
-    return 0
-  fi
-  sed -i '0,/^\([[:space:]]*\)"version":[[:space:]]*"[^"]*"/s//\1"version": "'"$VERSION"'"/' "$file"
-  git diff --quiet -- "$file" && return 0
-  git add -- "$file"
+  stamped=""
+  while IFS= read -r rel; do
+    file="$ROOT/$rel"
+    if ! grep -qE '^[[:space:]]*"version":[[:space:]]*"' "$file"; then
+      say "$rel declares no version - nothing to stamp"
+      continue
+    fi
+    VERSION="$VERSION" perl -0pi -e 's/^([ \t]*)"version":[ \t]*"[^"]*"/$1"version": "$ENV{VERSION}"/m' "$file"
+    git diff --quiet -- "$file" && continue
+    git add -- "$file"
+    stamped="$stamped$rel
+"
+  done <<EOF
+$manifests
+EOF
+  [ -z "$stamped" ] && return 0
   git commit --quiet -m "release: $TAG" || die "the version bump to $VERSION could not be committed"
-  say "package.json declares ${VERSION}"
+  printf '%s' "$stamped" | while IFS= read -r rel; do say "$rel declares ${VERSION}"; done
 }
 
 # Does this unit run on a cluster whose role is $1? A role names every PART the cluster carries —
@@ -139,7 +159,8 @@ pin_branch() {
     git -C "$PLATFORM_REPO_DIR" fetch --quiet origin "$branch" \
       || die "the branch ${branch} of ${PLATFORM_REPO} could not be fetched - nothing further was pinned"
     git -C "$PLATFORM_REPO_DIR" reset --quiet --hard "origin/${branch}"
-    pinned="$(python3 "$PINNER" "$PLATFORM_REPO_DIR" "$STAGE" "${TAG}-${SHA7}" "$MANIFEST")"
+    pinned="$(python3 "$PINNER" "$PLATFORM_REPO_DIR" "$STAGE" "${TAG}-${SHA7}" "$MANIFEST")" \
+      || die "the pin of ${STAGE} could not be written: ${pinned} - the images are built and nothing was pinned"
     if [ -z "$pinned" ]; then
       say "${branch} carries no values-${STAGE}.yaml pin of ${NAME} - left as it stands"
       return 0
@@ -164,13 +185,15 @@ pin_branch() {
 VERSION="${1:-}"
 CHANNEL="${2:-}"
 STAGE="${3:-}"
+TARGET="${4:-deploy}"
 
 [ -n "$VERSION" ] && [ -n "$CHANNEL" ] && [ -n "$STAGE" ] \
-  || die "usage: release/release.sh <x.y.z> <stable|beta|alpha> <dev|test|prod>"
+  || die "usage: release/release.sh <x.y.z> <stable|beta|alpha> <dev|test|prod> [deploy|build]"
 [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
   || die "version must be x.y.z with no leading zeros (got '$VERSION')"
 case "$CHANNEL" in stable|beta|alpha) ;; *) die "channel must be stable|beta|alpha (got '$CHANNEL')" ;; esac
 case "$STAGE" in dev|test|prod) ;; *) die "stage must be dev|test|prod (got '$STAGE')" ;; esac
+case "$TARGET" in deploy|build) ;; *) die "target must be deploy|build (got '$TARGET')" ;; esac
 
 # The courtesy ceiling check. It WARNS and continues on purpose — see the header.
 case "$CHANNEL" in
@@ -198,6 +221,8 @@ manifest_value() { sed -nE "s/^$1:[[:space:]]*([^[:space:]]+).*\$/\\1/p" "$MANIF
 NAME="$(manifest_value name || true)"
 [ -n "$NAME" ] || die "the manifest ${MANIFEST} states no name - it is what the release line and any pin are written under"
 PLATFORM_REPO="$(manifest_value platformRepo || true)"
+# A unit that pins itself writes its pin from here, so a build that pins nothing has no meaning for it.
+[ "$TARGET" = "deploy" ] || [ -z "$PLATFORM_REPO" ]   || die "the manifest declares platformRepo ${PLATFORM_REPO}, so this unit writes its own pins - target build is for units the platform's build plane pins"
 
 # ── The pin pre-flight ────────────────────────────────────────────────────────────────────────
 #
@@ -325,11 +350,16 @@ SHA7="${SHA:0:7}"
 # commit; the bump's pin commits then sit on top of it and are replaced by the next release the same
 # way. Nothing a person pushes there survives a release, which is the point: what the cluster runs
 # is what was released.
-DELIVERY_BRANCH="refs/heads/deploy/${STAGE}"
-git push --force origin "${SHA}:${DELIVERY_BRANCH}"   || die "the delivery branch deploy/${STAGE} could not be placed at ${SHA7}, so the build would have nothing to render"
-say "deploy/${STAGE} stands at ${SHA7}"
+#
+# A BUILD PINS NOTHING, so the cluster must not read its tree either: target build leaves the branch
+# where the last deploy put it.
+if [ "$TARGET" = "deploy" ]; then
+  DELIVERY_BRANCH="refs/heads/deploy/${STAGE}"
+  git push --force origin "${SHA}:${DELIVERY_BRANCH}"   || die "the delivery branch deploy/${STAGE} could not be placed at ${SHA7}, so the build would have nothing to render"
+  say "deploy/${STAGE} stands at ${SHA7}"
+fi
 
-DEPLOY_REF="refs/tags/deploy/${STAGE}/${TAG}"
+DEPLOY_REF="refs/tags/${TARGET}/${STAGE}/${TAG}"
 # Delete first (absent on a first deploy — that is the normal case, not an error), then push: the
 # push is what the platform's webhook reacts to.
 git push origin ":${DEPLOY_REF}" >/dev/null 2>&1 || true
@@ -380,31 +410,83 @@ else
   git -C "$PLATFORM_REPO_DIR" fetch --quiet --prune origin \
     || die "the platform tree ${PLATFORM_REPO} could not be refreshed after the build - the images exist and nothing was pinned"
   # THE PIN GRAMMAR AND NOTHING ELSE: builds[]{name,image,tag}, in the values file of the stage
-  # this release is going to. Read and written by name rather than by line, so a file whose
-  # entries are ordered differently is still pinned and a file that carries none is left alone.
+  # this release is going to, and beside a build's tag what its pinValues name. Read and written by
+  # name rather than by line, so a file whose entries are ordered differently is still pinned and a
+  # file that carries none is left alone. The PowerShell twin is Write-StagePin; the two write the
+  # same bytes.
   cat > "$PINNER" <<'PIN'
 import glob, os, re, sys
+# ONE \n ENDS WHAT THIS PRINTS, as the PowerShell twin ends it. A Windows python ends a printed line
+# with \r\n, the shell's $(...) keeps the \r, and every path the answer names would then carry it.
+sys.stdout.reconfigure(newline=chr(10))
 tree, stage, image_tag, manifest = sys.argv[1:5]
-names = re.findall(r"^\s*-\s*name:\s*(\S+)", open(manifest, encoding="utf-8").read(), re.M)
+text = open(manifest, encoding="utf-8").read()
+names = re.findall(r"^\s*-\s*name:\s*(\S+)", text, re.M)
+# WHAT A BUILD PINS BESIDE ITS TAG: its pinValues, a block of `key: "value"` lines under the build,
+# each value double-quoted and without a backslash or a double quote in it. Anything else there is
+# refused before a file is touched: a value read wrong is a value written wrong.
+pins, build, top, block = {}, None, 0, None
+for number, line in enumerate(text.split(chr(10)), 1):
+    if line.strip() == "" or line.strip().startswith("#"):
+        continue
+    depth = len(line) - len(line.lstrip(" "))
+    if block is not None and depth > block:
+        pair = re.match(r'^ +([A-Za-z][A-Za-z0-9_-]*): *"([ !#-\[\]-~]*)"\s*(#.*)?$', line)
+        if not pair or pair.group(1) in ("name", "image", "tag"):
+            print('line %d is no key: "value" pair of the pinValues of %s' % (number, build))
+            sys.exit(3)
+        pins[build][pair.group(1)] = pair.group(2)
+        continue
+    block = None
+    item = re.match(r"^( *)-\s*name:\s*(\S+)", line)
+    if item:
+        build, top = item.group(2), len(item.group(1))
+        pins[build] = {}
+    elif build is not None and depth <= top:
+        build = None
+    elif build is not None and re.match(r"^ *pinValues:", line):
+        if not re.match(r"^ *pinValues:\s*(#.*)?$", line):
+            print('line %d writes the pinValues of %s on one line - write one key: "value" pair per line below it' % (number, build))
+            sys.exit(3)
+        block = depth
 touched = []
 for path in glob.glob(os.path.join(tree, "clusters", "inventories", "*", "values-%s.yaml" % stage)):
-    text = open(path, encoding="utf-8", newline="").read()
-    out, image, changed = [], None, False
-    for line in text.split(chr(10)):
-        m = re.match(r"^(\s*)image:\s*(\S+)\s*$", line)
+    lines = open(path, encoding="utf-8", newline="").read().split(chr(10))
+    image, changed, i = None, False, 0
+    while i < len(lines):
+        m = re.match(r"^(\s*)image:\s*(\S+)\s*$", lines[i])
         if m:
             image = m.group(2)
-        t = re.match(r"^(\s*)tag:\s*\S+\s*$", line)
+        t = re.match(r"^(\s*)tag:\s*\S+\s*$", lines[i])
         if t and image in names:
-            line = '%stag: "%s"' % (t.group(1), image_tag)
+            indent = t.group(1)
+            lines[i] = '%stag: "%s"' % (indent, image_tag)
+            # THE ENTRY is every line around the tag at its indentation or deeper, from below the item
+            # line above it to the first shallower line below it. A pin value replaces its key's line
+            # there, and stands right after the tag where the entry carries none.
+            inside = lambda n: lines[n].strip() == "" or len(lines[n]) - len(lines[n].lstrip(" ")) >= len(indent)
+            first, after = i, i + 1
+            while first > 0 and inside(first - 1):
+                first -= 1
+            for key, value in pins.get(image, {}).items():
+                end = i + 1
+                while end < len(lines) and inside(end):
+                    end += 1
+                pin = '%s%s: "%s"' % (indent, key, value)
+                own = [n for n in range(first, end) if re.match("^" + re.escape(indent + key) + r":(\s|$)", lines[n])]
+                if own:
+                    lines[own[0]] = pin
+                else:
+                    lines.insert(after, pin)
+                    after += 1
+            i = after - 1
             image, changed = None, True
-        out.append(line)
+        i += 1
     # WRITTEN ONLY WHERE A TAG MOVED. A file compared by its whole text is a file rewritten for a
     # trailing newline, and a commit that names files it did not change is one nobody can read.
-    new = chr(10).join(out)
     if changed:
         with open(path + ".writing", "w", encoding="utf-8", newline=chr(10)) as f:
-            f.write(new)
+            f.write(chr(10).join(lines))
         os.replace(path + ".writing", path)
         touched.append(os.path.relpath(path, tree).replace(os.sep, "/"))
 print(" ".join(touched))
@@ -445,7 +527,11 @@ PIN
     || die "no branch of ${PLATFORM_REPO} carries a values-${STAGE}.yaml pin of ${NAME} - the images are built and no cluster reads them, so this release reaches nothing"
 fi
 
-say "${NAME} ${TAG} (commit ${SHA7}) is on its way to ${STAGE}"
+if [ "$TARGET" = "build" ]; then
+  say "${NAME} ${TAG} (commit ${SHA7}) is being built for ${STAGE} - no pin is written, the build is for whoever records its tag"
+else
+  say "${NAME} ${TAG} (commit ${SHA7}) is on its way to ${STAGE}"
+fi
 # Read with sed and not grep: under `set -o pipefail` a manifest that declares no builds — a
 # chart-only or fan-out unit — would make the pipeline's exit status 1 and end a release that had
 # already succeeded. `sed -n ... p` answers nothing and exits 0.

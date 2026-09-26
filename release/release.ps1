@@ -7,7 +7,10 @@
 .DESCRIPTION
   The three inputs are the version (x.y.z), the channel - the maturity CEILING of the release: alpha
   may reach dev only, beta dev and test, stable anywhere - and the stage this run puts the release
-  on. The channel is part of the release tag; the stage is not.
+  on. The channel is part of the release tag; the stage is not. An optional fourth input, the target
+  deploy (the default) or build, decides whether the stage's pin is written: build leaves the
+  delivery branch where it is and pushes refs/tags/build/<stage>/<tag>, which the platform builds,
+  scans and verifies without writing the stage's pin.
 
   It:
     1. Validates version, channel and stage.
@@ -51,10 +54,15 @@
 param(
   [Parameter(Mandatory = $true, Position = 0)][string]$Version,
   [Parameter(Mandatory = $true, Position = 1)][ValidateSet('stable', 'beta', 'alpha')][string]$Channel,
-  [Parameter(Mandatory = $true, Position = 2)][ValidateSet('dev', 'test', 'prod')][string]$Stage
+  [Parameter(Mandatory = $true, Position = 2)][ValidateSet('dev', 'test', 'prod')][string]$Stage,
+  [Parameter(Position = 3)][ValidateSet('deploy', 'build')][string]$Target = 'deploy'
 )
 $ErrorActionPreference = 'Stop'
-# WHAT THIS SCRIPT PRINTS, AND WHO WRITES THE NEWLINE. Every printed line is ASCII and ends with the
+# git's output is read, and this script's own is written, as UTF-8 — what the bash spelling reads and
+# writes — so a path with a non-ASCII byte is the same bytes on both sides.
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+# WHAT THIS SCRIPT PRINTS, AND WHO WRITES THE NEWLINE. Every line it composes is ASCII, a path it names
+# is printed as UTF-8, and every line ends with the
 # one "`n" written here, because neither is the host's to choose. Write-Host and WriteLine end a line
 # with the HOST's ending, which on Windows is two bytes where the bash twin writes one; and
 # [Console]::Error.WriteLine writes in the console's CODE PAGE, which turned a printed em dash into a
@@ -73,16 +81,55 @@ function Note($m) { [Console]::Error.Write("$m`n") }
 function Die($m) { Warn $m; exit 1 }
 
 # THE PIN GRAMMAR AND NOTHING ELSE: builds[]{name,image,tag}, in the values file of the stage this
-# release is going to. Read and written by name rather than by line, so a file whose entries are
-# ordered differently is still pinned and a file that carries none is left alone. Answers the
-# tree-relative paths whose tag actually moved.
+# release is going to, and beside a build's tag what its pinValues name. Read and written by name
+# rather than by line, so a file whose entries are ordered differently is still pinned and a file
+# that carries none is left alone. Answers the tree-relative paths whose tag actually moved. The
+# bash twin is the python pinner in release.sh; the two write the same bytes, so every comparison
+# here is ordinal and case-sensitive, as python's are.
 function Write-StagePin {
   param(
     [Parameter(Mandatory = $true)][string]$Tree,
     [Parameter(Mandatory = $true)][string]$PinStage,
     [Parameter(Mandatory = $true)][string]$ImageTag,
-    [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$BuildNames
+    [Parameter(Mandatory = $true)][string]$Manifest
   )
+  $text = [System.IO.File]::ReadAllText($Manifest)
+  $names = @([regex]::Matches($text, '(?m)^\s*-\s*name:\s*(\S+)') | ForEach-Object { $_.Groups[1].Value })
+  # WHAT A BUILD PINS BESIDE ITS TAG: its pinValues, a block of `key: "value"` lines under the build,
+  # each value double-quoted and without a backslash or a double quote in it. Anything else there is
+  # refused before a file is touched: a value read wrong is a value written wrong.
+  $pins = [System.Collections.Generic.Dictionary[string, System.Collections.Specialized.OrderedDictionary]]::new([StringComparer]::Ordinal)
+  $build = $null
+  $top = 0
+  $block = -1
+  $number = 0
+  foreach ($line in $text.Split([char]10)) {
+    $number++
+    if ($line.Trim() -eq '' -or $line.Trim().StartsWith('#', [StringComparison]::Ordinal)) { continue }
+    $depth = $line.Length - $line.TrimStart(' ').Length
+    if ($block -ge 0 -and $depth -gt $block) {
+      $pair = [regex]::Match($line, '^ +([A-Za-z][A-Za-z0-9_-]*): *"([ !#-\[\]-~]*)"\s*(#.*)?$')
+      if (-not $pair.Success -or @('name', 'image', 'tag') -ccontains $pair.Groups[1].Value) {
+        throw ('line {0} is no key: "value" pair of the pinValues of {1}' -f $number, $build)
+      }
+      $pins[$build][$pair.Groups[1].Value] = $pair.Groups[2].Value
+      continue
+    }
+    $block = -1
+    $item = [regex]::Match($line, '^( *)-\s*name:\s*(\S+)')
+    if ($item.Success) {
+      $build = $item.Groups[2].Value
+      $top = $item.Groups[1].Value.Length
+      $pins[$build] = [System.Collections.Specialized.OrderedDictionary]::new([StringComparer]::Ordinal)
+    } elseif ($null -ne $build -and $depth -le $top) {
+      $build = $null
+    } elseif ($null -ne $build -and $line -cmatch '^ *pinValues:') {
+      if ($line -cnotmatch '^ *pinValues:\s*(#.*)?$') {
+        throw ('line {0} writes the pinValues of {1} on one line - write one key: "value" pair per line below it' -f $number, $build)
+      }
+      $block = $depth
+    }
+  }
   $inventories = Join-Path $Tree 'clusters/inventories'
   if (-not (Test-Path -LiteralPath $inventories)) { return @() }
   $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
@@ -90,24 +137,44 @@ function Write-StagePin {
   foreach ($inventory in Get-ChildItem -LiteralPath $inventories -Directory) {
     $path = Join-Path $inventory.FullName "values-$PinStage.yaml"
     if (-not (Test-Path -LiteralPath $path)) { continue }
-    $out = [System.Collections.Generic.List[string]]::new()
+    $lines = [System.Collections.Generic.List[string]]::new([string[]][System.IO.File]::ReadAllText($path).Split([char]10))
     $image = $null
     $changed = $false
-    foreach ($line in [System.IO.File]::ReadAllText($path).Split([char]10)) {
-      $imageLine = [regex]::Match($line, '^(\s*)image:\s*(\S+)\s*$')
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+      $imageLine = [regex]::Match($lines[$i], '^(\s*)image:\s*(\S+)\s*$')
       if ($imageLine.Success) { $image = $imageLine.Groups[2].Value }
-      $tagLine = [regex]::Match($line, '^(\s*)tag:\s*\S+\s*$')
-      if ($tagLine.Success -and $BuildNames -contains $image) {
-        $line = '{0}tag: "{1}"' -f $tagLine.Groups[1].Value, $ImageTag
+      $tagLine = [regex]::Match($lines[$i], '^(\s*)tag:\s*\S+\s*$')
+      if ($tagLine.Success -and $names -ccontains $image) {
+        $indent = $tagLine.Groups[1].Value
+        $lines[$i] = '{0}tag: "{1}"' -f $indent, $ImageTag
+        # THE ENTRY is every line around the tag at its indentation or deeper, from below the item
+        # line above it to the first shallower line below it. A pin value replaces its key's line
+        # there, and stands right after the tag where the entry carries none.
+        $inside = { param($n) $lines[$n].Trim() -eq '' -or ($lines[$n].Length - $lines[$n].TrimStart(' ').Length) -ge $indent.Length }
+        $first = $i
+        while ($first -gt 0 -and (& $inside ($first - 1))) { $first-- }
+        $after = $i + 1
+        if ($pins.ContainsKey($image)) {
+          foreach ($key in $pins[$image].Keys) {
+            $end = $i + 1
+            while ($end -lt $lines.Count -and (& $inside $end)) { $end++ }
+            $pin = '{0}{1}: "{2}"' -f $indent, $key, $pins[$image][$key]
+            $own = -1
+            for ($n = $first; $n -lt $end; $n++) {
+              if ([regex]::IsMatch($lines[$n], '^' + [regex]::Escape($indent + $key) + ':(\s|$)')) { $own = $n; break }
+            }
+            if ($own -ge 0) { $lines[$own] = $pin } else { $lines.Insert($after, $pin); $after++ }
+          }
+        }
+        $i = $after - 1
         $image = $null
         $changed = $true
       }
-      $out.Add($line)
     }
     # WRITTEN ONLY WHERE A TAG MOVED. A file compared by its whole text is a file rewritten for a
     # trailing newline, and a commit that names files it did not change is one nobody can read.
     if ($changed) {
-      [System.IO.File]::WriteAllText($path, ($out -join "`n"), $utf8NoBom)
+      [System.IO.File]::WriteAllText($path, ($lines -join "`n"), $utf8NoBom)
       $touched += ([System.IO.Path]::GetRelativePath($Tree, $path) -replace '\\', '/')
     }
   }
@@ -150,7 +217,8 @@ function Publish-BranchPin {
     git -C $platformRepoDir fetch --quiet origin $Branch
     if ($LASTEXITCODE -ne 0) { Die "the branch $Branch of $platformRepo could not be fetched - nothing further was pinned" }
     git -C $platformRepoDir reset --quiet --hard "origin/$Branch"
-    $pinned = @(Write-StagePin -Tree $platformRepoDir -PinStage $Stage -ImageTag "$tag-$sha7" -BuildNames $buildNames)
+    try { $pinned = @(Write-StagePin -Tree $platformRepoDir -PinStage $Stage -ImageTag "$tag-$sha7" -Manifest $manifest) }
+    catch { Die "the pin of $Stage could not be written: $($_.Exception.Message) - the images are built and nothing was pinned" }
     if ($pinned.Count -eq 0) {
       Say "$Branch carries no values-$Stage.yaml pin of $name - left as it stands"
       return
@@ -178,30 +246,42 @@ function Publish-BranchPin {
 # the tag, so a package.json still declaring an older number labels the artifact with a version
 # nobody released. The write happens BEFORE the tag is created: a tag placed first would point at
 # the commit that still carries the old number, and a release does not move a tag afterwards.
-# Only the FIRST "version" line is touched. That is the manifest's own; a version further down
-# belongs to a dependency and is not this release's to move.
-# A repository with no package.json, or one that declares no version, has nothing that could go
+# EVERY package.json the repository tracks is stamped, in the one commit: a workspace publishes its
+# packages at the numbers they declare, and a package left at an older number is skipped by a publish
+# that finds that number already published.
+# Only the FIRST "version" line of a file is touched. That is the manifest's own; a version further
+# down belongs to a dependency and is not this release's to move. The file keeps its line endings and
+# its byte order mark. Paths come unquoted, so a name with a non-ASCII byte is the file itself.
+# A repository with no package.json, or a file that declares no version, has nothing that could go
 # stale — that is said out loud and the release continues, because a unit written in another
 # language is the ordinary case for this script and not a broken one.
 function Set-ManifestVersion($Root, $Version, $Tag) {
-  $file = Join-Path $Root 'package.json'
-  if (-not (Test-Path -LiteralPath $file)) {
+  $manifests = @(git -c core.quotePath=false -C $Root ls-files -- 'package.json' '*/package.json')
+  if ($manifests.Count -eq 0) {
     Say 'this repository carries no package.json - no version manifest to stamp'
     return
   }
-  $text = [System.IO.File]::ReadAllText($file)
   $rx = [regex]'(?m)^(\s*)"version":\s*"[^"]*"'
-  if (-not $rx.IsMatch($text)) {
-    Say 'package.json declares no version - nothing to stamp'
-    return
+  $stamped = @()
+  foreach ($rel in $manifests) {
+    $file = Join-Path $Root $rel
+    $bytes = [System.IO.File]::ReadAllBytes($file)
+    $hasBom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
+    $text = [System.IO.File]::ReadAllText($file)
+    if (-not $rx.IsMatch($text)) {
+      Say "$rel declares no version - nothing to stamp"
+      continue
+    }
+    $bumped = $rx.Replace($text, '$1"version": "' + $Version + '"', 1)
+    if ($bumped -eq $text) { continue }
+    [System.IO.File]::WriteAllText($file, $bumped, [System.Text.UTF8Encoding]::new($hasBom))
+    git add -- $file
+    $stamped += $rel
   }
-  $bumped = $rx.Replace($text, '$1"version": "' + $Version + '"', 1)
-  if ($bumped -eq $text) { return }
-  [System.IO.File]::WriteAllText($file, $bumped)
-  git add -- $file
+  if ($stamped.Count -eq 0) { return }
   git commit --quiet -m "release: $Tag"
   if ($LASTEXITCODE -ne 0) { Die "the version bump to $Version could not be committed" }
-  Say "package.json declares $Version"
+  foreach ($rel in $stamped) { Say "$rel declares $Version" }
 }
 
 if ($Version -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
@@ -236,6 +316,10 @@ if (Test-Path -LiteralPath $manifest) {
   $buildNames = @([regex]::Matches($manifestText, '(?m)^\s*-\s*name:\s*(\S+)') | ForEach-Object { $_.Groups[1].Value })
 }
 if (-not $name) { Die "the manifest $manifest states no name - it is what the release line and any pin are written under" }
+# A unit that pins itself writes its pin from here, so a build that pins nothing has no meaning for it.
+if ($Target -ne 'deploy' -and $platformRepo) {
+  Die "the manifest declares platformRepo $platformRepo, so this unit writes its own pins - target build is for units the platform's build plane pins"
+}
 
 # ── The pin pre-flight ────────────────────────────────────────────────────────────────────────
 #
@@ -386,14 +470,19 @@ try {
   # commit; the bump's pin commits then sit on top of it and are replaced by the next release the
   # same way. Nothing a person pushes there survives a release, which is the point: what the cluster
   # runs is what was released.
-  $deliveryBranch = "refs/heads/deploy/$Stage"
-  git push --force origin "${sha}:$deliveryBranch"
-  if ($LASTEXITCODE -ne 0) {
-    Die "the delivery branch deploy/$Stage could not be placed at $sha7, so the build would have nothing to render"
+  #
+  # A BUILD PINS NOTHING, so the cluster must not read its tree either: target build leaves the branch
+  # where the last deploy put it.
+  if ($Target -eq 'deploy') {
+    $deliveryBranch = "refs/heads/deploy/$Stage"
+    git push --force origin "${sha}:$deliveryBranch"
+    if ($LASTEXITCODE -ne 0) {
+      Die "the delivery branch deploy/$Stage could not be placed at $sha7, so the build would have nothing to render"
+    }
+    Say "deploy/$Stage stands at $sha7"
   }
-  Say "deploy/$Stage stands at $sha7"
 
-  $deployRef = "refs/tags/deploy/$Stage/$tag"
+  $deployRef = "refs/tags/$Target/$Stage/$tag"
   # Delete first (absent on a first deploy — that is the normal case, not an error), then push: the
   # push is what the platform's webhook reacts to.
   git push origin ":$deployRef" 2>$null | Out-Null
@@ -491,7 +580,11 @@ try {
     }
   }
 
-  Say "$name $tag (commit $sha7) is on its way to $Stage"
+  if ($Target -eq 'build') {
+    Say "$name $tag (commit $sha7) is being built for $Stage - no pin is written, the build is for whoever records its tag"
+  } else {
+    Say "$name $tag (commit $sha7) is on its way to $Stage"
+  }
   if ($buildNames.Count -gt 0) {
     Say 'the platform builds these image tags, or skips the build when they already exist:'
     foreach ($build in $buildNames) {
