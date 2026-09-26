@@ -10,6 +10,12 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  # The Release workflow commits a release with GITHUB_TOKEN, and GitHub starts no workflow from such
+  # a push. This runs the gates and the publish job after every release as well; for this event the
+  # checkout is the head of master, which is the release commit.
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
 
 permissions:
   contents: read
@@ -17,6 +23,7 @@ permissions:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +54,7 @@ jobs:
   # tests and the production build. It resolves the workspace packages' types, so the foundation
   # packages are built first; the build needs the vendor bundles build:vendor writes.
   app:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -84,6 +92,7 @@ jobs:
   # The web site's gate: typecheck, tests (among them the guard that it carries no design value of
   # its own) and the production build, over the built foundation packages it renders with.
   web:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -116,6 +125,7 @@ jobs:
   # installs the whole workspace, so a workspace package the site imports but the Dockerfile does
   # not install, copy or build would pass there and fail only at release; here it fails.
   web-image:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -127,10 +137,11 @@ jobs:
         run: docker build -f docker/web.Dockerfile --secret id=npmrc,src="$RUNNER_TEMP/npmrc" -t digita-web:ci .
 
   # Every publishable package whose version is not yet in GitHub Packages, on every push to
-  # master: a version that is already there is skipped, so a push without a bump publishes
-  # nothing, and a bumped package.json is the whole release. No tag, no script, no hand.
+  # master and after every successful release: a version that is already there is skipped, so a
+  # push without a bump publishes nothing, and the release commit's stamped versions are the whole
+  # release. No tag, no script, no hand.
   publish:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -182,6 +193,7 @@ jobs:
   # integration tests — each integration file boots its own 1-node replset, so
   # the runner needs egress to the mongod download mirror on a cold cache).
   engine:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
