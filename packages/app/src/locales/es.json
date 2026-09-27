@@ -262,6 +262,7 @@
   "ui.theme.toggle": "Cambiar tema",
   "ui.crumb.label": "Ruta de navegación",
   "ui.lang.label": "Idioma",
+  "ui.lang.notSaved": "No se pudo guardar tu idioma en tu cuenta, así que tus correos siguen en el idioma anterior.",
   "ui.login.title": "Iniciar sesión",
   "ui.login.redirecting": "Te llevamos a la página de inicio de sesión.",
   "ui.nav.skipToContent": "Saltar al contenido",

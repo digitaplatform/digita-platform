@@ -2,17 +2,20 @@ import { Globe } from 'lucide-react';
 import { LanguageMenu } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
 import { useChrome } from '@/lib/chrome-i18n';
+import { useProfileUpdate } from '@/hooks/useAccount';
+import { useDialogHost } from '@/components/overlay/DialogHost';
 
 /**
  * Language picker driven entirely by the BACKEND: the options are the engine's
  * Language entities (from /boot.available_languages) and switching reloads that
  * locale's backend translations. Hidden when the platform disallows user language
- * choice or only one language exists.
+ * choice or only one language exists. `onChosen` runs after the switch; the sign-in
+ * shell passes none.
  *
  * Nordstern F15: a compact globe menu (kit Menu/MenuItem radio items) instead of
  * a 176px Select box — the topbar stays one calm row of icon buttons.
  */
-export function LanguageSwitcher() {
+export function LanguageSwitcher({ onChosen }: { onChosen?: (code: string) => void }) {
   const tc = useChrome();
   const languages = useSessionStore((s) => s.languages);
   const allow = useSessionStore((s) => s.allowUserLanguage);
@@ -27,7 +30,21 @@ export function LanguageSwitcher() {
       current={current}
       icon={<Globe className="h-5 w-5" aria-hidden="true" />}
       languages={languages.map((l) => ({ code: l.code, label: `${l.flag_emoji ? `${l.flag_emoji} ` : ''}${l.native_name}` }))}
-      onSelect={(code) => void setLocale(code)}
+      onSelect={(code) => {
+        void setLocale(code);
+        onChosen?.(code);
+      }}
     />
   );
+}
+
+/**
+ * For the signed-in chrome: saves a chosen language to the user's IdP profile, because the
+ * IdP writes that user's mails in the profile's language. A failed save is shown, not hidden.
+ */
+export function useSaveLanguageToProfile(): (code: string) => void {
+  const tc = useChrome();
+  const profile = useProfileUpdate();
+  const dialog = useDialogHost();
+  return (code) => profile.mutate({ language: code }, { onError: () => dialog.toast(tc('ui.lang.notSaved'), 'error') });
 }

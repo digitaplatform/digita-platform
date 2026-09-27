@@ -262,6 +262,7 @@
   "ui.theme.toggle": "Design wechseln",
   "ui.crumb.label": "Brotkrümelnavigation",
   "ui.lang.label": "Sprache",
+  "ui.lang.notSaved": "Deine Sprache konnte nicht in deinem Konto gespeichert werden. Deine Mails kommen weiter in der bisherigen Sprache.",
   "ui.login.title": "Anmelden",
   "ui.login.redirecting": "Du wirst zur Anmeldung weitergeleitet.",
   "ui.nav.skipToContent": "Zum Inhalt springen",

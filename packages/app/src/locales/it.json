@@ -262,6 +262,7 @@
   "ui.theme.toggle": "Cambia tema",
   "ui.crumb.label": "Percorso di navigazione",
   "ui.lang.label": "Lingua",
+  "ui.lang.notSaved": "Non è stato possibile salvare la tua lingua nel tuo account, quindi le tue email restano nella lingua precedente.",
   "ui.login.title": "Accedi",
   "ui.login.redirecting": "Ti stiamo portando alla pagina di accesso.",
   "ui.nav.skipToContent": "Vai al contenuto",

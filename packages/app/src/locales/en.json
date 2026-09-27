@@ -262,6 +262,7 @@
   "ui.theme.toggle": "Toggle theme",
   "ui.crumb.label": "Breadcrumb",
   "ui.lang.label": "Language",
+  "ui.lang.notSaved": "Your language could not be saved to your account, so your mails keep the previous language.",
   "ui.login.title": "Sign in",
   "ui.login.redirecting": "Taking you to the sign-in page.",
   "ui.nav.skipToContent": "Skip to content",

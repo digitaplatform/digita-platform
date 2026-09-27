@@ -3,7 +3,7 @@ import { ModeButton, TopBar, topBarButtonClass, cn } from '@digitaplatform/compo
 import { useThemeStore } from '@/stores/theme';
 import { useUiStore } from '@/stores/ui';
 import { useChrome } from '@/lib/chrome-i18n';
-import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
+import { LanguageSwitcher, useSaveLanguageToProfile } from '@/components/layout/LanguageSwitcher';
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { AppMenu } from '@/components/layout/AppMenu';
 import { DensityMenu } from '@/components/layout/DensityMenu';
@@ -21,6 +21,7 @@ export function Topbar({ showMenuButton = true }: { showMenuButton?: boolean }) 
   const setMobileNav = useUiStore((s) => s.setMobileNav);
   const setCommandPalette = useUiStore((s) => s.setCommandPalette);
   const tc = useChrome();
+  const saveLanguage = useSaveLanguageToProfile();
 
   return (
     <TopBar>
@@ -48,7 +49,7 @@ export function Topbar({ showMenuButton = true }: { showMenuButton?: boolean }) 
           <Search className="h-5 w-5" />
           <span className="hidden text-xs lg:inline">{tc('ui.list.search')} ⌘K</span>
         </button>
-        <LanguageSwitcher />
+        <LanguageSwitcher onChosen={saveLanguage} />
         <DesignMenu />
         <SignatureMenu />
         <DensityMenu />
