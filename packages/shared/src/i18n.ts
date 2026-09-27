@@ -1,11 +1,12 @@
 /**
- * Lightweight, dependency-free i18n for the digita suite. The MECHANISM lives
- * here in @digita/shared so every service (digita-auth, future digita-post,
- * frontends) shares one translator; each service supplies its OWN locale data.
+ * Lightweight, dependency-free i18n for the digita suite: one synchronous translator over a bundle
+ * of every language's messages. The messages of a build are the folder named after it in the public
+ * repository digitaplatform/digita-translations (`translations/<build>/<language>.json`); a pod gets
+ * its stage's pinned commit of that folder as files. Load them with `fetchBundle` in a browser or
+ * `readBundle` (`@digitaplatform/shared/i18n-node`) in Node.
  *
- * (digita-engine keeps its richer DB-backed translation service for
- * admin-editable, per-document translations — this is for static service
- * messages / error codes.)
+ * (digita-engine keeps its DB-backed translation service for the apps' texts, which tenants edit —
+ * this is for the built-in texts of the platform and its services.)
  */
 
 /** One locale's key → message-template map (templates use `{param}` placeholders). */
@@ -14,9 +15,22 @@ export type LocaleMessages = Record<string, string>;
 /** A bundle keyed by language code, e.g. `{ en: {...}, de: {...} }`. */
 export type LocaleBundle = Record<string, LocaleMessages>;
 
+/** The languages every build's translations carry in full. */
+export const SUPPORTED_LANGUAGES = ["en", "de", "es", "fr", "it", "tr"] as const;
+
+export type Language = (typeof SUPPORTED_LANGUAGES)[number];
+
+/** The language a text falls back to when the asked one lacks it. */
+export const FALLBACK_LANGUAGE: Language = "en";
+
 export interface Translator {
   /** Resolve `key` in `locale` (→ fallback → key itself), interpolating `{param}`s. */
   t(key: string, params?: Record<string, string | number>, locale?: string): string;
+  /**
+   * The `<key>.one` or `<key>.other` message for `count`, as the language's plural rules pick it,
+   * with `{count}` filled.
+   */
+  tPlural(key: string, count: number, params?: Record<string, string | number>, locale?: string): string;
   /** Pick the best supported language from an Accept-Language header. */
   resolveLocale(acceptLanguage?: string | null): string;
   readonly supported: string[];
@@ -50,8 +64,12 @@ export function createTranslator(bundle: LocaleBundle, fallback: string): Transl
     return fallback;
   }
 
+  function languageOf(locale?: string): string {
+    return locale && supported.includes(locale) ? locale : fallback;
+  }
+
   function t(key: string, params?: Record<string, string | number>, locale?: string): string {
-    const loc = locale && supported.includes(locale) ? locale : fallback;
+    const loc = languageOf(locale);
     const template = bundle[loc]?.[key] ?? bundle[fallback]?.[key] ?? key;
     if (!params) return template;
     return template.replace(/\{(\w+)\}/g, (_m, k: string) =>
@@ -59,5 +77,30 @@ export function createTranslator(bundle: LocaleBundle, fallback: string): Transl
     );
   }
 
-  return { t, resolveLocale, supported, fallback };
+  function tPlural(key: string, count: number, params?: Record<string, string | number>, locale?: string): string {
+    const loc = languageOf(locale);
+    const form = new Intl.PluralRules(loc).select(count) === "one" ? "one" : "other";
+    return t(`${key}.${form}`, { count, ...params }, loc);
+  }
+
+  return { t, tPlural, resolveLocale, supported, fallback };
+}
+
+/**
+ * Loads every supported language of one build's translations in a browser: `<baseUrl><language>.json`,
+ * where `baseUrl` ends in "/". A file the server does not deliver fails the load, naming it.
+ */
+export async function fetchBundle(
+  baseUrl: string,
+  languages: readonly string[] = SUPPORTED_LANGUAGES,
+): Promise<LocaleBundle> {
+  const entries = await Promise.all(
+    languages.map(async (language) => {
+      const url = `${baseUrl}${language}.json`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`translations: ${url} answered ${response.status}`);
+      return [language, (await response.json()) as LocaleMessages] as const;
+    }),
+  );
+  return Object.fromEntries(entries);
 }

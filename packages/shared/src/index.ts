@@ -180,6 +180,7 @@ export type { DataFormatOption } from "./constants/field-types.js";
 export { DIGITA } from "./digita-constants.js";
 export type { DIGITACollection, DIGITADatabase } from "./digita-constants.js";
 
-// Shared i18n mechanism — services supply their own locale bundles.
-export { createTranslator } from "./i18n.js";
-export type { Translator, LocaleBundle, LocaleMessages } from "./i18n.js";
+// Shared i18n: the translator and the browser loader of digita-translations; the Node loader is
+// the subpath export "@digitaplatform/shared/i18n-node".
+export { createTranslator, fetchBundle, SUPPORTED_LANGUAGES, FALLBACK_LANGUAGE } from "./i18n.js";
+export type { Translator, LocaleBundle, LocaleMessages, Language } from "./i18n.js";

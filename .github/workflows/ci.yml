@@ -47,8 +47,8 @@ jobs:
           build
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Test the theme and the component kit
-        run: pnpm --filter '@digitaplatform/theme' --filter '@digitaplatform/components' test
+      - name: Test shared, the theme and the component kit
+        run: pnpm --filter '@digitaplatform/shared' --filter '@digitaplatform/theme' --filter '@digitaplatform/components' test
 
   # The app's gate: lint (eslint --max-warnings 0, type-aware over src and tests), typecheck,
   # tests and the production build. It resolves the workspace packages' types, so the foundation

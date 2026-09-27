@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./i18n-node": {
+      "types": "./dist/i18n-node.d.ts",
+      "import": "./dist/i18n-node.js"
     }
   },
   "files": [
@@ -25,9 +29,12 @@
   },
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "@types/node": "^25.9.3"
   }
 }
