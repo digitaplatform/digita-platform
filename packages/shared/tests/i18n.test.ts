@@ -96,4 +96,10 @@ describe("the key-drift guard", () => {
     writeFileSync(join(dir, "a.tsx"), `t('known'); tPlural('codes', 1);\n`);
     expect(findMissingKeys(dir, { known: "K", "codes.one": "1", "codes.other": "n" })).toEqual([]);
   });
+
+  it("reads the one-message call a build names in place of t", () => {
+    const dir = mkdtempSync(join(tmpdir(), "src-"));
+    writeFileSync(join(dir, "a.tsx"), `tc('known'); tc("gone"); t('other.catalog'); tPlural('codes', 2);\n`);
+    expect(findMissingKeys(dir, { known: "K" }, ["tc"])).toEqual(["a.tsx:1 gone", "a.tsx:1 codes.one", "a.tsx:1 codes.other"]);
+  });
 });

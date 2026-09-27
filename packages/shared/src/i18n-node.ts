@@ -22,25 +22,25 @@ export function readBundle(dir: string, languages: readonly string[] = SUPPORTED
   return bundle;
 }
 
-const KEY_CALL = /\b(t|tPlural)\(\s*(["'`])([\w.-]+)\2/g;
-
 /**
  * The keys that `t("…")` and `tPlural("…", …)` calls in the .ts and .tsx files under `dir` name
- * and `messages` lacks, each as "<file>:<line> <key>". A `tPlural` key needs `<key>.one` and
- * `<key>.other`. A key built at run time, such as a template literal with `${}`, is not seen.
- * Code and texts are versioned apart, so a build's tests run this against its folder of
- * digita-translations `master` to catch a key the code uses and the texts lack.
+ * and `messages` lacks, each as "<file>:<line> <key>". A build whose one-message call has another
+ * name, such as the app's `tc`, names it in `calls` in place of `t`. A `tPlural` key needs
+ * `<key>.one` and `<key>.other`. A key built at run time, such as a template literal with `${}`,
+ * is not seen. Code and texts are versioned apart, so a build's tests run this against its folder
+ * of digita-translations `master` to catch a key the code uses and the texts lack.
  */
-export function findMissingKeys(dir: string, messages: LocaleMessages): string[] {
+export function findMissingKeys(dir: string, messages: LocaleMessages, calls: readonly string[] = ["t"]): string[] {
+  const keyCall = new RegExp(`\\b(${[...calls, "tPlural"].join("|")})\\(\\s*(["'\`])([\\w.-]+)\\2`, "g");
   const missing: string[] = [];
   const files = readdirSync(dir, { recursive: true, encoding: "utf8" })
     .filter((file) => /\.tsx?$/.test(file) && !file.endsWith(".d.ts"))
     .sort();
   for (const file of files) {
     const source = readFileSync(join(dir, file), "utf8");
-    for (const match of source.matchAll(KEY_CALL)) {
+    for (const match of source.matchAll(keyCall)) {
       const call = match[1];
-      const key = match[3]!; // KEY_CALL's third group is not optional
+      const key = match[3]!; // keyCall's third group is not optional
       const keyStart = match.index + match[0].length - 1 - key.length;
       const line = source.slice(0, keyStart).split("\n").length;
       const needed = call === "tPlural" ? [`${key}.one`, `${key}.other`] : [key];
