@@ -47,6 +47,9 @@ export interface ServerConfig extends PublicSiteConfig {
   /** The tenant's session cookie suffix (AUTH_COOKIE_SUFFIX, sessionCookieNames). Explicitly
    *  OPTIONAL: null → the unsuffixed names. */
   authCookieSuffix: string | null;
+  /** The site's chrome texts, one <language>.json each (TRANSLATIONS_DIR): the folder digita-web
+   *  of digitaplatform/digita-translations, put there by the pod's init container. */
+  translationsDir: string;
 }
 
 let cached: ServerConfig | null = null;
@@ -63,6 +66,7 @@ export function getConfig(): ServerConfig {
     tenantApps: (process.env.TENANT_APPS ?? "").split(",").map((name) => name.trim()).filter(Boolean),
     authUrl: process.env.AUTH_URL ? noTrailing(process.env.AUTH_URL) : null,
     authCookieSuffix: process.env.AUTH_COOKIE_SUFFIX || null,
+    translationsDir: req("TRANSLATIONS_DIR"),
     locales: getLocales(),
     defaultLocale: getDefaultLocale(),
   };

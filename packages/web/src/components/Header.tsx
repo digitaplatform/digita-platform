@@ -40,16 +40,16 @@ export function Header({
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          <LocaleSwitcher current={locale} enabled={enabled} label={t(locale, "language")} />
-          <ThemeToggle label={t(locale, "toggleTheme")} />
+          <LocaleSwitcher current={locale} enabled={enabled} label={t("language", locale)} />
+          <ThemeToggle label={t("toggleTheme", locale)} />
           <MobileNav
             locale={locale}
             items={items}
             apps={apps}
             brand={brand}
-            label={t(locale, "navigation")}
-            openLabel={t(locale, "openMenu")}
-            closeLabel={t(locale, "closeMenu")}
+            label={t("navigation", locale)}
+            openLabel={t("openMenu", locale)}
+            closeLabel={t("closeMenu", locale)}
           />
         </div>
       </div>
