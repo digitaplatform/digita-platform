@@ -4,13 +4,20 @@ import { SUPPORTED_LANGUAGES, type LocaleBundle, type LocaleMessages } from "./i
 
 /**
  * Loads every supported language of one build's translations from `dir`, where the pod's init
- * container put its stage's pinned commit of digitaplatform/digita-translations. A missing or
- * unreadable file throws, naming it. Its own subpath export keeps `node:fs` out of browser bundles.
+ * container put its stage's pinned commit of digitaplatform/digita-translations. A missing,
+ * unreadable or unparsable file throws, naming it. Its own subpath export keeps `node:fs` out of
+ * browser bundles.
  */
 export function readBundle(dir: string, languages: readonly string[] = SUPPORTED_LANGUAGES): LocaleBundle {
   const bundle: LocaleBundle = {};
   for (const language of languages) {
-    bundle[language] = JSON.parse(readFileSync(join(dir, `${language}.json`), "utf8")) as LocaleMessages;
+    const file = join(dir, `${language}.json`);
+    const text = readFileSync(file, "utf8");
+    try {
+      bundle[language] = JSON.parse(text) as LocaleMessages;
+    } catch (error) {
+      throw new Error(`translations: ${file} is not valid JSON: ${(error as Error).message}`);
+    }
   }
   return bundle;
 }

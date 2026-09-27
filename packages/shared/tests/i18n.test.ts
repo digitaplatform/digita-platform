@@ -65,6 +65,9 @@ describe("the loaders of digita-translations", () => {
     const partial = mkdtempSync(join(tmpdir(), "translations-"));
     writeFileSync(join(partial, "en.json"), "{}");
     expect(() => readBundle(partial)).toThrow(/de\.json/);
+    const truncated = mkdtempSync(join(tmpdir(), "translations-"));
+    writeFileSync(join(truncated, "en.json"), `{"title":`);
+    expect(() => readBundle(truncated, ["en"])).toThrow(/en\.json is not valid JSON/);
   });
 
   it("keeps the Node loader out of the root export, so a browser bundle never pulls in node:fs", () => {
