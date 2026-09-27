@@ -82,8 +82,18 @@ jobs:
         run: pnpm --filter '@digitaplatform/app' lint
       - name: Typecheck the app
         run: pnpm --filter '@digitaplatform/app' typecheck
+      # The tests read the build's texts as its pod does, from TRANSLATIONS_DIR: its folder of
+      # digitaplatform/digita-translations master, never a copy kept here. A literal key the code
+      # names and that folder's en.json lacks turns the tests red.
+      - name: Download digitaplatform/digita-translations master
+        run: |
+          mkdir -p "$RUNNER_TEMP/digita-translations"
+          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/master \
+            | tar -xz -C "$RUNNER_TEMP/digita-translations" --strip-components=1
       - name: Test the app
         run: pnpm --filter '@digitaplatform/app' test
+        env:
+          TRANSLATIONS_DIR: ${{ runner.temp }}/digita-translations/translations/digita-app
       - name: Build the app
         run: >-
           pnpm --filter '@digitaplatform/app' build:vendor &&
@@ -116,8 +126,18 @@ jobs:
           build
       - name: Typecheck the web site
         run: pnpm --filter '@digitaplatform/web' typecheck
+      # The tests read the build's texts as its pod does, from TRANSLATIONS_DIR: its folder of
+      # digitaplatform/digita-translations master, never a copy kept here. A literal key the code
+      # names and that folder's en.json lacks turns the tests red.
+      - name: Download digitaplatform/digita-translations master
+        run: |
+          mkdir -p "$RUNNER_TEMP/digita-translations"
+          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/master \
+            | tar -xz -C "$RUNNER_TEMP/digita-translations" --strip-components=1
       - name: Test the web site
         run: pnpm --filter '@digitaplatform/web' test
+        env:
+          TRANSLATIONS_DIR: ${{ runner.temp }}/digita-translations/translations/digita-web
       - name: Build the web site
         run: pnpm --filter '@digitaplatform/web' build
 
@@ -217,9 +237,18 @@ jobs:
         run: pnpm --filter '@digitaplatform/engine' depcruise
       - name: Build the engine
         run: pnpm --filter '@digitaplatform/engine' build
+      # The tests read the build's texts as its pod does, from TRANSLATIONS_DIR: its folder of
+      # digitaplatform/digita-translations master, never a copy kept here. A literal key the code
+      # names and that folder's en.json lacks turns the tests red.
+      - name: Download digitaplatform/digita-translations master
+        run: |
+          mkdir -p "$RUNNER_TEMP/digita-translations"
+          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/master \
+            | tar -xz -C "$RUNNER_TEMP/digita-translations" --strip-components=1
       - name: Engine test suite
         run: pnpm --filter '@digitaplatform/engine' test
         env:
+          TRANSLATIONS_DIR: ${{ runner.temp }}/digita-translations/translations/digita-engine
           # Mirrors the 2-fork CI scenario the vitest.config.ts isolation
           # comment documents (worker isolation must stay ON).
           VITEST_MAX_WORKERS: '2'
