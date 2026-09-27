@@ -1,7 +1,8 @@
 import { defineConfig, searchForWorkspaceRoot, type Plugin, type ProxyOptions } from 'vite';
 import react from '@vitejs/plugin-react';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'path';
 // Shared singletons resolved at RUNTIME via the import-map (see vendor/build-vendor.mjs).
 // The host must NOT bundle these — it leaves the bare specifiers so the browser
@@ -67,6 +68,51 @@ function inlineImportMap(isBuild: boolean): Plugin {
   };
 }
 
+/** TRANSLATIONS_DIR is required, with no default: dev and preview must fail at start and name it. */
+function requireTranslationsDir(): string {
+  const dir = process.env.TRANSLATIONS_DIR;
+  if (!dir) {
+    throw new Error(
+      'TRANSLATIONS_DIR is not set; pnpm dev and pnpm preview serve translations/ from it: the folder digita-app of a digitaplatform/digita-translations checkout',
+    );
+  }
+  return dir;
+}
+
+/**
+ * Serves only a plain file that sits directly in `dir`: path.basename drops every directory
+ * component of the request, so neither a traversal nor a nested path can name anything outside
+ * `dir`, and a request for `dir` itself (a directory, not a file) is rejected the same way. A
+ * miss answers 404, never Vite's own SPA fallback, matching docker/nginx-app.conf in prod.
+ */
+function translationsHandler(dir: string) {
+  return (req: IncomingMessage, res: ServerResponse) => {
+    const name = req.url ? path.basename(req.url) : '';
+    const file = name ? path.join(dir, name) : '';
+    if (!file || !existsSync(file) || !statSync(file).isFile()) {
+      res.statusCode = 404;
+      res.end();
+      return;
+    }
+    res.setHeader('Content-Type', 'application/json');
+    res.end(readFileSync(file));
+  };
+}
+
+/** Dev-only stand-in for the pod's init container, which puts the chrome texts under the SPA's
+ *  own `translations/` path in prod; wired into both `pnpm dev` and `pnpm preview`. */
+function serveTranslations(): Plugin {
+  return {
+    name: 'serve-translations',
+    configureServer(server) {
+      server.middlewares.use('/translations', translationsHandler(requireTranslationsDir()));
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use('/translations', translationsHandler(requireTranslationsDir()));
+    },
+  };
+}
+
 // Point the dev server at a REMOTE backend (e.g. the erp.dev cluster) so the UI
 // can be iterated on WITHOUT running the whole local stack. `pnpm dev:ui` stays
 // local (engine :3000 + auth :3100); `pnpm dev:ui:remote` (= `vite --mode
@@ -110,7 +156,7 @@ export default defineConfig(({ command, mode }) => {
     // Relative asset URLs: the served index.html carries a <base href> of the app's
     // base path (docker/app-env.sh), so one build serves /erp/, /buildproject/, ….
     base: './',
-    plugins: [react(), inlineImportMap(isBuild)],
+    plugins: [react(), inlineImportMap(isBuild), serveTranslations()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

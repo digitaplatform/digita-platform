@@ -5,6 +5,7 @@ import App from './App';
 import { queryClient } from '@/lib/query-client';
 import { ErrorBoundary } from '@digitaplatform/components';
 import { DialogHostProvider } from '@/components/overlay/DialogHost';
+import { loadChromeTexts } from '@/lib/chrome-i18n';
 import { polyfillCountryFlagEmojis } from 'country-flag-emoji-polyfill';
 // Vendored from country-flag-emoji-polyfill (its exports map hides the file).
 // Glyphs: Twemoji, CC-BY 4.0 (c) Twitter — flags only, 76KB.
@@ -80,14 +81,21 @@ function FatalScreen({ error }: { error: Error }) {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ErrorBoundary fallback={(error) => <FatalScreen error={error} />}>
-      <QueryClientProvider client={queryClient}>
-        <DialogHostProvider>
-          <App />
-        </DialogHostProvider>
-      </QueryClientProvider>
-    </ErrorBoundary>
-  </React.StrictMode>,
+const root = ReactDOM.createRoot(document.getElementById('root')!);
+// The chrome texts come from the pod's files (lib/chrome-i18n.ts), not the bundle, so the app
+// renders only once they have loaded; a failed load shows a plain error, never raw keys.
+loadChromeTexts().then(
+  () =>
+    root.render(
+      <React.StrictMode>
+        <ErrorBoundary fallback={(error) => <FatalScreen error={error} />}>
+          <QueryClientProvider client={queryClient}>
+            <DialogHostProvider>
+              <App />
+            </DialogHostProvider>
+          </QueryClientProvider>
+        </ErrorBoundary>
+      </React.StrictMode>,
+    ),
+  (error: unknown) => root.render(<FatalScreen error={error instanceof Error ? error : new Error(String(error))} />),
 );

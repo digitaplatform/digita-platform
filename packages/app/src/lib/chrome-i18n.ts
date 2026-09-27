@@ -1,49 +1,32 @@
+import { createTranslator, fetchBundle, FALLBACK_LANGUAGE, type Translator } from '@digitaplatform/shared';
 import { useI18nStore } from '@/stores/i18n';
-import en from '@/locales/en.json';
-import de from '@/locales/de.json';
-import es from '@/locales/es.json';
-import tr from '@/locales/tr.json';
-import it from '@/locales/it.json';
-import fr from '@/locales/fr.json';
 
 /**
  * Static UI-chrome translator (`ui.*` keys), reactive on the session locale.
  * DATA + META labels localize via the i18n store (tField/tOption/tEntity); this
- * covers the fixed chrome strings (buttons, status, dialogs) bundled with the app
- * so they work pre-boot and don't depend on backend translations. A missing key
- * warns in dev and renders the key (loud, never silent).
+ * covers the fixed chrome strings (buttons, status, dialogs): the folder digita-app
+ * of digitaplatform/digita-translations, which the pod serves under translations/.
+ * They load before the first render (main.tsx), so they work pre-boot and don't
+ * depend on backend translations. A missing key warns in dev and renders the key
+ * (loud, never silent).
  */
+let translator: Translator | undefined;
 
-type Bundle = Record<string, string>;
-const BUNDLES: Record<string, Bundle> = {
-  en: en as Bundle,
-  de: de as Bundle,
-  es: es as Bundle,
-  tr: tr as Bundle,
-  it: it as Bundle,
-  fr: fr as Bundle,
-};
-
-function interpolate(tpl: string, params?: Record<string, string | number>): string {
-  if (!params) return tpl;
-  let out = tpl;
-  for (const [k, v] of Object.entries(params)) {
-    out = out.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
-  }
-  return out;
+/** Fetches the chrome texts relative to the page's <base href>, so an app under /erp reads
+ *  /erp/translations/. Rejects, naming the file, when one does not load. */
+export async function loadChromeTexts(): Promise<void> {
+  translator = createTranslator(await fetchBundle('translations/'), FALLBACK_LANGUAGE);
 }
 
 export type ChromeTranslate = (key: string, params?: Record<string, string | number>) => string;
 
 export function useChrome(): ChromeTranslate {
   const locale = useI18nStore((s) => s.locale);
-  const bundle = BUNDLES[locale] ?? BUNDLES['en']!;
+  const loaded = translator;
+  if (!loaded) throw new Error('chrome-i18n: loadChromeTexts() has not resolved yet');
   return (key, params) => {
-    const value = bundle[key] ?? BUNDLES['en']![key];
-    if (value === undefined) {
-      if (import.meta.env.DEV) console.warn(`[chrome-i18n] missing key "${key}"`);
-      return key;
-    }
-    return interpolate(value, params);
+    const text = loaded.t(key, params, locale);
+    if (text === key && import.meta.env.DEV) console.warn(`[chrome-i18n] missing key "${key}"`);
+    return text;
   };
 }
