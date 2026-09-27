@@ -2,7 +2,7 @@
 //
 // tsc only emits artifacts for .ts inputs. Other file types stay behind:
 //   • .cjs       — pino transports loaded via dynamic require
-//   • .json      — entity definitions, locales, view/rule definitions
+//   • .json      — entity definitions, view/rule definitions
 //
 // In production (`node dist/server.js`), these assets must be co-located
 // with the compiled .js so the platform can find them at runtime. dev

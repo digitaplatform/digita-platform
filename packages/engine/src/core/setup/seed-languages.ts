@@ -4,13 +4,12 @@ import { createLogger } from "../logging/logger.js";
 
 const log = createLogger("seed-languages");
 
-// Master language list. All six are ENABLED so the platform fully supports the
-// languages the public website (packages/web) ships in: English, German, Italian,
-// French, Spanish, Turkish. Rule: any language the frontend needs MUST exist
-// (and be enabled) here \u2014 the engine is the master list. (Operator-UI chrome
-// bundles exist for all six; the website carries its own per-page content
-// translations.)
-const DEFAULT_LANGUAGES = [
+// The languages a tenant starts with, all ENABLED: exactly SUPPORTED_LANGUAGES of
+// @digitaplatform/shared, the languages every build's texts in
+// digitaplatform/digita-translations carry in full, so no language offered here
+// lacks the engine's, the app's or the website's texts. A test fails when the two
+// lists differ.
+export const DEFAULT_LANGUAGES = [
   {
     _id: "en",
     name: "English",

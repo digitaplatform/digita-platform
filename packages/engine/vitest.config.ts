@@ -1,5 +1,13 @@
 import { defineConfig } from "vitest/config";
 
+// The boot tests read the engine's texts as the pod does, from TRANSLATIONS_DIR: the folder
+// digita-engine of digitaplatform/digita-translations, never a copy kept here.
+if (!process.env["TRANSLATIONS_DIR"]) {
+  throw new Error(
+    "TRANSLATIONS_DIR is not set: point it at translations/digita-engine of a digitaplatform/digita-translations checkout",
+  );
+}
+
 export default defineConfig({
   test: {
     globals: true,

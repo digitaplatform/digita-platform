@@ -28,7 +28,7 @@ vi.mock("../src/core/config/env.js", async () => {
     JOBS_ENABLED: false, JOBS_CONCURRENCY: 1, JOBS_RETRY_ATTEMPTS: 1, JOBS_RETRY_DELAY_MS: 1000,
     REALTIME_ENABLED: true, WS_PATH: "/ws", WS_PING_INTERVAL_MS: 25000,
     IMPORT_MAX_ROWS: 100, EXPORT_MAX_ROWS: 100,
-    APP_DIRS: [], ENTITIES_DIR: "./src/entities", MODULES_DIR: "./src/modules", LOCALES_DIR: "./src/locales",
+    APP_DIRS: [], ENTITIES_DIR: "./src/entities", MODULES_DIR: "./src/modules", TRANSLATIONS_DIR: process.env.TRANSLATIONS_DIR,
     AUTO_MIGRATE: true, TRACK_CHANGES_DEFAULT: false, PERMISSION_SCOPE_ENABLED: true,
   } };
 });

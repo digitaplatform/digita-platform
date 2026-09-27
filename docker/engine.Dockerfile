@@ -51,7 +51,7 @@ FROM deps AS build
 COPY packages/shared/ packages/shared/
 COPY packages/engine/ packages/engine/
 
-# shared → engine (tsc + copy-assets: entity/locale .json + .cjs land in dist/).
+# shared → engine (tsc + copy-assets: entity .json + .cjs land in dist/).
 # No apps are built here — they live in the digita-catalog repo and ship as a
 # separately-built app-bundle mounted at runtime under APPS_DIRS.
 RUN pnpm --filter @digitaplatform/shared build && \
@@ -94,7 +94,7 @@ COPY packages/web/package.json packages/web/
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     pnpm install --frozen-lockfile --prod --filter @digitaplatform/shared --filter @digitaplatform/engine
 
-# Built output. engine dist/ already contains entities/, locales/, modules/
+# Built output. engine dist/ already contains entities/ and modules/
 # (tsc + scripts/copy-assets.mjs) — do NOT re-copy from src/, that would put
 # .ts hook files back in the image and the hook-loader prefers .ts over .js.
 COPY --from=build /app/packages/shared/dist/ packages/shared/dist/
@@ -110,12 +110,13 @@ RUN mkdir -p /app/uploads && chown -R digita:digita /app
 USER digita
 
 # cwd = packages/engine/ so the compiled-runtime asset auto-detection
-# (ENTITIES_DIR/MODULES_DIR/LOCALES_DIR default to ./dist/*) and the
+# (ENTITIES_DIR/MODULES_DIR default to ./dist/*) and the
 # relative APP_DIRS resolve exactly like `pnpm start` does locally.
 WORKDIR /app/packages/engine
 
 # Default env vars (override at runtime). Required at runtime but NOT set here:
-# MONGODB_URI, AUTH_JWKS_URL, AUTH_ISSUER, AUTH_AUDIENCE. Apps are NOT baked in —
+# MONGODB_URI, AUTH_JWKS_URL, AUTH_ISSUER, AUTH_AUDIENCE, and TRANSLATIONS_DIR, where
+# the chart's init container puts the engine's texts. Apps are NOT baked in —
 # the chart points APPS_DIRS at the mounted app-bundle so the engine
 # auto-discovers every app; with no mount the engine runs app-less.
 ENV NODE_ENV=production \

@@ -259,7 +259,7 @@ export function registerTranslationRoutes(
   app.post(`${base}/seed`, async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdministrator(request, reply)) return;
     const result = await translationService.seedFromFiles(
-      (await import("../config/env.js")).env.LOCALES_DIR,
+      (await import("../config/env.js")).env.TRANSLATIONS_DIR,
     );
     const ctx = new ResponseContext();
     ctx.success("translations_seeded", {

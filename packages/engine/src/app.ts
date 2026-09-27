@@ -561,11 +561,11 @@ export async function createApp(
     // 1. Connect to MongoDB
     await db.connect();
 
-    // 1a. Load static system-message i18n (shared translator) from file locales.
-    await loadEngineI18n();
+    // 1a. Load static system-message i18n (shared translator) from TRANSLATIONS_DIR.
+    loadEngineI18n();
 
     // 2. Build app directory lists (APP_DIRS or fallback to legacy single dirs).
-    //    Platform core entities (env.ENTITIES_DIR / MODULES_DIR / LOCALES_DIR)
+    //    Platform core entities (env.ENTITIES_DIR / MODULES_DIR / TRANSLATIONS_DIR)
     //    are loaded UNCONDITIONALLY — they declare the user/role/translation/
     //    session entities that the rest of the platform depends on. APP_DIRS
     //    are loaded after so they can override core entities by name if needed.
@@ -577,8 +577,8 @@ export async function createApp(
       ? [env.MODULES_DIR, ...env.APP_DIRS.map((d) => join(d, "modules"))]
       : [env.MODULES_DIR];
     const localeDirs = useAppDirs
-      ? [env.LOCALES_DIR, ...env.APP_DIRS.map((d) => join(d, "locales"))]
-      : [env.LOCALES_DIR];
+      ? [env.TRANSLATIONS_DIR, ...env.APP_DIRS.map((d) => join(d, "locales"))]
+      : [env.TRANSLATIONS_DIR];
     discoveredEntityDirs = entityDirs;
     discoveredLocaleDirs = localeDirs;
 

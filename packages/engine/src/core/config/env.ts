@@ -20,9 +20,9 @@ const monorepoRoot = resolve(__dirname, "../../../../../");
 
 // Default platform-internal asset roots track where the runtime is loaded
 // from. tsx (dev) loads .ts files in src/, node (prod) loads .js in dist/.
-// Both copies of `entities/` and `locales/` exist after a build (tsc copies
-// .json files via its includes; we still keep them in src for dev). Allow
-// env overrides for non-standard layouts.
+// Both copies of `entities/` exist after a build (tsc copies .json files via
+// its includes; we still keep them in src for dev). Allow env overrides for
+// non-standard layouts.
 const platformAssetRoot = isCompiled ? "./dist" : "./src";
 
 // Load .env file based on NODE_ENV
@@ -223,6 +223,11 @@ export const env = {
   BOOTSTRAP_LOCALE: getEnv("BOOTSTRAP_LOCALE", "en"),
 
   // ─── TRANSLATION ─────────────────────────────────────
+  // The engine's own texts, one <language>.json each: the folder digita-engine of
+  // digitaplatform/digita-translations. In the pod an init container puts the stage's pinned
+  // commit there, so a text changes without a release; they seed the Translation collection
+  // as the base a tenant overrides.
+  TRANSLATIONS_DIR: getEnvRequired("TRANSLATIONS_DIR"),
   TRANSLATION_SOURCE: getEnv("TRANSLATION_SOURCE", "both") as "file" | "mongodb" | "both",
   TRANSLATION_CACHE: getEnv("TRANSLATION_CACHE", "memory") as "redis" | "memory" | "none",
   TRANSLATION_CACHE_TTL_SEC: getEnvInt("TRANSLATION_CACHE_TTL_SEC", 3600),
@@ -342,7 +347,6 @@ export const env = {
   ),
   ENTITIES_DIR: getEnv("ENTITIES_DIR", `${platformAssetRoot}/entities`),
   MODULES_DIR: getEnv("MODULES_DIR", `${platformAssetRoot}/modules`),
-  LOCALES_DIR: getEnv("LOCALES_DIR", `${platformAssetRoot}/locales`),
   AUTO_MIGRATE: getEnvBool("AUTO_MIGRATE", true),
   // Drop indexes that exist in MongoDB but are not declared in the
   // current entity definitions on every boot. Off by default —
