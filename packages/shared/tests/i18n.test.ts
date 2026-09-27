@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as shared from "../src/index.js";
 import { createTranslator, fetchBundle, SUPPORTED_LANGUAGES } from "../src/i18n.js";
-import { readBundle } from "../src/i18n-node.js";
+import { findMissingKeys, readBundle } from "../src/i18n-node.js";
 
 const i18n = createTranslator(
   {
@@ -69,6 +69,28 @@ describe("the loaders of digita-translations", () => {
 
   it("keeps the Node loader out of the root export, so a browser bundle never pulls in node:fs", () => {
     expect("readBundle" in shared).toBe(false);
+    expect("findMissingKeys" in shared).toBe(false);
     expect(typeof shared.fetchBundle).toBe("function");
+  });
+});
+
+describe("the key-drift guard", () => {
+  it("names each literal key the code uses and the texts lack, with its file and line", () => {
+    const dir = mkdtempSync(join(tmpdir(), "src-"));
+    mkdirSync(join(dir, "pages"));
+    writeFileSync(join(dir, "a.ts"), `i18n.t("known");\nformat("not.a.key");\nt(\`dynamic.\${x}\`);\n`);
+    writeFileSync(
+      join(dir, "pages", "b.tsx"),
+      `const x = t(\n  'missing.key',\n);\ntPlural('codes', n);\ntPlural("known", 2);\n`,
+    );
+    writeFileSync(join(dir, "c.d.ts"), `t("ignored.in.declarations");\n`);
+    const messages = { known: "Known", "known.one": "one", "known.other": "other", "codes.one": "{count} code" };
+    expect(findMissingKeys(dir, messages)).toEqual(["pages/b.tsx:2 missing.key", "pages/b.tsx:4 codes.other"]);
+  });
+
+  it("finds nothing when every key is there", () => {
+    const dir = mkdtempSync(join(tmpdir(), "src-"));
+    writeFileSync(join(dir, "a.tsx"), `t('known'); tPlural('codes', 1);\n`);
+    expect(findMissingKeys(dir, { known: "K", "codes.one": "1", "codes.other": "n" })).toEqual([]);
   });
 });
