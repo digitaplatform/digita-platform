@@ -18,11 +18,11 @@
   },
   "dependencies": {
     "@digitaplatform/components": "workspace:*",
-    "@digitaplatform/digita": "^0.1.2",
+    "@digitaplatform/digita": "^0.3.0",
     "@digitaplatform/plugins": "workspace:*",
     "@digitaplatform/shared": "workspace:*",
     "@digitaplatform/theme": "workspace:*",
-    "@digitaplatform/usermenu": "^0.1.0",
+    "@digitaplatform/usermenu": "^0.3.0",
     "@hookform/resolvers": "3.9.1",
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-table": "^8.21.3",
