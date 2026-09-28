@@ -157,7 +157,8 @@ export class MongoDBService {
       {
         duration_ms: Date.now() - startTime,
         databases: reserved,
-        app_db_prefix: env.MONGODB_APP_DB_PREFIX,
+        // The prefix only names databases the engine composes; a tenant engine composes none.
+        ...(env.MONGODB_DATABASE_NAMES ? {} : { app_db_prefix: env.MONGODB_APP_DB_PREFIX }),
       },
       "MongoDB connected",
     );
