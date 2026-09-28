@@ -23,10 +23,11 @@ export function Stack({ props, locale }: { props?: P; locale: Locale }) {
           const coming = s(item, "status") === "coming";
           return (
             <Card key={i} variant="default" className={`${cardClass} ${coming ? "border-dashed border-borderStrong bg-transparent" : ""}`}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* The pill stands under the title on every card, so a long title and a short one line up. */}
+              <div className="flex flex-col items-start gap-2">
                 <h3 className="font-display text-xl font-semibold text-textMain">
                   {lockup ? (
-                    <ProductLockup family={lockup.family} product={lockup.product} className="text-2xl" />
+                    <ProductLockup family={lockup.family} product={lockup.product} className="text-xl" />
                   ) : (
                     s(item, "title")
                   )}

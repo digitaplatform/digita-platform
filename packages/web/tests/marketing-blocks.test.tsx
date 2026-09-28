@@ -216,3 +216,24 @@ describe("the contact sheet", () => {
     await act(async () => root.unmount());
   });
 });
+
+describe("the stack's grid", () => {
+  const stack = (count: number) =>
+    render("stack", {
+      heading: "Apps",
+      items: Array.from({ length: count }, (_, i) => ({ title: `App ${i + 1}`, body: "One line.", status: i ? "coming" : "available" })),
+    });
+
+  it("PLANTED DEFECT: five items wrap into rows of at most three columns, never five columns", () => {
+    const html = stack(5);
+    expect(html).toContain("lg:grid-cols-3");
+    expect(html).not.toContain("grid-cols-5");
+  });
+
+  it("PLANTED INNOCENT: three items keep three columns, and the pill stands under the title on every card", () => {
+    const html = stack(3);
+    expect(html).toContain("md:grid-cols-3");
+    // The title block is a column: the pill follows the h3 inside one flex-col, never beside it.
+    expect(html.match(/flex flex-col items-start gap-2/g)?.length).toBe(3);
+  });
+});

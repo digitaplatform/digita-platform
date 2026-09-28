@@ -39,7 +39,7 @@ export function Section({
 }) {
   const hasHeading = Boolean(eyebrow || heading || lede);
   return (
-    <section className={`mx-auto w-full max-w-6xl px-6 py-16 md:px-8 md:py-24 ${className}`}>
+    <section className={`mx-auto w-full max-w-6xl px-6 py-12 md:px-8 md:py-16 ${className}`}>
       {hasHeading && (
         <div className="flex max-w-3xl flex-col gap-4">
           {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
@@ -122,7 +122,9 @@ const COLUMNS_BY_COUNT: Record<number, string> = {
   2: "md:grid-cols-2",
   3: "md:grid-cols-3",
   4: "md:grid-cols-2 lg:grid-cols-4",
-  5: "md:grid-cols-3 lg:grid-cols-5",
-  6: "md:grid-cols-3 lg:grid-cols-6",
+  // Five or six items wrap into rows: five narrow columns clip a lockup and stretch every card to
+  // the tallest body.
+  5: "md:grid-cols-2 lg:grid-cols-3",
+  6: "md:grid-cols-2 lg:grid-cols-3",
 };
 export const columnsFor = (count: number): string => COLUMNS_BY_COUNT[count] ?? "md:grid-cols-3";
