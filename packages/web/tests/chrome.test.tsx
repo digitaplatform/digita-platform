@@ -12,11 +12,13 @@ import { Header } from "../src/components/Header";
 import type { NavItem, WebSite } from "../src/lib/types";
 import type { Locale } from "../src/i18n/config";
 import { LocaleSwitcher } from "../src/components/LocaleSwitcher";
+import LocaleNotFound from "../src/app/[locale]/not-found";
 
 vi.mock("server-only", () => ({}));
 vi.mock("../src/i18n/messages", () => ({ t: (key: string) => key }));
 let currentPath = "/";
-vi.mock("next/navigation", () => ({ usePathname: () => currentPath, useRouter: () => ({ push: () => {} }), useParams: () => ({ locale: "en" }) }));
+let currentLocale = "en";
+vi.mock("next/navigation", () => ({ usePathname: () => currentPath, useRouter: () => ({ push: () => {} }), useParams: () => ({ locale: currentLocale }) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -27,6 +29,7 @@ const siteConfig = (contactEnabled: boolean): PublicSiteConfig => ({
   locales: ["en", "de", "fr"],
   defaultLocale: "en",
   contactEnabled,
+  notFound: { title: "Seite nicht gefunden", body: "Die gesuchte Seite gibt es nicht.", home: "Zur Startseite" },
 });
 
 const family: NavItem[] = [
@@ -176,5 +179,22 @@ describe("the header", () => {
   it("PLANTED INNOCENT: offers no call to action that leads nowhere", () => {
     const html = renderHeader(false, { ...site, contact_email: undefined });
     expect(html).not.toContain("Book a call");
+  });
+});
+
+describe("the locale's not-found page", () => {
+  it("PLANTED DEFECT: reads its texts from the layout's config and links the locale's home, not English literals", () => {
+    currentLocale = "de";
+    const html = renderToStaticMarkup(
+      <ConfigProvider value={siteConfig(false)}>
+        <LocaleNotFound />
+      </ConfigProvider>,
+    );
+    // The old page said "Page not found" and linked "/"; this goes red then.
+    expect(html).toContain("Seite nicht gefunden");
+    expect(html).toContain("Zur Startseite");
+    expect(html).not.toContain("Page not found");
+    expect(html).toContain('href="/de"');
+    currentLocale = "en";
   });
 });

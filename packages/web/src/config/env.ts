@@ -32,7 +32,7 @@ function reqInt(key: string): number {
 }
 const noTrailing = (u: string): string => u.replace(/\/+$/, "");
 
-export interface ServerConfig extends Omit<PublicSiteConfig, "contactEnabled"> {
+export interface ServerConfig extends Omit<PublicSiteConfig, "contactEnabled" | "notFound"> {
   /** Cluster-internal engine URL for server-side fetches (never sent to the browser). */
   engineUrl: string;
   revalidateSeconds: number;
@@ -77,9 +77,10 @@ export function getConfig(): ServerConfig {
 /** The browser-safe subset, injected into the client via <ConfigProvider>. The contact sheet is
  *  offered when the site names the address its requests go to; the engine stores them and the
  *  web app's hook mails that address. */
-export function publicConfig(site: WebSite | null): PublicSiteConfig {
+export function publicConfig(site: WebSite | null, notFound: PublicSiteConfig["notFound"]): PublicSiteConfig {
   const c = getConfig();
   return {
+    notFound,
     siteId: c.siteId,
     siteUrl: c.siteUrl,
     publicEngineUrl: c.publicEngineUrl,

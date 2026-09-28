@@ -13,4 +13,7 @@ export interface PublicSiteConfig {
   defaultLocale: string;
   /** Whether the contact sheet is offered; a call to action that opens it renders only then. */
   contactEnabled: boolean;
+  /** The texts of the locale's not-found page, read on the server; the page itself is a client
+   *  component without a locale param. */
+  notFound: { title: string; body: string; home: string };
 }

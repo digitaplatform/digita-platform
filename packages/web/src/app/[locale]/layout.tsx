@@ -60,7 +60,11 @@ export default async function LocaleLayout({
   const tenant = brandingStyle(branding);
   const attributes = { ...signatureStyles.attributes, ...tenant.attributes };
   const properties = { ...signatureStyles.properties, ...tenant.properties };
-  const siteConfig = publicConfig(site);
+  const siteConfig = publicConfig(site, {
+    title: t("notFoundTitle", locale as Locale),
+    body: t("notFoundBody", locale as Locale),
+    home: t("notFoundHome", locale as Locale),
+  });
   // A website carries its own name: the site's `site_name` wins over the tenant's `app_name`,
   // which names the tenant's apps, not its public site.
   const brand = {

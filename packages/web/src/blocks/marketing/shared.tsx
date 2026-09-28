@@ -57,14 +57,17 @@ export function Section({
 }
 
 export type Status = "available" | "early_access" | "coming";
-const STATUS_KEY: Record<Status, string> = { available: "statusAvailable", early_access: "statusEarlyAccess", coming: "statusComing" };
-const isStatus = (value: string): value is Status => Object.hasOwn(STATUS_KEY, value);
+const STATUSES: readonly Status[] = ["available", "early_access", "coming"];
+const isStatus = (value: string): value is Status => (STATUSES as readonly string[]).includes(value);
+// Each key is written out, so the translations test sees the three of them.
+const statusLabel = (status: Status, locale: Locale): string =>
+  status === "available" ? t("statusAvailable", locale) : status === "early_access" ? t("statusEarlyAccess", locale) : t("statusComing", locale);
 const PILL = "shrink-0 rounded-full font-mono uppercase tracking-wider";
 
 /** How true a capability is today: an accent pill, an outlined accent pill, an outlined muted pill. */
 export function StatusPill({ status, locale }: { status: string; locale: Locale }) {
   if (!isStatus(status)) return null;
-  const label = t(STATUS_KEY[status], locale);
+  const label = statusLabel(status, locale);
   if (status === "available")
     return (
       <Badge variant="pill" color="primary" className={PILL}>

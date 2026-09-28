@@ -24,6 +24,7 @@ const siteConfig = (contactEnabled: boolean): PublicSiteConfig => ({
   locales: ["en"],
   defaultLocale: "en",
   contactEnabled,
+  notFound: { title: "Seite nicht gefunden", body: "Die gesuchte Seite gibt es nicht.", home: "Zur Startseite" },
 });
 
 const render = (type: BlockType, props?: Record<string, unknown>, contactEnabled = true) => {
