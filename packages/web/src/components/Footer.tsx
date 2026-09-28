@@ -40,7 +40,7 @@ export function Footer({
             )}
           </div>
           {items.length > 0 && (
-            <nav aria-label="Footer" className="md:col-span-2">
+            <nav aria-label={t("navFooter", locale)} className="md:col-span-2">
               <ul className="gap-x-8 sm:columns-2 lg:columns-3">
                 {items.map((item, i) => (
                   <li key={`${item.label}-${i}`} className="mb-2.5 break-inside-avoid">

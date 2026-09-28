@@ -7,18 +7,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { ContactSheet } from "../src/components/ContactSheet";
 import { contactSheetTexts } from "../src/components/chrome-texts";
 import { closeContactSheet, openContactSheet } from "../src/lib/contact-sheet";
+import { setSiteEnv } from "./site-env";
 
 vi.mock("server-only", () => ({}));
-// The texts come from TRANSLATIONS_DIR as the pod reads them; the rest of the config is any value.
-Object.assign(process.env, {
-  ENGINE_URL: "http://engine.internal:3000",
-  SITE_ID: "example",
-  SITE_URL: "https://example.org",
-  PUBLIC_ENGINE_URL: "",
-  REVALIDATE_SECONDS: "60",
-  LOCALES: "en,de",
-  DEFAULT_LOCALE: "en",
-});
+setSiteEnv();
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

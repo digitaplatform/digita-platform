@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
-// The design band keeps focus on the button the visitor clicked while its design loads, and takes
-// no second click until the first design arrived.
+// The design band keeps focus on the button the visitor clicked while its design loads, takes no
+// second click until the first design arrived, and names a refused design in the site's own text.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { designSwitcherTexts } from "../src/components/chrome-texts";
+import { setSiteEnv } from "./site-env";
 
-const loadDesignFromApps = vi.fn(() => new Promise<boolean>(() => {}));
+vi.mock("server-only", () => ({}));
+setSiteEnv();
+const loadDesignFromApps = vi.fn((): Promise<boolean> => new Promise(() => {}));
 vi.mock("../src/lib/delivered-identity", () => ({ loadDesignFromApps }));
 
 const { DesignSwitcher } = await import("../src/components/DesignSwitcher");
@@ -26,7 +30,7 @@ describe("the design switcher", () => {
     document.body.append(container);
     root = createRoot(container);
     await act(async () =>
-      root!.render(<DesignSwitcher apps={["crm"]} authUrl={null} authCookieSuffix={null} texts={{ notBundled: "not bundled", refused: "{design} refused" }} />),
+      root!.render(<DesignSwitcher apps={["crm"]} authUrl={null} authCookieSuffix={null} texts={designSwitcherTexts("en")} />),
     );
     const button = [...container.querySelectorAll("button")].find((b) => b.textContent === "editorial")!;
 
@@ -39,5 +43,16 @@ describe("the design switcher", () => {
 
     await act(async () => button.click());
     expect(loadDesignFromApps).toHaveBeenCalledTimes(1);
+  });
+
+  it("names a refused design in the status line, filled into the text of TRANSLATIONS_DIR", async () => {
+    loadDesignFromApps.mockResolvedValueOnce(false);
+    const container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => root!.render(<DesignSwitcher apps={["crm"]} authUrl={null} authCookieSuffix={null} texts={designSwitcherTexts("en")} />));
+    const button = [...container.querySelectorAll("button")].find((b) => b.textContent === "editorial")!;
+    await act(async () => button.click());
+    expect(container.querySelector('[role="status"]')?.textContent).toBe("The editorial design is not available to you here.");
   });
 });

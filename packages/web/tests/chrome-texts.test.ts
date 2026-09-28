@@ -12,18 +12,10 @@ import { ContactSheet } from "../src/components/ContactSheet";
 import { contactSheetTexts } from "../src/components/chrome-texts";
 import { Stack } from "../src/blocks/marketing/Stack";
 import { closeContactSheet, openContactSheet } from "../src/lib/contact-sheet";
+import { setSiteEnv } from "./site-env";
 
 vi.mock("server-only", () => ({}));
-// The texts come from TRANSLATIONS_DIR as the pod reads them; the rest of the config is any value.
-Object.assign(process.env, {
-  ENGINE_URL: "http://engine.internal:3000",
-  SITE_ID: "example",
-  SITE_URL: "https://example.org",
-  PUBLIC_ENGINE_URL: "",
-  REVALIDATE_SECONDS: "60",
-  LOCALES: "en,de",
-  DEFAULT_LOCALE: "en",
-});
+setSiteEnv();
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -34,7 +26,11 @@ const CHROME_FILES = [
   "components/NavItemLink.tsx",
   "components/DesignSwitcher.tsx",
   "components/Header.tsx",
+  "components/MobileNav.tsx",
+  "components/Footer.tsx",
+  "blocks/components.tsx",
   "blocks/marketing/shared.tsx",
+  "blocks/marketing/HeroBrand.tsx",
 ];
 
 /** The English literals removed, as they stood in the source. */
@@ -42,9 +38,12 @@ const REMOVED_LITERALS = [
   'label="Contact"',
   ">Contact</p>",
   'aria-label="Close"',
+  "Let&apos;s talk.",
   "Thank you. We reply within one working day.",
   "Tell us in two sentences what you want to digitalize. We reply within one working day.",
   "Book a 30-minute call",
+  "or write to us",
+  'placeholder="Two sentences are enough."',
   "Sending failed. Please check your details and try again, or write to",
   "We use your details only to answer you.",
   'contact: "Contact", trial: "Trial", early_access: "Early access"',
@@ -52,28 +51,41 @@ const REMOVED_LITERALS = [
   "· coming",
   "not bundled on this site",
   "design is not available to you here.",
+  "This site runs on digita. Switch the design.",
+  "One click restyles the whole site; the choice stays in your browser.",
   'available: "available", early_access: "early access", coming: "coming"',
+  'aria-label="Primary"',
+  'aria-label="Footer"',
+  '"Embedded content"',
+  "hover or tap to see the code",
+  'aria-label="Show the code behind the form"',
 ];
 /** The one-word labels and buttons removed, each on a JSX line of its own. */
 const REMOVED_WORDS = ["Name", "Email", "Company", "Topic", "Message", "Send", "Privacy"];
 
+/** Every line of `source` on which a removed literal stands, as `line-number literal`. */
+function findReturnedLiterals(source: string): string[] {
+  const found: string[] = [];
+  source.split("\n").forEach((line, i) => {
+    for (const literal of REMOVED_LITERALS) if (line.includes(literal)) found.push(`${i + 1} ${literal}`);
+    if (REMOVED_WORDS.includes(line.trim())) found.push(`${i + 1} ${line.trim()}`);
+  });
+  return found;
+}
+
 describe("the chrome texts", () => {
-  it("PLANTED DEFECT: no removed English literal is back in the chrome components", () => {
+  it("no removed English literal is back in the chrome components", () => {
     const src = join(dirname(fileURLToPath(import.meta.url)), "../src");
-    const found: string[] = [];
-    for (const file of CHROME_FILES) {
-      const lines = readFileSync(join(src, file), "utf8").split("\n");
-      lines.forEach((line, i) => {
-        for (const literal of REMOVED_LITERALS) if (line.includes(literal)) found.push(`${file}:${i + 1} ${literal}`);
-        if (REMOVED_WORDS.includes(line.trim())) found.push(`${file}:${i + 1} ${line.trim()}`);
-      });
-    }
+    const found = CHROME_FILES.flatMap((file) => findReturnedLiterals(readFileSync(join(src, file), "utf8")).map((hit) => `${file}:${hit}`));
     expect(found).toEqual([]);
   });
 
-  it("PLANTED INNOCENT: the guard sees a literal that comes back", () => {
-    expect(REMOVED_LITERALS.some((literal) => 'aria-label="Close"'.includes(literal))).toBe(true);
-    expect(REMOVED_WORDS.includes("                Message".trim())).toBe(true);
+  it("PLANTED DEFECT: a returned literal is found", () => {
+    expect(findReturnedLiterals('<button aria-label="Close">\n                Message\n')).toEqual(['1 aria-label="Close"', "2 Message"]);
+  });
+
+  it("PLANTED INNOCENT: a line that reads its text from the texts prop is not found", () => {
+    expect(findReturnedLiterals("              {texts.message}\n              <input name=\"message\" />")).toEqual([]);
   });
 });
 
@@ -102,6 +114,8 @@ describe("a German site", () => {
     await act(async () => openContactSheet());
     const text = document.body.textContent ?? "";
     expect(text).toContain("Nachricht");
+    expect(document.querySelector("h2")?.textContent).toBe("Reden wir.");
+    expect(document.querySelector("textarea")?.getAttribute("placeholder")).toBe("Zwei Sätze genügen.");
     expect(document.querySelector('button[type="submit"]')?.textContent).toBe("Senden");
     expect(text).not.toContain("Message");
   });

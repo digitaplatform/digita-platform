@@ -24,6 +24,7 @@ export function MobileNav({
   domain,
   brand,
   label,
+  navLabel,
   openLabel,
   closeLabel,
   comingLabel,
@@ -38,6 +39,8 @@ export function MobileNav({
   brand: BrandMarkProps;
   /** Accessible name of the drawer. */
   label: string;
+  /** Accessible name of the nav landmark inside the drawer. */
+  navLabel: string;
   openLabel: string;
   closeLabel: string;
   comingLabel: string;
@@ -66,7 +69,7 @@ export function MobileNav({
               <X className="h-5 w-5" />
             </button>
           </div>
-          <nav aria-label="Primary" className="min-h-0 flex-1 overflow-y-auto p-2">
+          <nav aria-label={navLabel} className="min-h-0 flex-1 overflow-y-auto p-2">
             <NavList>
               {items.map((item, i) => {
                 const active = isActive(item);

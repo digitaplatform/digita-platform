@@ -10,14 +10,18 @@ import { CONTACT_TOPICS, type ContactTopic } from "@/lib/contact-request";
  *  a client component cannot read the site's texts itself. */
 export interface ContactSheetTexts {
   title: string;
+  heading: string;
   close: string;
   lede: string;
   book: string;
+  /** The divider between the booking link and the form. */
+  orWrite: string;
   name: string;
   email: string;
   company: string;
   topic: string;
   message: string;
+  messagePlaceholder: string;
   send: string;
   sent: string;
   /** The failure line; the address follows it as a mailto link. */
@@ -82,7 +86,7 @@ function ContactPanel({ locale, texts, contactEmail, bookingUrl, privacyHref, re
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-2.5">
           <p className="font-mono text-xs font-medium uppercase tracking-widest text-textMuted">{texts.title}</p>
-          <h2 className="text-balance font-display text-3xl font-semibold tracking-tight text-textMain md:text-4xl">Let&apos;s talk.</h2>
+          <h2 className="text-balance font-display text-3xl font-semibold tracking-tight text-textMain md:text-4xl">{texts.heading}</h2>
         </div>
         <button
           type="button"
@@ -118,7 +122,7 @@ function ContactPanel({ locale, texts, contactEmail, bookingUrl, privacyHref, re
               </a>
               <div className="flex items-center gap-3 text-xs text-textMuted">
                 <span className="h-px flex-1 bg-border" />
-                or write to us
+                {texts.orWrite}
                 <span className="h-px flex-1 bg-border" />
               </div>
             </>
@@ -151,7 +155,7 @@ function ContactPanel({ locale, texts, contactEmail, bookingUrl, privacyHref, re
             </div>
             <label className={LABEL}>
               {texts.message}
-              <textarea name="message" required maxLength={5000} rows={4} placeholder="Two sentences are enough." className={`${FIELD} resize-none`} />
+              <textarea name="message" required maxLength={5000} rows={4} placeholder={texts.messagePlaceholder} className={`${FIELD} resize-none`} />
             </label>
             {/* A program fills every field; a person never sees this one. The route drops a request that has it filled. */}
             <div aria-hidden="true" className="sr-only">

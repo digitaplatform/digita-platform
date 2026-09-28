@@ -20,6 +20,8 @@ const NO_DESIGNS: ReturnType<typeof getRuntimeDesigns> = [];
 
 /** The band's texts in the page's locale, built by the server (src/components/chrome-texts.ts). */
 export interface DesignSwitcherTexts {
+  title: string;
+  note: string;
   notBundled: string;
   /** Names the refused design in its `{design}` placeholder. */
   refused: string;
@@ -75,8 +77,8 @@ export function DesignSwitcher({ texts, ...sources }: DeliveredIdentitySources &
     <section className="mx-auto w-full max-w-6xl px-6 pb-16 md:px-8">
       <div className="flex flex-col gap-5 rounded-card border border-border px-7 py-5 md:flex-row md:items-center md:gap-6">
         <div className="flex flex-col gap-1 text-sm">
-          <p className="font-semibold text-textMain">This site runs on digita. Switch the design.</p>
-          <p className="text-textMuted">One click restyles the whole site; the choice stays in your browser.</p>
+          <p className="font-semibold text-textMain">{texts.title}</p>
+          <p className="text-textMuted">{texts.note}</p>
           {refused && (
             <p role="status" className="text-textMuted">
               {texts.refused.replace("{design}", refused)}

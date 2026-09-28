@@ -10,21 +10,12 @@ import type { BlockType } from "../src/lib/types";
 import { closeContactSheet, useContactSheetOpen } from "../src/lib/contact-sheet";
 import { ConfigProvider } from "../src/config/ConfigProvider";
 import type { PublicSiteConfig } from "../src/config/public";
+import { setSiteEnv } from "./site-env";
 
 // The registry reaches the server config through the media block; the guard that keeps it out of
 // a browser bundle has nothing to guard in a test.
 vi.mock("server-only", () => ({}));
-// The status pills read their texts from TRANSLATIONS_DIR as the pod reads them; the rest of the
-// config is any value.
-Object.assign(process.env, {
-  ENGINE_URL: "http://engine.internal:3000",
-  SITE_ID: "example",
-  SITE_URL: "https://example.org",
-  PUBLIC_ENGINE_URL: "",
-  REVALIDATE_SECONDS: "60",
-  LOCALES: "en,de",
-  DEFAULT_LOCALE: "en",
-});
+setSiteEnv();
 
 const siteConfig = (contactEnabled: boolean): PublicSiteConfig => ({
   siteId: "example",

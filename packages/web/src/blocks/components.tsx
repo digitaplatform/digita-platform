@@ -1,5 +1,7 @@
 import { Badge, Card, buttonAttributes } from "@digitaplatform/components";
 import { mediaUrl } from "@/lib/media";
+import type { Locale } from "@/i18n/config";
+import { t } from "@/i18n/messages";
 import { type P, Section, list, s } from "./marketing/shared";
 import { GlowPanel } from "./marketing/CtaPanel";
 import { LocaleLink } from "./LocaleLink";
@@ -158,7 +160,7 @@ export function Code({ props }: { props?: P }) {
   );
 }
 
-export function Embed({ props }: { props?: P }) {
+export function Embed({ props, locale }: { props?: P; locale: Locale }) {
   const src = s(props, "src");
   if (!src) return null;
   return (
@@ -166,7 +168,7 @@ export function Embed({ props }: { props?: P }) {
       <div className="aspect-video w-full overflow-hidden rounded-card border border-border">
         <iframe
           src={src}
-          title={s(props, "title") || "Embedded content"}
+          title={s(props, "title") || t("embedTitle", locale)}
           loading="lazy"
           allowFullScreen
           className="h-full w-full"

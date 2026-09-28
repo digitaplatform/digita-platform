@@ -11,14 +11,17 @@ import type { DesignSwitcherTexts } from "./DesignSwitcher";
 export function contactSheetTexts(locale: Locale): ContactSheetTexts {
   return {
     title: t("contactTitle", locale),
+    heading: t("contactHeading", locale),
     close: t("contactClose", locale),
     lede: t("contactLede", locale),
     book: t("contactBook", locale),
+    orWrite: t("contactOrWrite", locale),
     name: t("contactName", locale),
     email: t("contactEmail", locale),
     company: t("contactCompany", locale),
     topic: t("contactTopic", locale),
     message: t("contactMessage", locale),
+    messagePlaceholder: t("contactMessagePlaceholder", locale),
     send: t("contactSend", locale),
     sent: t("contactSent", locale),
     failed: t("contactFailed", locale),
@@ -33,5 +36,10 @@ export function contactSheetTexts(locale: Locale): ContactSheetTexts {
 }
 
 export function designSwitcherTexts(locale: Locale): DesignSwitcherTexts {
-  return { notBundled: t("designNotBundled", locale), refused: t("designRefused", locale) };
+  return {
+    title: t("designBandTitle", locale),
+    note: t("designBandNote", locale),
+    notBundled: t("designNotBundled", locale),
+    refused: t("designRefused", locale),
+  };
 }

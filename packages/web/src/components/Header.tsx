@@ -75,7 +75,7 @@ export function Header({
           <BrandMark {...brand} />
         </Link>
 
-        <nav className="hidden flex-1 items-center gap-1 md:flex" aria-label="Primary">
+        <nav className="hidden flex-1 items-center gap-1 md:flex" aria-label={t("navPrimary", locale)}>
           <NavLinks locale={locale} items={items} apps={apps} comingLabel={comingLabel} />
         </nav>
 
@@ -93,6 +93,7 @@ export function Header({
             domain={site?.domain}
             brand={brand}
             label={t("navigation", locale)}
+            navLabel={t("navPrimary", locale)}
             openLabel={t("openMenu", locale)}
             closeLabel={t("closeMenu", locale)}
             comingLabel={comingLabel}
