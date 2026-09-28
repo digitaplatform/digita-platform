@@ -16,6 +16,7 @@ import ListPage from '@/pages/ListPage';
 import AccountPage from '@/pages/AccountPage';
 import JobsPage from '@/pages/JobsPage';
 import GroupsPage from '@/pages/GroupsPage';
+import DesignPage from '@/pages/DesignPage';
 import PluginPagePlaceholder from '@/pages/PluginPagePlaceholder';
 import { PageError } from '@/components/render/PageError';
 
@@ -80,6 +81,9 @@ const router = createBrowserRouter([
           // Master-data Groups — dedicated tree-management module (static → ranked
           // ahead of the generic :entity catch-alls). Menu-gated for rights.
           { path: '_groups', element: <GroupsPage /> },
+          // Design showcase: every design on every kit component, administrators only. The underscore
+          // keeps the path off the namespace an app entity may take, as _jobs and _groups do.
+          { path: '_design', element: <DesignPage /> },
           // Generic meta-driven renderer. `new` is static → ranked ahead of :name.
           { path: ':entity/new', element: <RecordPage />, errorElement: <PageError /> },
           { path: ':entity/:name', element: <RecordPage />, errorElement: <PageError /> },

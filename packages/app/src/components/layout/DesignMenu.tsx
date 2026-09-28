@@ -5,6 +5,22 @@ import { DESIGN_LIST, getRuntimeDesigns, subscribeRuntimeDesigns } from '@digita
 import { useThemeStore } from '@/stores/theme';
 import { useChrome } from '@/lib/chrome-i18n';
 
+/** Every design the app can apply now: the baked list plus the runtime-loaded
+ *  design plugins, deduped by id (a baked entry wins, it carries the richer meta). */
+export function useDesignList(): { id: string; name: string; description: string }[] {
+  const runtimeDesigns = useSyncExternalStore(
+    subscribeRuntimeDesigns,
+    getRuntimeDesigns,
+    getRuntimeDesigns,
+  );
+  return [
+    ...DESIGN_LIST.map((d) => ({ id: d.id, name: d.name, description: d.description })),
+    ...runtimeDesigns
+      .filter((r) => !DESIGN_LIST.some((d) => d.id === r.designId))
+      .map((r) => ({ id: r.designId, name: r.name ?? r.designId, description: r.description ?? '' })),
+  ];
+}
+
 /**
  * Topbar design picker: a labeled dropdown listing EVERY registered design —
  * the BAKED list (`DESIGN_LIST` from `@digitaplatform/theme`) plus every
@@ -19,18 +35,7 @@ export function DesignMenu() {
   const tc = useChrome();
   const design = useThemeStore((s) => s.design);
   const setDesign = useThemeStore((s) => s.setDesign);
-  const runtimeDesigns = useSyncExternalStore(
-    subscribeRuntimeDesigns,
-    getRuntimeDesigns,
-    getRuntimeDesigns,
-  );
-
-  const designs = [
-    ...DESIGN_LIST.map((d) => ({ id: d.id, name: d.name, description: d.description })),
-    ...runtimeDesigns
-      .filter((r) => !DESIGN_LIST.some((d) => d.id === r.designId))
-      .map((r) => ({ id: r.designId, name: r.name ?? r.designId, description: r.description ?? '' })),
-  ];
+  const designs = useDesignList();
 
   return (
     <Menu

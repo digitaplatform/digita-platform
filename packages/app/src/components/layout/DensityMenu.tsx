@@ -4,7 +4,7 @@ import type { Density } from '@digitaplatform/theme';
 import { useThemeStore } from '@/stores/theme';
 import { useChrome } from '@/lib/chrome-i18n';
 
-const OPTIONS: Density[] = ['comfortable', 'compact', 'spacious'];
+export const DENSITY_OPTIONS: Density[] = ['comfortable', 'compact', 'spacious'];
 
 /**
  * Topbar UI-density picker: a labeled dropdown (Comfortable / Compact / Spacious)
@@ -25,7 +25,7 @@ export function DensityMenu() {
       trigger={<AlignVerticalSpaceAround className="h-5 w-5" />}
     >
       {(close) =>
-        OPTIONS.map((opt) => (
+        DENSITY_OPTIONS.map((opt) => (
           <MenuItem
             key={opt}
             checked={density === opt}
