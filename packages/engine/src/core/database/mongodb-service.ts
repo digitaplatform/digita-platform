@@ -176,6 +176,11 @@ export class MongoDBService {
     if (target === "logs") return env.MONGODB_LOGS_DB;
     if (target === "audits") return env.MONGODB_AUDITS_DB;
     if (target === "core") return env.MONGODB_CORE_DB;
+    // A tenant engine opens only granted databases; every one is bound at connect or
+    // registered from its grant, so reaching here means the grant lacks this target.
+    if (env.MONGODB_DATABASE_NAMES) {
+      throw new Error(`Database target "${target}" is not among the databases MONGODB_DATABASE_NAMES grants`);
+    }
     const slug = target.replace(/-/g, "_").replace(/[^A-Za-z0-9_]/g, "_");
     if (!slug) {
       throw new Error(`Invalid database target "${target}"`);

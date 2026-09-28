@@ -1,7 +1,7 @@
 import { readdir, stat } from "fs/promises";
 import { basename, join } from "path";
 import { env } from "../config/env.js";
-import { dbName } from "../config/db-names.js";
+import { grantedDatabaseName } from "../config/db-names.js";
 import { createLogger } from "../logging/logger.js";
 import type { AppDatabaseDefinition, MongoDBService } from "./mongodb-service.js";
 
@@ -82,19 +82,19 @@ const RESERVED_APP_SUBDIRS = new Set([
 /**
  * Discover and register every domain database across all configured app dirs.
  *
- * An engine with APP_NAME serves one app as that tenant member, so its domain
- * databases carry the member's name, like its reserved ones and like the grant
- * its chart claims. A website member is named after its domain while its folder
- * stays `web`, so the folder name would open a database nobody granted. Without
- * APP_NAME (local dev, several app dirs) the folder name keeps the apps apart.
+ * A tenant engine opens each domain under the name its chart granted for that
+ * domain (MONGODB_DATABASE_NAMES); a domain without a grant stops the boot, because
+ * the engine could not open it. Without a grant (local dev, several app dirs) the
+ * name is composed from the folder, which keeps the apps apart.
  */
 export async function registerAppDatabases(
   db: MongoDBService,
   appDirs: string[],
 ): Promise<DomainDirectory[]> {
-  if (env.APP_NAME && appDirs.length > 1) {
+  const granted = env.MONGODB_DATABASE_NAMES;
+  if (granted && appDirs.length > 1) {
     throw new Error(
-      `APP_NAME ${env.APP_NAME} names one app, but APP_DIRS lists ${appDirs.length}; their domain databases would share names`,
+      `MONGODB_DATABASE_NAMES grants the databases of one app, but APP_DIRS lists ${appDirs.length}; their domains would share names`,
     );
   }
   const all: DomainDirectory[] = [];
@@ -104,9 +104,7 @@ export async function registerAppDatabases(
       const def: AppDatabaseDefinition = {
         name: d.dbName,
         label: `${d.app}/${d.domain}`,
-        physical: env.APP_NAME
-          ? dbName(env.MONGODB_APP_DB_PREFIX, env.TENANT_ID, env.APP_NAME, d.domain, env.STAGE)
-          : undefined,
+        physical: granted ? grantedDatabaseName(granted, d.domain) : undefined,
       };
       db.registerAppDatabase(def);
       all.push(d);

@@ -112,27 +112,46 @@ describe("registerAppDatabases", () => {
     expect(sales.physical).toBe(`test_${app.replace(/-/g, "_")}_sales`);
   });
 
-  describe("with APP_NAME, the tenant member", () => {
-    const member = { APP_NAME: "digitaplatform-com", TENANT_ID: "g1", STAGE: "prod", MONGODB_APP_DB_PREFIX: "" };
-    const saved = { ...env };
-    beforeAll(() => void Object.assign(env, member));
-    afterAll(() => {
-      for (const key of Object.keys(member)) delete (env as Record<string, unknown>)[key];
-      Object.assign(env, saved);
-    });
+  describe("with MONGODB_DATABASE_NAMES, a tenant engine", () => {
+    // What the chart renders for a website member (digita-engine.databaseNames): the
+    // member is named after its domain while its folder is `web`, so a composed name
+    // would open a database nobody granted.
+    const granted = {
+      accounting: "g1_digitaplatform-com_accounting_prod",
+      master: "g1_digitaplatform-com_master_prod",
+      sales: "g1_digitaplatform-com_sales_prod",
+    };
+    beforeAll(() => void Object.assign(env, { MONGODB_DATABASE_NAMES: granted }));
+    afterAll(() => void delete (env as Record<string, unknown>).MONGODB_DATABASE_NAMES);
 
-    // A website member is named after its domain while its folder is `web`; its chart grants
-    // <guid>_<member>_<domain>_<stage>, so the folder name would open an ungranted database.
-    it("names each domain database after the member, keeping the logical name", async () => {
+    it("opens each domain under the name its grant gives, keeping the logical name", async () => {
       const db = new MongoDBService();
       await registerAppDatabases(db, [appDir]);
       const app = (await discoverDomainDirectories(appDir))[0]!.app;
-      const sales = db.listAppDatabases().find((d) => d.name === `${app}_sales`)!;
-      expect(sales.physical).toBe("g1_digitaplatform-com_sales_prod");
+      const byName = Object.fromEntries(db.listAppDatabases().map((d) => [d.name, d.physical]));
+      expect(byName).toEqual({
+        [`${app}_accounting`]: granted.accounting,
+        [`${app}_master`]: granted.master,
+        [`${app}_sales`]: granted.sales,
+      });
     });
 
-    it("refuses several app dirs, whose domain databases would share names", async () => {
-      await expect(registerAppDatabases(new MongoDBService(), [appDir, appDir])).rejects.toThrow(/names one app/);
+    it("stops the boot for a domain the grant lacks, naming it", async () => {
+      Object.assign(env, { MONGODB_DATABASE_NAMES: { accounting: granted.accounting, master: granted.master } });
+      try {
+        await expect(registerAppDatabases(new MongoDBService(), [appDir])).rejects.toThrow(/no database for "sales"/);
+      } finally {
+        Object.assign(env, { MONGODB_DATABASE_NAMES: granted });
+      }
+    });
+
+    it("refuses several app dirs, whose domains would share the grant's names", async () => {
+      await expect(registerAppDatabases(new MongoDBService(), [appDir, appDir])).rejects.toThrow(/lists 2/);
+    });
+
+    it("composes no name for a target outside the grant", () => {
+      const db = new MongoDBService();
+      expect(() => db.registerAppDatabase({ name: "erp_unknown" })).toThrow(/not among the databases/);
     });
   });
 });

@@ -27,3 +27,36 @@ export function dbName(
   // filter(Boolean) drops empty segments, so this one join yields every shape above.
   return [prefix, tenantId, appName, suffix, stage].filter(Boolean).join("_");
 }
+
+/**
+ * The databases a tenant engine may open, keyed by suffix (core, logs, audits, auth and
+ * every domain): the map its chart's ServiceClaim grants, handed over as
+ * MONGODB_DATABASE_NAMES. A tenant engine opens exactly these and composes no name.
+ */
+export type DatabaseNames = Readonly<Record<string, string>>;
+
+export function parseDatabaseNames(json: string): DatabaseNames {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new Error("MONGODB_DATABASE_NAMES is not valid JSON");
+  }
+  const isNameMap =
+    typeof parsed === "object" &&
+    parsed !== null &&
+    !Array.isArray(parsed) &&
+    Object.values(parsed).every((name) => typeof name === "string" && name !== "");
+  if (!isNameMap) throw new Error("MONGODB_DATABASE_NAMES must map each suffix to a database name");
+  return parsed as DatabaseNames;
+}
+
+export function grantedDatabaseName(names: DatabaseNames, suffix: string): string {
+  const name = names[suffix];
+  if (!name) {
+    throw new Error(
+      `MONGODB_DATABASE_NAMES grants no database for "${suffix}"; it grants: ${Object.keys(names).join(", ")}`,
+    );
+  }
+  return name;
+}

@@ -2,7 +2,7 @@ import { config } from "dotenv";
 import { resolve, dirname, join } from "path";
 import { readdirSync } from "fs";
 import { fileURLToPath } from "url";
-import { dbName } from "./db-names.js";
+import { dbName, grantedDatabaseName, parseDatabaseNames } from "./db-names.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -132,7 +132,14 @@ const appName = getEnv("APP_NAME", "") || getEnv("INSTANCE_ID", "");
 // Environment postfix (dev/test/prod) appended LAST to every physical DB name so a
 // tenant's DBs are distinguishable per stage; empty (local dev/tests) drops out.
 const stage = getEnv("STAGE", "");
-const reservedDb = (role: string): string => dbName(appDbPrefix, tenantId, appName, role, stage);
+// A tenant engine opens exactly the databases its chart's ServiceClaim grants, handed
+// over as MONGODB_DATABASE_NAMES, and composes no name. Local dev and base mode have no
+// grant, so they compose the names from the segments above.
+const databaseNames = tenantId ? parseDatabaseNames(getEnvRequired("MONGODB_DATABASE_NAMES")) : null;
+const reservedDb = (role: string, override: string): string =>
+  databaseNames
+    ? grantedDatabaseName(databaseNames, role)
+    : getEnv(override, dbName(appDbPrefix, tenantId, appName, role, stage));
 
 // ─── Environment Configuration ───────────────────────────
 
@@ -164,11 +171,13 @@ export const env = {
   MONGODB_URI: getEnvRequired("MONGODB_URI"),
   // Identity is owned by digita-auth now (engine has no User entity); this
   // binding is vestigial. Per-tenant by default: digita_<guid>_<app>_auth.
-  MONGODB_IDENTITY_DB: getEnv("MONGODB_IDENTITY_DB", dbName(appDbPrefix, tenantId, appName, "auth", stage)),
+  MONGODB_IDENTITY_DB: reservedDb("auth", "MONGODB_IDENTITY_DB"),
   // core/logs/audits are per-instance → default to ${prefix}_${INSTANCE_ID}_<role>.
-  MONGODB_LOGS_DB: getEnv("MONGODB_LOGS_DB", reservedDb("logs")),
-  MONGODB_AUDITS_DB: getEnv("MONGODB_AUDITS_DB", reservedDb("audits")),
-  MONGODB_CORE_DB: getEnv("MONGODB_CORE_DB", reservedDb("core")),
+  MONGODB_LOGS_DB: reservedDb("logs", "MONGODB_LOGS_DB"),
+  MONGODB_AUDITS_DB: reservedDb("audits", "MONGODB_AUDITS_DB"),
+  MONGODB_CORE_DB: reservedDb("core", "MONGODB_CORE_DB"),
+  // Tenant mode only: every database this engine may open, suffix -> name.
+  MONGODB_DATABASE_NAMES: databaseNames,
   // Leading platform constant for every physical DB name (see db-names.ts):
   // digita_<guid>_<app>_<target>. Entity targets ("app", "master", "sales", …)
   // become the <target> segment (with `-` normalised to `_`); reserved targets
