@@ -199,20 +199,35 @@ export class PermissionChecker {
   }
 
   /**
-   * Does the user hold any read permission on this entity, at any level, that
-   * carries a `condition`? scope/if_owner are translated into the Mongo filter by
-   * applyScopeFilters, but a `condition` is an arbitrary expression that cannot
-   * be — so enumeration paths (list/count/exists/aggregate) must re-check it per
-   * row, and a list must mask field levels on the stored row, since a condition
-   * on a higher level decides which fields a row shows. Returns false (no per-row
-   * cost) for Administrators and entities without a conditional read grant for
-   * this user.
+   * Does the user hold a level-0 read permission on this entity that carries a
+   * `condition`, so whether a row may be read at all depends on its stored values?
+   * scope/if_owner are translated into the Mongo filter by applyScopeFilters, but a
+   * `condition` is an arbitrary expression that cannot be — so enumeration paths
+   * (list/count/exists/aggregate) must re-check it per row. Returns false (no
+   * per-row cost) for Administrators and entities without such a grant.
    */
-  hasConditionalReadPermission(user: UserContext, entityName: string): boolean {
+  hasConditionalRowRead(user: UserContext, entityName: string): boolean {
+    return this.hasConditionalRead(user, entityName, (p) => p.level === 0);
+  }
+
+  /**
+   * Does the user hold a read permission on this entity, at any level, that carries
+   * a `condition`, so which fields of a row may be read depends on its stored values?
+   * A list then masks each row as stored, before it projects.
+   */
+  hasConditionalFieldRead(user: UserContext, entityName: string): boolean {
+    return this.hasConditionalRead(user, entityName, () => true);
+  }
+
+  private hasConditionalRead(
+    user: UserContext,
+    entityName: string,
+    atLevel: (p: EntityDefinition["permissions"][number]) => boolean,
+  ): boolean {
     if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return false;
     const entity = this.registry.get(entityName);
     return entity.permissions.some(
-      (p) => !!p.read && !!p.condition && user.roles.includes(p.role),
+      (p) => atLevel(p) && !!p.read && !!p.condition && user.roles.includes(p.role),
     );
   }
 

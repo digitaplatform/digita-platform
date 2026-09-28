@@ -193,6 +193,13 @@ describe("Public list gates each stored row before it projects (#41)", () => {
     }
   });
 
+  it("refuses a fields, filters or or_filters value that is not JSON with 400", async () => {
+    for (const param of ["fields", "filters", "or_filters"]) {
+      const res = await app.inject({ method: "GET", url: `/api/v1/public/resource/GatedPage?${param}=abc` });
+      expect(res.statusCode, param).toBe(400);
+    }
+  });
+
   it("answers no row a Guest may list but not read", async () => {
     const { ids, total } = await list("ListedPage", { fields: ["_id", "title"] });
     expect(ids).toEqual([]);

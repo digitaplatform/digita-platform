@@ -494,13 +494,16 @@ export class DocumentService {
     // a permission `condition` is an arbitrary expression that cannot be — so the
     // enumeration query can return rows getDoc would 403. Re-check each row's read
     // permission (which evaluates `condition` fail-closed) and drop denied rows,
-    // when the user holds a conditional read grant or the caller asks for readable
+    // when the user holds a conditional row read or the caller asks for readable
     // rows only. The check reads whatever fields the condition names, so it runs on
     // the stored row and the caller's projection comes after it: on a projected row
     // a missing field denies every row, or grants one where the condition negates.
+    // Field masking weighs conditions at every level the same way, so whenever one
+    // applies, the rows are masked as stored too, and projected only afterwards.
     const gatesRows =
       options.everyRowNeedsRead === true ||
-      this.permissionChecker.hasConditionalReadPermission(user, doctype);
+      this.permissionChecker.hasConditionalRowRead(user, doctype);
+    const masksStoredRows = gatesRows || this.permissionChecker.hasConditionalFieldRead(user, doctype);
 
     const dbTarget = entity.database;
     const [data, total] = await Promise.all([
@@ -508,7 +511,7 @@ export class DocumentService {
         entity.name,
         {
           filters: filterArray,
-          fields: gatesRows ? undefined : query.fields,
+          fields: masksStoredRows ? undefined : query.fields,
           order_by: query.order_by ?? defaultSort,
           limit,
           offset,
@@ -521,14 +524,11 @@ export class DocumentService {
     let docs = data as Record<string, unknown>[];
     let effectiveTotal = total;
 
-    if (gatesRows) {
+    if (masksStoredRows) {
       const visible: Record<string, unknown>[] = [];
       for (const doc of docs) {
-        if ((await this.permissionChecker.hasPermission(user, doctype, "read", doc)).allowed) {
-          // Field masking weighs the same conditions per field level, so it too
-          // runs on the stored row, before the projection.
-          visible.push(projectFields(this.permissionChecker.filterFieldsForRead(user, doctype, doc), query.fields));
-        }
+        if (gatesRows && !(await this.permissionChecker.hasPermission(user, doctype, "read", doc)).allowed) continue;
+        visible.push(projectFields(this.permissionChecker.filterFieldsForRead(user, doctype, doc), query.fields));
       }
       // Lower-bound correction: subtract rows dropped on this page. An exact total
       // would require scanning the whole collection; the security guarantee is that
@@ -549,8 +549,8 @@ export class DocumentService {
       }
     }
 
-    // Filter fields by read permission; gated rows were masked on their stored row above.
-    const filteredDocs = gatesRows
+    // Filter fields by read permission; rows masked as stored above are done.
+    const filteredDocs = masksStoredRows
       ? docs
       : docs.map((doc) => this.permissionChecker.filterFieldsForRead(user, doctype, doc));
 
@@ -584,7 +584,7 @@ export class DocumentService {
     if (hits === 0) return false;
     // C1: a `condition` read grant can't be a scope filter, so a scope-visible
     // row may still be condition-hidden. Re-check the specific doc.
-    if (this.permissionChecker.hasConditionalReadPermission(user, doctype)) {
+    if (this.permissionChecker.hasConditionalRowRead(user, doctype)) {
       const raw = await this.db.findOne(entity.name, name, entity.database);
       if (!raw) return false;
       return (
@@ -641,7 +641,7 @@ export class DocumentService {
     // C1: a `condition` read grant cannot be a Mongo filter, so count only the
     // condition-visible rows by loading the scope-visible set and re-checking each.
     // Costlier, but only when the user holds a conditional read grant.
-    if (this.permissionChecker.hasConditionalReadPermission(user, doctype)) {
+    if (this.permissionChecker.hasConditionalRowRead(user, doctype)) {
       const rows = (await this.db.find(
         entity.name,
         { filters: [scopedFilter] },

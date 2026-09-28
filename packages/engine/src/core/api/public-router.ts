@@ -7,7 +7,8 @@ import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { LocaleResolver } from "../i18n/locale-resolver.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
-import type { ListQuery, FilterTuple } from "../database/filter-builder.js";
+import type { FilterTuple } from "../database/filter-builder.js";
+import { listQueryFrom } from "./list-query.js";
 import { FileNotFoundInStorageError, type StoragePort } from "../storage/storage-port.js";
 import { resolveStorageKey } from "../storage/file-cleanup.js";
 import { isSafeInlineType, contentDisposition } from "./upload-router.js";
@@ -137,17 +138,7 @@ export function registerPublicRoutes(
   app.get(`${base}/:doctype`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { doctype } = request.params as { doctype: string };
     const query = request.query as Record<string, unknown>;
-    const listQuery: ListQuery = {
-      fields: query["fields"] ? JSON.parse(query["fields"] as string) : undefined,
-      filters: query["filters"] ? JSON.parse(query["filters"] as string) : undefined,
-      or_filters: query["or_filters"] ? JSON.parse(query["or_filters"] as string) : undefined,
-      order_by: query["order_by"] as string,
-      limit: query["limit"] ? Number(query["limit"]) : undefined,
-      offset: query["offset"] ? Number(query["offset"]) : undefined,
-      page: query["page"] ? Number(query["page"]) : undefined,
-      page_size: query["page_size"] ? Number(query["page_size"]) : undefined,
-      search: query["search"] as string,
-    };
+    const listQuery = listQueryFrom(query);
     // buildMongoFilter ANDs every filter with or_filters and search, so the caller
     // cannot widen the scope.
     const scope = siteScope(doctype);

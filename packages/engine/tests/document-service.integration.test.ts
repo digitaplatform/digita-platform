@@ -718,6 +718,40 @@ describe("C1 — the read gate sees the stored row, whatever fields name", () =>
       expect(byId.get("LCD-draft")).not.toHaveProperty("secret");
       expect(byId.get("LCD-active")?.["secret"]).toBe("s-active");
     }
+
+    // A condition above level 0 decides fields, never whether a row may be read,
+    // so count and exists answer from the query without loading a row.
+    const find = vi.spyOn(db, "find");
+    const findOne = vi.spyOn(db, "findOne");
+    try {
+      expect(await docService.count("LevelCondDoc", [], l1reader)).toBe(2);
+      expect(await docService.exists("LevelCondDoc", "LCD-draft", l1reader)).toBe(true);
+      expect(find.mock.calls.filter(([name]) => name === "LevelCondDoc")).toEqual([]);
+      expect(findOne.mock.calls.filter(([name]) => name === "LevelCondDoc")).toEqual([]);
+    } finally {
+      find.mockRestore();
+      findOne.mockRestore();
+    }
+
+    // A role that may list but not read keeps listing its rows; the level-1
+    // condition only masks the fields it decides.
+    registry.register(makeEntity({
+      name: "ListOnlyLevelDoc",
+      fields: [...base.fields, { fieldname: "secret", fieldtype: "Data" as const, label: "Secret", perm_level: 1 }],
+      permissions: [
+        { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+        { role: "LevelLister", level: 0, select: 1, read: 0, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0 },
+        { role: "LevelLister", level: 1, select: 0, read: 1, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0, condition: "eval:doc.status != 'Draft'" },
+      ],
+    }));
+    await db.ensureCollection("ListOnlyLevelDoc", "app");
+    await db.insertOne("ListOnlyLevelDoc", { ...row, doctype: "ListOnlyLevelDoc", _id: "LOL-active", title: "A", status: "Active", secret: "s-a" }, "app");
+    await db.insertOne("ListOnlyLevelDoc", { ...row, doctype: "ListOnlyLevelDoc", _id: "LOL-draft", title: "B", status: "Draft", secret: "s-d" }, "app");
+    const lister: UserContext = { _id: "ll-001", email: "ll@test.local", roles: ["LevelLister"], full_name: "Level Lister" };
+    const listed = await docService.getList("ListOnlyLevelDoc", { fields: ["_id", "secret"] }, lister);
+    const byId = new Map(listed.data.map((r) => [r["_id"], r]));
+    expect([...byId.keys()].sort()).toEqual(["LOL-active", "LOL-draft"]);
+    expect(byId.get("LOL-draft")).not.toHaveProperty("secret");
   });
 
   it("keeps a listable row without everyRowNeedsRead, and drops a row the user may not read with it", async () => {

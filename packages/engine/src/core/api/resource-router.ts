@@ -8,7 +8,7 @@ import { callerIsInternal, stripInternalFields } from "../auth/audience.js";
 import { createDelegationClient } from "../auth/delegation-client.js";
 import { ResponseContext } from "./response-context.js";
 import { successResponse, errorResponse } from "./response-model.js";
-import type { ListQuery } from "../database/filter-builder.js";
+import { listQueryFrom } from "./list-query.js";
 import type { HookServices } from "../hooks/hook-runner.js";
 import type { DelegationScope } from "@digitaplatform/shared";
 import { createLogger } from "../logging/logger.js";
@@ -67,17 +67,7 @@ export function registerResourceRoutes(
     const { doctype } = request.params as { doctype: string };
     const query = request.query as Record<string, unknown>;
 
-    const listQuery: ListQuery = {
-      fields: query["fields"] ? JSON.parse(query["fields"] as string) : undefined,
-      filters: query["filters"] ? JSON.parse(query["filters"] as string) : undefined,
-      or_filters: query["or_filters"] ? JSON.parse(query["or_filters"] as string) : undefined,
-      order_by: query["order_by"] as string,
-      limit: query["limit"] ? Number(query["limit"]) : undefined,
-      offset: query["offset"] ? Number(query["offset"]) : undefined,
-      page: query["page"] ? Number(query["page"]) : undefined,
-      page_size: query["page_size"] ? Number(query["page_size"]) : undefined,
-      search: query["search"] as string,
-    };
+    const listQuery = listQueryFrom(query);
 
     const ctx = new ResponseContext();
     const result = await documentService.getList(doctype, listQuery, getUser(request), ctx, await localeOf(request));
