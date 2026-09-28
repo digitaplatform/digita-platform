@@ -1,11 +1,12 @@
 import { getConfig } from "@/config/env";
 import type { WebSite, WebPage, WebNavMenu, WebBranding } from "./types";
+import type { ContactRequest } from "./contact-request";
 
 /**
  * Server-side client for the engine's GENERIC public read API
- * (/api/v1/public/resource/*). Fetched cluster-internally; never exposes a
- * token (Guest read). ISR-cached with tags so the on-publish revalidation
- * webhook can purge precisely. Always scopes to this deployment's SITE_ID and
+ * (/api/v1/public/resource/*) and its public create of a contact request.
+ * Fetched cluster-internally; never sends a token (Guest read and create).
+ * ISR-cached with tags so the on-publish revalidation webhook can purge precisely. Always scopes to this deployment's SITE_ID and
  * requests only published rows. All config is strict runtime env (no fallbacks),
  * read per-request via getConfig().
  */
@@ -118,4 +119,16 @@ export async function getBranding(): Promise<WebBranding | null> {
     console.error("[digita-web] boot unreachable; rendering without tenant branding:", err);
     return null;
   }
+}
+
+/** Stores one contact request on the engine through its public create route, without a
+ *  credential: the engine takes it because ContactRequest grants Guest create. */
+export async function createContactRequest(request: ContactRequest & { site: string }): Promise<void> {
+  const res = await fetch(`${getConfig().engineUrl}/api/v1/public/resource/ContactRequest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) throw new Error(`the engine answered HTTP ${res.status} to the ContactRequest create`);
 }

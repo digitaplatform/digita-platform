@@ -95,7 +95,7 @@ export default async function LocaleLayout({
               site={site}
               nav={headerNav}
               family={familyNav}
-              apps={site?.link_apps ? config.tenantApps : []}
+              apps={site?.link_apps === false ? [] : config.tenantApps}
               brand={brand}
               contactEnabled={siteConfig.contactEnabled}
             />
@@ -110,6 +110,7 @@ export default async function LocaleLayout({
                 contactEmail={site.contact_email}
                 bookingUrl={site.booking_url || undefined}
                 privacyHref={localePath(locale, config.defaultLocale, "/privacy")}
+                renderedAt={Date.now()}
               />
             )}
             <DeliveredIdentity {...identitySources} />

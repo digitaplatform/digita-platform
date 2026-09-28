@@ -1,13 +1,15 @@
-// The URL rules: a bare path serves the default locale under the same URL, a www host moves to
-// its apex, and every link the site builds follows the same rule.
-import { describe, it, expect, beforeAll } from "vitest";
+// The URL rules: a bare path serves the default locale under the same URL, the www and the bare
+// form of the canonical host move to the canonical host, and every link the site builds follows
+// the same rule.
+import { describe, it, expect, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
-import { middleware } from "../src/middleware";
+import { config, middleware } from "../src/middleware";
 import { localeHref, navHref, switchLocalePath } from "../src/lib/nav";
 
-beforeAll(() => {
+beforeEach(() => {
   process.env.LOCALES = "en,de";
   process.env.DEFAULT_LOCALE = "en";
+  process.env.SITE_URL = "https://example.com";
 });
 
 const run = (url: string) => middleware(new NextRequest(url));
@@ -24,16 +26,43 @@ describe("the middleware", () => {
     expect(res?.headers.get("x-middleware-rewrite")).toBe(target);
   });
 
-  it("moves a www host to the apex host for good, the path kept", () => {
-    const res = run("https://www.example.com/x");
+  it("moves the www host to the canonical apex host for good, on every path", () => {
+    for (const path of ["/x", "/sitemap.xml", "/robots.txt", "/api/contact"]) {
+      const res = run(`https://www.example.com${path}`);
+      expect(res?.status).toBe(301);
+      expect(res?.headers.get("location")).toBe(`https://example.com${path}`);
+    }
+  });
+
+  it("runs on every path but Next's own assets, so the host rule reaches the API and the files", () => {
+    // Next compiles each matcher entry to an anchored regular expression; this one is plain regex.
+    const matches = (path: string) => config.matcher.some((m) => new RegExp(`^${m}$`).test(path));
+    for (const path of ["/", "/about", "/sitemap.xml", "/robots.txt", "/api/contact"]) expect(matches(path)).toBe(true);
+    expect(matches("/_next/static/app.js")).toBe(false);
+  });
+
+  it("moves the apex host to the canonical www host for good, the path kept", () => {
+    process.env.SITE_URL = "https://www.example.com";
+    const res = run("https://example.com/about");
     expect(res?.status).toBe(301);
-    expect(res?.headers.get("location")).toBe("https://example.com/x");
+    expect(res?.headers.get("location")).toBe("https://www.example.com/about");
   });
 
   it("sends the visitor to the host they asked for, over their protocol, not to the pod's port", () => {
     const headers = { host: "www.example.com", "x-forwarded-proto": "https" };
     const res = middleware(new NextRequest("http://www.example.com:3001/x?a=1", { headers }));
     expect(res?.headers.get("location")).toBe("https://example.com/x?a=1");
+  });
+
+  it("PLANTED INNOCENT: leaves a host that is not a form of the canonical host alone", () => {
+    expect(run("https://other.example.org/sitemap.xml")).toBeUndefined();
+    expect(run("https://www.other.example.org/api/contact")).toBeUndefined();
+    expect(run("https://other.example.org/about")?.headers.get("location")).toBeNull();
+  });
+
+  it("serves the API and the files on the canonical host as they are", () => {
+    expect(run("https://example.com/sitemap.xml")).toBeUndefined();
+    expect(run("https://example.com/api/contact")).toBeUndefined();
   });
 
   it("PLANTED INNOCENT: leaves a path with a locale alone", () => {

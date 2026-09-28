@@ -32,11 +32,13 @@ interface ContactPanelProps {
   bookingUrl?: string;
   /** The privacy page in the visitor's locale. */
   privacyHref: string;
+  /** When the server rendered the page, in its clock. Sent back unchanged, so the route's fill-time
+   *  check compares the server's clock with itself, never with the browser's. */
+  renderedAt: number;
 }
 
-/** Mounted on every open, so the render timestamp and the form state start fresh each time. */
-function ContactPanel({ locale, contactEmail, bookingUrl, privacyHref }: ContactPanelProps) {
-  const [renderedAt] = useState(() => Date.now());
+/** Mounted on every open, so the form state starts fresh each time. */
+function ContactPanel({ locale, contactEmail, bookingUrl, privacyHref, renderedAt }: ContactPanelProps) {
   const [state, setState] = useState<"editing" | "sending" | "sent" | "failed">("editing");
 
   async function submit(event: FormEvent<HTMLFormElement>) {

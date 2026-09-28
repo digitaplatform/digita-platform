@@ -14,8 +14,8 @@ const ENV = {
   TRANSLATIONS_DIR: "/translations",
   LOCALES: "en,de",
   DEFAULT_LOCALE: "en",
-  ENGINE_SERVICE_KEY: "service-key-secret",
   POST_URL: "http://post.internal:3200",
+  POST_API_KEY: "post-key-secret",
 };
 
 type Answer = { status: number; body: unknown };
@@ -62,7 +62,7 @@ beforeEach(() => {
     if (url.includes("/api/v1/public/resource/WebSite")) {
       return Response.json({ data: [{ _id: "simetrix", site_name: "simetrix", contact_email: "hello@example.org" }] });
     }
-    if (url.includes("/api/v1/resource/ContactRequest")) return Response.json({ data: {} }, { status: engineStatus });
+    if (url.includes("/api/v1/public/resource/ContactRequest")) return Response.json({ data: {} }, { status: engineStatus });
     if (url.includes("/api/internal/send-email")) return Response.json({ id: "1" }, { status: 202 });
     throw new Error(`unexpected fetch ${url}`);
   });
@@ -76,18 +76,21 @@ afterEach(() => {
 });
 
 describe("POST /api/contact", () => {
-  it("creates the ContactRequest with the service key and mails the site's contact address", async () => {
+  it("creates the ContactRequest through the public create without a credential and mails the site's contact address", async () => {
     const route = await loadRoute();
     expect(await send(route, valid())).toEqual({ status: 200, body: { ok: true } });
 
-    const [create] = calls("/api/v1/resource/ContactRequest");
-    expect(create?.[0]).toBe("http://engine.internal:3000/api/v1/resource/ContactRequest");
-    expect(create?.[1].headers["x-engine-api-key"]).toBe("service-key-secret");
+    const [create] = calls("/api/v1/public/resource/ContactRequest");
+    expect(create?.[0]).toBe("http://engine.internal:3000/api/v1/public/resource/ContactRequest");
+    const createHeaders = Object.keys(create?.[1].headers).map((name) => name.toLowerCase());
+    expect(createHeaders).not.toContain("x-engine-api-key");
+    expect(createHeaders).not.toContain("authorization");
     const { rendered_at: _r, website: _w, ...fields } = valid();
     expect(JSON.parse(create?.[1].body)).toEqual({ site: "simetrix", ...fields });
 
     const [mail] = calls("/api/internal/send-email");
     expect(mail?.[0]).toBe("http://post.internal:3200/api/internal/send-email");
+    expect(mail?.[1].headers["X-Api-Key"]).toBe("post-key-secret");
     const sent = JSON.parse(mail?.[1].body);
     expect(sent).toMatchObject({ channel: "email", to: "hello@example.org", from: "hello@example.org" });
     expect(sent.text).toContain("We want to digitalize our order intake.");
@@ -115,8 +118,14 @@ describe("POST /api/contact", () => {
   });
 
   it("answers 503 and reaches nothing while the contact env is not set", async () => {
-    const route = await loadRoute({ ...ENV, ENGINE_SERVICE_KEY: undefined, POST_URL: undefined });
+    const route = await loadRoute({ ...ENV, POST_URL: undefined, POST_API_KEY: undefined });
     expect(await send(route, valid())).toMatchObject({ status: 503 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("fails loud, naming POST_API_KEY, and reaches nothing when POST_URL is set without it", async () => {
+    const route = await loadRoute({ ...ENV, POST_API_KEY: undefined });
+    await expect(send(route, valid())).rejects.toThrow("POST_URL is set without POST_API_KEY");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -132,7 +141,7 @@ describe("POST /api/contact", () => {
     engineStatus = 401;
     const answer = await send(route, valid());
     expect(answer.status).toBe(500);
-    expect(JSON.stringify(answer.body)).not.toMatch(/service-key-secret|internal/);
+    expect(JSON.stringify(answer.body)).not.toMatch(/post-key-secret|internal/);
     expect(calls("/api/internal/send-email")).toHaveLength(0);
   });
 });

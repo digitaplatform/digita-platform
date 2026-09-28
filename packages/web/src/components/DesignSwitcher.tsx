@@ -40,6 +40,8 @@ export function DesignSwitcher(sources: DeliveredIdentitySources) {
   const active = stored && isOnPage(stored) ? stored : DEFAULT_DESIGN_ID;
 
   async function choose(id: string) {
+    // One design loads at a time; the buttons stay enabled so the one clicked keeps its focus.
+    if (loading !== null) return;
     setRefused(null);
     if (!isOnPage(id)) {
       setLoading(id);
@@ -83,7 +85,7 @@ export function DesignSwitcher(sources: DeliveredIdentitySources) {
                 type="button"
                 aria-pressed={active === id}
                 aria-busy={loading === id || undefined}
-                disabled={!reachable || loading !== null}
+                disabled={!reachable}
                 title={reachable ? undefined : "not bundled on this site"}
                 onClick={() => choose(id)}
                 className={cn(

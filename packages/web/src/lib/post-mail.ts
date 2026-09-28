@@ -3,16 +3,15 @@ import "server-only";
 /**
  * Sends one plain-text mail through digita-post's internal send route, the request shape of
  * digita-report's PostMailAdapter. digita-post delivers the content as given and queues retries;
- * 202 means queued. No credential is sent, so only a digita-post that runs without POST_API_KEY
- * (its development mode) accepts the call.
+ * 202 means queued. The route checks the platform's POST_API_KEY in X-Api-Key.
  */
 export async function sendMail(
-  postUrl: string,
+  post: { postUrl: string; postApiKey: string },
   mail: { from: string; to: string; subject: string; text: string },
 ): Promise<void> {
-  const res = await fetch(`${postUrl}/api/internal/send-email`, {
+  const res = await fetch(`${post.postUrl}/api/internal/send-email`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Api-Key": post.postApiKey },
     body: JSON.stringify({ channel: "email", ...mail, metadata: { source: "web", type: "contact_request" } }),
     signal: AbortSignal.timeout(5000),
   });

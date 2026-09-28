@@ -65,7 +65,8 @@ export interface WebSite {
   contact_email?: string;
   /** The booking page the contact sheet links to; without it the booking button stays out. */
   booking_url?: string;
-  /** Whether the header links the tenant's apps. */
+  /** Whether the header links the tenant's apps; only false hides them, so a row without the
+   *  field keeps them linked. */
   link_apps?: boolean;
   /** Whether the band that switches the site's design shows above the footer. */
   design_switcher?: boolean;

@@ -1,11 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ENGINE_SERVICE_HEADERS } from "@digitaplatform/shared";
 import { getConfig } from "@/config/env";
-import { getSite } from "@/lib/engine-client";
+import { createContactRequest, getSite } from "@/lib/engine-client";
 import { sendMail } from "@/lib/post-mail";
-import { CONTACT_TOPICS, type ContactTopic } from "@/lib/contact-request";
+import { CONTACT_TOPICS, type ContactRequest } from "@/lib/contact-request";
 
-/** A form sent sooner than this after the sheet rendered was filled by a program. */
+/** A form sent sooner than this after the server rendered its page was filled by a program. */
 const MIN_FILL_MS = 3000;
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
@@ -45,16 +44,6 @@ function line(value: unknown, max: number): string | null {
   return text && text.length <= max && !CONTROL.test(text) ? text : null;
 }
 
-interface ContactRequest {
-  name: string;
-  email: string;
-  company: string;
-  topic: ContactTopic;
-  message: string;
-  locale: string;
-  page: string;
-}
-
 function parse(body: Record<string, unknown>, locales: string[]): ContactRequest | null {
   const name = line(body.name, 200);
   const email = line(body.email, 254);
@@ -72,7 +61,8 @@ function parse(body: Record<string, unknown>, locales: string[]): ContactRequest
 /**
  * The contact sheet's endpoint: stores the request as a ContactRequest on the engine and mails the
  * site's contact address. A filled honeypot field (`website`) or a form sent under 3 seconds after
- * it rendered is answered like a success and does nothing, so a program learns nothing from it.
+ * the server rendered its page is answered like a success and does nothing, so a program learns
+ * nothing from it.
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const config = getConfig();
@@ -101,15 +91,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const site = await getSite();
     if (!site?.contact_email) return answer(503, { ok: false, message: "Contact is not configured" });
 
-    const created = await fetch(`${config.engineUrl}/api/v1/resource/ContactRequest`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", [ENGINE_SERVICE_HEADERS.KEY]: config.contact.engineServiceKey },
-      body: JSON.stringify({ site: config.siteId, ...request }),
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!created.ok) throw new Error(`the engine answered HTTP ${created.status} to the ContactRequest create`);
+    await createContactRequest({ site: config.siteId, ...request });
 
-    await sendMail(config.contact.postUrl, {
+    await sendMail(config.contact, {
       from: site.contact_email,
       to: site.contact_email,
       subject: `Contact request from ${request.name} (${request.topic})`,

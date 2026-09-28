@@ -51,20 +51,20 @@ export interface ServerConfig extends Omit<PublicSiteConfig, "contactEnabled"> {
   /** The site's chrome texts, one <language>.json each (TRANSLATIONS_DIR): the folder digita-web
    *  of digitaplatform/digita-translations, put there by the pod's init container. */
   translationsDir: string;
-  /** The contact sheet's switch: ENGINE_SERVICE_KEY (the key the engine's service path checks) and
-   *  POST_URL (the cluster-internal digita-post base URL, where the notification mail goes).
-   *  Explicitly OPTIONAL, as a pair: null → the sheet is not offered and /api/contact answers 503.
-   *  One without the other is a half-configured feature and fails loud. */
-  contact: { engineServiceKey: string; postUrl: string } | null;
+  /** The contact sheet's switch: POST_URL (the cluster-internal digita-post base URL, where the
+   *  notification mail goes) and POST_API_KEY (the key digita-post's internal send route checks
+   *  in X-Api-Key). Explicitly OPTIONAL, as a pair: null → the sheet is not offered and
+   *  /api/contact answers 503. One without the other is a half-configured feature and fails loud. */
+  contact: { postUrl: string; postApiKey: string } | null;
 }
 
 function contactConfig(): ServerConfig["contact"] {
-  const engineServiceKey = process.env.ENGINE_SERVICE_KEY || "";
   const postUrl = process.env.POST_URL || "";
-  if (!engineServiceKey && !postUrl) return null;
-  if (!engineServiceKey) throw new Error("[digita-web] POST_URL is set without ENGINE_SERVICE_KEY; set both or neither");
-  if (!postUrl) throw new Error("[digita-web] ENGINE_SERVICE_KEY is set without POST_URL; set both or neither");
-  return { engineServiceKey, postUrl: noTrailing(postUrl) };
+  const postApiKey = process.env.POST_API_KEY || "";
+  if (!postUrl && !postApiKey) return null;
+  if (!postApiKey) throw new Error("[digita-web] POST_URL is set without POST_API_KEY; set both or neither");
+  if (!postUrl) throw new Error("[digita-web] POST_API_KEY is set without POST_URL; set both or neither");
+  return { postUrl: noTrailing(postUrl), postApiKey };
 }
 
 let cached: ServerConfig | null = null;

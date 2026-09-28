@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// The contact sheet opens from the store, takes focus, closes on Escape and gives focus back, and
-// shows the confirmation once the route accepted the request.
+// The contact sheet opens from the store, takes focus, closes on Escape and gives focus back, sends
+// the server's render time back unchanged, and shows the confirmation once the route accepted.
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -10,6 +10,8 @@ import { closeContactSheet, openContactSheet } from "../src/lib/contact-sheet";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let root: Root | null = null;
+// A server clock far from the browser's, so a value the browser made up cannot pass for it.
+const RENDERED_AT = 1_000_000;
 
 async function mount(bookingUrl?: string) {
   const opener = document.createElement("button");
@@ -18,7 +20,7 @@ async function mount(bookingUrl?: string) {
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  await act(async () => root!.render(<ContactSheet locale="en" contactEmail="hello@example.org" bookingUrl={bookingUrl} privacyHref="/privacy" />));
+  await act(async () => root!.render(<ContactSheet locale="en" contactEmail="hello@example.org" bookingUrl={bookingUrl} privacyHref="/privacy" renderedAt={RENDERED_AT} />));
   await act(async () => openContactSheet());
   return opener;
 }
@@ -48,7 +50,7 @@ describe("the contact sheet", () => {
     expect(document.querySelector('a[href="https://example.org/book"]')?.textContent).toContain("Book a 30-minute call");
   });
 
-  it("shows the confirmation after the route accepted the request", async () => {
+  it("sends the server's render time back unchanged and shows the confirmation once the route accepted", async () => {
     const fetchMock = vi.fn(async () => Response.json({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);
     await mount();
@@ -63,7 +65,7 @@ describe("the contact sheet", () => {
     expect(url).toBe("/api/contact");
     const sent = JSON.parse(String(init.body));
     expect(sent).toMatchObject({ name: "Ada Example", topic: "contact", website: "", locale: "en" });
-    expect(typeof sent.rendered_at).toBe("number");
+    expect(sent.rendered_at).toBe(RENDERED_AT);
     expect(document.querySelector('[role="status"]')?.textContent).toBe("Thank you. We reply within one working day.");
   });
 });
