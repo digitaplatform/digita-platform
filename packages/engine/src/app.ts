@@ -671,12 +671,16 @@ export async function createApp(
 
     // 4b-ter. A website engine (SITE_ID set) always seeds its own site from
     //     `<domainDir>/sites/<SITE_ID>/`: a website has no demo tier to opt into,
-    //     and without its content it is an empty page. Non-destructive and
-    //     non-fatal, as 4b-bis.
+    //     and without its content it is an empty page. The catalog is the source
+    //     of a site's content, so the seed UPSERTS: a page changed in the catalog
+    //     reaches the live site with the next boot, an edit made in the app lasts
+    //     until then, and nothing is deleted (rows the seed does not carry are
+    //     reported). Translation files of a site stay insert-only. Non-fatal, as
+    //     4b-bis.
     if (env.SITE_ID) {
       const siteSeedDirs = domainDirs.map((d) => join(d.root, "sites", env.SITE_ID));
       try {
-        await seedAppData(db, registry, new NamingService(db), siteSeedDirs);
+        await seedAppData(db, registry, new NamingService(db), siteSeedDirs, { mode: "upsert" });
         await seedDataTranslations(db, registry, translationService, siteSeedDirs);
         log.info({ site: env.SITE_ID, dirs: siteSeedDirs.length }, "Site content seeded at boot");
       } catch (e) {

@@ -1,11 +1,12 @@
 import { readdir, readFile } from "fs/promises";
 import { basename, join } from "path";
 import { ObjectId } from "mongodb";
-import type { EntityDefinition } from "@digitaplatform/shared";
+import { ROW_ID_FIELD, type EntityDefinition } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { NamingService } from "../document/naming-service.js";
 import { injectRowIds } from "../document/base-document.js";
+import { deepEqual } from "../document/change-tracker.js";
 import { toIdString } from "../document/id-codec.js";
 import {
   BkResolver,
@@ -51,14 +52,26 @@ interface Collected {
  *
  * is_single entities: the file MUST contain exactly one row.
  *
- * Always non-destructive: skip rows whose `_id` already exists.
+ * Two modes, never destructive:
+ *  - `insert` (default): skip rows whose `_id` already exists. The reference and demo
+ *    tiers use it, so a runtime edit survives every boot.
+ *  - `upsert`: a row whose `_id` exists is replaced by the seed row (its `creation` and
+ *    `owner` carried forward); rows the seed does not carry stay and are reported. The
+ *    website engine uses it for `sites/<SITE_ID>/`, where the catalog is the source of
+ *    the content and a deploy must carry a changed page to the live site.
  */
+export interface SeedOptions {
+  mode?: "insert" | "upsert";
+}
+
 export async function seedAppData(
   db: MongoDBService,
   registry: EntityRegistry,
   namingService: NamingService,
   seedDirs: string[],
+  options: SeedOptions = {},
 ): Promise<void> {
+  const mode = options.mode ?? "insert";
   // ── Pass 1: collect + validate every seed file across all dirs ──────
   const collected: Collected[] = [];
   for (const dir of seedDirs) {
@@ -208,9 +221,27 @@ export async function seedAppData(
     }
   }
 
-  // ── Pass 4: insert (non-destructive, chunked) ───────────────────────
+  // ── Pass 4: insert (non-destructive, chunked); upsert mode replaces existing rows ──
   for (const { entity, rows } of collected) {
-    await insertRows(db, entity, rows);
+    await insertRows(db, entity, rows, mode);
+  }
+
+  // ── Pass 4b: in upsert mode, report the rows in the collection the seed does not carry ──
+  // Upsert never deletes: a page dropped from the catalog, or one created in the app,
+  // stays in the database until an operation removes it. Naming them on every boot
+  // keeps that visible.
+  if (mode === "upsert") {
+    for (const { entity, rows } of collected) {
+      const seeded = new Set(rows.map((row) => toIdString(row.__seedId ?? String(row["_id"]))));
+      const stored = await db.find(entity.name, { fields: ["_id"] }, entity.database);
+      const unseeded = stored.map((doc) => toIdString(String(doc._id))).filter((id) => !seeded.has(id));
+      if (unseeded.length > 0) {
+        log.warn(
+          { entity: entity.name, db: entity.database, unseeded: unseeded.length, ids: unseeded.slice(0, 50) },
+          "seed-app-data: rows in the collection that the seed does not carry stay as they are",
+        );
+      }
+    }
   }
 
   // ── Pass 5: seal snapshot/freeze fields for seeded SUBMITTED docs ────
@@ -268,9 +299,12 @@ async function insertRows(
   db: MongoDBService,
   entity: EntityDefinition,
   rows: CollectedRow[],
+  mode: NonNullable<SeedOptions["mode"]>,
 ): Promise<void> {
   const target = entity.database;
   let inserted = 0;
+  let updated = 0;
+  let unchanged = 0;
   let skipped = 0;
   let maxNamingSeq = 0;
   const namingPrefix = entity.naming?.prefix ?? "";
@@ -281,19 +315,13 @@ async function insertRows(
     const id = row.__seedId ?? String(row["_id"]);
     const idString = toIdString(id);
 
-    // Skip rows whose _id already exists (non-destructive). A native ObjectId
-    // just minted for `system` naming never collides, so this is a no-op there.
-    const existing = await db.findOne(entity.name, idString, target);
-    if (existing) {
-      skipped++;
-      continue;
-    }
-
     const { __seedId: _omit, ...rowData } = row;
     void _omit;
     // Honor a seed row's declared docstatus (a demo transactional shipset seeds
     // docstatus:1). Fail loud on an out-of-range value rather than silently
     // coercing it to 0 (no-silent-fallbacks); default to 0 (draft) when unset.
+    // Checked before the modes split, so an upsert never writes what an insert
+    // would refuse.
     const declaredDocstatus = row["docstatus"];
     if (
       declaredDocstatus !== undefined &&
@@ -305,6 +333,45 @@ async function insertRows(
       );
     }
     const docstatus = typeof declaredDocstatus === "number" ? declaredDocstatus : 0;
+
+    // An existing row is skipped in insert mode (non-destructive) and, in upsert
+    // mode, replaced only when the seed differs from what is stored. A native
+    // ObjectId just minted for `system` naming never collides, so both are no-ops
+    // there.
+    const existing = await db.findOne(entity.name, idString, target);
+    if (existing && mode === "insert") {
+      skipped++;
+      continue;
+    }
+    if (existing) {
+      const replacement = serializeRowForStorage(entity, rowData);
+      carryRowIds(replacement, existing);
+      injectRowIds(replacement);
+      // The seed row is the whole truth of the document; only what the seed cannot
+      // know is carried forward: when it was created and by whom, and the ids of
+      // its child rows. An unchanged seed writes nothing, so `modified` (which the
+      // website's sitemap reports as lastModified) moves only when a page did.
+      const candidate: Record<string, unknown> = {
+        ...replacement,
+        _id: existing._id,
+        doctype: entity.name,
+        docstatus,
+        owner: existing.owner ?? "system",
+        creation: existing.creation ?? now,
+      };
+      if (sameDocument(candidate, existing)) {
+        unchanged++;
+        continue;
+      }
+      // The written document carries no `_id`: replaceOne keeps the stored one, which
+      // matters for an entity whose ids are ObjectIds (findOne hands them back as strings).
+      const { _id: _compared, ...body } = candidate;
+      void _compared;
+      await db.upsertOne(entity.name, idString, { ...body, modified_by: "system", modified: now }, target);
+      updated++;
+      continue;
+    }
+
     const serialized = serializeRowForStorage(entity, rowData);
     injectRowIds(serialized);
     batch.push({
@@ -354,5 +421,36 @@ async function insertRows(
     await db.setSequenceFloor(entity.name, "naming_seq", maxNamingSeq, target);
   }
 
-  log.info({ entity: entity.name, inserted, skipped }, "seed-app-data");
+  log.info({ entity: entity.name, mode, inserted, updated, unchanged, skipped }, "seed-app-data");
+}
+
+/**
+ * Keep the stored `_row_id` of every child row the seed carries again, matched by
+ * position: a seed row knows no row ids, and a fresh id on every boot would break
+ * every sub-row Link that points at the row.
+ */
+function carryRowIds(replacement: Record<string, unknown>, stored: Record<string, unknown>): void {
+  for (const key of Object.keys(replacement)) {
+    const rows = replacement[key];
+    const storedRows = stored[key];
+    if (!Array.isArray(rows) || !Array.isArray(storedRows)) continue;
+    rows.forEach((row, i) => {
+      const storedRow = storedRows[i];
+      if (!row || typeof row !== "object" || !storedRow || typeof storedRow !== "object") return;
+      const storedId = (storedRow as Record<string, unknown>)[ROW_ID_FIELD];
+      if (typeof storedId === "string" && storedId) (row as Record<string, unknown>)[ROW_ID_FIELD] = storedId;
+    });
+  }
+}
+
+/**
+ * Whether the stored document already says what the seed says: everything but the
+ * modification stamp is compared, so a boot with an unchanged seed writes nothing.
+ * A document this loader wrote carries exactly the seed's fields plus the stamps.
+ */
+function sameDocument(candidate: Record<string, unknown>, stored: Record<string, unknown>): boolean {
+  const { modified: _modified, modified_by: _modifiedBy, ...rest } = stored;
+  void _modified;
+  void _modifiedBy;
+  return deepEqual(candidate, rest);
 }
