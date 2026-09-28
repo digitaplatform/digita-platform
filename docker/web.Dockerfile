@@ -11,7 +11,7 @@
 # browser-loaded media is served same-origin via the web host ingress
 # (/api/v1/public → engine). See the digita-deploy digita-web chart.
 #
-# packages/web/next.config.mjs sets outputFileTracingRoot to the REPO ROOT
+# packages/web/next.config.ts sets outputFileTracingRoot to the REPO ROOT
 # (two levels up from packages/web = /app here), so the standalone bundle pulls
 # in the workspace deps (@digitaplatform/shared, @digitaplatform/theme,
 # @digitaplatform/components, @digitaplatform/plugins) and the pnpm-symlinked

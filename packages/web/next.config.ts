@@ -1,10 +1,10 @@
+import type { NextConfig } from "next";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+const nextConfig: NextConfig = {
   // Node-runtime container build (ISR / on-demand revalidation / draft mode need
   // a server — NOT a static export). See docker/web.Dockerfile.
   output: "standalone",
@@ -14,6 +14,12 @@ const nextConfig = {
   outputFileTracingRoot: repoRoot,
   reactStrictMode: true,
   poweredByHeader: false,
+  // The privacy page promises that following a link sends nothing to the other
+  // site. The browser default (strict-origin-when-cross-origin) still sends the
+  // origin, so the promise holds only with this header on every response.
+  async headers() {
+    return [{ source: "/:path*", headers: [{ key: "Referrer-Policy", value: "no-referrer" }] }];
+  },
   // ESLint config is added in a later milestone; typecheck (tsc) + build are the
   // current gates. Do not let a missing eslint setup fail the build.
   eslint: { ignoreDuringBuilds: true },
