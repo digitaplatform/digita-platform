@@ -17,8 +17,16 @@ describe("Referrer-Policy header", () => {
     expect(await referrerPolicyFor(nextConfig)).toBe("no-referrer");
   });
 
-  it("PLANTED DEFECT: a config without the header has no policy", async () => {
-    const { headers: _dropped, ...withoutHeader } = nextConfig;
-    expect(await referrerPolicyFor(withoutHeader)).toBeUndefined();
+  const { headers: _dropped, ...withoutHeader } = nextConfig;
+  const withPolicy = (source: string, value: string): NextConfig => ({
+    ...nextConfig,
+    headers: async () => [{ source, headers: [{ key: "Referrer-Policy", value }] }],
+  });
+  it.each([
+    ["no header", withoutHeader],
+    ["wrong value", withPolicy("/:path*", "strict-origin-when-cross-origin")],
+    ["one locale only", withPolicy("/en/:path*", "no-referrer")],
+  ])("PLANTED DEFECT: %s fails the assertion above", async (_name, config) => {
+    expect(await referrerPolicyFor(config)).not.toBe("no-referrer");
   });
 });
