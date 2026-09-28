@@ -4,7 +4,7 @@
 // link-entry pick appends a row and opens its first entry_flow cell.
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { useState } from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
 import type { FieldControlState } from '@/controls/types';
@@ -113,6 +113,14 @@ vi.mock('@/lib/chrome-i18n', () => ({
 
 import TableControl from '@/controls/TableControl';
 import { stripForSave } from '@/pages/RecordPage';
+
+// TanStack Virtual resets `isScrolling` from a timer 150 ms after the last scroll event
+// (`isScrollingResetDelay` in @tanstack/virtual-core 3.17.3), and its cleanup does not clear
+// that timer. Under Vitest the jsdom window's setTimeout is Node's own, so the environment's
+// teardown does not clear it either: left pending, it fires in whatever file the worker runs
+// next, and the React update it starts reads `window.event` where no `window` exists. A test
+// that scrolls the grid waits the timer out while its jsdom is still in place.
+const settleScroll = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 250)));
 
 const STATE: FieldControlState = {
   visible: true,
@@ -262,6 +270,7 @@ describe('TableControl entry flow', () => {
     // The row is now mounted AND focus must have landed in its qty cell.
     const cell = await screen.findByLabelText('edit-qty');
     expect(document.activeElement, 'focus must land in the qty cell once the deferred row mounts').toBe(cell);
+    await settleScroll();
   });
 
   it('does NOT snap the scroll back when the user scrolls the already-focused active cell out of view', async () => {
@@ -297,6 +306,19 @@ describe('TableControl entry flow', () => {
     // The grid must not have tried to scroll back to pin the (still active,
     // now off-screen) cell in view.
     expect(scrollToSpy).not.toHaveBeenCalled();
+    await settleScroll();
+  });
+
+  it('leaves no scroll timer behind that needs a window after the test', async () => {
+    // Stands in for the next file of the worker, which may run without jsdom: a timer the
+    // scroll tests above left pending would throw "window is not defined" in here.
+    const saved = Object.getOwnPropertyDescriptor(globalThis, 'window')!;
+    Reflect.deleteProperty(globalThis, 'window');
+    try {
+      await new Promise<void>((resolve) => setTimeout(resolve, 250));
+    } finally {
+      Object.defineProperty(globalThis, 'window', saved);
+    }
   });
 
   it('link pick shows the picked DISPLAY in the CHILD cell, not the raw id', async () => {
