@@ -82,6 +82,8 @@ describe("POST /api/contact", () => {
     const createHeaders = Object.keys(create?.[1].headers).map((name) => name.toLowerCase());
     expect(createHeaders).not.toContain("x-engine-api-key");
     expect(createHeaders).not.toContain("authorization");
+    // The engine limits its route per visitor and trusts this server as the one proxy hop.
+    expect(create?.[1].headers["X-Forwarded-For"]).toBe(`203.0.113.${address}`);
     const { rendered_at: _r, website: _w, ...fields } = valid();
     expect(JSON.parse(create?.[1].body)).toEqual({ site: "simetrix", ...fields });
     expect(fetchMock.mock.calls.filter(([url]) => !String(url).includes("engine.internal"))).toHaveLength(0);
@@ -113,6 +115,16 @@ describe("POST /api/contact", () => {
     engineStatus = 403;
     // The site has no Guest create row yet; the sheet then offers the contact address.
     expect(await send(route, valid())).toEqual({ status: 503, body: { ok: false, message: "Contact is not configured" } });
+  });
+
+  it("PLANTED DEFECT: keys the limit and the forwarded address on the last x-forwarded-for entry, not on the visitor's own claim", async () => {
+    const route = await loadRoute();
+    // Five sends whose first entry differs each time and whose last entry, the one the ingress appended, is the same.
+    for (let i = 0; i < 5; i++) expect((await send(route, valid(), `10.0.0.${i}, 198.51.100.20`)).status).toBe(200);
+    expect((await send(route, valid(), "10.0.0.9, 198.51.100.20")).status).toBe(429);
+    expect((await send(route, valid(), "10.0.0.9, 198.51.100.21")).status).toBe(200);
+    const [create] = calls("/api/v1/public/resource/ContactRequest");
+    expect(create?.[1].headers["X-Forwarded-For"]).toBe("198.51.100.20");
   });
 
   it("answers 429 to the sixth request in an hour from one address", async () => {

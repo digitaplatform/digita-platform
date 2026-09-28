@@ -26,9 +26,11 @@ function isRateLimited(address: string, now: number): boolean {
   return times.length > RATE_LIMIT;
 }
 
-/** The ingress sets x-forwarded-for to the visitor's address; its first entry is the visitor. */
+/** The ingress appends the address it saw as the last x-forwarded-for entry; an earlier entry is
+ *  whatever the visitor wrote themselves, so only the last one identifies them. */
 function clientAddress(req: NextRequest): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
+  const forwarded = req.headers.get("x-forwarded-for")?.split(",").map((entry) => entry.trim()).filter(Boolean);
+  return forwarded?.at(-1) || req.headers.get("x-real-ip") || "unknown";
 }
 
 const answer = (status: number, body: Record<string, unknown>) => NextResponse.json(body, { status });
@@ -66,7 +68,8 @@ function parse(body: Record<string, unknown>, locales: string[]): ContactRequest
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const config = getConfig();
   const now = Date.now();
-  if (isRateLimited(clientAddress(req), now)) return answer(429, { ok: false, message: "Too many requests" });
+  const visitor = clientAddress(req);
+  if (isRateLimited(visitor, now)) return answer(429, { ok: false, message: "Too many requests" });
 
   let body: unknown;
   try {
@@ -88,7 +91,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const site = await getSite();
     if (!site?.contact_email) return answer(503, { ok: false, message: "Contact is not configured" });
 
-    const status = await createContactRequest({ site: config.siteId, ...request });
+    const status = await createContactRequest({ site: config.siteId, ...request }, visitor);
     // 403: the engine grants no Guest create on ContactRequest yet, so the sheet offers the address.
     if (status === 403) return answer(503, { ok: false, message: "Contact is not configured" });
     if (status < 200 || status >= 300) throw new Error(`the engine answered HTTP ${status} to the ContactRequest create`);

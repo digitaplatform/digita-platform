@@ -123,11 +123,14 @@ export async function getBranding(): Promise<WebBranding | null> {
 
 /** Stores one contact request on the engine through its public create route, without a
  *  credential: the engine takes it because ContactRequest grants Guest create. Answers the
- *  engine's status, so the route can tell a refused create from a failure. */
-export async function createContactRequest(request: ContactRequest & { site: string }): Promise<number> {
+ *  engine's status, so the route can tell a refused create from a failure. The engine trusts
+ *  this server as its one proxy hop and limits the route per visitor, so the visitor's address
+ *  travels as the one X-Forwarded-For entry; without it every visitor of the site would share
+ *  the renderer's own budget. */
+export async function createContactRequest(request: ContactRequest & { site: string }, visitorAddress: string): Promise<number> {
   const res = await fetch(`${getConfig().engineUrl}/api/v1/public/resource/ContactRequest`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Forwarded-For": visitorAddress },
     body: JSON.stringify(request),
     signal: AbortSignal.timeout(5000),
   });
