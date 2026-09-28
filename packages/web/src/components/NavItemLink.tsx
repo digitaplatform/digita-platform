@@ -9,11 +9,12 @@ import { isExternalHref, navHref } from "@/lib/nav";
 
 /**
  * One menu item, the same way in every menu of the site: a site path in the page's locale, a web
- * link in a new tab with an arrow, and an item without a link as its label marked "coming".
+ * link in a new tab with an arrow, and an item without a link as its label marked coming.
  */
 export function NavItemLink({
   locale,
   item,
+  comingLabel,
   className,
   current = false,
   role,
@@ -21,6 +22,8 @@ export function NavItemLink({
 }: {
   locale: string;
   item: NavItem;
+  /** The suffix of an item without a link, `familyComing` in the page's locale. */
+  comingLabel: string;
   className?: string;
   /** Marks a site path as the page the visitor is on. */
   current?: boolean;
@@ -37,7 +40,7 @@ export function NavItemLink({
   if (!href) {
     return (
       <span data-ui={ui} role={role} aria-disabled={role ? true : undefined} tabIndex={tabIndex} className={className}>
-        {item.label} <span className="text-textMuted">· coming</span>
+        {item.label} <span className="text-textMuted">· {comingLabel}</span>
       </span>
     );
   }

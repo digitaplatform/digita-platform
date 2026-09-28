@@ -26,6 +26,7 @@ export function MobileNav({
   label,
   openLabel,
   closeLabel,
+  comingLabel,
   children,
 }: {
   locale: string;
@@ -39,6 +40,7 @@ export function MobileNav({
   label: string;
   openLabel: string;
   closeLabel: string;
+  comingLabel: string;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -70,7 +72,7 @@ export function MobileNav({
                 const active = isActive(item);
                 return (
                   <li key={`${item.label}-${i}`}>
-                    <NavItemLink locale={locale} item={item} current={active} data-ui="nav-leaf" className={navLeafClass(active)} />
+                    <NavItemLink locale={locale} item={item} comingLabel={comingLabel} current={active} data-ui="nav-leaf" className={navLeafClass(active)} />
                   </li>
                 );
               })}
@@ -92,7 +94,7 @@ export function MobileNav({
                         {item.label}
                       </span>
                     ) : (
-                      <NavItemLink locale={locale} item={item} data-ui="nav-leaf" className={navLeafClass(false)} />
+                      <NavItemLink locale={locale} item={item} comingLabel={comingLabel} data-ui="nav-leaf" className={navLeafClass(false)} />
                     )}
                   </li>
                 ))}

@@ -7,7 +7,7 @@ export function PageView({ page, site }: { page: WebPage; site: WebSite | null }
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: pageJsonLd(page, site) }} />
-      <BlockRenderer blocks={page.blocks} />
+      <BlockRenderer blocks={page.blocks} locale={page.locale} />
     </>
   );
 }

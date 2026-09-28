@@ -60,6 +60,7 @@ export function Header({
   const contact = all.find((item) => item.href === CONTACT_HREF);
   const items = all.filter((item) => item !== contact);
   const familyItems = sortNav(family?.items);
+  const comingLabel = t("familyComing", locale);
   const controls = (
     <>
       <LocaleSwitcher current={locale} publishedSlugs={publishedSlugs} enabledLocales={enabledLocales} label={t("language", locale)} />
@@ -75,12 +76,12 @@ export function Header({
         </Link>
 
         <nav className="hidden flex-1 items-center gap-1 md:flex" aria-label="Primary">
-          <NavLinks locale={locale} items={items} apps={apps} />
+          <NavLinks locale={locale} items={items} apps={apps} comingLabel={comingLabel} />
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <div className="hidden items-center gap-1 md:flex">
-            <FamilySwitcher locale={locale} items={familyItems} domain={site?.domain} label="Product family" />
+            <FamilySwitcher locale={locale} items={familyItems} domain={site?.domain} label={t("familyLabel", locale)} comingLabel={comingLabel} />
             {controls}
           </div>
           {contact && <ContactButton item={contact} contactEnabled={contactEnabled} contactEmail={site?.contact_email} />}
@@ -94,6 +95,7 @@ export function Header({
             label={t("navigation", locale)}
             openLabel={t("openMenu", locale)}
             closeLabel={t("closeMenu", locale)}
+            comingLabel={comingLabel}
           >
             {controls}
           </MobileNav>

@@ -50,7 +50,7 @@ async function openFamilyMenu() {
   await act(async () =>
     root!.render(
       <ConfigProvider value={siteConfig(true)}>
-        <FamilySwitcher locale="en" items={family} domain="example.org" label="Product family" />
+        <FamilySwitcher locale="en" items={family} domain="example.org" label="familyLabel" comingLabel="coming" />
       </ConfigProvider>,
     ),
   );

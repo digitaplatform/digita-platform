@@ -28,7 +28,7 @@ export function useActiveItem(locale: string): (item: NavItem) => boolean {
  * server-rendered in the layout and can't know the active page). The tenant's apps follow as
  * plain links: each one leaves the website for the app at `/<name>/` on the same host.
  */
-export function NavLinks({ locale, items, apps }: { locale: string; items: NavItem[]; apps: string[] }) {
+export function NavLinks({ locale, items, apps, comingLabel }: { locale: string; items: NavItem[]; apps: string[]; comingLabel: string }) {
   const isActive = useActiveItem(locale);
 
   return (
@@ -36,7 +36,15 @@ export function NavLinks({ locale, items, apps }: { locale: string; items: NavIt
       {items.map((item, i) => {
         const active = isActive(item);
         return (
-          <NavItemLink key={`${item.label}-${i}`} locale={locale} item={item} current={active} data-ui="nav-leaf" className={navLeafClass(active)} />
+          <NavItemLink
+            key={`${item.label}-${i}`}
+            locale={locale}
+            item={item}
+            comingLabel={comingLabel}
+            current={active}
+            data-ui="nav-leaf"
+            className={navLeafClass(active)}
+          />
         );
       })}
       {apps.map((app) => (

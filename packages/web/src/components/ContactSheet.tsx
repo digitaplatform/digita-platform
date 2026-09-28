@@ -6,8 +6,27 @@ import { Drawer, buttonAttributes } from "@digitaplatform/components";
 import { closeContactSheet, useContactSheetOpen } from "@/lib/contact-sheet";
 import { CONTACT_TOPICS, type ContactTopic } from "@/lib/contact-request";
 
-// The site texts carry no contact keys yet, so the sheet speaks English on every locale.
-const TOPIC_LABEL: Record<ContactTopic, string> = { contact: "Contact", trial: "Trial", early_access: "Early access" };
+/** The sheet's texts in the page's locale, built by the server (src/components/chrome-texts.ts):
+ *  a client component cannot read the site's texts itself. */
+export interface ContactSheetTexts {
+  title: string;
+  close: string;
+  lede: string;
+  book: string;
+  name: string;
+  email: string;
+  company: string;
+  topic: string;
+  message: string;
+  send: string;
+  sent: string;
+  /** The failure line; the address follows it as a mailto link. */
+  failed: string;
+  privacyNote: string;
+  privacy: string;
+  topics: Record<ContactTopic, string>;
+}
+
 const FIELD =
   "w-full rounded-input border border-border bg-background px-3 py-3 text-base text-textMain placeholder:text-textMuted focus:border-primary-600 focus:shadow-focus focus:outline-none";
 const LABEL = "flex flex-col gap-1.5 text-sm font-semibold text-textMain";
@@ -20,7 +39,7 @@ const LABEL = "flex flex-col gap-1.5 text-sm font-semibold text-textMain";
 export function ContactSheet(props: ContactPanelProps) {
   const open = useContactSheetOpen();
   return (
-    <Drawer open={open} onClose={closeContactSheet} label="Contact" side="right">
+    <Drawer open={open} onClose={closeContactSheet} label={props.texts.title} side="right">
       <ContactPanel {...props} />
     </Drawer>
   );
@@ -28,6 +47,7 @@ export function ContactSheet(props: ContactPanelProps) {
 
 interface ContactPanelProps {
   locale: string;
+  texts: ContactSheetTexts;
   contactEmail: string;
   bookingUrl?: string;
   /** The privacy page in the visitor's locale. */
@@ -38,7 +58,7 @@ interface ContactPanelProps {
 }
 
 /** Mounted on every open, so the form state starts fresh each time. */
-function ContactPanel({ locale, contactEmail, bookingUrl, privacyHref, renderedAt }: ContactPanelProps) {
+function ContactPanel({ locale, texts, contactEmail, bookingUrl, privacyHref, renderedAt }: ContactPanelProps) {
   const [state, setState] = useState<"editing" | "sending" | "sent" | "failed">("editing");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -61,12 +81,12 @@ function ContactPanel({ locale, contactEmail, bookingUrl, privacyHref, renderedA
     <aside className="flex h-full w-screen max-w-lg flex-col gap-6 overflow-y-auto border-l border-border bg-surface px-6 py-8 md:px-10 md:py-10">
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-2.5">
-          <p className="font-mono text-xs font-medium uppercase tracking-widest text-textMuted">Contact</p>
+          <p className="font-mono text-xs font-medium uppercase tracking-widest text-textMuted">{texts.title}</p>
           <h2 className="text-balance font-display text-3xl font-semibold tracking-tight text-textMain md:text-4xl">Let&apos;s talk.</h2>
         </div>
         <button
           type="button"
-          aria-label="Close"
+          aria-label={texts.close}
           onClick={closeContactSheet}
           className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-btn border border-border text-textMuted hover:text-textMain focus-visible:shadow-focus focus-visible:outline-none"
         >
@@ -76,13 +96,11 @@ function ContactPanel({ locale, contactEmail, bookingUrl, privacyHref, renderedA
 
       {state === "sent" ? (
         <p role="status" className="text-pretty text-lg leading-relaxed text-textMain">
-          Thank you. We reply within one working day.
+          {texts.sent}
         </p>
       ) : (
         <>
-          <p className="text-pretty leading-relaxed text-textMuted">
-            Tell us in two sentences what you want to digitalize. We reply within one working day.
-          </p>
+          <p className="text-pretty leading-relaxed text-textMuted">{texts.lede}</p>
 
           {bookingUrl && (
             <>
@@ -94,7 +112,7 @@ function ContactPanel({ locale, contactEmail, bookingUrl, privacyHref, renderedA
               >
                 <span className="flex items-center gap-3">
                   <CalendarDays className="h-5 w-5 text-primary-600" aria-hidden="true" />
-                  Book a 30-minute call
+                  {texts.book}
                 </span>
                 <ArrowRight className="h-4 w-4 text-primary-600" aria-hidden="true" />
               </a>
@@ -109,30 +127,30 @@ function ContactPanel({ locale, contactEmail, bookingUrl, privacyHref, renderedA
           <form onSubmit={submit} className="flex flex-col gap-3.5">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className={LABEL}>
-                Name
+                {texts.name}
                 <input name="name" type="text" required maxLength={200} autoComplete="name" className={FIELD} />
               </label>
               <label className={LABEL}>
-                Email
+                {texts.email}
                 <input name="email" type="email" required maxLength={254} autoComplete="email" className={FIELD} />
               </label>
               <label className={LABEL}>
-                Company
+                {texts.company}
                 <input name="company" type="text" maxLength={200} autoComplete="organization" className={FIELD} />
               </label>
               <label className={LABEL}>
-                Topic
+                {texts.topic}
                 <select name="topic" defaultValue="contact" className={FIELD}>
                   {CONTACT_TOPICS.map((topic) => (
                     <option key={topic} value={topic}>
-                      {TOPIC_LABEL[topic]}
+                      {texts.topics[topic]}
                     </option>
                   ))}
                 </select>
               </label>
             </div>
             <label className={LABEL}>
-              Message
+              {texts.message}
               <textarea name="message" required maxLength={5000} rows={4} placeholder="Two sentences are enough." className={`${FIELD} resize-none`} />
             </label>
             {/* A program fills every field; a person never sees this one. The route drops a request that has it filled. */}
@@ -143,11 +161,11 @@ function ContactPanel({ locale, contactEmail, bookingUrl, privacyHref, renderedA
               </label>
             </div>
             <button type="submit" disabled={state === "sending"} {...buttonAttributes({ size: "lg", className: "mt-1 w-full" })}>
-              Send
+              {texts.send}
             </button>
             {state === "failed" && (
               <p role="alert" className="text-sm text-error">
-                Sending failed. Please check your details and try again, or write to{" "}
+                {texts.failed}{" "}
                 <a href={`mailto:${contactEmail}`} className="underline">
                   {contactEmail}
                 </a>
@@ -155,9 +173,9 @@ function ContactPanel({ locale, contactEmail, bookingUrl, privacyHref, renderedA
               </p>
             )}
             <p className="text-xs leading-relaxed text-textMuted">
-              We use your details only to answer you.{" "}
+              {texts.privacyNote}{" "}
               <a href={privacyHref} className="underline hover:text-textMain">
-                Privacy
+                {texts.privacy}
               </a>
             </p>
           </form>

@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Badge, buttonAttributes } from "@digitaplatform/components";
+import type { Locale } from "@/i18n/config";
+import { t } from "@/i18n/messages";
 import { SheetButton } from "./SheetButton";
 import { LocaleLink } from "../LocaleLink";
 
@@ -55,14 +57,14 @@ export function Section({
 }
 
 export type Status = "available" | "early_access" | "coming";
-const STATUS_LABEL: Record<Status, string> = { available: "available", early_access: "early access", coming: "coming" };
-const isStatus = (value: string): value is Status => Object.hasOwn(STATUS_LABEL, value);
+const STATUS_KEY: Record<Status, string> = { available: "statusAvailable", early_access: "statusEarlyAccess", coming: "statusComing" };
+const isStatus = (value: string): value is Status => Object.hasOwn(STATUS_KEY, value);
 const PILL = "shrink-0 rounded-full font-mono uppercase tracking-wider";
 
 /** How true a capability is today: an accent pill, an outlined accent pill, an outlined muted pill. */
-export function StatusPill({ status }: { status: string }) {
+export function StatusPill({ status, locale }: { status: string; locale: Locale }) {
   if (!isStatus(status)) return null;
-  const label = STATUS_LABEL[status];
+  const label = t(STATUS_KEY[status], locale);
   if (status === "available")
     return (
       <Badge variant="pill" color="primary" className={PILL}>

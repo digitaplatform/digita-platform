@@ -18,6 +18,13 @@ import { loadDesignFromApps, type DeliveredIdentitySources } from "@/lib/deliver
 const SHOWCASED_DESIGNS = ["minimal", "editorial", "fluent", "ios", "material"];
 const NO_DESIGNS: ReturnType<typeof getRuntimeDesigns> = [];
 
+/** The band's texts in the page's locale, built by the server (src/components/chrome-texts.ts). */
+export interface DesignSwitcherTexts {
+  notBundled: string;
+  /** Names the refused design in its `{design}` placeholder. */
+  refused: string;
+}
+
 const PILL = "inline-flex h-9 items-center rounded-full px-3.5 text-sm font-semibold transition-colors focus-visible:shadow-focus focus-visible:outline-none";
 
 /**
@@ -27,7 +34,7 @@ const PILL = "inline-flex h-9 items-center rounded-full px-3.5 text-sm font-semi
  * the visitor decides; it applies only once its stylesheet loaded, and a refusal is said. Without
  * tenant apps such a design cannot arrive, so its button is disabled.
  */
-export function DesignSwitcher(sources: DeliveredIdentitySources) {
+export function DesignSwitcher({ texts, ...sources }: DeliveredIdentitySources & { texts: DesignSwitcherTexts }) {
   useSyncExternalStore(subscribeRuntimeDesigns, getRuntimeDesigns, () => NO_DESIGNS);
   const [stored, setStored] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
@@ -72,7 +79,7 @@ export function DesignSwitcher(sources: DeliveredIdentitySources) {
           <p className="text-textMuted">One click restyles the whole site; the choice stays in your browser.</p>
           {refused && (
             <p role="status" className="text-textMuted">
-              The {refused} design is not available to you here.
+              {texts.refused.replace("{design}", refused)}
             </p>
           )}
         </div>
@@ -86,7 +93,7 @@ export function DesignSwitcher(sources: DeliveredIdentitySources) {
                 aria-pressed={active === id}
                 aria-busy={loading === id || undefined}
                 disabled={!reachable}
-                title={reachable ? undefined : "not bundled on this site"}
+                title={reachable ? undefined : texts.notBundled}
                 onClick={() => choose(id)}
                 className={cn(
                   PILL,

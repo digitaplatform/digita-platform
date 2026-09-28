@@ -25,7 +25,9 @@ describe("the design switcher", () => {
     const container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
-    await act(async () => root!.render(<DesignSwitcher apps={["crm"]} authUrl={null} authCookieSuffix={null} />));
+    await act(async () =>
+      root!.render(<DesignSwitcher apps={["crm"]} authUrl={null} authCookieSuffix={null} texts={{ notBundled: "not bundled", refused: "{design} refused" }} />),
+    );
     const button = [...container.querySelectorAll("button")].find((b) => b.textContent === "editorial")!;
 
     button.focus();

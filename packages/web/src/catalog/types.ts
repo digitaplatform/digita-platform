@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import type { BlockType } from "@/lib/types";
+import type { Locale } from "@/i18n/config";
 
 /**
  * Self-describing contracts for blocks and plugins. A future visual
@@ -37,6 +38,8 @@ export interface PropField {
 
 /** A component that renders from a JSON `props` bag (block or plugin). */
 export type RenderComponent = ComponentType<{ props?: Record<string, unknown> }>;
+/** A block also knows the page's locale, for the chrome texts it carries, such as a status pill. */
+export type BlockComponent = ComponentType<{ props?: Record<string, unknown>; locale: Locale }>;
 
 export interface BlockManifest {
   type: BlockType;
@@ -45,7 +48,7 @@ export interface BlockManifest {
   /** Grouping for the builder palette. */
   category: "content" | "media" | "interactive";
   props: PropField[];
-  component: RenderComponent;
+  component: BlockComponent;
 }
 
 export interface PluginManifest {

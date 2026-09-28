@@ -1,4 +1,6 @@
 import type { Block } from "@/lib/types";
+import type { Locale } from "@/i18n/config";
+import type { BlockComponent } from "@/catalog/types";
 import { getBlockComponent } from "./registry";
 import { PluginBlock } from "./PluginBlock";
 
@@ -9,12 +11,12 @@ import { PluginBlock } from "./PluginBlock";
  * becomes a scroll target; `theme_variant` is exposed as a data attribute for
  * per-section theme overrides.
  */
-export function BlockRenderer({ blocks }: { blocks?: Block[] }) {
+export function BlockRenderer({ blocks, locale }: { blocks?: Block[]; locale: Locale }) {
   if (!blocks?.length) return null;
   return (
     <>
       {blocks.map((block, i) => {
-        const Component = block.type === "plugin" ? PluginBlock : getBlockComponent(block.type);
+        const Component: BlockComponent | undefined = block.type === "plugin" ? PluginBlock : getBlockComponent(block.type);
         if (!Component) return null;
         return (
           <div
@@ -24,7 +26,7 @@ export function BlockRenderer({ blocks }: { blocks?: Block[] }) {
             data-variant={block.theme_variant || undefined}
             className={block.anchor ? "scroll-mt-24" : undefined}
           >
-            <Component props={block.props} />
+            <Component props={block.props} locale={locale} />
           </div>
         );
       })}

@@ -21,6 +21,7 @@ import { Footer } from "@/components/Footer";
 import { DeliveredIdentity } from "@/components/DeliveredIdentity";
 import { ContactSheet } from "@/components/ContactSheet";
 import { DesignSwitcher } from "@/components/DesignSwitcher";
+import { contactSheetTexts, designSwitcherTexts } from "@/components/chrome-texts";
 
 // Rendered on-demand (config + content are runtime, never baked at build); engine
 // fetches are cache-tagged with a runtime TTL (see engine-client).
@@ -105,11 +106,12 @@ export default async function LocaleLayout({
             <main id="main" className="flex-1">
               {children}
             </main>
-            {site?.design_switcher && <DesignSwitcher {...identitySources} />}
+            {site?.design_switcher && <DesignSwitcher {...identitySources} texts={designSwitcherTexts(locale)} />}
             <Footer locale={locale as Locale} site={site} nav={footerNav} brand={brand} />
             {siteConfig.contactEnabled && site?.contact_email && (
               <ContactSheet
                 locale={locale}
+                texts={contactSheetTexts(locale)}
                 contactEmail={site.contact_email}
                 bookingUrl={site.booking_url || undefined}
                 privacyHref={localePath(locale, config.defaultLocale, "/privacy")}

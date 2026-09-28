@@ -14,6 +14,17 @@ import type { PublicSiteConfig } from "../src/config/public";
 // The registry reaches the server config through the media block; the guard that keeps it out of
 // a browser bundle has nothing to guard in a test.
 vi.mock("server-only", () => ({}));
+// The status pills read their texts from TRANSLATIONS_DIR as the pod reads them; the rest of the
+// config is any value.
+Object.assign(process.env, {
+  ENGINE_URL: "http://engine.internal:3000",
+  SITE_ID: "example",
+  SITE_URL: "https://example.org",
+  PUBLIC_ENGINE_URL: "",
+  REVALIDATE_SECONDS: "60",
+  LOCALES: "en,de",
+  DEFAULT_LOCALE: "en",
+});
 
 const siteConfig = (contactEnabled: boolean): PublicSiteConfig => ({
   siteId: "example",
@@ -29,7 +40,7 @@ const render = (type: BlockType, props?: Record<string, unknown>, contactEnabled
   if (!Block) throw new Error(`${type} is not registered`);
   return renderToStaticMarkup(
     <ConfigProvider value={siteConfig(contactEnabled)}>
-      <Block props={props} />
+      <Block props={props} locale="en" />
     </ConfigProvider>,
   );
 };
@@ -202,7 +213,7 @@ describe("the contact sheet", () => {
     await act(async () =>
       root.render(
         <ConfigProvider value={siteConfig(true)}>
-          <Block props={{ heading: "Talk.", primary: sheet }} />
+          <Block props={{ heading: "Talk.", primary: sheet }} locale="en" />
           <Probe />
         </ConfigProvider>,
       ),

@@ -1,4 +1,5 @@
 import { Card, ProductLockup } from "@digitaplatform/components";
+import type { Locale } from "@/i18n/config";
 import { LocaleLink } from "../LocaleLink";
 import { type P, Section, StatusPill, cardClass, columnsFor, list, record, s } from "./shared";
 
@@ -11,7 +12,7 @@ function lockupOf(item: P): { family: string; product: string } | null {
 
 /** The products and apps a site offers, each named by its family lockup or a plain title, with
  *  how available it is today. */
-export function Stack({ props }: { props?: P }) {
+export function Stack({ props, locale }: { props?: P; locale: Locale }) {
   const items = list(props, "items").filter((item) => s(item, "title") || lockupOf(item));
   if (!items.length) return null;
   return (
@@ -30,7 +31,7 @@ export function Stack({ props }: { props?: P }) {
                     s(item, "title")
                   )}
                 </h3>
-                <StatusPill status={s(item, "status")} />
+                <StatusPill status={s(item, "status")} locale={locale} />
               </div>
               {s(item, "body") && <p className="text-sm leading-relaxed text-textMuted">{s(item, "body")}</p>}
               {s(item, "href") && s(item, "link_label") && (

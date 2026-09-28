@@ -5,7 +5,20 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ContactSheet } from "../src/components/ContactSheet";
+import { contactSheetTexts } from "../src/components/chrome-texts";
 import { closeContactSheet, openContactSheet } from "../src/lib/contact-sheet";
+
+vi.mock("server-only", () => ({}));
+// The texts come from TRANSLATIONS_DIR as the pod reads them; the rest of the config is any value.
+Object.assign(process.env, {
+  ENGINE_URL: "http://engine.internal:3000",
+  SITE_ID: "example",
+  SITE_URL: "https://example.org",
+  PUBLIC_ENGINE_URL: "",
+  REVALIDATE_SECONDS: "60",
+  LOCALES: "en,de",
+  DEFAULT_LOCALE: "en",
+});
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -20,7 +33,11 @@ async function mount(bookingUrl?: string) {
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  await act(async () => root!.render(<ContactSheet locale="en" contactEmail="hello@example.org" bookingUrl={bookingUrl} privacyHref="/privacy" renderedAt={RENDERED_AT} />));
+  await act(async () =>
+    root!.render(
+      <ContactSheet locale="en" texts={contactSheetTexts("en")} contactEmail="hello@example.org" bookingUrl={bookingUrl} privacyHref="/privacy" renderedAt={RENDERED_AT} />,
+    ),
+  );
   await act(async () => openContactSheet());
   return opener;
 }

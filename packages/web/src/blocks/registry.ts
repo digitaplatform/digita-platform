@@ -1,5 +1,5 @@
 import type { BlockType } from "@/lib/types";
-import type { BlockManifest, PropField, RenderComponent } from "@/catalog/types";
+import type { BlockComponent, BlockManifest, PropField } from "@/catalog/types";
 import { Hero, RichText, FeatureGrid, Media, Cta, Stats, Embed, Code } from "./components";
 import { HeroBrand } from "./marketing/HeroBrand";
 import { Pillars } from "./marketing/Pillars";
@@ -376,9 +376,9 @@ export const BLOCK_MANIFESTS: BlockManifest[] = [
   },
 ];
 
-const BY_TYPE = new Map<BlockType, RenderComponent>(BLOCK_MANIFESTS.map((m) => [m.type, m.component]));
+const BY_TYPE = new Map<BlockType, BlockComponent>(BLOCK_MANIFESTS.map((m) => [m.type, m.component]));
 
 /** Component for a block type, or undefined if unknown (renderer skips it). */
-export function getBlockComponent(type: BlockType): RenderComponent | undefined {
+export function getBlockComponent(type: BlockType): BlockComponent | undefined {
   return BY_TYPE.get(type);
 }

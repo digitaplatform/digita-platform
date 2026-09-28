@@ -33,7 +33,19 @@ function FamilyIcon() {
  * others open in a new tab; a product without a link shows as coming. The phone shows the same
  * list inside MobileNav.
  */
-export function FamilySwitcher({ locale, items, domain, label }: { locale: string; items: NavItem[]; domain?: string; label: string }) {
+export function FamilySwitcher({
+  locale,
+  items,
+  domain,
+  label,
+  comingLabel,
+}: {
+  locale: string;
+  items: NavItem[];
+  domain?: string;
+  label: string;
+  comingLabel: string;
+}) {
   if (!items.length) return null;
   return (
     <Menu
@@ -56,7 +68,7 @@ export function FamilySwitcher({ locale, items, domain, label }: { locale: strin
               <Check className="ml-auto h-4 w-4 text-primary-600" aria-hidden="true" />
             </span>
           ) : (
-            <NavItemLink key={`${item.label}-${i}`} locale={locale} item={item} role="menuitem" className={ITEM} />
+            <NavItemLink key={`${item.label}-${i}`} locale={locale} item={item} comingLabel={comingLabel} role="menuitem" className={ITEM} />
           ),
         )
       }
