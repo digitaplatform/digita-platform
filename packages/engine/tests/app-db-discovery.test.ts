@@ -18,6 +18,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { discoverDomainDirectories, registerAppDatabases } from "../src/core/database/app-db-discovery.js";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
+import { env } from "../src/core/config/env.js";
 
 let appDir: string;
 
@@ -107,5 +108,31 @@ describe("registerAppDatabases", () => {
     const names = db.listAppDatabases().map((d) => d.name).sort();
     const app = (await discoverDomainDirectories(appDir))[0]!.app;
     expect(names).toEqual([`${app}_accounting`, `${app}_master`, `${app}_sales`]);
+    const sales = db.listAppDatabases().find((d) => d.name === `${app}_sales`)!;
+    expect(sales.physical).toBe(`test_${app.replace(/-/g, "_")}_sales`);
+  });
+
+  describe("with APP_NAME, the tenant member", () => {
+    const member = { APP_NAME: "digitaplatform-com", TENANT_ID: "g1", STAGE: "prod", MONGODB_APP_DB_PREFIX: "" };
+    const saved = { ...env };
+    beforeAll(() => void Object.assign(env, member));
+    afterAll(() => {
+      for (const key of Object.keys(member)) delete (env as Record<string, unknown>)[key];
+      Object.assign(env, saved);
+    });
+
+    // A website member is named after its domain while its folder is `web`; its chart grants
+    // <guid>_<member>_<domain>_<stage>, so the folder name would open an ungranted database.
+    it("names each domain database after the member, keeping the logical name", async () => {
+      const db = new MongoDBService();
+      await registerAppDatabases(db, [appDir]);
+      const app = (await discoverDomainDirectories(appDir))[0]!.app;
+      const sales = db.listAppDatabases().find((d) => d.name === `${app}_sales`)!;
+      expect(sales.physical).toBe("g1_digitaplatform-com_sales_prod");
+    });
+
+    it("refuses several app dirs, whose domain databases would share names", async () => {
+      await expect(registerAppDatabases(new MongoDBService(), [appDir, appDir])).rejects.toThrow(/names one app/);
+    });
   });
 });
