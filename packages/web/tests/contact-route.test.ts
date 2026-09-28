@@ -1,5 +1,5 @@
-// The contact route stores a request on the engine and mails the site, answers a bot like a person
-// without doing anything, and refuses invalid input, a missing configuration and a flood.
+// The contact route stores a request on the engine, answers a bot like a person without doing
+// anything, and refuses invalid input, a refused create and a flood.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
 
@@ -14,8 +14,6 @@ const ENV = {
   TRANSLATIONS_DIR: "/translations",
   LOCALES: "en,de",
   DEFAULT_LOCALE: "en",
-  POST_URL: "http://post.internal:3200",
-  POST_API_KEY: "post-key-secret",
 };
 
 type Answer = { status: number; body: unknown };
@@ -63,7 +61,6 @@ beforeEach(() => {
       return Response.json({ data: [{ _id: "simetrix", site_name: "simetrix", contact_email: "hello@example.org" }] });
     }
     if (url.includes("/api/v1/public/resource/ContactRequest")) return Response.json({ data: {} }, { status: engineStatus });
-    if (url.includes("/api/internal/send-email")) return Response.json({ id: "1" }, { status: 202 });
     throw new Error(`unexpected fetch ${url}`);
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -76,7 +73,7 @@ afterEach(() => {
 });
 
 describe("POST /api/contact", () => {
-  it("creates the ContactRequest through the public create without a credential and mails the site's contact address", async () => {
+  it("creates the ContactRequest through the public create without a credential and nothing else", async () => {
     const route = await loadRoute();
     expect(await send(route, valid())).toEqual({ status: 200, body: { ok: true } });
 
@@ -87,13 +84,7 @@ describe("POST /api/contact", () => {
     expect(createHeaders).not.toContain("authorization");
     const { rendered_at: _r, website: _w, ...fields } = valid();
     expect(JSON.parse(create?.[1].body)).toEqual({ site: "simetrix", ...fields });
-
-    const [mail] = calls("/api/internal/send-email");
-    expect(mail?.[0]).toBe("http://post.internal:3200/api/internal/send-email");
-    expect(mail?.[1].headers["X-Api-Key"]).toBe("post-key-secret");
-    const sent = JSON.parse(mail?.[1].body);
-    expect(sent).toMatchObject({ channel: "email", to: "hello@example.org", from: "hello@example.org" });
-    expect(sent.text).toContain("We want to digitalize our order intake.");
+    expect(fetchMock.mock.calls.filter(([url]) => !String(url).includes("engine.internal"))).toHaveLength(0);
   });
 
   it("PLANTED DEFECT: a filled honeypot is answered like a success and reaches nothing", async () => {
@@ -117,16 +108,11 @@ describe("POST /api/contact", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("answers 503 and reaches nothing while the contact env is not set", async () => {
-    const route = await loadRoute({ ...ENV, POST_URL: undefined, POST_API_KEY: undefined });
-    expect(await send(route, valid())).toMatchObject({ status: 503 });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("fails loud, naming POST_API_KEY, and reaches nothing when POST_URL is set without it", async () => {
-    const route = await loadRoute({ ...ENV, POST_API_KEY: undefined });
-    await expect(send(route, valid())).rejects.toThrow("POST_URL is set without POST_API_KEY");
-    expect(fetchMock).not.toHaveBeenCalled();
+  it("PLANTED DEFECT: answers 503, not 500, when the engine refuses the create with 403", async () => {
+    const route = await loadRoute();
+    engineStatus = 403;
+    // The site has no Guest create row yet; the sheet then offers the contact address.
+    expect(await send(route, valid())).toEqual({ status: 503, body: { ok: false, message: "Contact is not configured" } });
   });
 
   it("answers 429 to the sixth request in an hour from one address", async () => {
@@ -136,12 +122,11 @@ describe("POST /api/contact", () => {
     expect((await send(route, valid(), "198.51.100.8")).status).toBe(200);
   });
 
-  it("answers 500 without the key or an internal URL when the engine refuses the create, and sends no mail", async () => {
+  it("answers 500 without an internal URL when the engine fails the create", async () => {
     const route = await loadRoute();
-    engineStatus = 401;
+    engineStatus = 500;
     const answer = await send(route, valid());
     expect(answer.status).toBe(500);
-    expect(JSON.stringify(answer.body)).not.toMatch(/post-key-secret|internal/);
-    expect(calls("/api/internal/send-email")).toHaveLength(0);
+    expect(JSON.stringify(answer.body)).not.toMatch(/internal/);
   });
 });

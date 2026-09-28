@@ -147,7 +147,11 @@ function ContactPanel({ locale, contactEmail, bookingUrl, privacyHref, renderedA
             </button>
             {state === "failed" && (
               <p role="alert" className="text-sm text-error">
-                Sending failed. Please check your details and try again, or write to {contactEmail}.
+                Sending failed. Please check your details and try again, or write to{" "}
+                <a href={`mailto:${contactEmail}`} className="underline">
+                  {contactEmail}
+                </a>
+                .
               </p>
             )}
             <p className="text-xs leading-relaxed text-textMuted">

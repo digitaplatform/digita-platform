@@ -51,20 +51,6 @@ export interface ServerConfig extends Omit<PublicSiteConfig, "contactEnabled"> {
   /** The site's chrome texts, one <language>.json each (TRANSLATIONS_DIR): the folder digita-web
    *  of digitaplatform/digita-translations, put there by the pod's init container. */
   translationsDir: string;
-  /** The contact sheet's switch: POST_URL (the cluster-internal digita-post base URL, where the
-   *  notification mail goes) and POST_API_KEY (the key digita-post's internal send route checks
-   *  in X-Api-Key). Explicitly OPTIONAL, as a pair: null → the sheet is not offered and
-   *  /api/contact answers 503. One without the other is a half-configured feature and fails loud. */
-  contact: { postUrl: string; postApiKey: string } | null;
-}
-
-function contactConfig(): ServerConfig["contact"] {
-  const postUrl = process.env.POST_URL || "";
-  const postApiKey = process.env.POST_API_KEY || "";
-  if (!postUrl && !postApiKey) return null;
-  if (!postApiKey) throw new Error("[digita-web] POST_URL is set without POST_API_KEY; set both or neither");
-  if (!postUrl) throw new Error("[digita-web] POST_API_KEY is set without POST_URL; set both or neither");
-  return { postUrl: noTrailing(postUrl), postApiKey };
 }
 
 let cached: ServerConfig | null = null;
@@ -82,7 +68,6 @@ export function getConfig(): ServerConfig {
     authUrl: process.env.AUTH_URL ? noTrailing(process.env.AUTH_URL) : null,
     authCookieSuffix: process.env.AUTH_COOKIE_SUFFIX || null,
     translationsDir: req("TRANSLATIONS_DIR"),
-    contact: contactConfig(),
     locales: getLocales(),
     defaultLocale: getDefaultLocale(),
   };
@@ -90,7 +75,8 @@ export function getConfig(): ServerConfig {
 }
 
 /** The browser-safe subset, injected into the client via <ConfigProvider>. The contact sheet is
- *  offered only when its env is set and the site names the address its requests go to. */
+ *  offered when the site names the address its requests go to; the engine stores them and the
+ *  web app's hook mails that address. */
 export function publicConfig(site: WebSite | null): PublicSiteConfig {
   const c = getConfig();
   return {
@@ -99,6 +85,6 @@ export function publicConfig(site: WebSite | null): PublicSiteConfig {
     publicEngineUrl: c.publicEngineUrl,
     locales: c.locales,
     defaultLocale: c.defaultLocale,
-    contactEnabled: c.contact !== null && Boolean(site?.contact_email),
+    contactEnabled: Boolean(site?.contact_email),
   };
 }

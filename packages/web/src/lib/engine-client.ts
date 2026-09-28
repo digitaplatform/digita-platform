@@ -122,13 +122,14 @@ export async function getBranding(): Promise<WebBranding | null> {
 }
 
 /** Stores one contact request on the engine through its public create route, without a
- *  credential: the engine takes it because ContactRequest grants Guest create. */
-export async function createContactRequest(request: ContactRequest & { site: string }): Promise<void> {
+ *  credential: the engine takes it because ContactRequest grants Guest create. Answers the
+ *  engine's status, so the route can tell a refused create from a failure. */
+export async function createContactRequest(request: ContactRequest & { site: string }): Promise<number> {
   const res = await fetch(`${getConfig().engineUrl}/api/v1/public/resource/ContactRequest`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
     signal: AbortSignal.timeout(5000),
   });
-  if (!res.ok) throw new Error(`the engine answered HTTP ${res.status} to the ContactRequest create`);
+  return res.status;
 }

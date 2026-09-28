@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getConfig } from "@/config/env";
 import { createContactRequest, getSite } from "@/lib/engine-client";
-import { sendMail } from "@/lib/post-mail";
 import { CONTACT_TOPICS, type ContactRequest } from "@/lib/contact-request";
 
 /** A form sent sooner than this after the server rendered its page was filled by a program. */
@@ -59,15 +58,13 @@ function parse(body: Record<string, unknown>, locales: string[]): ContactRequest
 }
 
 /**
- * The contact sheet's endpoint: stores the request as a ContactRequest on the engine and mails the
- * site's contact address. A filled honeypot field (`website`) or a form sent under 3 seconds after
- * the server rendered its page is answered like a success and does nothing, so a program learns
- * nothing from it.
+ * The contact sheet's endpoint: stores the request as a ContactRequest on the engine, whose web
+ * app mails the site's contact address on insert. A filled honeypot field (`website`) or a form
+ * sent under 3 seconds after the server rendered its page is answered like a success and does
+ * nothing, so a program learns nothing from it.
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const config = getConfig();
-  if (!config.contact) return answer(503, { ok: false, message: "Contact is not configured" });
-
   const now = Date.now();
   if (isRateLimited(clientAddress(req), now)) return answer(429, { ok: false, message: "Too many requests" });
 
@@ -91,22 +88,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const site = await getSite();
     if (!site?.contact_email) return answer(503, { ok: false, message: "Contact is not configured" });
 
-    await createContactRequest({ site: config.siteId, ...request });
-
-    await sendMail(config.contact, {
-      from: site.contact_email,
-      to: site.contact_email,
-      subject: `Contact request from ${request.name} (${request.topic})`,
-      text: [
-        `Name: ${request.name}`,
-        `Email: ${request.email}`,
-        `Company: ${request.company || "-"}`,
-        `Topic: ${request.topic}`,
-        `Page: ${request.page} (${request.locale})`,
-        "",
-        request.message,
-      ].join("\n"),
-    });
+    const status = await createContactRequest({ site: config.siteId, ...request });
+    // 403: the engine grants no Guest create on ContactRequest yet, so the sheet offers the address.
+    if (status === 403) return answer(503, { ok: false, message: "Contact is not configured" });
+    if (status < 200 || status >= 300) throw new Error(`the engine answered HTTP ${status} to the ContactRequest create`);
     return answer(200, { ok: true });
   } catch (err) {
     console.error("[digita-web] contact request failed:", err instanceof Error ? err.message : err);

@@ -68,4 +68,16 @@ describe("the contact sheet", () => {
     expect(sent.rendered_at).toBe(RENDERED_AT);
     expect(document.querySelector('[role="status"]')?.textContent).toBe("Thank you. We reply within one working day.");
   });
+
+  it("PLANTED DEFECT: offers the contact address as a mailto link when the route refuses the request", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ ok: false, message: "Contact is not configured" }, { status: 503 })));
+    await mount();
+    (document.querySelector('[name="name"]') as HTMLInputElement).value = "Ada Example";
+    (document.querySelector('[name="email"]') as HTMLInputElement).value = "ada@example.org";
+    (document.querySelector('[name="message"]') as HTMLInputElement).value = "We want to digitalize our order intake.";
+    await act(async () => document.querySelector("form")!.requestSubmit());
+    // A failed state that only names the address leaves the visitor without a link; this goes red then.
+    const alert = document.querySelector('[role="alert"]');
+    expect(alert?.querySelector('a[href="mailto:hello@example.org"]')?.textContent).toBe("hello@example.org");
+  });
 });
