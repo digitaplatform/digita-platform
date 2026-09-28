@@ -106,7 +106,7 @@ afterAll(async () => {
   await replSet.stop();
 }, 30000);
 
-describe("Export projection includes docstatus so condition grants don't fail open", () => {
+describe("Export honors a condition grant that negates, so it does not fail open", () => {
   it("a condition-restricted exporter does not leak cancelled (docstatus 2) rows", async () => {
     const res = await app.inject({ method: "GET", url: "/api/v1/export/CondDoc", headers: bearer(viewerTok) });
     expect(res.statusCode).toBe(200);

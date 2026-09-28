@@ -53,13 +53,9 @@ export class ExportService {
       .filter((f) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype))
       .map((f) => f.fieldname);
 
-    // Add standard fields. SEC: a permission `condition` is an arbitrary
-    // expression evaluated per-row by getList's conditional-read re-check. A
-    // projection that omits docstatus makes `doc.docstatus` read as null there
-    // (a missing member maps to null), so an exclude-style grant like
-    // `eval:doc.docstatus != 2` fails OPEN and leaks cancelled/hidden rows.
-    // Always project the system fields a condition may reference; filterFieldsForRead
-    // still masks per read-level, and docstatus is always readable.
+    // Add standard fields. getList checks a permission `condition` on the stored
+    // row before it projects, so these fields are export columns, not the
+    // condition's inputs; filterFieldsForRead still masks per read-level.
     const fields = [
       "_id",
       ...storedFields,

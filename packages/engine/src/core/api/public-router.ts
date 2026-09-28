@@ -161,22 +161,17 @@ export function registerPublicRoutes(
 
     const u = user(request);
     const ctx = new ResponseContext();
-    const result = await documentService.getList(doctype, listQuery, u, ctx, await localeOf(request));
-
-    // applyScopeFilters (used by getList) does NOT evaluate per-doc `condition`,
-    // so re-check each row's read permission here — defense-in-depth that gates
-    // drafts even if a caller omits a status filter. `total` reflects the query
-    // (callers should pass their own published filter for exact pagination; the
-    // re-check is a safety net, not the primary gate).
-    const visible: Record<string, unknown>[] = [];
-    for (const row of result.data) {
-      if ((await permissionChecker.hasPermission(u, doctype, "read", row)).allowed) {
-        visible.push(stripInternal(row));
-      }
-    }
+    // Every row must be readable, not only listable: getList checks each stored row's
+    // read permission (its `condition` and any workflow-state strip), which gates
+    // drafts even if a caller omits a status filter, and projects only afterwards.
+    // `total` is the query's count less the rows dropped on this page, so a caller
+    // passes its own published filter for exact pagination.
+    const result = await documentService.getList(doctype, listQuery, u, ctx, await localeOf(request), {
+      everyRowNeedsRead: true,
+    });
 
     return reply.send(
-      successResponse(visible, ctx.getMessages(), {
+      successResponse(result.data.map(stripInternal), ctx.getMessages(), {
         total: result.total,
         page: result.page,
         page_size: result.page_size,

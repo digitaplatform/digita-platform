@@ -643,6 +643,67 @@ describe("C1 — condition enforced on list/count/exists", () => {
   });
 });
 
+// #41: the read gate evaluates a `condition` on the stored row, so the caller's
+// `fields` decide only what the answer carries. Gated on a projected row, a
+// condition over a field the caller did not ask for denied every row (a sitemap
+// came back empty), and one that negates granted the rows it should hide.
+describe("C1 — the read gate sees the stored row, whatever fields name", () => {
+  const reader: UserContext = { _id: "reader-002", email: "reader2@test.local", roles: ["CondReader"], full_name: "Cond Reader" };
+  const lister: UserContext = { _id: "lister-001", email: "lister@test.local", roles: ["Lister"], full_name: "Lister" };
+
+  beforeAll(async () => {
+    const now = new Date();
+    const base = { docstatus: 0, owner: "system", modified_by: "system", creation: now, modified: now };
+    registry.register(makeEntity({
+      name: "NegCondDoc",
+      permissions: [
+        { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+        { role: "CondReader", level: 0, select: 1, read: 1, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0, condition: "eval:doc.status != 'Draft'" },
+      ],
+    }));
+    await db.ensureCollection("NegCondDoc", "app");
+    await db.insertOne("NegCondDoc", { ...base, doctype: "NegCondDoc", _id: "NCD-active", title: "A", status: "Active" }, "app");
+    await db.insertOne("NegCondDoc", { ...base, doctype: "NegCondDoc", _id: "NCD-draft", title: "B", status: "Draft" }, "app");
+
+    registry.register(makeEntity({
+      name: "ListOnlyDoc",
+      permissions: [
+        { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+        { role: "Lister", level: 0, select: 1, read: 0, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0 },
+      ],
+    }));
+    await db.ensureCollection("ListOnlyDoc", "app");
+    await db.insertOne("ListOnlyDoc", { ...base, doctype: "ListOnlyDoc", _id: "LOD-1", title: "L", status: "Active" }, "app");
+  });
+
+  it("admits the rows a condition allows when fields omit the field it reads", async () => {
+    const res = await docService.getList("CondDoc", { fields: ["_id", "title"] }, reader);
+    expect(res.data.map((r) => r["_id"])).toEqual(["CD-active"]);
+    expect(Object.keys(res.data[0]!).sort()).toEqual(["_id", "title"]);
+    expect(res.total).toBe(1);
+  });
+
+  it("hides the rows a negating condition excludes when fields omit the field it reads", async () => {
+    const res = await docService.getList("NegCondDoc", { fields: ["_id", "title"] }, reader);
+    expect(res.data.map((r) => r["_id"])).toEqual(["NCD-active"]);
+  });
+
+  it("answers the same rows with the condition's field projected, and without a projection", async () => {
+    const projected = await docService.getList("CondDoc", { fields: ["_id", "title", "status"] }, reader);
+    const whole = await docService.getList("CondDoc", {}, reader);
+    expect(projected.data.map((r) => r["_id"])).toEqual(["CD-active"]);
+    expect(whole.data.map((r) => r["_id"])).toEqual(["CD-active"]);
+  });
+
+  it("keeps a listable row without everyRowNeedsRead, and drops a row the user may not read with it", async () => {
+    const listed = await docService.getList("ListOnlyDoc", { fields: ["_id", "title"] }, lister);
+    expect(listed.data.map((r) => r["_id"])).toEqual(["LOD-1"]);
+    const readable = await docService.getList("ListOnlyDoc", { fields: ["_id", "title"] }, lister, undefined, undefined, { everyRowNeedsRead: true });
+    expect(readable.data).toEqual([]);
+    expect(readable.total).toBe(0);
+  });
+});
+
 // H7: submit()/cancel() loaded the doc and gated on docstatus OUTSIDE the
 // transaction, and the write was an unconditional updateOne by _id — so a
 // concurrent (or retried) submit/cancel re-ran on_submit/on_cancel and

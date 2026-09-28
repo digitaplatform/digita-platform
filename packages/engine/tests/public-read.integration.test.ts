@@ -111,6 +111,19 @@ describe.skipIf(!APPS_PRESENT)("Public read scope (generic Guest)", () => {
     expect(ids).not.toContain("t-site::en::draft");
   });
 
+  it("lists the published pages for the renderer's projection, which omits status (#41)", async () => {
+    const qs = new URLSearchParams({
+      filters: JSON.stringify([["site", "=", "t-site"], ["status", "=", "published"]]),
+      fields: JSON.stringify(["_id", "slug", "locale", "nav_label", "title", "translation_group", "modified"]),
+      page_size: "200",
+    });
+    const res = await app.inject({ method: "GET", url: `${PUB}?${qs}` });
+    expect(res.statusCode).toBe(200);
+    const ids = (res.json().data as Array<{ _id: string }>).map((r) => r._id);
+    expect(ids).toEqual(["t-site::en::"]);
+    expect(res.json().meta.total).toBe(1);
+  });
+
   it("anonymously reads a published page", async () => {
     const res = await app.inject({ method: "GET", url: `${PUB}/t-site::en::` });
     expect(res.statusCode).toBe(200);

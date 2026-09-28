@@ -14,6 +14,7 @@ import { ZodSchemaBuilder } from "../entity/zod-schema-builder.js";
 import { IllegalTransitionError } from "../workflow/workflow-engine.js";
 import { getFieldTypeHandler, isStoredFieldType, FieldValueError } from "../entity/field-types.js";
 import { copyDocumentData } from "./copy-service.js";
+import { projectFields } from "./project-fields.js";
 import { resolveDefaults, applyNewChildRowDefaults } from "../defaults/default-resolver.js";
 import { applyScopeFilters, applyRoleVisibilityFilter, isRoleVisible } from "../permissions/scope-filter.js";
 import { env } from "../config/env.js";
@@ -410,12 +411,17 @@ export class DocumentService {
     return doc;
   }
 
+  /**
+   * A page of `doctype` for `user`. `everyRowNeedsRead` keeps only the rows the user may read,
+   * where the list itself needs only `select`: the public API answers readable rows alone.
+   */
   async getList(
     doctype: string,
     query: ListQuery,
     user: UserContext = GUEST_USER,
     ctx?: ResponseContext,
     locale?: string,
+    options: { everyRowNeedsRead?: boolean } = {},
   ): Promise<ListResult> {
     const entity = this.registry.get(doctype);
 
@@ -477,13 +483,25 @@ export class DocumentService {
     const filterArray =
       Object.keys(effectiveFilter).length > 0 ? [effectiveFilter] : [];
 
+    // C1: applyScopeFilters translates scope/if_owner into the Mongo filter, but
+    // a permission `condition` is an arbitrary expression that cannot be — so the
+    // enumeration query can return rows getDoc would 403. Re-check each row's read
+    // permission (which evaluates `condition` fail-closed) and drop denied rows,
+    // when the user holds a conditional read grant or the caller asks for readable
+    // rows only. The check reads whatever fields the condition names, so it runs on
+    // the stored row and the caller's projection comes after it: on a projected row
+    // a missing field denies every row, or grants one where the condition negates.
+    const gatesRows =
+      options.everyRowNeedsRead === true ||
+      this.permissionChecker.hasConditionalReadPermission(user, doctype);
+
     const dbTarget = entity.database;
     const [data, total] = await Promise.all([
       this.db.find(
         entity.name,
         {
           filters: filterArray,
-          fields: query.fields,
+          fields: gatesRows ? undefined : query.fields,
           order_by: query.order_by ?? defaultSort,
           limit,
           offset,
@@ -496,16 +514,13 @@ export class DocumentService {
     let docs = data as Record<string, unknown>[];
     let effectiveTotal = total;
 
-    // C1: applyScopeFilters translates scope/if_owner into the Mongo filter, but
-    // a permission `condition` is an arbitrary expression that cannot be — so the
-    // enumeration query can return rows getDoc would 403. Re-check each row's read
-    // permission (which evaluates `condition` fail-closed) and drop denied rows,
-    // only when the user actually holds a conditional read grant (no cost otherwise).
-    if (this.permissionChecker.hasConditionalReadPermission(user, doctype)) {
+    if (gatesRows) {
       const visible: Record<string, unknown>[] = [];
       for (const doc of docs) {
         if ((await this.permissionChecker.hasPermission(user, doctype, "read", doc)).allowed) {
-          visible.push(doc);
+          // Field masking weighs the same conditions per field level, so it too
+          // runs on the stored row, before the projection.
+          visible.push(projectFields(this.permissionChecker.filterFieldsForRead(user, doctype, doc), query.fields));
         }
       }
       // Lower-bound correction: subtract rows dropped on this page. An exact total
@@ -527,10 +542,10 @@ export class DocumentService {
       }
     }
 
-    // Filter fields by read permission
-    const filteredDocs = docs.map((doc) =>
-      this.permissionChecker.filterFieldsForRead(user, doctype, doc),
-    );
+    // Filter fields by read permission; gated rows were masked on their stored row above.
+    const filteredDocs = gatesRows
+      ? docs
+      : docs.map((doc) => this.permissionChecker.filterFieldsForRead(user, doctype, doc));
 
     const page = query.page ?? Math.floor(offset / limit) + 1;
     const page_size = limit;
