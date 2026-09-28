@@ -27,6 +27,7 @@ import { collectAttachFileIds, deleteFileRefCounted, cleanupDocumentAttachments,
 import {
   buildMongoFilter,
   assertFieldAllowed,
+  assertListFields,
   buildSort,
   parsePagination,
   type ListQuery,
@@ -327,7 +328,12 @@ export class DocumentService {
     }
   }
 
-  /** Batched data-translation overlay for a list (one query for all rows). */
+  /**
+   * Batched data-translation overlay for a list (one query for all rows). As in
+   * applyDataTranslations, a translation replaces only a value the row carries:
+   * a row is already projected, and gated rows already masked, so a field it
+   * lacks was not asked for or may not be read, and the overlay never adds one.
+   */
   private async applyListDataTranslations(
     entity: EntityDefinition,
     docs: Record<string, unknown>[],
@@ -348,7 +354,7 @@ export class DocumentService {
       const tr = map.get(String(doc["_id"]));
       if (!tr) continue;
       for (const [f, v] of Object.entries(tr)) {
-        if (v != null && v !== "") doc[f] = v;
+        if (v != null && v !== "" && doc[f] != null && doc[f] !== "") doc[f] = v;
       }
     }
   }
@@ -427,6 +433,7 @@ export class DocumentService {
 
     // Permission check
     await this.permissionChecker.check(user, doctype, "select");
+    assertListFields(query.fields);
 
     // Build base filter. P-SEC/R7: constrain caller-supplied filter/or_filter
     // field names to the entity's DECLARED surface (+ system fields + Table child

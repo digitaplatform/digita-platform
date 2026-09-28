@@ -58,6 +58,7 @@ import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { projectFields } from "../src/core/document/project-fields.js";
+import { DIGITA } from "@digitaplatform/shared";
 
 // #41: a public list checks each row's Guest read `condition` on the stored row and
 // projects afterwards. The renderer's page list asks for seven fields, none of them
@@ -75,9 +76,9 @@ async function writeEntity(dir: string, name: string, guest: Record<string, unkn
   await writeFile(join(dir, `${name}.entity.json`), JSON.stringify({
     name, module: "web", database: DB, naming: { strategy: "user_set" }, title_field: "title",
     fields: [
-      { fieldname: "title", fieldtype: "Data", label: "Title", required: true },
+      { fieldname: "title", fieldtype: "Data", label: "Title", required: true, translatable: true },
       { fieldname: "status", fieldtype: "Data", label: "Status" },
-      { fieldname: "note", fieldtype: "Data", label: "Note", perm_level: 1 },
+      { fieldname: "note", fieldtype: "Data", label: "Note", perm_level: 1, translatable: true },
     ],
     permissions: guestPermissions(guest),
   }), "utf-8");
@@ -112,9 +113,16 @@ beforeAll(async () => {
   });
   await db.insertOne("GatedPage", row("GatedPage", "G-1", "published", {
     meta: { a: 1, b: { c: 2 } }, items: [{ q: 1, r: 2 }, 3, { r: 4 }], when: now,
+    nested: [[{ x: 1, y: 2 }, 7], { x: 3, y: 4 }, 5, [[{ x: 6 }]]], ["__proto__"]: { polluted: true },
   }), DB);
   await db.insertOne("GatedPage", row("GatedPage", "G-2", "published", { note: "operator only" }), DB);
   await db.insertOne("GatedPage", row("GatedPage", "G-3", "draft"), DB);
+  const translation = (document_name: string, fieldname: string, value: string) => ({
+    _id: `data:GatedPage:${document_name}:en:${fieldname}`, namespace: "data", key: `GatedPage.${document_name}.${fieldname}`, entity: "GatedPage",
+    document_name, locale: "en", fieldname, value, creation: now, modified: now,
+  });
+  await db.insertOne(DIGITA.COLLECTIONS.TRANSLATION, translation("G-2", "title", "G-2 translated"), DIGITA.DATABASES.CORE);
+  await db.insertOne(DIGITA.COLLECTIONS.TRANSLATION, translation("G-2", "note", "operator only, translated"), DIGITA.DATABASES.CORE);
   await db.insertOne("NegatedPage", row("NegatedPage", "N-1", "published"), DB);
   await db.insertOne("NegatedPage", row("NegatedPage", "N-2", "draft"), DB);
   await db.insertOne("ListedPage", row("ListedPage", "L-1", "published"), DB);
@@ -166,6 +174,25 @@ describe("Public list gates each stored row before it projects (#41)", () => {
     }
   });
 
+  it("translates a field the row carries, and never adds one the row lacks or masks", async () => {
+    for (const query of [{ fields: ["_id", "title"] }, {}]) {
+      const { rows } = await list("GatedPage", query);
+      const g2 = rows.find((r) => r["_id"] === "G-2")!;
+      expect(g2["title"]).toBe("G-2 translated");
+      expect(g2).not.toHaveProperty("note");
+    }
+    const { rows } = await list("GatedPage", { fields: ["_id"] });
+    for (const r of rows) expect(Object.keys(r)).toEqual(["_id"]);
+  });
+
+  it("refuses fields it cannot project with 400, before any query", async () => {
+    for (const fields of [[1], 5, "title", ["title", "title.x"], ["$where"], [""], ["a..b"], { a: 1 }]) {
+      const res = await app.inject({ method: "GET", url: `/api/v1/public/resource/GatedPage?fields=${encodeURIComponent(JSON.stringify(fields))}` });
+      expect(res.statusCode, JSON.stringify(fields)).toBe(400);
+      expect(res.json().error.code).toBe("MALFORMED_FIELDS");
+    }
+  });
+
   it("answers no row a Guest may list but not read", async () => {
     const { ids, total } = await list("ListedPage", { fields: ["_id", "title"] });
     expect(ids).toEqual([]);
@@ -176,7 +203,8 @@ describe("Public list gates each stored row before it projects (#41)", () => {
 describe("projectFields answers what a MongoDB projection answers", () => {
   const cases: string[][] = [
     ["title"], ["meta"], ["meta.a"], ["meta.b.c"], ["meta.missing"], ["items.q"], ["items.q", "items.r"],
-    ["missing"], ["when"], ["when.x"], ["title", "meta.b"],
+    ["missing"], ["when"], ["when.x"], ["title", "meta.b"], ["nested"], ["nested.x"], ["nested.x", "nested.y"],
+    ["__proto__"], ["__proto__.polluted"],
   ];
   for (const fields of cases) {
     it(`matches the database for ${JSON.stringify(fields)}`, async () => {
@@ -185,4 +213,11 @@ describe("projectFields answers what a MongoDB projection answers", () => {
       expect(projectFields(stored as Record<string, unknown>, fields)).toEqual(projected);
     });
   }
+
+  it("never touches a prototype, whatever the stored row names", async () => {
+    const [stored] = await db.find("GatedPage", { filters: [{ _id: "G-1" }] }, DB);
+    const projected = projectFields(stored as Record<string, unknown>, ["__proto__", "__proto__.polluted"].slice(0, 1));
+    expect(Object.getPrototypeOf(projected)).toBe(Object.prototype);
+    expect(({} as Record<string, unknown>)["polluted"]).toBeUndefined();
+  });
 });

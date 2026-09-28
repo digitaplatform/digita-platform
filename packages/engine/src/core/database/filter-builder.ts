@@ -16,6 +16,36 @@ export class FilterFieldNotAllowedError extends Error {
   }
 }
 
+/** A list's `fields` the engine cannot project: not a list of field paths, a path
+ *  with an operator or an empty segment, or a path together with one inside it. */
+export class MalformedFieldsError extends Error {
+  constructor(public readonly fields: unknown) {
+    super(`Malformed fields: ${JSON.stringify(fields)} — expected a list of field paths, none inside another`);
+    this.name = "MalformedFieldsError";
+  }
+}
+
+/** A list's `fields` as the caller sent them (JSON from a query string, or a view's
+ *  definition): absent, or a list of dotted field paths. MongoDB refuses a path
+ *  beside one inside it ("Path collision"), so both are refused here, on every
+ *  list path alike, before any query runs. */
+export function assertListFields(fields: unknown): asserts fields is string[] | undefined {
+  if (fields === undefined) return;
+  const malformed = (): never => {
+    throw new MalformedFieldsError(fields);
+  };
+  if (!Array.isArray(fields)) malformed();
+  const paths = fields as unknown[];
+  for (const field of paths) {
+    if (typeof field !== "string" || field.includes("$")) malformed();
+    if ((field as string).split(".").some((segment) => segment === "")) malformed();
+  }
+  const names = paths as string[];
+  for (const field of names) {
+    if (names.some((other) => other !== field && other.startsWith(`${field}.`))) malformed();
+  }
+}
+
 /** Reject an operator key ($…) or a field whose root segment the entity did not
  *  declare. No-op when no allow-list is supplied (internal callers / legacy).
  *  Exported so the count path (object-form filters) can validate its keys with

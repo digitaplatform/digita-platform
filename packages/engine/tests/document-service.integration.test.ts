@@ -695,6 +695,31 @@ describe("C1 — the read gate sees the stored row, whatever fields name", () =>
     expect(whole.data.map((r) => r["_id"])).toEqual(["CD-active"]);
   });
 
+  it("masks a field whose level a negating condition decides on the stored row, whatever fields name", async () => {
+    const base = makeEntity();
+    registry.register(makeEntity({
+      name: "LevelCondDoc",
+      fields: [...base.fields, { fieldname: "secret", fieldtype: "Data" as const, label: "Secret", perm_level: 1 }],
+      permissions: [
+        { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+        { role: "L1Reader", level: 0, select: 1, read: 1, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0 },
+        { role: "L1Reader", level: 1, select: 0, read: 1, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0, condition: "eval:doc.status != 'Draft'" },
+      ],
+    }));
+    await db.ensureCollection("LevelCondDoc", "app");
+    const now = new Date();
+    const row = { docstatus: 0, owner: "system", modified_by: "system", creation: now, modified: now, doctype: "LevelCondDoc" };
+    await db.insertOne("LevelCondDoc", { ...row, _id: "LCD-active", title: "A", status: "Active", secret: "s-active" }, "app");
+    await db.insertOne("LevelCondDoc", { ...row, _id: "LCD-draft", title: "B", status: "Draft", secret: "s-draft" }, "app");
+    const l1reader: UserContext = { _id: "l1-001", email: "l1@test.local", roles: ["L1Reader"], full_name: "Level One" };
+    for (const query of [{ fields: ["_id", "secret"] }, {}]) {
+      const res = await docService.getList("LevelCondDoc", query, l1reader);
+      const byId = new Map(res.data.map((r) => [r["_id"], r]));
+      expect(byId.get("LCD-draft")).not.toHaveProperty("secret");
+      expect(byId.get("LCD-active")?.["secret"]).toBe("s-active");
+    }
+  });
+
   it("keeps a listable row without everyRowNeedsRead, and drops a row the user may not read with it", async () => {
     const listed = await docService.getList("ListOnlyDoc", { fields: ["_id", "title"] }, lister);
     expect(listed.data.map((r) => r["_id"])).toEqual(["LOD-1"]);
