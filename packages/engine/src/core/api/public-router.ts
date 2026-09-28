@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { DIGITA } from "@digitaplatform/shared";
+import { DIGITA, type EntityDefinition, type FieldType } from "@digitaplatform/shared";
 import { env } from "../config/env.js";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { NotFoundError, type DocumentService } from "../document/document-service.js";
@@ -14,6 +14,8 @@ import { isSafeInlineType, contentDisposition } from "./upload-router.js";
 import { ResponseContext } from "./response-context.js";
 import { successResponse, errorResponse } from "./response-model.js";
 import { createLogger } from "../logging/logger.js";
+import { BadRequestError } from "../view/view-engine.js";
+import { parseBodyLimit } from "./http-options.js";
 
 const log = createLogger("public-router");
 
@@ -42,6 +44,43 @@ function stripInternal<T extends Record<string, unknown>>(row: T): T {
   return row;
 }
 
+/** The field types a guest may set on a public create: plain values that name no other record and
+ *  no file, and carry no markup the operator's app would render. */
+const GUEST_SETTABLE_TYPES: ReadonlySet<FieldType> = new Set<FieldType>([
+  "Data", "Text", "SmallText", "Int", "Float", "Currency", "Percent", "Check",
+  "Date", "Datetime", "Time", "Select", "Phone", "Rating", "Color",
+]);
+
+/** The fields an entity's id is made of: the `by_field` field, or every `{field}` an `expression`
+ *  interpolates (naming-service.ts). A visitor may set none of them, so a visitor never picks an
+ *  id. */
+function namingFields(entity: EntityDefinition): Set<string> {
+  const naming = entity.naming;
+  if (naming?.strategy === "by_field" && naming.field) return new Set([naming.field]);
+  if (naming?.strategy === "expression" && naming.expression) {
+    return new Set([...naming.expression.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!));
+  }
+  return new Set();
+}
+
+/** The first body key a guest may not set on a public create, or null. An undeclared or
+ *  `_`-prefixed key never passes, nor a field the id is made of; a declared field passes when Guest
+ *  may write it and its type is a plain value. */
+function guestRefusedKey(
+  entity: EntityDefinition,
+  writable: Set<string> | null,
+  body: Record<string, unknown>,
+): string | null {
+  const idFields = namingFields(entity);
+  for (const key of Object.keys(body)) {
+    const field = entity.fields.find((f) => f.fieldname === key);
+    if (!field || idFields.has(key) || !GUEST_SETTABLE_TYPES.has(field.fieldtype) || !writable?.has(key)) {
+      return key;
+    }
+  }
+  return null;
+}
+
 /**
  * GENERIC, content-agnostic PUBLIC (anonymous) READ surface.
  *
@@ -49,7 +88,8 @@ function stripInternal<T extends Record<string, unknown>>(row: T): T {
  * as the Guest role; an authenticated request keeps its real identity (so an
  * editor token can preview drafts). The engine never learns what entity this
  * serves — opt-in is entirely the entity's own `{ role: "Guest", read: 1 }`
- * permission. Read-only: NO mutations are exposed here. A website engine
+ * permission. The one write is the public create below, opened the same way by a
+ * Guest row that grants `create` and `write`. A website engine
  * (env.SITE_ID set) serves only its own site's rows; see `siteScope`.
  *
  * Draft gating is defense-in-depth: a per-doc permission `condition`
@@ -156,6 +196,49 @@ export function registerPublicRoutes(
     if (scope && data[scope[0]] !== scope[2]) throw new NotFoundError(doctype, name);
     return reply.send(successResponse(stripInternal(data), ctx.getMessages()));
   });
+
+  // ─── CREATE (public, always as Guest) ──────────────────
+  // It runs as Guest whatever session the request carries, so a signed-in browser gains nothing
+  // here, and the entity's own Guest row decides: `create` lets Guest in, and the fields its row
+  // lets Guest write are the fields a body may set. Any other key is refused, not dropped, so an
+  // entity that opens this route cannot take a field by accident. On a website engine a
+  // site-scoped entity gets its site from the engine. The answer is the new id and nothing else.
+  app.post(
+    `${base}/:doctype`,
+    {
+      bodyLimit: parseBodyLimit(env.API_PUBLIC_CREATE_MAX_BODY_SIZE, "API_PUBLIC_CREATE_MAX_BODY_SIZE"),
+      config: {
+        rateLimit: { max: env.API_PUBLIC_CREATE_RATE_LIMIT_MAX, timeWindow: env.API_PUBLIC_CREATE_RATE_LIMIT_WINDOW },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { doctype } = request.params as { doctype: string };
+      const entity = registry.get(doctype);
+      await permissionChecker.check(GUEST_USER, doctype, "create");
+      const body = request.body;
+      if (typeof body !== "object" || body === null || Array.isArray(body)) {
+        throw new BadRequestError("The body must be an object of field values");
+      }
+      const values = body as Record<string, unknown>;
+      const writable = permissionChecker.getWritableFields(GUEST_USER, doctype);
+      const refused = guestRefusedKey(entity, writable, values);
+      if (refused !== null) {
+        throw new BadRequestError(`"${refused}" is not a field a guest may set on ${doctype}`);
+      }
+      const data: Record<string, unknown> = { ...values };
+      const scope = siteScope(doctype);
+      if (scope && scope[0] === "site") {
+        // The insert keeps only what Guest may write, so a site field Guest cannot write would
+        // drop the stamp in silence; that is the entity's misconfiguration, not the visitor's.
+        if (!writable?.has("site")) {
+          throw new Error(`${doctype} is site-scoped, but its Guest row cannot write "site", so the public create cannot stamp it`);
+        }
+        data["site"] = scope[2];
+      }
+      const doc = await documentService.insert(doctype, data, GUEST_USER);
+      return reply.code(201).send(successResponse({ _id: doc._id }));
+    },
+  );
 
   // ─── PUBLIC FILE (only non-private blobs; no RBAC, is_private is the sole gate) ──
   app.get(`${prefix}/public/file/:id`, async (request: FastifyRequest, reply: FastifyReply) => {

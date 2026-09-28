@@ -67,6 +67,30 @@ function getEnvCountRequired(key: string): number {
   return parseInt(val, 10);
 }
 
+/** A count of 1 or more, the fallback when unset; anything else stops the boot, naming the variable. */
+function getEnvPositiveInt(key: string, fallback: number): number {
+  const val = process.env[key];
+  if (val === undefined || val === "") return fallback;
+  if (!/^\d+$/.test(val) || parseInt(val, 10) < 1) {
+    throw new Error(`Environment variable ${key} must be a whole number of 1 or more, got: ${val}`);
+  }
+  return parseInt(val, 10);
+}
+
+/** A duration written `<n>ms`, `<n>s`, `<n>m` or `<n>h`, above zero, in milliseconds; the fallback
+ *  when unset. Anything else stops the boot, naming the variable, where a limiter would otherwise
+ *  read it as no window at all. */
+function getEnvDurationMs(key: string, fallback: string): number {
+  const val = process.env[key] || fallback;
+  const match = /^(\d+)(ms|s|m|h)$/.exec(val);
+  const factor = { ms: 1, s: 1000, m: 60_000, h: 3_600_000 } as const;
+  const ms = match ? parseInt(match[1]!, 10) * factor[match[2] as keyof typeof factor] : 0;
+  if (ms < 1) {
+    throw new Error(`Environment variable ${key} must be a duration like 1m or 30s, got: ${val}`);
+  }
+  return ms;
+}
+
 function getEnvBool(key: string, fallback: boolean): boolean {
   const val = process.env[key];
   if (val === undefined || val === "") return fallback;
@@ -264,6 +288,12 @@ export const env = {
   // anonymous request by the address the last of them saw; required, because a wrong count
   // either lets clients choose their own key or gives every visitor the same one.
   API_TRUSTED_PROXY_HOPS: getEnvCountRequired("API_TRUSTED_PROXY_HOPS"),
+  // The public create (POST /public/resource/:doctype) answers anyone, so its budget per visitor
+  // lies far below API_RATE_LIMIT_MAX and its body is small. API_RATE_LIMIT_MAX <= 0 switches the
+  // limiter off, this route's budget with it.
+  API_PUBLIC_CREATE_RATE_LIMIT_MAX: getEnvPositiveInt("API_PUBLIC_CREATE_RATE_LIMIT_MAX", 5),
+  API_PUBLIC_CREATE_RATE_LIMIT_WINDOW: getEnvDurationMs("API_PUBLIC_CREATE_RATE_LIMIT_WINDOW", "1m"),
+  API_PUBLIC_CREATE_MAX_BODY_SIZE: getEnv("API_PUBLIC_CREATE_MAX_BODY_SIZE", "16kb"),
   API_TIMEOUT_MS: getEnvInt("API_TIMEOUT_MS", 60000),
   CORS_ORIGINS: getEnvArray("CORS_ORIGINS", ["http://localhost:5173"]),
   CORS_CREDENTIALS: getEnvBool("CORS_CREDENTIALS", true),

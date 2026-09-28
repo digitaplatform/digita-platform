@@ -46,3 +46,25 @@ export function engineRateLimitOptions(settings: { max: number; timeWindow: stri
     },
   };
 }
+
+/**
+ * A byte size written `<n>`, `<n>kb`, `<n>mb` or `<n>gb`. A value in any other form stops the boot
+ * and names its setting: a limit that silently became something else would guard nothing.
+ */
+export function parseBodyLimit(value: string, setting: string): number {
+  const match = value.match(/^(\d+)\s*(kb|mb|gb)?$/i);
+  if (!match) {
+    throw new Error(`Environment variable ${setting} must be a size like 16kb or 10mb, got: ${value}`);
+  }
+  const num = parseInt(match[1]!, 10);
+  switch (match[2]?.toLowerCase()) {
+    case "kb":
+      return num * 1024;
+    case "mb":
+      return num * 1024 * 1024;
+    case "gb":
+      return num * 1024 * 1024 * 1024;
+    default:
+      return num;
+  }
+}

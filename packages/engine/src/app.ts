@@ -4,7 +4,7 @@ import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
-import { engineRateLimitOptions, engineServerOptions } from "./core/api/http-options.js";
+import { engineRateLimitOptions, engineServerOptions, parseBodyLimit } from "./core/api/http-options.js";
 import multipart from "@fastify/multipart";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
@@ -92,28 +92,12 @@ import { registerViewRoutes } from "./core/api/view-router.js";
 
 const log = createLogger("app");
 
-function parseBodyLimit(value: string): number {
-  const match = value.match(/^(\d+)\s*(kb|mb|gb)?$/i);
-  if (!match) return 10485760; // 10MB default
-  const num = parseInt(match[1]!, 10);
-  switch (match[2]?.toLowerCase()) {
-    case "kb":
-      return num * 1024;
-    case "mb":
-      return num * 1024 * 1024;
-    case "gb":
-      return num * 1024 * 1024 * 1024;
-    default:
-      return num;
-  }
-}
-
 export async function createApp(
   opts: { authn?: import("./core/auth/authn-port.js").AuthnPort } = {},
 ) {
   const app = Fastify(
     engineServerOptions({
-      bodyLimit: parseBodyLimit(env.API_MAX_BODY_SIZE),
+      bodyLimit: parseBodyLimit(env.API_MAX_BODY_SIZE, "API_MAX_BODY_SIZE"),
       trustedProxyHops: env.API_TRUSTED_PROXY_HOPS,
     }),
   );
@@ -282,7 +266,7 @@ export async function createApp(
   }
 
   await app.register(multipart, {
-    limits: { fileSize: parseBodyLimit(env.UPLOAD_MAX_SIZE) },
+    limits: { fileSize: parseBodyLimit(env.UPLOAD_MAX_SIZE, "UPLOAD_MAX_SIZE") },
   });
 
   // ─── Swagger / OpenAPI ──────────────────────────────────
