@@ -1,11 +1,13 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { DIGITA } from "@digitaplatform/shared";
+import { env } from "../config/env.js";
 import type { MongoDBService } from "../database/mongodb-service.js";
-import type { DocumentService } from "../document/document-service.js";
+import { NotFoundError, type DocumentService } from "../document/document-service.js";
+import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { LocaleResolver } from "../i18n/locale-resolver.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
-import type { ListQuery } from "../database/filter-builder.js";
+import type { ListQuery, FilterTuple } from "../database/filter-builder.js";
 import { FileNotFoundInStorageError, type StoragePort } from "../storage/storage-port.js";
 import { resolveStorageKey } from "../storage/file-cleanup.js";
 import { isSafeInlineType, contentDisposition } from "./upload-router.js";
@@ -47,7 +49,8 @@ function stripInternal<T extends Record<string, unknown>>(row: T): T {
  * as the Guest role; an authenticated request keeps its real identity (so an
  * editor token can preview drafts). The engine never learns what entity this
  * serves — opt-in is entirely the entity's own `{ role: "Guest", read: 1 }`
- * permission. Read-only: NO mutations are exposed here.
+ * permission. Read-only: NO mutations are exposed here. A website engine
+ * (env.SITE_ID set) serves only its own site's rows; see `siteScope`.
  *
  * Draft gating is defense-in-depth: a per-doc permission `condition`
  * (e.g. `eval:doc.status=='published'`) is enforced by getDoc, and LIST results
@@ -63,9 +66,10 @@ export function registerPublicRoutes(
     permissionChecker: PermissionChecker;
     storage: StoragePort;
     localeResolver: LocaleResolver;
+    registry: EntityRegistry;
   },
 ): void {
-  const { db, documentService, permissionChecker, storage, localeResolver } = deps;
+  const { db, documentService, permissionChecker, storage, localeResolver, registry } = deps;
   const base = `${prefix}/public/resource`;
   const user = (request: FastifyRequest): UserContext => request.user ?? GUEST_USER;
   // Anonymous visitors carry no token language → negotiate from Accept-Language;
@@ -75,6 +79,19 @@ export function registerPublicRoutes(
       user(request).language,
       request.headers["accept-language"] as string | undefined,
     );
+
+  // ─── SITE SCOPE ────────────────────────────────────────
+  // Several domains of one tenant can each run a website engine; each serves
+  // only its own site. WebSite is the site, keyed by `_id`; an entity with a
+  // `site` link to WebSite is scoped by that field. No SITE_ID, no scope.
+  const siteScope = (doctype: string): FilterTuple | null => {
+    if (!env.SITE_ID) return null;
+    if (doctype === "WebSite") return ["_id", "=", env.SITE_ID];
+    if (registry.has(doctype) && registry.getField(doctype, "site")?.target === "WebSite") {
+      return ["site", "=", env.SITE_ID];
+    }
+    return null;
+  };
 
   // ─── LIST (public, published-gated per row) ────────────
   app.get(`${base}/:doctype`, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -91,6 +108,11 @@ export function registerPublicRoutes(
       page_size: query["page_size"] ? Number(query["page_size"]) : undefined,
       search: query["search"] as string,
     };
+    // buildMongoFilter ANDs every filter with or_filters and search, so the caller
+    // cannot widen the scope.
+    const scope = siteScope(doctype);
+    if (scope) listQuery.filters = [...(listQuery.filters ?? []), scope];
+
     // DoS guard: clamp any explicit page size into [1, MAX_PUBLIC_PAGE]. A
     // non-positive/non-finite value (0, negative, NaN) is forced to the ceiling —
     // Mongo would otherwise treat limit 0 as unbounded and dump the collection.
@@ -128,7 +150,11 @@ export function registerPublicRoutes(
     const { doctype, name } = request.params as { doctype: string; name: string };
     const ctx = new ResponseContext();
     const doc = await documentService.getDoc(doctype, name, user(request), ctx, await localeOf(request));
-    return reply.send(successResponse(stripInternal(doc.toJSON()), ctx.getMessages()));
+    const data = doc.toJSON();
+    // Another site's document reads as not found, so the read never reveals it.
+    const scope = siteScope(doctype);
+    if (scope && data[scope[0]] !== scope[2]) throw new NotFoundError(doctype, name);
+    return reply.send(successResponse(stripInternal(data), ctx.getMessages()));
   });
 
   // ─── PUBLIC FILE (only non-private blobs; no RBAC, is_private is the sole gate) ──

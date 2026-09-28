@@ -388,7 +388,7 @@ export async function createApp(
   // Read-only; no engine knowledge of "websites".
   app.register(async (scope) => {
     scope.addHook("onRequest", optionalAuth);
-    registerPublicRoutes(scope, env.API_PREFIX, { db, documentService, permissionChecker, storage, localeResolver });
+    registerPublicRoutes(scope, env.API_PREFIX, { db, documentService, permissionChecker, storage, localeResolver, registry });
   });
 
   // ─── Protected utility routes (auth required) ─────────
@@ -665,6 +665,24 @@ export async function createApp(
         log.error(
           { err: (e as Error).message },
           "Boot app-data seed failed (non-fatal) — continuing startup",
+        );
+      }
+    }
+
+    // 4b-ter. A website engine (SITE_ID set) always seeds its own site from
+    //     `<domainDir>/sites/<SITE_ID>/`: a website has no demo tier to opt into,
+    //     and without its content it is an empty page. Non-destructive and
+    //     non-fatal, as 4b-bis.
+    if (env.SITE_ID) {
+      const siteSeedDirs = domainDirs.map((d) => join(d.root, "sites", env.SITE_ID));
+      try {
+        await seedAppData(db, registry, new NamingService(db), siteSeedDirs);
+        await seedDataTranslations(db, registry, translationService, siteSeedDirs);
+        log.info({ site: env.SITE_ID, dirs: siteSeedDirs.length }, "Site content seeded at boot");
+      } catch (e) {
+        log.error(
+          { err: (e as Error).message },
+          "Boot site-content seed failed (non-fatal) — continuing startup",
         );
       }
     }

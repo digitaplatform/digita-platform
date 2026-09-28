@@ -156,6 +156,9 @@ export const env = {
   APP_NAME: appName,
   INSTANCE_ID: appName,
   STAGE: stage,
+  // Set only for a website engine: it seeds `<domainDir>/sites/<SITE_ID>/` at boot
+  // and scopes the public read API to that site. Empty for every other app.
+  SITE_ID: getEnv("SITE_ID", ""),
 
   // ─── MONGODB ──────────────────────────────────────────
   MONGODB_URI: getEnvRequired("MONGODB_URI"),
