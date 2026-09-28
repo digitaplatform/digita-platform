@@ -26,14 +26,17 @@ afterEach(() => {
 });
 
 describe('BrandChrome — signature wordmark', () => {
-  it('renders the digita wordmark lockup in an EXPANDED rail (no tenant branding)', () => {
+  it('renders the digita family lockup in an EXPANDED rail (no tenant branding)', () => {
     useThemeStore.setState({ signature: 'digita' });
     useSessionStore.setState({ branding: null });
     render(<BrandChrome side="left" />);
-    const mark = screen.getByTestId('brand-wordmark');
-    // The lockup carries its own accessible name (the inner SVG is aria-hidden).
+    // The digita signature is a lockup family: the kit renders `digita ● platform` from the
+    // display face instead of the wordmark SVG, with its own accessible name.
+    const mark = screen.getByTestId('brand-lockup');
     expect(mark).toHaveAttribute('role', 'img');
     expect(mark).toHaveAttribute('aria-label', 'Digita');
+    expect(mark.textContent).toBe('digitaplatform');
+    expect(screen.queryByTestId('brand-wordmark')).toBeNull();
   });
 
   it('falls back to the monogram (no wordmark) in a COLLAPSED rail', () => {
