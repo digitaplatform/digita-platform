@@ -19,7 +19,8 @@ export type PropType =
   | "select"
   | "code"
   | "media"
-  | "list";
+  | "list"
+  | "object";
 
 export interface PropField {
   name: string;
@@ -28,7 +29,8 @@ export interface PropField {
   required?: boolean;
   /** Options for `select`. */
   options?: string[];
-  /** Item shape for `list` (a repeatable group, e.g. feature-grid items). */
+  /** Item shape for `list` (a repeatable group, e.g. feature-grid items) and the members of an
+   *  `object` (one group, e.g. a call to action). A `list` without it holds lines of text. */
   itemFields?: PropField[];
   help?: string;
 }

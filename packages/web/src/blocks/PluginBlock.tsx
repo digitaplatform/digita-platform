@@ -1,4 +1,5 @@
 import { resolvePlugin } from "@/plugins";
+import { Section } from "./marketing/shared";
 
 /**
  * Renders a `plugin` block by resolving `props.plugin_id` against the frontend
@@ -20,5 +21,10 @@ export function PluginBlock({ props }: { props?: Record<string, unknown> }) {
     }
     return null;
   }
-  return <Plugin props={props} />;
+  // The section owns the page spacing, so a plugin placed alone and one inside a showcase line up.
+  return (
+    <Section>
+      <Plugin props={props} />
+    </Section>
+  );
 }

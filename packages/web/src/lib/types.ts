@@ -9,6 +9,17 @@ export type BlockType =
   | "stats"
   | "embed"
   | "code"
+  | "hero_brand"
+  | "pillars"
+  | "stack"
+  | "pipeline"
+  | "compare"
+  | "checklist"
+  | "segments"
+  | "signals"
+  | "cta_panel"
+  | "contact_details"
+  | "showcase"
   | "plugin";
 
 export interface Block {

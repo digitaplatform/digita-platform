@@ -3,3 +3,22 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* The motion of the marketing blocks. Each block applies these through `motion-safe:` classes,
+   so a visitor who asks for reduced motion gets none of them. */
+@keyframes mark-aura {
+  0%, 100% { opacity: 0.35; transform: scale(0.96); }
+  50% { opacity: 0.9; transform: scale(1.04); }
+}
+@keyframes mark-node {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes rain-fall {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(100%); }
+}

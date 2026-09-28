@@ -56,10 +56,7 @@ export default function MetadataDemo() {
   });
 
   return (
-    <section
-      className="mx-auto w-full max-w-6xl px-6 py-12 md:px-8 md:py-16"
-      aria-label="How one Sales Order definition generates a REST API and an admin UI"
-    >
+    <section aria-label="How one Sales Order definition generates a REST API and an admin UI">
       <motion.div
         initial="hidden"
         whileInView="show"

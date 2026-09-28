@@ -1,6 +1,36 @@
 import type { BlockType } from "@/lib/types";
-import type { BlockManifest, RenderComponent } from "@/catalog/types";
+import type { BlockManifest, PropField, RenderComponent } from "@/catalog/types";
 import { Hero, RichText, FeatureGrid, Media, Cta, Stats, Embed, Code } from "./components";
+import { HeroBrand } from "./marketing/HeroBrand";
+import { Pillars } from "./marketing/Pillars";
+import { Stack } from "./marketing/Stack";
+import { Pipeline } from "./marketing/Pipeline";
+import { Compare } from "./marketing/Compare";
+import { Checklist } from "./marketing/Checklist";
+import { Segments } from "./marketing/Segments";
+import { Signals } from "./marketing/Signals";
+import { CtaPanel } from "./marketing/CtaPanel";
+import { ContactDetails } from "./marketing/ContactDetails";
+import { Showcase } from "./marketing/Showcase";
+import { PLUGIN_MANIFESTS } from "@/plugins";
+
+/** The heading every marketing section opens with. */
+const EYEBROW: PropField = { name: "eyebrow", label: "Eyebrow", type: "text" };
+const HEADING: PropField = { name: "heading", label: "Heading", type: "text" };
+const LEDE: PropField = { name: "lede", label: "Lede", type: "textarea" };
+
+/** A call to action: `sheet` opens the contact sheet, `href` follows the link. */
+const action = (name: string, label: string): PropField => ({
+  name,
+  label,
+  type: "object",
+  itemFields: [
+    { name: "label", label: "Label", type: "text", required: true },
+    { name: "action", label: "Action", type: "select", options: ["sheet", "href"] },
+    { name: "href", label: "Link", type: "url" },
+  ],
+});
+const STATUS: PropField = { name: "status", label: "Status", type: "select", options: ["available", "early_access", "coming"] };
 
 /**
  * Block manifests — the single source for which generic block types the renderer
@@ -55,7 +85,7 @@ export const BLOCK_MANIFESTS: BlockManifest[] = [
   {
     type: "stats",
     name: "Stats",
-    description: "A row of big numbers with labels.",
+    description: "A proof strip: up to four facts, each a value over its label, divided by hairlines.",
     category: "content",
     component: Stats,
     props: [
@@ -85,7 +115,7 @@ export const BLOCK_MANIFESTS: BlockManifest[] = [
   {
     type: "cta",
     name: "Call to action",
-    description: "A highlighted banner with a button.",
+    description: "A glowing panel with a headline, a body and a button.",
     category: "content",
     component: Cta,
     props: [
@@ -118,6 +148,229 @@ export const BLOCK_MANIFESTS: BlockManifest[] = [
       { name: "title", label: "File/title", type: "text" },
       { name: "language", label: "Language label", type: "text" },
       { name: "code", label: "Code", type: "code", required: true },
+      { name: "caption", label: "Caption", type: "text" },
+    ],
+  },
+  {
+    type: "hero_brand",
+    name: "Brand hero",
+    description: "The opening section of a brand site: headline, lede, calls to action and the site's visual.",
+    category: "content",
+    component: HeroBrand,
+    props: [
+      EYEBROW,
+      { ...HEADING, required: true },
+      LEDE,
+      action("primary", "Primary action"),
+      action("secondary", "Secondary action"),
+      { name: "visual", label: "Visual", type: "select", options: ["simetrix-mark", "code-app", "none"] },
+      { name: "atmosphere", label: "Atmosphere", type: "select", options: ["data-rain", "none"] },
+      { name: "reveal", label: "Reveal the code behind the app", type: "boolean", help: "Only with the code-app visual." },
+    ],
+  },
+  {
+    type: "pillars",
+    name: "Pillars",
+    description: "Three or four numbered steps or ideas, one card each.",
+    category: "content",
+    component: Pillars,
+    props: [
+      EYEBROW,
+      HEADING,
+      LEDE,
+      {
+        name: "items",
+        label: "Items",
+        type: "list",
+        required: true,
+        itemFields: [
+          { name: "num", label: "Number", type: "text" },
+          { name: "title", label: "Title", type: "text", required: true },
+          { name: "body", label: "Body", type: "textarea" },
+        ],
+      },
+    ],
+  },
+  {
+    type: "stack",
+    name: "Product stack",
+    description: "Products or apps, each with its lockup or title, its status and a link.",
+    category: "content",
+    component: Stack,
+    props: [
+      EYEBROW,
+      HEADING,
+      LEDE,
+      {
+        name: "items",
+        label: "Items",
+        type: "list",
+        required: true,
+        itemFields: [
+          {
+            name: "lockup",
+            label: "Lockup",
+            type: "object",
+            help: "A family product: family and product word, both lowercase. Leave empty to show the title.",
+            itemFields: [
+              { name: "family", label: "Family", type: "text", required: true },
+              { name: "product", label: "Product", type: "text", required: true },
+            ],
+          },
+          { name: "title", label: "Title", type: "text" },
+          { name: "body", label: "Body", type: "textarea" },
+          STATUS,
+          { name: "href", label: "Link", type: "url" },
+          { name: "link_label", label: "Link label", type: "text" },
+        ],
+      },
+    ],
+  },
+  {
+    type: "pipeline",
+    name: "Pipeline",
+    description: "The stages of a process in order, one column each.",
+    category: "content",
+    component: Pipeline,
+    props: [
+      EYEBROW,
+      HEADING,
+      LEDE,
+      {
+        name: "stages",
+        label: "Stages",
+        type: "list",
+        required: true,
+        itemFields: [
+          { name: "stage", label: "Stage", type: "text", help: "Its number, e.g. 01." },
+          { name: "title", label: "Title", type: "text", required: true },
+          { name: "body", label: "Body", type: "textarea" },
+          { name: "target", label: "Target", type: "text", help: "How long it takes, e.g. days." },
+        ],
+      },
+    ],
+  },
+  {
+    type: "compare",
+    name: "Comparison",
+    description: "Two approaches compared row by row; the second column is the one the page argues for.",
+    category: "content",
+    component: Compare,
+    props: [
+      EYEBROW,
+      HEADING,
+      LEDE,
+      { name: "columns", label: "Column names", type: "list", required: true, help: "Two lines: the first and the second column." },
+      {
+        name: "rows",
+        label: "Rows",
+        type: "list",
+        required: true,
+        itemFields: [
+          { name: "aspect", label: "Aspect", type: "text", required: true },
+          { name: "a", label: "First column", type: "textarea" },
+          { name: "b", label: "Second column", type: "textarea" },
+        ],
+      },
+    ],
+  },
+  {
+    type: "checklist",
+    name: "Checklist",
+    description: "What is included, as a checked list in two or three columns.",
+    category: "content",
+    component: Checklist,
+    props: [
+      EYEBROW,
+      HEADING,
+      {
+        name: "items",
+        label: "Items",
+        type: "list",
+        required: true,
+        itemFields: [
+          { name: "what", label: "What", type: "text", required: true },
+          { name: "note", label: "Note", type: "text" },
+        ],
+      },
+    ],
+  },
+  {
+    type: "segments",
+    name: "Segments",
+    description: "Who a product is for: each audience, who they are and what they gain.",
+    category: "content",
+    component: Segments,
+    props: [
+      EYEBROW,
+      HEADING,
+      LEDE,
+      {
+        name: "items",
+        label: "Items",
+        type: "list",
+        required: true,
+        itemFields: [
+          { name: "mark", label: "Mark", type: "text" },
+          { name: "title", label: "Title", type: "text", required: true },
+          { name: "who", label: "Who they are", type: "textarea" },
+          { name: "gain", label: "What they gain", type: "textarea" },
+        ],
+      },
+    ],
+  },
+  {
+    type: "signals",
+    name: "Signals",
+    description: "A row of chips a visitor recognizes themselves in, with a note line.",
+    category: "content",
+    component: Signals,
+    props: [
+      EYEBROW,
+      { name: "items", label: "Chips", type: "list", required: true },
+      { name: "note", label: "Note", type: "text" },
+    ],
+  },
+  {
+    type: "cta_panel",
+    name: "Call to action panel",
+    description: "A glowing panel with a headline, a body and up to two actions.",
+    category: "content",
+    component: CtaPanel,
+    props: [
+      { ...HEADING, required: true },
+      { name: "body", label: "Body", type: "textarea" },
+      action("primary", "Primary action"),
+      action("secondary", "Secondary action"),
+    ],
+  },
+  {
+    type: "contact_details",
+    name: "Contact details",
+    description: "The address, email and phone, with a booking button once a booking link exists.",
+    category: "content",
+    component: ContactDetails,
+    props: [
+      HEADING,
+      { name: "body", label: "Body", type: "textarea" },
+      { name: "address", label: "Address lines", type: "list", required: true },
+      { name: "email", label: "Email", type: "text" },
+      { name: "phone", label: "Phone", type: "text" },
+      { name: "booking_url", label: "Booking link", type: "url" },
+      { name: "booking_label", label: "Booking button label", type: "text" },
+    ],
+  },
+  {
+    type: "showcase",
+    name: "Showcase",
+    description: "A live plugin under a section heading, with a caption.",
+    category: "interactive",
+    component: Showcase,
+    props: [
+      EYEBROW,
+      HEADING,
+      LEDE,
+      { name: "plugin_id", label: "Plugin", type: "select", required: true, options: PLUGIN_MANIFESTS.map((plugin) => plugin.id) },
       { name: "caption", label: "Caption", type: "text" },
     ],
   },

@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
 import { Badge, Card, buttonAttributes } from "@digitaplatform/components";
 import { mediaUrl } from "@/lib/media";
+import { type P, Section, list, s } from "./marketing/shared";
+import { GlowPanel } from "./marketing/CtaPanel";
 
 /**
  * Generic content-block components. Each reads its typed config from the block's
@@ -9,16 +10,6 @@ import { mediaUrl } from "@/lib/media";
  * restyles like the app. Add a block type by adding a component here and registering it
  * in registry.ts.
  */
-
-type P = Record<string, unknown>;
-const s = (p: P | undefined, k: string): string => (typeof p?.[k] === "string" ? (p[k] as string) : "");
-const list = (p: P | undefined, k: string): P[] => (Array.isArray(p?.[k]) ? (p[k] as P[]) : []);
-
-function Section({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return (
-    <section className={`mx-auto w-full max-w-6xl px-6 py-16 md:px-8 md:py-24 ${className}`}>{children}</section>
-  );
-}
 
 export function Hero({ props }: { props?: P }) {
   const ctaHref = s(props, "cta_href");
@@ -77,18 +68,30 @@ export function FeatureGrid({ props }: { props?: P }) {
   );
 }
 
+/** Proof-strip columns and the hairline between cells, as literal classes so the stylesheet
+ *  carries them: two columns on a phone, up to four on a wide screen. */
+const STRIP_COLUMNS: Record<number, string> = { 1: "md:grid-cols-1", 2: "md:grid-cols-2", 3: "md:grid-cols-3" };
+
 export function Stats({ props }: { props?: P }) {
   const items = list(props, "items");
+  if (!items.length) return null;
+  const columns = Math.min(items.length, 4);
   return (
     <Section>
-      <Card graphic className="grid gap-8 sm:grid-cols-3">
+      <dl className={`grid grid-cols-2 border-t border-border md:border-b ${STRIP_COLUMNS[columns] ?? "md:grid-cols-4"}`}>
         {items.map((item, i) => (
-          <div key={i} className="text-center">
-            <div className="text-4xl font-semibold tracking-tight text-primary-600 md:text-5xl">{s(item, "value")}</div>
-            <div className="mt-2 text-sm text-textMuted">{s(item, "label")}</div>
+          <div
+            key={i}
+            className={`flex flex-col-reverse justify-end gap-1.5 border-b border-border py-5 pr-6 md:border-b-0 ${i % 2 ? "border-l pl-6" : "pl-0"} ${
+              i % columns ? "md:border-l md:pl-6" : "md:border-l-0 md:pl-0"
+            }`}
+          >
+            {/* The label is the term and the value its description; the value still reads first. */}
+            <dt className="text-sm text-textMuted">{s(item, "label")}</dt>
+            <dd className="font-display text-xl font-semibold text-textMain">{s(item, "value")}</dd>
           </div>
         ))}
-      </Card>
+      </dl>
     </Section>
   );
 }
@@ -111,19 +114,15 @@ export function Media({ props }: { props?: P }) {
 }
 
 export function Cta({ props }: { props?: P }) {
+  const label = s(props, "cta_label");
   const href = s(props, "cta_href");
   return (
-    <Section>
-      <div className="rounded-card bg-primary-600 px-8 py-14 text-center text-onPrimary">
-        {s(props, "heading") && <h2 className="text-3xl font-semibold tracking-tight [overflow-wrap:anywhere]">{s(props, "heading")}</h2>}
-        {s(props, "body") && <p className="mx-auto mt-3 max-w-xl [overflow-wrap:anywhere]">{s(props, "body")}</p>}
-        {s(props, "cta_label") && href && (
-          <a href={href} {...buttonAttributes({ variant: "secondary", size: "lg", className: "mt-8" })}>
-            {s(props, "cta_label")}
-          </a>
-        )}
-      </div>
-    </Section>
+    <GlowPanel
+      heading={s(props, "heading")}
+      body={s(props, "body")}
+      primary={label && href ? { label, href, sheet: false } : null}
+      secondary={null}
+    />
   );
 }
 
