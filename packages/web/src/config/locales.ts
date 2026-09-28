@@ -58,3 +58,22 @@ export function offeredLocales(
       (enabled.length === 0 || enabled.includes(locale) || locale === current),
   );
 }
+
+/** The locale a bare URL redirects to for a visitor's Accept-Language, or null. The languages are
+ *  read by quality, a region (de-CH) counts as its language, "*" names no locale. The first
+ *  language the site offers decides: the default locale gives null, because the bare URL already
+ *  shows it, and so does a list that names no offered locale. */
+export function preferredLocale(acceptLanguage: string, offered: readonly string[], defaultLocale: string): string | null {
+  const ranked = acceptLanguage
+    .split(",")
+    .map((entry) => {
+      const [tag = "", ...params] = entry.trim().split(";");
+      // RFC 9110: a parameter name is case-insensitive, so Q=0.1 is the same quality.
+      const quality = params.map((p) => p.trim().toLowerCase()).find((p) => p.startsWith("q="));
+      return { language: tag.split("-")[0]!.toLowerCase(), q: quality ? Number(quality.slice(2)) : 1 };
+    })
+    .filter((e) => e.language && e.language !== "*" && e.q > 0)
+    .sort((a, b) => b.q - a.q);
+  const first = ranked.find((e) => offered.includes(e.language));
+  return first && first.language !== defaultLocale ? first.language : null;
+}

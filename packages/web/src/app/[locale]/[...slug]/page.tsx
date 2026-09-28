@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { isLocale } from "@/config/locales";
 import { getConfig } from "@/config/env";
 import { getPage, getSite } from "@/lib/engine-client";
+import { negotiateLocale } from "@/lib/negotiate-locale";
 import { buildPageMetadata } from "@/lib/seo";
 import { PageView } from "@/components/PageView";
 
@@ -27,6 +28,7 @@ export default async function ContentPage({
 }) {
   const { locale, slug } = await params;
   if (!isLocale(locale, getConfig().locales)) notFound();
+  await negotiateLocale(locale);
 
   const [page, site] = await Promise.all([getPage(locale, slug.join("/")), getSite()]);
   if (!page) notFound();

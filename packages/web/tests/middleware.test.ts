@@ -2,7 +2,7 @@
 // form of the canonical host move to the canonical host, and every link the site builds follows
 // the same rule.
 import { describe, it, expect, beforeEach } from "vitest";
-import { NextRequest } from "next/server";
+import { NextRequest, type NextResponse } from "next/server";
 import { config, middleware } from "../src/middleware";
 import { localeHref, navHref, switchLocalePath } from "../src/lib/nav";
 
@@ -12,7 +12,9 @@ beforeEach(() => {
   process.env.SITE_URL = "https://example.com";
 });
 
-const run = (url: string) => middleware(new NextRequest(url));
+const run = (url: string, headers?: Record<string, string>) => middleware(new NextRequest(url, { headers }));
+/** The request goes on to its own route: no other URL, no other page. */
+const passes = (res: NextResponse) => res.status === 200 && !res.headers.get("location") && !res.headers.get("x-middleware-rewrite");
 
 describe("the middleware", () => {
   it.each([
@@ -24,6 +26,29 @@ describe("the middleware", () => {
     expect(res?.status).toBe(200);
     expect(res?.headers.get("location")).toBeNull();
     expect(res?.headers.get("x-middleware-rewrite")).toBe(target);
+  });
+
+  it("marks a bare page request as negotiable, with the visitor's path and query, and its answer as varying by language", () => {
+    const res = run("https://example.com/about");
+    expect(res.headers.get("x-middleware-request-x-locale-negotiable")).toBe("/about");
+    expect(res.headers.get("vary")).toBe("Accept-Language, Cookie");
+    // PLANTED DEFECT: a mark that carries the path alone loses a campaign's query, and this goes red.
+    expect(run("https://example.com/about?utm_source=newsletter&x=1").headers.get("x-middleware-request-x-locale-negotiable")).toBe(
+      "/about?utm_source=newsletter&x=1",
+    );
+  });
+
+  it("PLANTED DEFECT: drops a negotiable mark the client sent, so a prefixed URL, the API and a file never negotiate", () => {
+    // A middleware that passes a prefixed request untouched forwards the smuggled mark, and this goes red.
+    for (const url of ["https://example.com/de/about", "https://example.com/de", "https://example.com/api/contact", "https://example.com/sitemap.xml"]) {
+      const res = run(url, { "x-locale-negotiable": "/about", "accept-language": "de" });
+      expect(passes(res)).toBe(true);
+      expect(res.headers.get("x-middleware-request-x-locale-negotiable")).toBeNull();
+      expect(res.headers.get("x-middleware-override-headers")?.split(",")).not.toContain("x-locale-negotiable");
+      expect(res.headers.get("x-middleware-request-accept-language")).toBe("de");
+    }
+    // On the bare URL the mark is the middleware's own, not the client's.
+    expect(run("https://example.com/about", { "x-locale-negotiable": "/" }).headers.get("x-middleware-request-x-locale-negotiable")).toBe("/about");
   });
 
   it("moves the www host to the canonical apex host for good, on every path", () => {
@@ -55,19 +80,19 @@ describe("the middleware", () => {
   });
 
   it("PLANTED INNOCENT: leaves a host that is not a form of the canonical host alone", () => {
-    expect(run("https://other.example.org/sitemap.xml")).toBeUndefined();
-    expect(run("https://www.other.example.org/api/contact")).toBeUndefined();
-    expect(run("https://other.example.org/about")?.headers.get("location")).toBeNull();
+    expect(passes(run("https://other.example.org/sitemap.xml"))).toBe(true);
+    expect(passes(run("https://www.other.example.org/api/contact"))).toBe(true);
+    expect(run("https://other.example.org/about").headers.get("location")).toBeNull();
   });
 
   it("serves the API and the files on the canonical host as they are", () => {
-    expect(run("https://example.com/sitemap.xml")).toBeUndefined();
-    expect(run("https://example.com/api/contact")).toBeUndefined();
+    expect(passes(run("https://example.com/sitemap.xml"))).toBe(true);
+    expect(passes(run("https://example.com/api/contact"))).toBe(true);
   });
 
   it("PLANTED INNOCENT: leaves a path with a locale alone", () => {
-    expect(run("https://example.com/de/about")).toBeUndefined();
-    expect(run("https://example.com/de")).toBeUndefined();
+    expect(passes(run("https://example.com/de/about"))).toBe(true);
+    expect(passes(run("https://example.com/de"))).toBe(true);
   });
 });
 

@@ -1,12 +1,27 @@
-// The locale layout links the tenant's apps in the header unless the site turns them off, so a
-// WebSite row written before `link_apps` existed keeps the apps it linked.
+// The locale layout leaves the bare URL's language negotiation to the pages, and links the
+// tenant's apps in the header unless the site turns them off, so a WebSite row written before
+// `link_apps` existed keeps the apps it linked.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { WebSite } from "../src/lib/types";
 
 vi.mock("server-only", () => ({}));
 vi.mock("../src/i18n/messages", () => ({ t: (key: string) => key }));
-vi.mock("next/navigation", () => ({ notFound: () => {}, usePathname: () => "/", useRouter: () => ({ push: () => {} }) }));
+const redirect = vi.fn((url: string): never => {
+  throw new Error(`redirect ${url}`);
+});
+vi.mock("next/navigation", () => ({
+  notFound: () => {},
+  redirect: (url: string) => redirect(url),
+  usePathname: () => "/",
+  useRouter: () => ({ push: () => {} }),
+}));
+let requestHeaders: Record<string, string> = {};
+let localeCookie: string | undefined;
+vi.mock("next/headers", () => ({
+  headers: async () => new Headers(requestHeaders),
+  cookies: async () => ({ get: (name: string) => (name === "locale" && localeCookie ? { name, value: localeCookie } : undefined) }),
+}));
 
 let site: WebSite;
 let publishedSlugs: Record<string, string[]> = { en: [""], de: [""] };
@@ -39,9 +54,18 @@ async function render(): Promise<string> {
 beforeEach(() => {
   site = { _id: "example", site_name: "example", domain: "example.org" };
   publishedSlugs = { en: [""], de: [""] };
+  requestHeaders = {};
+  localeCookie = undefined;
+  redirect.mockClear();
 });
 
 describe("the locale layout", () => {
+  it("PLANTED INNOCENT: never negotiates a bare URL itself, because a soft navigation keeps the layout and would skip it", async () => {
+    requestHeaders = { "x-locale-negotiable": "/", "accept-language": "de" };
+    expect(await render()).toContain('lang="en"');
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
   it("PLANTED DEFECT: hands the header the engine's published pages, so a locale without a published home is not offered", async () => {
     publishedSlugs = { en: [""] };
     // A layout that offered every served locale would render the menu here; this goes red then.

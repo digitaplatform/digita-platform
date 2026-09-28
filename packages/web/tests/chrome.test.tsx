@@ -155,6 +155,26 @@ describe("the language menu", () => {
     currentPath = "/";
   });
 
+  it("remembers the visitor's pick in the locale cookie for a year, before it moves", async () => {
+    currentPath = "/";
+    const { container, unmount } = await mountMenu({ en: [""], de: [""] }, "en");
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="language"]')!.click());
+    const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((el) => el.textContent === "Deutsch")!;
+    // The document keeps only the cookie's name and value; the written string carries its lifetime and scope.
+    let written = "";
+    const cookie = Object.getOwnPropertyDescriptor(Document.prototype, "cookie")!;
+    Object.defineProperty(document, "cookie", { configurable: true, set: (value: string) => (written = value) });
+    try {
+      // PLANTED DEFECT: a switcher that only navigates sets no cookie, and a session cookie has no max-age; both go red.
+      await act(async () => item.click());
+      expect(written).toBe("locale=de; max-age=31536000; path=/; samesite=lax");
+    } finally {
+      Object.defineProperty(document, "cookie", cookie);
+    }
+    await unmount();
+    container.remove();
+  });
+
   it("PLANTED INNOCENT: the header shows the menu on a home page published in two locales", () => {
     expect(renderHeader(false, site, { en: [""], de: [""] })).toContain('aria-label="language"');
     // The header renders the de home; with only de published there is nowhere to switch to.

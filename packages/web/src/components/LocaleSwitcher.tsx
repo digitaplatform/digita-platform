@@ -23,7 +23,8 @@ const labelFor = (loc: string) => LABELS[loc] ?? loc.toUpperCase();
 /**
  * The language picker, the app's own (the kit's LanguageMenu): a globe menu with the active
  * code. Offers what offeredLocales allows for this page; choosing one keeps the page and moves to
- * its URL in that locale. With nothing to switch to, there is no menu.
+ * its URL in that locale, and remembers the pick in the locale cookie for a year, so a bare URL
+ * opened later shows this locale and not the browser's. With nothing to switch to, there is no menu.
  */
 export function LocaleSwitcher({
   current,
@@ -44,6 +45,7 @@ export function LocaleSwitcher({
 
   function pick(next: string) {
     if (!isLocale(next, locales) || next === current) return;
+    document.cookie = `locale=${next}; max-age=31536000; path=/; samesite=lax`;
     router.push(switchLocalePath(pathname, next, locales, defaultLocale));
   }
 

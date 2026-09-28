@@ -1,6 +1,6 @@
 // The language menu offers, on one page, only the locales a visitor can land on.
 import { describe, it, expect } from "vitest";
-import { offeredLocales } from "../src/config/locales";
+import { offeredLocales, preferredLocale } from "../src/config/locales";
 import { pathSlug } from "../src/lib/nav";
 
 const served = ["en", "de", "fr"];
@@ -35,5 +35,32 @@ describe("pathSlug", () => {
     expect(pathSlug("/privacy", served)).toBe("privacy");
     expect(pathSlug("/de/privacy", served)).toBe("privacy");
     expect(pathSlug("/de/docs/start", served)).toBe("docs/start");
+  });
+});
+
+describe("preferredLocale", () => {
+  const offered = ["en", "de"];
+
+  it("PLANTED DEFECT: a browser that prefers German, with a region, is sent to de", () => {
+    expect(preferredLocale("de-CH,de;q=0.9,en;q=0.8", offered, "en")).toBe("de");
+    // Reading the tag whole (de-CH is not an offered locale) would pick en here, and this goes red.
+    expect(preferredLocale("de-CH,en;q=0.8", offered, "en")).toBe("de");
+    // Reading the list in order, not by quality, would pick en here.
+    expect(preferredLocale("en;q=0.5,de", offered, "en")).toBe("de");
+    // Reading the parameter name case-sensitively would give en the quality 1 here.
+    expect(preferredLocale("en;Q=0.1,de;q=0.5", offered, "en")).toBe("de");
+  });
+
+  it("PLANTED INNOCENT: a quality that is no number or zero drops the language, an empty entry names none", () => {
+    expect(preferredLocale("de;q=abc", offered, "en")).toBeNull();
+    expect(preferredLocale("de;q=0", offered, "en")).toBeNull();
+    expect(preferredLocale(",de", offered, "en")).toBe("de");
+  });
+
+  it("PLANTED INNOCENT: a browser that prefers the default locale, or nothing the site offers, stays", () => {
+    expect(preferredLocale("en-US,en;q=0.9,de;q=0.8", offered, "en")).toBeNull();
+    expect(preferredLocale("fr-FR,fr;q=0.9", offered, "en")).toBeNull();
+    expect(preferredLocale("*", offered, "en")).toBeNull();
+    expect(preferredLocale("", offered, "en")).toBeNull();
   });
 });
