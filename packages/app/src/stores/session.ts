@@ -50,6 +50,32 @@ export function getBrowserLocale(): string | null {
   return null;
 }
 
+/** The language after boot: the engine's own locale resolver already puts the token's
+ *  `language` claim (remote-authn-adapter.ts buildUser → request.user.language) ahead of
+ *  Accept-Language (locale-resolver.ts pickLanguage), so its answer wins here too;
+ *  `clientGuess` (the manually stored choice, else the browser's language) only covers a
+ *  boot call that came back with no locale at all. */
+export function resolveBootLocale(bootLocaleCode: string | undefined, clientGuess: string | undefined): string {
+  return bootLocaleCode ?? clientGuess ?? 'en';
+}
+
+/**
+ * The whole pick, from a fresh page load to the language App() applies: the stored/browser
+ * guess goes out as Accept-Language (so an anonymous /boot still negotiates it), then boot's
+ * own answer — which already carries the signed-in user's profile language ahead of that
+ * header — decides. Takes `bootstrap` as a parameter so a test can hand it a fixed answer
+ * without touching the live store; production leaves it to the default.
+ */
+export async function pickBootLocale(
+  bootstrap: () => Promise<BootData | null> = () => useSessionStore.getState().bootstrap(),
+): Promise<{ resolved: string; data: BootData | null }> {
+  const stored = getStoredLocale();
+  const initial = stored ?? getBrowserLocale() ?? undefined;
+  if (initial) document.documentElement.lang = initial;
+  const data = await bootstrap();
+  return { resolved: resolveBootLocale(data?.locale?.code, initial), data };
+}
+
 /**
  * The session: who the user is + the boot payload. Identity is resolved from
  * the engine's `/boot` via the httpOnly access cookie (never a JS-readable

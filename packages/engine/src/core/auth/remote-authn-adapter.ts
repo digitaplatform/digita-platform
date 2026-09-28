@@ -108,6 +108,9 @@ export class RemoteAuthnAdapter implements AuthnPort {
       // app resolves to zero honored roles here.
       roles: scopeRolesToApp(rolesToStringArray(p["roles"]), this.appName),
       full_name: p["full_name"] as string | undefined,
+      // The IdP's stored-profile language claim — /boot's locale resolver (and
+      // resource/public routers) read this to put it ahead of Accept-Language.
+      language: p["language"] as string | undefined,
       // Audience-set (ADR-A1) — normalized; absent claim ⇒ undefined.
       tiers: normalizeTiers(p[AUDIENCE_CLAIM]),
       ...extraClaims,

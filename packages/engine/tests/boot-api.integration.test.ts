@@ -53,12 +53,7 @@ import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
 let db: MongoDBService;
-let sign: (c: {
-  sub: string;
-  email: string;
-  roles: string[];
-  tiers?: string[];
-}) => Promise<string>;
+let sign: Awaited<ReturnType<typeof buildTestAuth>>["sign"];
 
 beforeAll(async () => {
   replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
@@ -116,6 +111,26 @@ describe("Boot API Integration", () => {
       expect(body.success).toBe(true);
       expect(body.data.user).toBeDefined();
       expect(body.data.user.email).toBe("admin@digita.local");
+    });
+
+    it("resolves the locale from the token's language claim, ahead of Accept-Language", async () => {
+      const access_token = await sign({
+        sub: "de-profile@digita.local",
+        email: "de-profile@digita.local",
+        roles: ["System User"],
+        language: "de",
+      });
+
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/v1/boot",
+        headers: { authorization: `Bearer ${access_token}`, "accept-language": "en-US" },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.data.user.language).toBe("de");
+      expect(body.data.locale.code).toBe("de");
     });
 
     it("surfaces the token's `tiers` audience-set and the canEnter verdict (ADR-A1)", async () => {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useSessionStore, getStoredLocale, getBrowserLocale } from '@/stores/session';
+import { useSessionStore, pickBootLocale } from '@/stores/session';
 import { useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
 import { Spinner } from '@digitaplatform/components';
@@ -92,7 +92,6 @@ const router = createBrowserRouter([
 ], { basename: APP_BASE_PATH || '/' });
 
 export default function App() {
-  const bootstrap = useSessionStore((s) => s.bootstrap);
   const loadI18n = useI18nStore((s) => s.load);
   const [ready, setReady] = useState(false);
   const [bootError, setBootError] = useState<Error | null>(null);
@@ -107,17 +106,7 @@ export default function App() {
       try {
         installHostServices();
         registerBuiltinTemplates(); // static config — register before anything resolves a template
-        // Decide the language BEFORE boot so the engine's locale resolver picks it
-        // up via Accept-Language: a manually-stored choice wins; otherwise the
-        // browser's language is the auto-detect default (the engine negotiates it
-        // against the enabled languages, falling back to the platform default).
-        const stored = getStoredLocale();
-        const initial = stored ?? getBrowserLocale() ?? undefined;
-        if (initial) document.documentElement.lang = initial;
-        const data = await bootstrap();
-        // The engine-resolved language (stored → browser → default). A stored
-        // manual choice still wins over the engine's negotiation.
-        const resolved = stored ?? data?.locale?.code ?? initial ?? 'en';
+        const { resolved, data } = await pickBootLocale();
         if (data?.user) {
           // Authenticated on load: backend (data) translations are auth-gated, so
           // load them here (the login screen needs only static chrome strings).
@@ -140,7 +129,7 @@ export default function App() {
         setReady(true);
       }
     })();
-  }, [bootstrap, loadI18n]);
+  }, [loadI18n]);
 
   if (!ready) return <Splash />;
   if (bootError) return <BootError error={bootError} />;
