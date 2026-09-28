@@ -10,6 +10,7 @@ import {
   transitionTimingFunction,
   shadowValues,
   motionValues,
+  controlHeight,
 } from './scales.js';
 import type { Design } from '../designs/types.js';
 import { getDesign, DEFAULT_DESIGN_ID } from '../designs/index.js';
@@ -35,6 +36,7 @@ export {
   transitionTimingFunction,
   shadowValues,
   motionValues,
+  controlHeight,
 } from './scales.js';
 
 /** camelCase / `name-step` → kebab (textMain → text-main, primary-500 → primary-500). */
@@ -72,6 +74,9 @@ export function varsForDesign(design: Design, mode: 'light' | 'dark'): Record<st
     if (!ramp) continue;
     for (const [step, value] of Object.entries(ramp)) out[cssVarName(`${name}-${step}`)] = value;
   }
+  // Mode-agnostic, so it rides the light block only and cascades into .dark,
+  // like the radius and font vars gen-css adds around this function.
+  if (mode === 'light') out['--control-h'] = design.controlHeight ?? controlHeight;
   return out;
 }
 

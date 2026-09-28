@@ -39,7 +39,7 @@ function ControlBar({ field }: { field: FieldDefinition }) {
     return <Skeleton className="h-6 w-11 rounded-full" />;
   }
   // Every other single-line control settles at the shared control height.
-  return <Skeleton className="h-[var(--control-h,2.625rem)] w-full rounded-input" />;
+  return <Skeleton className="h-[var(--control-h)] w-full rounded-input" />;
 }
 
 /** One field cell — mirrors FieldSlot: layout decorations render bare, data fields get
@@ -62,7 +62,7 @@ function FieldCell({
   if (ft === 'Button') {
     return (
       <div className={cellClassName}>
-        <Skeleton className="h-[var(--control-h,2.625rem)] w-28 rounded-btn" />
+        <Skeleton className="h-[var(--control-h)] w-28 rounded-btn" />
       </div>
     );
   }
@@ -126,8 +126,8 @@ export function RecordSkeleton({ meta }: { meta: EntityDefinition }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Skeleton className="h-[var(--control-h,2.625rem)] w-24 rounded-btn" />
-          <Skeleton className="h-[var(--control-h,2.625rem)] w-24 rounded-btn" />
+          <Skeleton className="h-[var(--control-h)] w-24 rounded-btn" />
+          <Skeleton className="h-[var(--control-h)] w-24 rounded-btn" />
         </div>
       </header>
 

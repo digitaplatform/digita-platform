@@ -324,10 +324,7 @@ export function BaseDialog({
       data-presentation={presentation}
       {...(closing ? {} : { 'data-dialog-overlay': '' })}
       className={cn(
-        // Scrim rides an overridable var (--color-scrim) with the historical
-        // black/30 as its default — same var(--x, fallback) hook idiom as the
-        // theme's --glow-color; designs/theme can re-tint it without a kit change.
-        'fixed inset-0 z-dialog flex items-end justify-center bg-[color:var(--color-scrim,rgba(0,0,0,0.30))] backdrop-blur-sm transition-opacity duration-base sm:items-center',
+        'fixed inset-0 z-dialog flex items-end justify-center bg-scrim backdrop-blur-sm transition-opacity duration-base sm:items-center',
         closing && 'pointer-events-none opacity-0',
       )}
       onMouseDown={(e) => {

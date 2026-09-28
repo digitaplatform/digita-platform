@@ -29,10 +29,11 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
     <div className={cn('flex flex-col gap-1', wrapperClassName)}>
       <div
         data-ui="textfield"
-        data-invalid={invalid || undefined}
+        aria-invalid={invalid || undefined}
+        data-disabled={disabled || undefined}
+        data-readonly={props.readOnly || undefined}
         className={cn(
-          'relative flex items-center gap-2 rounded-input border bg-surface px-3 transition duration-base ease-smooth focus-within:border-primary-400 focus-within:shadow-focus',
-          invalid ? 'border-error' : 'border-border',
+          'relative flex items-center gap-2 rounded-input border border-border bg-surface px-3 transition duration-base ease-smooth focus-within:border-primary-400 focus-within:shadow-focus',
           disabled && 'opacity-60',
         )}
       >

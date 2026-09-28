@@ -13,25 +13,31 @@ import type { FieldControlState } from '@/controls/types';
 const origRect = HTMLElement.prototype.getBoundingClientRect;
 const origRO = globalThis.ResizeObserver;
 const RECT = { width: 800, height: 480, top: 0, left: 0, right: 800, bottom: 480, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+// The grid measures each mounted row (offsetHeight, then the ResizeObserver entry);
+// a row is one density row (36px) tall here, everything else the viewport.
+const ROW_RECT = { ...RECT, height: 36, bottom: 36 } as DOMRect;
+const isRow = (el: Element) => el.matches('[data-ui="table-row"]');
+const origOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')!;
 beforeAll(() => {
   HTMLElement.prototype.getBoundingClientRect = function () {
     return RECT;
   };
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    configurable: true,
+    get(this: HTMLElement) {
+      return isRow(this) ? ROW_RECT.height : RECT.height;
+    },
+  });
   globalThis.ResizeObserver = class {
     cb: ResizeObserverCallback;
     constructor(cb: ResizeObserverCallback) {
       this.cb = cb;
     }
     observe(target: Element) {
+      const rect = isRow(target) ? ROW_RECT : RECT;
+      const size = [{ inlineSize: rect.width, blockSize: rect.height }];
       this.cb(
-        [
-          {
-            target,
-            contentRect: RECT,
-            borderBoxSize: [{ inlineSize: 800, blockSize: 480 }],
-            contentBoxSize: [{ inlineSize: 800, blockSize: 480 }],
-          } as unknown as ResizeObserverEntry,
-        ],
+        [{ target, contentRect: rect, borderBoxSize: size, contentBoxSize: size } as unknown as ResizeObserverEntry],
         this as unknown as ResizeObserver,
       );
     }
@@ -41,6 +47,7 @@ beforeAll(() => {
 });
 afterAll(() => {
   HTMLElement.prototype.getBoundingClientRect = origRect;
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', origOffsetHeight);
   globalThis.ResizeObserver = origRO;
 });
 

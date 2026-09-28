@@ -156,10 +156,10 @@ describe('/_design computed style per design and mode', () => {
     for (const lines of Object.values(full)) expect(lines.filter((l) => l.endsWith('not rendered'))).toEqual([]);
     expect(full).toMatchSnapshot();
 
-    // Planted defect: the baked minimal variant's rule for the list header is removed.
-    const headerRule = /:root\[data-design-variant="minimal"\] \[data-ui="table-header"\] \{[^}]*\}/;
-    expect(THEME_CSS).toMatch(headerRule);
-    style.textContent = THEME_CSS.replace(headerRule, '');
+    // Planted defect: the bundled minimal variant's rule for the command palette is removed.
+    const paletteRule = /:root\[data-design-variant="minimal"\] \[data-ui="command-palette"\] \{[^}]*\}/;
+    expect(THEME_CSS).toMatch(paletteRule);
+    style.textContent = THEME_CSS.replace(paletteRule, '');
     expect(measure()).not.toEqual(full);
 
     // Planted innocent change: a comment added.

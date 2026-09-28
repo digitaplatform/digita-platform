@@ -37,7 +37,7 @@ const minimal: Design = {
       textMain: '#09090B', textMuted: '#71717A',
       error: '#DC2626', errorLight: '#FEF2F2', warning: '#D97706', warningLight: '#FFFBEB',
       success: '#16A34A', successLight: '#F0FDF4', info: '#2563EB', infoLight: '#EFF6FF',
-      onPrimary: '#FFFFFF', onError: '#FFFFFF',
+      onPrimary: '#FFFFFF', onError: '#FFFFFF', scrim: 'rgba(0,0,0,0.30)',
       // ADR-V2: primaryContainer/onPrimaryContainer/selection/selectionSoft
       // come from the tint layer (design is primary-less).
     },
@@ -51,7 +51,7 @@ const minimal: Design = {
       textMain: '#FAFAFA', textMuted: '#A1A1AA',
       error: '#F87171', errorLight: 'rgba(220,38,38,0.15)', warning: '#FBBF24', warningLight: 'rgba(217,119,6,0.15)',
       success: '#4ADE80', successLight: 'rgba(22,163,74,0.15)', info: '#60A5FA', infoLight: 'rgba(37,99,235,0.15)',
-      onPrimary: '#FFFFFF', onError: '#FFFFFF',
+      onPrimary: '#FFFFFF', onError: '#FFFFFF', scrim: 'rgba(0,0,0,0.30)',
       // ADR-V2: primary-derived roles come from the tint layer.
     },
   },

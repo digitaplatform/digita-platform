@@ -59,10 +59,9 @@ export function FormSkeleton({
       {Array.from({ length: fields }, (_, i) => (
         <div key={i} className="space-y-1.5">
           <Skeleton className={cn('h-3', i % 3 === 0 ? 'w-1/3' : 'w-1/4')} />
-          {/* Bar height = the shared single-line control height (BUG-2): the bar and
-              the real Input it replaces settle at the same 42px, so no 36→42px jump.
-              `--control-h` (design token) overrides the literal default. */}
-          <Skeleton className="h-[var(--control-h,2.625rem)] w-full rounded-input" />
+          {/* Bar height = the design's single-line control height, so the bar and
+              the real Input it replaces settle at the same height (no jump). */}
+          <Skeleton className="h-[var(--control-h)] w-full rounded-input" />
         </div>
       ))}
     </div>

@@ -41,7 +41,7 @@ export function Drawer({ open, onClose, label, side = 'left', className, childre
   if (!open) return null;
   return (
     <div className={cn('fixed inset-0 z-40', className)}>
-      <div className="absolute inset-0 bg-[color:var(--color-scrim,rgba(0,0,0,0.30))] backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="absolute inset-0 bg-scrim backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div
         ref={panelRef}
         role="dialog"

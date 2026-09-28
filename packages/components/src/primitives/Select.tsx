@@ -263,6 +263,7 @@ export function Select({
             key={o.value}
             data-ui="option"
             data-selected={isSelected || undefined}
+            data-active={isActive || undefined}
             id={optionId(i)}
             role="option"
             aria-selected={isSelected}
@@ -310,7 +311,7 @@ export function Select({
         // plain button to avoid two comboboxes owning one listbox.
         role={searchable ? undefined : 'combobox'}
         aria-haspopup={searchable ? undefined : 'listbox'}
-        aria-expanded={searchable ? undefined : open}
+        aria-expanded={open}
         aria-controls={!searchable && open ? listId : undefined}
         aria-activedescendant={searchable ? undefined : activeOptionId}
         aria-label={ariaLabel}
@@ -326,7 +327,7 @@ export function Select({
           SIZES[size],
           'transition duration-base ease-smooth focus:shadow-focus focus:outline-none',
           'disabled:cursor-not-allowed disabled:opacity-60',
-          invalid ? 'border-error focus:border-error' : 'border-border focus:border-primary-400',
+          'border-border focus:border-primary-400',
         )}
       >
         <span className={cn('truncate', selected ? 'text-textMain' : 'text-neutral-400')}>

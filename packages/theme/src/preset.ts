@@ -52,6 +52,7 @@ const preset = {
         textMuted: v('textMuted'),
         onPrimary: v('onPrimary'),
         onError: v('onError'),
+        scrim: v('scrim'),
         // M3 tonal primary-container roles (P3) → bg-primaryContainer,
         // text-onPrimaryContainer; branding re-derives both at runtime.
         primaryContainer: v('primaryContainer'),

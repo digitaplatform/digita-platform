@@ -169,15 +169,15 @@ describe('legacy literal → token cleanup (B5, no behavior change)', () => {
     expect(thumb.className).toContain('bg-onPrimary');
     expect(thumb.className).not.toContain('bg-white');
   });
-  it('BaseDialog scrim rides the --color-scrim var (black/30 default)', () => {
+  it('BaseDialog scrim rides the theme scrim token, not a literal', () => {
     render(
       <Sheet open onClose={() => {}} title="Scrim">
         <p>body</p>
       </Sheet>,
     );
     const overlay = document.querySelector('[data-ui="dialog-overlay"]')!;
-    expect(overlay.className).toContain('bg-[color:var(--color-scrim,rgba(0,0,0,0.30))]');
-    expect(overlay.className).not.toContain('bg-black/30');
+    expect(overlay.className).toContain('bg-scrim');
+    expect(overlay.className).not.toMatch(/bg-black|rgba\(/);
   });
   it('Fab floats on the z-popover token, not a literal z-40', () => {
     render(<Fab label="New" icon={<span>+</span>} onClick={() => {}} />);

@@ -41,6 +41,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
         {...props}
         data-ui="icon-button"
         data-variant={variant}
+        data-size={size}
         type={type}
         aria-label={label}
         aria-busy={loading || undefined}

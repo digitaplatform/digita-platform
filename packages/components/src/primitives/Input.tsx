@@ -1,11 +1,9 @@
 import { type InputHTMLAttributes, type ReactNode, forwardRef } from 'react';
 import { cn } from '../lib/cn.js';
 
-// `h-[var(--control-h,2.625rem)]` — the shared single-line control height (BUG-2
-// reflow fix). The literal 2.625rem (42px) is the historical padded height; the
-// `--control-h` design token can override it, and the load-skeleton bar + packages/app's
-// FIELD_CLASS reference the same expression so a skeleton and its real control settle
-// at the identical height (no 36→42px jump).
+// `h-[var(--control-h)]` — the single-line control height the theme emits per design;
+// the load-skeleton bar and packages/app's FIELD_CLASS read the same variable so a
+// skeleton and its real control settle at the identical height (no 36→42px jump).
 //
 // C3 — locked/read-only fields drop the editable-box chrome for a filled "document" look
 // (subtle fill, no outline, no shadow) so a submitted record reads as a document. Both
@@ -15,7 +13,7 @@ import { cn } from '../lib/cn.js';
 // Dark keeps a hairline `borderStrong` edge because `subtle`
 // barely separates from `surface` there (a transparent border would vanish).
 const BARE =
-  'w-full h-[var(--control-h,2.625rem)] rounded-input border border-border bg-surface px-3 py-2.5 text-sm text-textMain transition duration-base ease-smooth placeholder:text-neutral-400 focus:border-primary-400 focus:shadow-focus focus:outline-none disabled:cursor-not-allowed disabled:bg-subtle disabled:border-transparent disabled:shadow-none dark:disabled:border-borderStrong [&[readonly]]:bg-subtle [&[readonly]]:border-transparent [&[readonly]]:shadow-none dark:[&[readonly]]:border-borderStrong';
+  'w-full h-[var(--control-h)] rounded-input border border-border bg-surface px-3 py-2.5 text-sm text-textMain transition duration-base ease-smooth placeholder:text-neutral-400 focus:border-primary-400 focus:shadow-focus focus:outline-none disabled:cursor-not-allowed disabled:bg-subtle disabled:border-transparent disabled:shadow-none dark:disabled:border-borderStrong [&[readonly]]:bg-subtle [&[readonly]]:border-transparent [&[readonly]]:shadow-none dark:[&[readonly]]:border-borderStrong';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   /** Optional field label above the input. */
@@ -50,7 +48,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         id={id}
         disabled={disabled}
         aria-invalid={invalid || undefined}
-        className={cn(BARE, invalid && 'border-error focus:border-error', className)}
+        className={cn(BARE, className)}
         {...props}
       />
     );
@@ -66,13 +64,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       )}
       <div
         data-ui="input-frame"
+        // The frame is a <div> with no :disabled, :read-only or :invalid pseudo-state,
+        // so the state the inner input holds is mirrored as attributes: the theme's
+        // base rule paints the invalid border, a design keys its locked look on them.
+        aria-invalid={invalid || undefined}
+        data-disabled={disabled || undefined}
+        data-readonly={props.readOnly || undefined}
         className={cn(
-          'flex items-center gap-2 rounded-input border bg-surface px-3 transition duration-base ease-smooth focus-within:shadow-focus',
-          invalid ? 'border-error' : 'border-border',
-          // C3 — locked frame gets the same "document" resting look as the bare input.
-          // The frame is a <div> (no :disabled/:read-only pseudo-state), so switch via JS;
-          // cn's tailwind-merge lets these override the bg-surface/border above. `readOnly`
-          // rides in `props` (only `disabled` is destructured), so read it from there.
+          'flex items-center gap-2 rounded-input border border-border bg-surface px-3 transition duration-base ease-smooth focus-within:shadow-focus',
+          // C3 — locked frame gets the same "document" resting look as the bare input;
+          // cn's tailwind-merge lets these override the bg-surface/border above.
           (disabled || props.readOnly) &&
             'bg-subtle border-transparent shadow-none dark:border-borderStrong',
         )}

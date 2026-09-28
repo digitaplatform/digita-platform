@@ -205,7 +205,7 @@ export function CommandPalette({
   return createPortal(
     <div
       data-ui="command-overlay"
-      className="fixed inset-0 z-dialog flex items-stretch justify-center bg-[color:var(--color-scrim,rgba(0,0,0,0.30))] backdrop-blur-sm sm:items-start sm:pt-[12vh]"
+      className="fixed inset-0 z-dialog flex items-stretch justify-center bg-scrim backdrop-blur-sm sm:items-start sm:pt-[12vh]"
       onMouseDown={(e) => {
         // Backdrop click closes; clicks inside the panel don't bubble here.
         if (e.target === e.currentTarget) onClose();

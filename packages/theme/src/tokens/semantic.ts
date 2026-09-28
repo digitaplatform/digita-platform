@@ -46,6 +46,9 @@ export interface SemanticTokens {
   onPrimary: string;
   /** Foreground that sits ON an error fill — destructive button labels. */
   onError: string;
+  /** The veil an overlay (dialog, command palette, drawer) lays over the page.
+   *  Per mode, because a dark page needs its own veil weight. */
+  scrim: string;
   /** M3 tonal primary container (P3 color roles) — the soft brand-tinted fill
    *  behind tonal/secondary emphasis (tonal buttons, selected chips, FAB, nav
    *  pill). Light: a pale tint of the ACTIVE primary ramp (≈ primary-100);
@@ -95,6 +98,7 @@ export const semantic: { light: SemanticTokens; dark: SemanticTokens } = {
     infoLight: '#eff6ff',
     onPrimary: '#FFFFFF',
     onError: '#FFFFFF',
+    scrim: 'rgba(0,0,0,0.30)',
     // ADR-V2: primaryContainer/onPrimaryContainer come from the TINT layer
     // (gen-css varsForTint — default blue at :root, per-[data-tint] blocks).
     // selection/selectionSoft derive from the ACTIVE primary so they follow
@@ -128,6 +132,7 @@ export const semantic: { light: SemanticTokens; dark: SemanticTokens } = {
     infoLight: 'rgba(59,130,246,0.1)',
     onPrimary: '#FFFFFF',
     onError: '#FFFFFF',
+    scrim: 'rgba(0,0,0,0.30)',
     // ADR-V2: container roles from the tint layer (see the light block note).
     // Dark selection anchors on primary-400 (the legible step on dark
     // surfaces, matching the previous per-design dark values) at 24% for soft.

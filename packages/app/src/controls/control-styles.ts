@@ -1,10 +1,8 @@
-/** Shared single-line control height (BUG-2 reflow fix). One source of truth for a
- *  single-line control's height AND the load-skeleton bar that stands in for it, so
- *  they settle at the exact same height (no 36→42px jump). Overridable per design via
- *  a `--control-h` token; the literal is the default (2.625rem = 42px, the historical
- *  padded height). The @digitaplatform/components Input BARE + the FormSkeleton bar use the
- *  same expression, so all three stay locked together. */
-export const CONTROL_H = 'var(--control-h,2.625rem)';
+/** The single-line control height the theme emits per design. One source for a
+ *  control's height AND the load-skeleton bar that stands in for it, so they settle
+ *  at the exact same height (no 36→42px jump); the @digitaplatform/components Input
+ *  BARE and the FormSkeleton bar read the same variable. */
+export const CONTROL_H = 'var(--control-h)';
 
 /** Base input chrome (height-free) so native controls (select/textarea/display div)
  *  match the @digitaplatform/components Input primitive. Token classes only. Each consumer

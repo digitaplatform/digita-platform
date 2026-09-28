@@ -542,14 +542,20 @@ export function DataGrid<T = Record<string, unknown>>({
                   role="row"
                   data-ui="table-row"
                   key={vi.key}
+                  // The virtualizer measures each mounted row, so the row's height is
+                  // the theme's: the density floor here, or whatever a design's
+                  // table-row rule raises it to; the estimate only places rows
+                  // that have not mounted yet.
+                  ref={virtualizer.measureElement}
+                  data-index={vi.index}
                   aria-rowindex={vi.index + 2}
-                  className={cn('grid', tableSkin.row)}
+                  aria-selected={focused?.row === vi.index || undefined}
+                  className={cn('grid min-h-[calc(var(--density-row)*1px)]', tableSkin.row)}
                   style={{
                     position: 'absolute',
                     top: 0,
                     left: 0,
                     width: '100%',
-                    height: vi.size,
                     transform: `translateY(${vi.start}px)`,
                     gridTemplateColumns: templateColumns,
                   }}

@@ -55,6 +55,7 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(function Badge(
       ref={ref}
       data-ui="badge"
       data-variant={variant}
+      data-color={color}
       className={cn(
         'inline-flex items-center font-medium',
         SIZE[size],

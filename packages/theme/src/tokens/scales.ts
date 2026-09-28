@@ -31,6 +31,11 @@ export const spacing = {
   '3xl': '4rem',
 } as const;
 
+/** Single-line control height (42px): the padded height of a text input, and
+ *  the height every load skeleton bar takes so nothing jumps when the control
+ *  mounts. A design overrides it through Design.controlHeight. */
+export const controlHeight = '2.625rem';
+
 /** Radius differentiated by element class — the contrast (crisp inputs vs softer
  *  cards) is what kills the uniform-box feel. Additive: Tailwind's sm/md/lg stay. */
 export const borderRadius = {

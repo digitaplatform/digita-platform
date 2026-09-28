@@ -139,7 +139,7 @@ export function DatePicker({
         className={cn(
           'flex w-full items-center justify-between gap-2 rounded-input border bg-surface px-3 py-2.5 text-left text-sm',
           'transition duration-base ease-smooth focus:shadow-focus focus:outline-none disabled:cursor-not-allowed disabled:opacity-60',
-          invalid ? 'border-error focus:border-error' : 'border-border focus:border-primary-400',
+          'border-border focus:border-primary-400',
         )}
       >
         <span className={cn('truncate tabular-nums', display ? 'text-textMain' : 'text-neutral-400')}>
