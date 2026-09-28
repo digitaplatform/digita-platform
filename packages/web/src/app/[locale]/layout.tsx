@@ -18,6 +18,7 @@ import { mediaUrl } from "@/lib/media";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { DeliveredIdentity } from "@/components/DeliveredIdentity";
+import { ContactSheet } from "@/components/ContactSheet";
 
 // Rendered on-demand (config + content are runtime, never baked at build); engine
 // fetches are cache-tagged with a runtime TTL (see engine-client).
@@ -53,6 +54,7 @@ export default async function LocaleLayout({
   const tenant = brandingStyle(branding);
   const attributes = { ...signature.attributes, ...tenant.attributes };
   const properties = { ...signature.properties, ...tenant.properties };
+  const siteConfig = publicConfig(site);
 
   return (
     <html lang={locale} style={properties as CSSProperties} {...attributes} suppressHydrationWarning>
@@ -65,7 +67,7 @@ export default async function LocaleLayout({
         <script dangerouslySetInnerHTML={{ __html: IDENTITY_BOOT_SCRIPT }} />
       </head>
       <body className="bg-background text-textMain antialiased">
-        <ConfigProvider value={publicConfig()}>
+        <ConfigProvider value={siteConfig}>
           <div className="relative isolate flex min-h-screen flex-col">
             <SignatureBackdrop graphics={defaultSignature.graphics} />
             <a
@@ -92,6 +94,9 @@ export default async function LocaleLayout({
               {children}
             </main>
             <Footer locale={locale as Locale} site={site} nav={footerNav} />
+            {siteConfig.contactEnabled && site?.contact_email && (
+              <ContactSheet locale={locale} contactEmail={site.contact_email} bookingUrl={site.booking_url || undefined} />
+            )}
             <DeliveredIdentity apps={config.tenantApps} authUrl={config.authUrl} authCookieSuffix={config.authCookieSuffix} />
           </div>
         </ConfigProvider>

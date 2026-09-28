@@ -59,6 +59,10 @@ export interface WebSite {
   enabled_locales?: string[];
   default_og_image?: string;
   footer_text?: string;
+  /** Where the contact sheet's requests are mailed to; without it the sheet is not offered. */
+  contact_email?: string;
+  /** The booking page the contact sheet links to; without it the booking button stays out. */
+  booking_url?: string;
 }
 
 export interface NavItem {

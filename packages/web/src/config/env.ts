@@ -1,6 +1,7 @@
 import "server-only";
 import { getLocales, getDefaultLocale } from "./locales";
 import type { PublicSiteConfig } from "./public";
+import type { WebSite } from "@/lib/types";
 
 /**
  * Strict runtime config. Single source of truth; NO fallbacks — every value comes
@@ -31,7 +32,7 @@ function reqInt(key: string): number {
 }
 const noTrailing = (u: string): string => u.replace(/\/+$/, "");
 
-export interface ServerConfig extends PublicSiteConfig {
+export interface ServerConfig extends Omit<PublicSiteConfig, "contactEnabled"> {
   /** Cluster-internal engine URL for server-side fetches (never sent to the browser). */
   engineUrl: string;
   revalidateSeconds: number;
@@ -50,6 +51,20 @@ export interface ServerConfig extends PublicSiteConfig {
   /** The site's chrome texts, one <language>.json each (TRANSLATIONS_DIR): the folder digita-web
    *  of digitaplatform/digita-translations, put there by the pod's init container. */
   translationsDir: string;
+  /** The contact sheet's switch: ENGINE_SERVICE_KEY (the key the engine's service path checks) and
+   *  POST_URL (the cluster-internal digita-post base URL, where the notification mail goes).
+   *  Explicitly OPTIONAL, as a pair: null → the sheet is not offered and /api/contact answers 503.
+   *  One without the other is a half-configured feature and fails loud. */
+  contact: { engineServiceKey: string; postUrl: string } | null;
+}
+
+function contactConfig(): ServerConfig["contact"] {
+  const engineServiceKey = process.env.ENGINE_SERVICE_KEY || "";
+  const postUrl = process.env.POST_URL || "";
+  if (!engineServiceKey && !postUrl) return null;
+  if (!engineServiceKey) throw new Error("[digita-web] POST_URL is set without ENGINE_SERVICE_KEY; set both or neither");
+  if (!postUrl) throw new Error("[digita-web] ENGINE_SERVICE_KEY is set without POST_URL; set both or neither");
+  return { engineServiceKey, postUrl: noTrailing(postUrl) };
 }
 
 let cached: ServerConfig | null = null;
@@ -67,14 +82,16 @@ export function getConfig(): ServerConfig {
     authUrl: process.env.AUTH_URL ? noTrailing(process.env.AUTH_URL) : null,
     authCookieSuffix: process.env.AUTH_COOKIE_SUFFIX || null,
     translationsDir: req("TRANSLATIONS_DIR"),
+    contact: contactConfig(),
     locales: getLocales(),
     defaultLocale: getDefaultLocale(),
   };
   return cached;
 }
 
-/** The browser-safe subset, injected into the client via <ConfigProvider>. */
-export function publicConfig(): PublicSiteConfig {
+/** The browser-safe subset, injected into the client via <ConfigProvider>. The contact sheet is
+ *  offered only when its env is set and the site names the address its requests go to. */
+export function publicConfig(site: WebSite | null): PublicSiteConfig {
   const c = getConfig();
   return {
     siteId: c.siteId,
@@ -82,5 +99,6 @@ export function publicConfig(): PublicSiteConfig {
     publicEngineUrl: c.publicEngineUrl,
     locales: c.locales,
     defaultLocale: c.defaultLocale,
+    contactEnabled: c.contact !== null && Boolean(site?.contact_email),
   };
 }

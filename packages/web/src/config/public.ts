@@ -11,4 +11,6 @@ export interface PublicSiteConfig {
   publicEngineUrl: string;
   locales: string[];
   defaultLocale: string;
+  /** Whether the contact sheet is offered; a call to action that opens it renders only then. */
+  contactEnabled: boolean;
 }

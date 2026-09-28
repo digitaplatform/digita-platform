@@ -8,15 +8,30 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { getBlockComponent } from "../src/blocks/registry";
 import type { BlockType } from "../src/lib/types";
 import { closeContactSheet, useContactSheetOpen } from "../src/lib/contact-sheet";
+import { ConfigProvider } from "../src/config/ConfigProvider";
+import type { PublicSiteConfig } from "../src/config/public";
 
 // The registry reaches the server config through the media block; the guard that keeps it out of
 // a browser bundle has nothing to guard in a test.
 vi.mock("server-only", () => ({}));
 
-const render = (type: BlockType, props?: Record<string, unknown>) => {
+const siteConfig = (contactEnabled: boolean): PublicSiteConfig => ({
+  siteId: "example",
+  siteUrl: "https://example.org",
+  publicEngineUrl: "",
+  locales: ["en"],
+  defaultLocale: "en",
+  contactEnabled,
+});
+
+const render = (type: BlockType, props?: Record<string, unknown>, contactEnabled = true) => {
   const Block = getBlockComponent(type);
   if (!Block) throw new Error(`${type} is not registered`);
-  return renderToStaticMarkup(<Block props={props} />);
+  return renderToStaticMarkup(
+    <ConfigProvider value={siteConfig(contactEnabled)}>
+      <Block props={props} />
+    </ConfigProvider>,
+  );
 };
 
 const sheet = { label: "Book a call", action: "sheet" };
@@ -122,6 +137,13 @@ describe("the marketing blocks", () => {
     expect(html).not.toContain("<a ");
   });
 
+  it("offers no sheet action on a site without the contact sheet, and keeps its links", () => {
+    const props = { heading: "Talk.", primary: sheet, secondary: link };
+    expect(render("cta_panel", props, true)).toContain("<button");
+    expect(render("cta_panel", props, false)).not.toContain("<button");
+    expect(render("cta_panel", props, false)).toContain('href="/how-we-work"');
+  });
+
   it("shows the booking button only once a booking link exists", () => {
     const base = { address: ["Example GmbH"], booking_label: "Book a 30-minute call" };
     expect(render("contact_details", base)).not.toContain("Book a 30-minute call");
@@ -179,10 +201,10 @@ describe("the contact sheet", () => {
     const root = createRoot(container);
     await act(async () =>
       root.render(
-        <>
+        <ConfigProvider value={siteConfig(true)}>
           <Block props={{ heading: "Talk.", primary: sheet }} />
           <Probe />
-        </>,
+        </ConfigProvider>,
       ),
     );
     expect(container.querySelector("output")?.textContent).toBe("closed");
