@@ -79,10 +79,12 @@ export default async function LocaleLayout({
               site={site}
               nav={headerNav}
               apps={config.tenantApps}
+              // A website carries its own name: the site's `site_name` wins over the tenant's
+              // `app_name`, which names the tenant's apps, not its public site.
               brand={{
-                name: branding?.app_name ?? site?.site_name ?? "Digita",
+                name: site?.site_name ?? branding?.app_name ?? "Digita",
                 logoUrl: branding?.logo ? mediaUrl(branding.logo) : undefined,
-                nameIsCustom: Boolean(branding?.app_name),
+                nameIsCustom: Boolean(site?.site_name ?? branding?.app_name),
                 signature: defaultSignature,
               }}
             />

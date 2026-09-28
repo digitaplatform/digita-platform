@@ -35,6 +35,11 @@ export interface Signature {
   /** Single hex anchoring the synthesized PRIMARY ramp (OKLCH, brand at step 600). */
   accent: string;
   fonts?: { display?: string; sans?: string; mono?: string };
+  /** The family word of a lockup system (`digita` for `digita●platform`, `digita●erp`): the
+   *  chrome renders `<family> ● <product>` from the display face for every product of the
+   *  family instead of one wordmark SVG per product. Absent: the signature has no lockup
+   *  family and its `wordmark` SVG is the brand. */
+  family?: string;
   logoUrl?: string;
   /** Self-contained inline SVG string for the brand mark: `fill="currentColor"`
    *  (inherits the accent via CSS `color`), viewBox preserved, NO width/height —

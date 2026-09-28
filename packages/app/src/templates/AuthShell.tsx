@@ -1,16 +1,22 @@
 import { type ReactNode } from 'react';
+import { getSignature } from '@digitaplatform/theme';
+import { BrandMark } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
+import { useThemeStore } from '@/stores/theme';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { appUrl } from '@/lib/appBase';
 
-/** Unauthenticated chrome — a centered card on the branded background. The logo
- *  and app name come from the branding payload (falls back to the platform
- *  name, then "Digita"). A language picker (backend languages) sits top-right so
- *  the operator can choose their language before signing in. */
+/** Unauthenticated chrome — a centered card on the branded background. The brand
+ *  is the kit's BrandMark with the one precedence every surface shares (the
+ *  family lockup, the signature wordmark, the tenant logo, the monogram); the
+ *  name comes from the branding payload (falls back to the platform name, then
+ *  "Digita"). A language picker (backend languages) sits top-right so the
+ *  operator can choose their language before signing in. */
 export function AuthShell({ children }: { children: ReactNode }) {
   const branding = useSessionStore((s) => s.branding);
   const platformName = useSessionStore((s) => s.settings?.platform_name);
   const appName = branding?.app_name ?? platformName ?? 'Digita';
+  const signatureId = useThemeStore((s) => s.signature);
 
   return (
     <div
@@ -25,15 +31,13 @@ export function AuthShell({ children }: { children: ReactNode }) {
         <LanguageSwitcher />
       </div>
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex flex-col items-center gap-2">
-          {branding?.logo ? (
-            <img src={appUrl(branding.logo)} alt="" className="h-10" />
-          ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-card bg-primary-600 text-lg font-bold text-white shadow-sm">
-              {appName.charAt(0).toUpperCase()}
-            </div>
-          )}
-          <span className="text-sm font-medium text-textMuted">{appName}</span>
+        <div className="mb-6 flex items-center justify-center gap-2 text-[28px]">
+          <BrandMark
+            name={appName}
+            logoUrl={branding?.logo ? appUrl(branding.logo) : undefined}
+            nameIsCustom={Boolean(branding?.app_name)}
+            signature={getSignature(signatureId)}
+          />
         </div>
         <div className="rounded-dialog border border-border bg-surface p-8 shadow-lg">{children}</div>
       </div>

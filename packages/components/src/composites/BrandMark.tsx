@@ -1,4 +1,5 @@
 import { cn } from '../lib/cn.js';
+import { ProductLockup, productWord } from './ProductLockup.js';
 
 export interface BrandMarkProps {
   /** The name shown beside the mark. */
@@ -8,20 +9,39 @@ export interface BrandMarkProps {
   /** Whether the tenant set `name` itself: a custom name renders as text, never
    *  under a signature wordmark that spells another brand. */
   nameIsCustom?: boolean;
-  /** The active signature's inline SVGs: `monogram` (currentColor, painted with the
-   *  accent) and the wide `wordmark` lockup. */
-  signature?: { monogram?: string; wordmark?: string };
+  /** The active signature: its `id`, its lockup `family` (the family word of a lockup system,
+   *  `digita`) and its inline SVGs, `monogram` (currentColor, painted with the accent) and the
+   *  wide `wordmark` lockup. */
+  signature?: { id?: string; family?: string; monogram?: string; wordmark?: string };
   /** Let the name (or the wordmark) take the row's free space, as in a side rail. */
   fill?: boolean;
 }
 
 /**
- * The brand in the chrome, with one precedence everywhere: the signature's
- * wordmark lockup when the tenant set neither a logo nor a name; otherwise the
- * tenant's logo, else the signature's monogram, else the name's initial on a
- * primary tile — each followed by the name.
+ * The brand in the chrome, with one precedence everywhere: the family lockup
+ * (`digita ● erp`) when the signature has a lockup family and the name is the
+ * family's or none was set; the signature's wordmark SVG when the tenant set
+ * neither a logo nor a name; otherwise the tenant's logo, else the signature's
+ * monogram, else the name's initial on a primary tile — each followed by the name.
  */
 export function BrandMark({ name, logoUrl, nameIsCustom = false, signature, fill = false }: BrandMarkProps) {
+  // ponytail: the digita signature package predates `Signature.family`; until the
+  // published @digitaplatform/digita sets `family: 'digita'`, its id stands in.
+  const family = signature?.family ?? (signature?.id === 'digita' ? 'digita' : undefined);
+  // A custom name that spells the family ("Digita Platform") is the family's own and takes the
+  // lockup; any other custom name renders as text, never under the family's mark.
+  const lockup = family && !logoUrl && (!nameIsCustom || name.toLowerCase().startsWith(family));
+  if (lockup) {
+    return (
+      <ProductLockup
+        family={family}
+        product={productWord(name, family)}
+        label={name}
+        className={cn('text-[22px]', fill && 'flex-1')}
+      />
+    );
+  }
+
   const wordmark = !logoUrl && !nameIsCustom ? signature?.wordmark : undefined;
   if (wordmark) {
     return (

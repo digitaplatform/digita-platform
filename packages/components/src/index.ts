@@ -88,6 +88,8 @@ export type { SignatureBackdropGraphics } from './composites/SignatureBackdrop.j
 export { TopBar, railButtonClass, topBarButtonClass } from './composites/TopBar.js';
 export { BrandMark } from './composites/BrandMark.js';
 export type { BrandMarkProps } from './composites/BrandMark.js';
+export { ProductLockup, productWord } from './composites/ProductLockup.js';
+export type { ProductLockupProps } from './composites/ProductLockup.js';
 export { LanguageMenu } from './composites/LanguageMenu.js';
 export type { LanguageMenuProps } from './composites/LanguageMenu.js';
 export { ModeButton, MODE_CYCLE, nextMode } from './composites/ModeButton.js';
