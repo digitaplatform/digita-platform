@@ -40,6 +40,8 @@ export function Header({
   apps,
   brand,
   contactEnabled,
+  publishedSlugs,
+  enabledLocales,
 }: {
   locale: Locale;
   defaultLocale: Locale;
@@ -49,15 +51,18 @@ export function Header({
   apps: string[];
   brand: BrandMarkProps;
   contactEnabled: boolean;
+  /** The published pages per locale, as slugs, handed to the language menu. */
+  publishedSlugs: Record<string, string[]>;
+  /** The site's own narrowing of the served locales; empty means all of them. */
+  enabledLocales: string[];
 }) {
   const all = sortNav(nav?.items);
   const contact = all.find((item) => item.href === CONTACT_HREF);
   const items = all.filter((item) => item !== contact);
   const familyItems = sortNav(family?.items);
-  const enabled = (site?.enabled_locales ?? []).filter(Boolean) as Locale[];
   const controls = (
     <>
-      <LocaleSwitcher current={locale} enabled={enabled} label={t("language", locale)} />
+      <LocaleSwitcher current={locale} publishedSlugs={publishedSlugs} enabledLocales={enabledLocales} label={t("language", locale)} />
       <ThemeToggle label={t("toggleTheme", locale)} />
     </>
   );

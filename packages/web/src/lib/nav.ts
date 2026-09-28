@@ -21,10 +21,19 @@ export function isExternalHref(href: string): boolean {
 }
 
 /** The same path in another locale, from the path the browser shows. */
-export function switchLocalePath(pathname: string, next: string, locales: string[], defaultLocale: string): string {
+/** The segments of a pathname after its locale prefix, if it has one. */
+function segmentsAfterLocale(pathname: string, locales: string[]): string[] {
   const [, first = "", ...rest] = pathname.split("/");
-  const path = locales.includes(first) ? `/${rest.join("/")}` : pathname;
-  return localePath(next, defaultLocale, path);
+  return locales.includes(first) ? rest : [first, ...rest];
+}
+
+export function switchLocalePath(pathname: string, next: string, locales: string[], defaultLocale: string): string {
+  return localePath(next, defaultLocale, `/${segmentsAfterLocale(pathname, locales).join("/")}`);
+}
+
+/** The page slug a pathname names, without its locale prefix: "" for a home page. */
+export function pathSlug(pathname: string, locales: string[]): string {
+  return segmentsAfterLocale(pathname, locales).join("/").replace(/\/+$/, "");
 }
 
 /**

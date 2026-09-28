@@ -83,6 +83,16 @@ export async function listPages(locale?: string): Promise<WebPage[]> {
   );
 }
 
+/** The published pages per locale, as slugs, for the language menu (offeredLocales says why).
+ *  ponytail: listPages reads one page of at most 200 rows; a site beyond that needs a filtered
+ *  query per locale or pagination here. This entry and a page's own entry expire on their own
+ *  TTLs, so for up to REVALIDATE_SECONDS after a publish the two can disagree. */
+export async function listPublishedSlugs(): Promise<Record<string, string[]>> {
+  const slugs: Record<string, string[]> = {};
+  for (const page of await listPages()) (slugs[page.locale] ??= []).push(page.slug);
+  return slugs;
+}
+
 export async function getNav(locale: string, location: WebNavMenu["location"]): Promise<WebNavMenu | null> {
   const site = siteId();
   const rows = await query<WebNavMenu>(

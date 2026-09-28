@@ -11,7 +11,7 @@ import { isLocale } from "@/config/locales";
 import { getConfig, publicConfig } from "@/config/env";
 import { ConfigProvider } from "@/config/ConfigProvider";
 import { t } from "@/i18n/messages";
-import { getSite, getNav, getBranding } from "@/lib/engine-client";
+import { getSite, getNav, getBranding, listPublishedSlugs } from "@/lib/engine-client";
 import { siteSignature } from "@/lib/identity";
 import { localePath } from "@/lib/nav";
 import { jsonForScript } from "@/lib/json-script";
@@ -40,12 +40,13 @@ export default async function LocaleLayout({
   const config = getConfig();
   if (!isLocale(locale, config.locales)) notFound();
 
-  const [site, headerNav, footerNav, familyNav, branding] = await Promise.all([
+  const [site, headerNav, footerNav, familyNav, branding, publishedSlugs] = await Promise.all([
     getSite(),
     getNav(locale, "header"),
     getNav(locale, "footer"),
     getNav(locale, "family"),
     getBranding(),
+    listPublishedSlugs(),
   ]);
 
   // The identity a visitor without choices of their own sees, rendered on the server: the site's
@@ -98,6 +99,8 @@ export default async function LocaleLayout({
               apps={site?.link_apps === false ? [] : config.tenantApps}
               brand={brand}
               contactEnabled={siteConfig.contactEnabled}
+              publishedSlugs={publishedSlugs}
+              enabledLocales={(site?.enabled_locales ?? []).filter(Boolean)}
             />
             <main id="main" className="flex-1">
               {children}

@@ -39,3 +39,22 @@ export function getDefaultLocale(): string {
 export function isLocale(value: string, locales: string[]): boolean {
   return locales.includes(value);
 }
+
+/** The locales the language menu offers on one page: the current locale, and every served locale
+ *  in which the page's slug is published, narrowed by the site's own enabled list where it is
+ *  set. A switch keeps the slug (switchLocalePath), so any other locale would land on a page that
+ *  does not exist; slug equality, not the translation group, is therefore the rule here, and a
+ *  sibling published under another slug is reachable through hreflang only. */
+export function offeredLocales(
+  served: readonly string[],
+  publishedSlugs: Record<string, readonly string[]>,
+  enabled: readonly string[],
+  slug: string,
+  current: string,
+): string[] {
+  return served.filter(
+    (locale) =>
+      (locale === current || (publishedSlugs[locale] ?? []).includes(slug)) &&
+      (enabled.length === 0 || enabled.includes(locale) || locale === current),
+  );
+}

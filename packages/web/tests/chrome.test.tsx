@@ -10,10 +10,13 @@ import type { PublicSiteConfig } from "../src/config/public";
 import { FamilySwitcher } from "../src/components/FamilySwitcher";
 import { Header } from "../src/components/Header";
 import type { NavItem, WebSite } from "../src/lib/types";
+import type { Locale } from "../src/i18n/config";
+import { LocaleSwitcher } from "../src/components/LocaleSwitcher";
 
 vi.mock("server-only", () => ({}));
 vi.mock("../src/i18n/messages", () => ({ t: (key: string) => key }));
-vi.mock("next/navigation", () => ({ usePathname: () => "/", useRouter: () => ({ push: () => {} }), useParams: () => ({ locale: "en" }) }));
+let currentPath = "/";
+vi.mock("next/navigation", () => ({ usePathname: () => currentPath, useRouter: () => ({ push: () => {} }), useParams: () => ({ locale: "en" }) }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -21,7 +24,7 @@ const siteConfig = (contactEnabled: boolean): PublicSiteConfig => ({
   siteId: "example",
   siteUrl: "https://example.org",
   publicEngineUrl: "",
-  locales: ["en", "de"],
+  locales: ["en", "de", "fr"],
   defaultLocale: "en",
   contactEnabled,
 });
@@ -93,7 +96,7 @@ const nav = {
   ],
 };
 
-const renderHeader = (contactEnabled: boolean, headerSite: WebSite = site) =>
+const renderHeader = (contactEnabled: boolean, headerSite: WebSite = site, publishedSlugs: Record<string, string[]> = { en: [""], de: [""] }) =>
   renderToStaticMarkup(
     <ConfigProvider value={siteConfig(contactEnabled)}>
       <Header
@@ -105,9 +108,56 @@ const renderHeader = (contactEnabled: boolean, headerSite: WebSite = site) =>
         apps={[]}
         brand={{ name: "example" }}
         contactEnabled={contactEnabled}
+        publishedSlugs={publishedSlugs}
+        enabledLocales={[]}
       />
     </ConfigProvider>,
   );
+
+describe("the language menu", () => {
+  const mountMenu = async (published: Record<string, string[]>, current: Locale) => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const menuRoot = createRoot(container);
+    await act(async () =>
+      menuRoot.render(
+        <ConfigProvider value={siteConfig(false)}>
+          <LocaleSwitcher current={current} publishedSlugs={published} enabledLocales={[]} label="language" />
+        </ConfigProvider>,
+      ),
+    );
+    return { container, unmount: () => act(async () => menuRoot.unmount()) };
+  };
+
+  it("PLANTED DEFECT: on a page published in the current locale only, there is no menu, although the other locale's home is published", async () => {
+    currentPath = "/privacy";
+    const { container, unmount } = await mountMenu({ en: ["", "privacy"], de: [""] }, "en");
+    // A menu here would offer Deutsch and send the visitor to /de/privacy, which does not exist.
+    expect(container.querySelector('button[aria-label="language"]')).toBeNull();
+    await unmount();
+    container.remove();
+  });
+
+  it("offers the locales in which the page is published, and no draft locale", async () => {
+    currentPath = "/";
+    const { container, unmount } = await mountMenu({ en: [""], de: [""] }, "de");
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="language"]')!.click());
+    // The menu panel is portaled, so the body carries the items.
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("English");
+    expect(text).toContain("Deutsch");
+    expect(text).not.toContain("Français");
+    await unmount();
+    container.remove();
+    currentPath = "/";
+  });
+
+  it("PLANTED INNOCENT: the header shows the menu on a home page published in two locales", () => {
+    expect(renderHeader(false, site, { en: [""], de: [""] })).toContain('aria-label="language"');
+    // The header renders the de home; with only de published there is nowhere to switch to.
+    expect(renderHeader(false, site, { de: [""] })).not.toContain('aria-label="language"');
+  });
+});
 
 describe("the header", () => {
   it("renders the menu item #contact as the button that opens the contact sheet", () => {

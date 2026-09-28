@@ -9,10 +9,12 @@ vi.mock("../src/i18n/messages", () => ({ t: (key: string) => key }));
 vi.mock("next/navigation", () => ({ notFound: () => {}, usePathname: () => "/", useRouter: () => ({ push: () => {} }) }));
 
 let site: WebSite;
+let publishedSlugs: Record<string, string[]> = { en: [""], de: [""] };
 vi.mock("../src/lib/engine-client", () => ({
   getSite: async () => site,
   getNav: async () => null,
   getBranding: async () => null,
+  listPublishedSlugs: async () => publishedSlugs,
 }));
 
 Object.assign(process.env, {
@@ -36,9 +38,23 @@ async function render(): Promise<string> {
 
 beforeEach(() => {
   site = { _id: "example", site_name: "example", domain: "example.org" };
+  publishedSlugs = { en: [""], de: [""] };
 });
 
 describe("the locale layout", () => {
+  it("PLANTED DEFECT: hands the header the engine's published pages, so a locale without a published home is not offered", async () => {
+    publishedSlugs = { en: [""] };
+    // A layout that offered every served locale would render the menu here; this goes red then.
+    expect(await render()).not.toContain('aria-label="language"');
+    publishedSlugs = { en: [""], de: [""] };
+    expect(await render()).toContain('aria-label="language"');
+  });
+
+  it("hands the header the site's enabled locales, so a site that enables one locale shows no menu", async () => {
+    site = { ...site, enabled_locales: ["en"] };
+    expect(await render()).not.toContain('aria-label="language"');
+  });
+
   it("links the tenant's apps for a site row without link_apps", async () => {
     // PLANTED DEFECT: reading a missing field as false drops the apps, and this goes red.
     expect(await render()).toContain('href="/crm/"');

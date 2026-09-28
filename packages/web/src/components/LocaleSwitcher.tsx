@@ -4,8 +4,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { Globe } from "lucide-react";
 import { LanguageMenu } from "@digitaplatform/components";
 import { useSiteConfig } from "@/config/ConfigProvider";
-import { isLocale } from "@/config/locales";
-import { switchLocalePath } from "@/lib/nav";
+import { isLocale, offeredLocales } from "@/config/locales";
+import { pathSlug, switchLocalePath } from "@/lib/nav";
 import type { Locale } from "@/i18n/config";
 
 /** Human label for a locale code; falls back to the uppercased code for any
@@ -22,14 +22,25 @@ const labelFor = (loc: string) => LABELS[loc] ?? loc.toUpperCase();
 
 /**
  * The language picker, the app's own (the kit's LanguageMenu): a globe menu with the active
- * code. Offers the site's enabled locales, else all runtime-configured ones; choosing one keeps
- * the page and moves to its URL in that locale.
+ * code. Offers what offeredLocales allows for this page; choosing one keeps the page and moves to
+ * its URL in that locale. With nothing to switch to, there is no menu.
  */
-export function LocaleSwitcher({ current, enabled, label }: { current: Locale; enabled: Locale[]; label: string }) {
+export function LocaleSwitcher({
+  current,
+  publishedSlugs,
+  enabledLocales,
+  label,
+}: {
+  current: Locale;
+  publishedSlugs: Record<string, string[]>;
+  enabledLocales: string[];
+  label: string;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const { locales, defaultLocale } = useSiteConfig();
-  const options = enabled.length ? enabled : locales;
+  const options = offeredLocales(locales, publishedSlugs, enabledLocales, pathSlug(pathname, locales), current);
+  if (options.length < 2) return null;
 
   function pick(next: string) {
     if (!isLocale(next, locales) || next === current) return;
