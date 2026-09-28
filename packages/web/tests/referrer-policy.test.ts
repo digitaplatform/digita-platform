@@ -17,7 +17,7 @@ describe("Referrer-Policy header", () => {
     expect(await referrerPolicyFor(nextConfig)).toBe("no-referrer");
   });
 
-  it("PLANTED DEFECT: a config without the header is rejected", async () => {
+  it("PLANTED DEFECT: a config without the header has no policy", async () => {
     const { headers: _dropped, ...withoutHeader } = nextConfig;
     expect(await referrerPolicyFor(withoutHeader)).toBeUndefined();
   });
