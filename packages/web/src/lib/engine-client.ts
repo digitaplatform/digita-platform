@@ -127,7 +127,7 @@ export async function getBranding(): Promise<WebBranding | null> {
  *  this server as its one proxy hop and limits the route per visitor, so the visitor's address
  *  travels as the one X-Forwarded-For entry; without it every visitor of the site would share
  *  the renderer's own budget. */
-export async function createContactRequest(request: ContactRequest & { site: string }, visitorAddress: string): Promise<number> {
+export async function createContactRequest(request: ContactRequest, visitorAddress: string): Promise<number> {
   const res = await fetch(`${getConfig().engineUrl}/api/v1/public/resource/ContactRequest`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Forwarded-For": visitorAddress },

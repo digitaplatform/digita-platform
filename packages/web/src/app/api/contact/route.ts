@@ -91,7 +91,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const site = await getSite();
     if (!site?.contact_email) return answer(503, { ok: false, message: "Contact is not configured" });
 
-    const status = await createContactRequest({ site: config.siteId, ...request }, visitor);
+    // The engine stamps the site from its own SITE_ID and refuses a Link in the body.
+    const status = await createContactRequest(request, visitor);
     // 403: the engine grants no Guest create on ContactRequest yet, so the sheet offers the address.
     if (status === 403) return answer(503, { ok: false, message: "Contact is not configured" });
     if (status < 200 || status >= 300) throw new Error(`the engine answered HTTP ${status} to the ContactRequest create`);

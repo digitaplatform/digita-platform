@@ -85,7 +85,9 @@ describe("POST /api/contact", () => {
     // The engine limits its route per visitor and trusts this server as the one proxy hop.
     expect(create?.[1].headers["X-Forwarded-For"]).toBe(`203.0.113.${address}`);
     const { rendered_at: _r, website: _w, ...fields } = valid();
-    expect(JSON.parse(create?.[1].body)).toEqual({ site: "simetrix", ...fields });
+    // PLANTED DEFECT: the engine stamps the site itself and refuses a Link or a system field in the body; a `site` key goes red.
+    expect(JSON.parse(create?.[1].body)).toEqual(fields);
+    expect(Object.keys(JSON.parse(create?.[1].body)).sort()).toEqual(["company", "email", "locale", "message", "name", "page", "topic"]);
     expect(fetchMock.mock.calls.filter(([url]) => !String(url).includes("engine.internal"))).toHaveLength(0);
   });
 
