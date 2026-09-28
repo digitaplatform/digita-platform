@@ -17,17 +17,25 @@ const LABEL = "flex flex-col gap-1.5 text-sm font-semibold text-textMain";
  * src/lib/contact-sheet.ts. The kit's Drawer closes it on Escape and on a scrim tap, moves focus
  * into it on open and back to the opener on close.
  */
-export function ContactSheet({ locale, contactEmail, bookingUrl }: { locale: string; contactEmail: string; bookingUrl?: string }) {
+export function ContactSheet(props: ContactPanelProps) {
   const open = useContactSheetOpen();
   return (
     <Drawer open={open} onClose={closeContactSheet} label="Contact" side="right">
-      <ContactPanel locale={locale} contactEmail={contactEmail} bookingUrl={bookingUrl} />
+      <ContactPanel {...props} />
     </Drawer>
   );
 }
 
+interface ContactPanelProps {
+  locale: string;
+  contactEmail: string;
+  bookingUrl?: string;
+  /** The privacy page in the visitor's locale. */
+  privacyHref: string;
+}
+
 /** Mounted on every open, so the render timestamp and the form state start fresh each time. */
-function ContactPanel({ locale, contactEmail, bookingUrl }: { locale: string; contactEmail: string; bookingUrl?: string }) {
+function ContactPanel({ locale, contactEmail, bookingUrl, privacyHref }: ContactPanelProps) {
   const [renderedAt] = useState(() => Date.now());
   const [state, setState] = useState<"editing" | "sending" | "sent" | "failed">("editing");
 
@@ -142,7 +150,7 @@ function ContactPanel({ locale, contactEmail, bookingUrl }: { locale: string; co
             )}
             <p className="text-xs leading-relaxed text-textMuted">
               We use your details only to answer you.{" "}
-              <a href={`/${locale}/privacy`} className="underline hover:text-textMain">
+              <a href={privacyHref} className="underline hover:text-textMain">
                 Privacy
               </a>
             </p>

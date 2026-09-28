@@ -39,8 +39,3 @@ export function getDefaultLocale(): string {
 export function isLocale(value: string, locales: string[]): boolean {
   return locales.includes(value);
 }
-
-/** Cookie remembering a visitor's MANUAL language choice. The middleware prefers
- *  it over Accept-Language so the override survives a return to a locale-less URL
- *  (the LocaleSwitcher writes it). Generic — no content/site coupling. */
-export const LOCALE_COOKIE = "NEXT_LOCALE";

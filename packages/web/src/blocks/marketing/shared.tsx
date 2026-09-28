@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Badge, buttonAttributes } from "@digitaplatform/components";
 import { SheetButton } from "./SheetButton";
+import { LocaleLink } from "../LocaleLink";
 
 /** A block's JSON props, and readers that answer an empty value for anything of the wrong shape,
  *  so a block written by hand in the engine never throws in the renderer. */
@@ -91,9 +92,9 @@ function ActionButton({ action, variant }: { action: Action; variant: "primary" 
   return action.sheet ? (
     <SheetButton {...attributes}>{action.label}</SheetButton>
   ) : (
-    <a href={action.href} {...attributes}>
+    <LocaleLink href={action.href} {...attributes}>
       {action.label}
-    </a>
+    </LocaleLink>
   );
 }
 

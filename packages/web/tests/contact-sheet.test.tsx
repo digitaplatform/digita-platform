@@ -18,7 +18,7 @@ async function mount(bookingUrl?: string) {
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  await act(async () => root!.render(<ContactSheet locale="en" contactEmail="hello@example.org" bookingUrl={bookingUrl} />));
+  await act(async () => root!.render(<ContactSheet locale="en" contactEmail="hello@example.org" bookingUrl={bookingUrl} privacyHref="/privacy" />));
   await act(async () => openContactSheet());
   return opener;
 }

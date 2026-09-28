@@ -3,6 +3,7 @@ import {
   findPluginInventory,
   joinCompositionWithInventory,
   type PluginManifest,
+  type PluginSource,
 } from "@digitaplatform/plugins";
 import { CSRF_HEADER, findCookie, sessionCookieNames, type ApiResponse } from "@digitaplatform/shared";
 import {
@@ -58,20 +59,12 @@ export async function loadDeliveredIdentity(sources: DeliveredIdentitySources): 
   for (const app of sources.apps) {
     if (!designMissing && !signatureMissing) break;
     const base = `/${app}`;
-    const composition = await findComposition(base, sources);
-    if (!composition) break;
-    const inventory = await findPluginInventory(`${base}/plugins/index.json`);
-    const plugins = joinCompositionWithInventory(composition.plugins, inventory, composition.entitlements ?? []).sources;
+    const plugins = await findDeliveredPlugins(base, sources);
+    if (!plugins) break;
 
-    const designSource = designMissing ? plugins.find((p) => p.type === "design" && p.id === design && p.url) : undefined;
-    if (designSource?.url) {
-      try {
-        await loadDeliveredDesign(designFromSource(designSource, `${base}${designSource.url}`));
-        designMissing = false;
-        changed = true;
-      } catch (err) {
-        console.error(`[identity] design "${design}" from ${base} failed to load`, err);
-      }
+    if (designMissing && (await loadDesignFrom(base, plugins, design))) {
+      designMissing = false;
+      changed = true;
     }
     const signatureSource = signatureMissing ? plugins.find((p) => p.type === "signature" && p.id === signature) : undefined;
     if (signatureSource) {
@@ -86,6 +79,43 @@ export async function loadDeliveredIdentity(sources: DeliveredIdentitySources): 
     bootIdentity({ signatures: page?.signatures, branding: page?.branding, followSystemMode: false });
   }
   return changed;
+}
+
+/**
+ * Load a design the page does not bundle from the first of the tenant's apps that delivers it to
+ * this visitor, the way loadDeliveredIdentity does: the app's composition for the visitor decides,
+ * so a visitor who is not signed in, or not entitled, gets nothing. Returns whether it loaded.
+ */
+export async function loadDesignFromApps(design: string, sources: DeliveredIdentitySources): Promise<boolean> {
+  for (const app of sources.apps) {
+    const base = `/${app}`;
+    const plugins = await findDeliveredPlugins(base, sources);
+    if (!plugins) return false;
+    if (await loadDesignFrom(base, plugins, design)) return true;
+  }
+  return false;
+}
+
+/** The plugins an app delivers to the signed-in visitor, or null when they are not signed in. */
+async function findDeliveredPlugins(base: string, sources: DeliveredIdentitySources): Promise<PluginSource[] | null> {
+  const composition = await findComposition(base, sources);
+  if (!composition) return null;
+  const inventory = await findPluginInventory(`${base}/plugins/index.json`);
+  return joinCompositionWithInventory(composition.plugins, inventory, composition.entitlements ?? []).sources;
+}
+
+/** Load `design` when the app's plugins carry it. A stylesheet that fails is logged and reported
+ *  as not loaded. */
+async function loadDesignFrom(base: string, plugins: PluginSource[], design: string): Promise<boolean> {
+  const source = plugins.find((p) => p.type === "design" && p.id === design && p.url);
+  if (!source?.url) return false;
+  try {
+    await loadDeliveredDesign(designFromSource(source, `${base}${source.url}`));
+    return true;
+  } catch (err) {
+    console.error(`[identity] design "${design}" from ${base} failed to load`, err);
+    return false;
+  }
 }
 
 const currentChoices = () =>

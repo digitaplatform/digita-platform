@@ -1,37 +1,56 @@
-import Link from "next/link";
+import { BrandMark, type BrandMarkProps } from "@digitaplatform/components";
 import type { Locale } from "@/i18n/config";
 import type { WebNavMenu, WebSite } from "@/lib/types";
-import { navHref, sortNav } from "@/lib/nav";
+import { sortNav } from "@/lib/nav";
+import { NavItemLink } from "./NavItemLink";
 
-/** Site footer: content-driven secondary nav + footer text. */
+const LINK = "inline-flex w-fit items-center gap-1 text-sm text-textMain transition-colors hover:text-primary-600";
+
+/**
+ * Site footer, the columns of the canvas: the brand with the site's contact address, then the
+ * footer menu, which carries the site's pages, the family's other sites and the legal pages in the
+ * visitor's language, flowing into columns. The site's footer text closes it.
+ */
 export function Footer({
   locale,
   site,
   nav,
+  brand,
 }: {
   locale: Locale;
   site: WebSite | null;
   nav: WebNavMenu | null;
+  brand: BrandMarkProps;
 }) {
   const items = sortNav(nav?.items);
 
   return (
     <footer className="mt-auto border-t border-border">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-6 py-10 text-sm text-textMuted md:flex-row md:items-center md:justify-between md:px-8">
-        <p>{site?.footer_text ?? site?.site_name ?? "Digita"}</p>
-        {items.length > 0 && (
-          <nav className="flex flex-wrap gap-x-6 gap-y-2" aria-label="Footer">
-            {items.map((item, i) => (
-              <Link
-                key={`${item.label}-${i}`}
-                href={navHref(locale, item)}
-                className="transition-colors hover:text-textMain"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-        )}
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pb-10 pt-14 md:px-8">
+        <div className="grid gap-10 md:grid-cols-3">
+          <div className="flex flex-col gap-3.5">
+            <div className="flex items-center gap-2">
+              <BrandMark {...brand} />
+            </div>
+            {site?.contact_email && (
+              <a href={`mailto:${site.contact_email}`} className="w-fit text-sm text-textMuted transition-colors hover:text-textMain">
+                {site.contact_email}
+              </a>
+            )}
+          </div>
+          {items.length > 0 && (
+            <nav aria-label="Footer" className="md:col-span-2">
+              <ul className="gap-x-8 sm:columns-2 lg:columns-3">
+                {items.map((item, i) => (
+                  <li key={`${item.label}-${i}`} className="mb-2.5 break-inside-avoid">
+                    <NavItemLink locale={locale} item={item} className={LINK} />
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )}
+        </div>
+        {site?.footer_text && <p className="text-sm text-textMuted">{site.footer_text}</p>}
       </div>
     </footer>
   );

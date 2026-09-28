@@ -2,6 +2,7 @@ import { Badge, Card, buttonAttributes } from "@digitaplatform/components";
 import { mediaUrl } from "@/lib/media";
 import { type P, Section, list, s } from "./marketing/shared";
 import { GlowPanel } from "./marketing/CtaPanel";
+import { LocaleLink } from "./LocaleLink";
 
 /**
  * Generic content-block components. Each reads its typed config from the block's
@@ -24,9 +25,9 @@ export function Hero({ props }: { props?: P }) {
         </p>
       )}
       {s(props, "cta_label") && ctaHref && (
-        <a href={ctaHref} {...buttonAttributes({ size: "lg", className: "mt-10" })}>
+        <LocaleLink href={ctaHref} {...buttonAttributes({ size: "lg", className: "mt-10" })}>
           {s(props, "cta_label")}
-        </a>
+        </LocaleLink>
       )}
     </Section>
   );

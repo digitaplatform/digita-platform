@@ -1,48 +1,54 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Menu, X } from "lucide-react";
 import { BrandMark, Drawer, NavList, navLeafClass, railButtonClass, topBarButtonClass, type BrandMarkProps } from "@digitaplatform/components";
 import type { NavItem } from "@/lib/types";
-import { navHref } from "@/lib/nav";
-import { isActiveHref } from "./NavLinks";
+import { useActiveItem } from "./NavLinks";
+import { NavItemLink } from "./NavItemLink";
+import { isCurrentSite } from "./FamilySwitcher";
 
 /**
- * Mobile navigation — the phone counterpart to the desktop NavLinks, which is `hidden md:flex`.
- * It opens the app's mobile drawer (the kit's Drawer): a rail with the brand row and the nav items
- * as the app's nav list. Closes on route change, on Escape and on a scrim tap. The tenant's apps
- * follow the nav items as plain links to `/<name>/`.
+ * Mobile navigation — the phone counterpart to the desktop header, whose nav, family menu,
+ * language menu and mode button are `hidden md:flex`. It opens the app's mobile drawer (the kit's
+ * Drawer): a rail with the brand row, the nav items as the app's nav list, the tenant's apps as
+ * plain links to `/<name>/`, the product family, and `children` (the language menu and the mode
+ * button) at the foot. Closes on route change, on Escape and on a scrim tap.
  */
 export function MobileNav({
   locale,
   items,
   apps,
+  family,
+  domain,
   brand,
   label,
   openLabel,
   closeLabel,
+  children,
 }: {
   locale: string;
   items: NavItem[];
   apps: string[];
+  family: NavItem[];
+  /** The site's domain, which marks the family item of the site the visitor is on. */
+  domain?: string;
   brand: BrandMarkProps;
   /** Accessible name of the drawer. */
   label: string;
   openLabel: string;
   closeLabel: string;
+  children: ReactNode;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const homeHref = `/${locale}`;
+  const isActive = useActiveItem(locale);
 
   // Close when the route changes (a link inside the drawer was followed).
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
-
-  if (!items.length && !apps.length) return null;
 
   return (
     <div className="md:hidden">
@@ -61,13 +67,10 @@ export function MobileNav({
           <nav aria-label="Primary" className="min-h-0 flex-1 overflow-y-auto p-2">
             <NavList>
               {items.map((item, i) => {
-                const href = navHref(locale, item);
-                const active = isActiveHref(pathname, href, homeHref);
+                const active = isActive(item);
                 return (
                   <li key={`${item.label}-${i}`}>
-                    <Link href={href} aria-current={active ? "page" : undefined} data-ui="nav-leaf" className={navLeafClass(active)}>
-                      {item.label}
-                    </Link>
+                    <NavItemLink locale={locale} item={item} current={active} data-ui="nav-leaf" className={navLeafClass(active)} />
                   </li>
                 );
               })}
@@ -79,7 +82,24 @@ export function MobileNav({
                 </li>
               ))}
             </NavList>
+            {family.length > 0 && <div aria-hidden="true" className="my-2 h-px bg-border" />}
+            {family.length > 0 && (
+              <NavList>
+                {family.map((item, i) => (
+                  <li key={`${item.label}-${i}`}>
+                    {isCurrentSite(item, domain) ? (
+                      <span aria-current="true" className={navLeafClass(true)}>
+                        {item.label}
+                      </span>
+                    ) : (
+                      <NavItemLink locale={locale} item={item} data-ui="nav-leaf" className={navLeafClass(false)} />
+                    )}
+                  </li>
+                ))}
+              </NavList>
+            )}
           </nav>
+          <div className="flex shrink-0 items-center gap-1 border-t border-border p-2">{children}</div>
         </div>
       </Drawer>
     </div>

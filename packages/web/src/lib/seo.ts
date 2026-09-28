@@ -4,9 +4,11 @@ import type { WebPage, WebSite } from "./types";
 import { listPages } from "./engine-client";
 import { mediaUrl } from "./media";
 import { jsonForScript } from "./json-script";
+import { localePath } from "./nav";
 
+/** A page's path: bare in the default locale, under /<locale> in the others. */
 export function pagePath(locale: string, slug: string): string {
-  return slug ? `/${locale}/${slug}` : `/${locale}`;
+  return localePath(locale, getConfig().defaultLocale, slug);
 }
 
 /** Absolute URL on this deployment's canonical host (strict env SITE_URL). */
@@ -20,7 +22,8 @@ function ogImageUrl(ref: string | undefined): string | undefined {
   return url.startsWith("http") ? url : absoluteUrl(url);
 }
 
-/** Build Next metadata for a page incl. canonical, hreflang siblings, and OG. */
+/** Build Next metadata for a page incl. canonical, hreflang siblings, and OG. x-default is the
+ *  default locale's URL, the bare one, which the middleware serves without negotiation. */
 export async function buildPageMetadata(page: WebPage, site: WebSite | null): Promise<Metadata> {
   const path = pagePath(page.locale, page.slug);
   const title = page.meta_title || page.title;
@@ -36,7 +39,9 @@ export async function buildPageMetadata(page: WebPage, site: WebSite | null): Pr
       }
     }
   }
-  languages["x-default"] = absoluteUrl(path);
+  languages[page.locale] = absoluteUrl(path);
+  const bare = languages[getConfig().defaultLocale];
+  if (bare) languages["x-default"] = bare;
 
   return {
     title,

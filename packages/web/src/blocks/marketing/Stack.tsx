@@ -1,4 +1,5 @@
 import { Card, ProductLockup } from "@digitaplatform/components";
+import { LocaleLink } from "../LocaleLink";
 import { type P, Section, StatusPill, cardClass, columnsFor, list, record, s } from "./shared";
 
 function lockupOf(item: P): { family: string; product: string } | null {
@@ -33,9 +34,9 @@ export function Stack({ props }: { props?: P }) {
               </div>
               {s(item, "body") && <p className="text-sm leading-relaxed text-textMuted">{s(item, "body")}</p>}
               {s(item, "href") && s(item, "link_label") && (
-                <a href={s(item, "href")} className="mt-auto text-sm font-semibold text-primary-600 hover:underline">
+                <LocaleLink href={s(item, "href")} className="mt-auto text-sm font-semibold text-primary-600 hover:underline">
                   {s(item, "link_label")}
-                </a>
+                </LocaleLink>
               )}
             </Card>
           );

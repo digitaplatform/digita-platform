@@ -55,6 +55,8 @@ export interface WebSite {
   _id: string;
   site_name: string;
   domain?: string;
+  /** The id of the signature the site is drawn in. */
+  theme?: string;
   default_locale?: string;
   enabled_locales?: string[];
   default_og_image?: string;
@@ -63,6 +65,10 @@ export interface WebSite {
   contact_email?: string;
   /** The booking page the contact sheet links to; without it the booking button stays out. */
   booking_url?: string;
+  /** Whether the header links the tenant's apps. */
+  link_apps?: boolean;
+  /** Whether the band that switches the site's design shows above the footer. */
+  design_switcher?: boolean;
 }
 
 export interface NavItem {
@@ -76,7 +82,7 @@ export interface WebNavMenu {
   _id: string;
   site: string;
   locale: string;
-  location: string;
+  location: "header" | "footer" | "family";
   items?: NavItem[];
 }
 

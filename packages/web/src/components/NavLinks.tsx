@@ -1,15 +1,25 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navLeafClass } from "@digitaplatform/components";
+import { useSiteConfig } from "@/config/ConfigProvider";
 import type { NavItem } from "@/lib/types";
-import { navHref } from "@/lib/nav";
+import { localePath, navHref } from "@/lib/nav";
+import { NavItemLink } from "./NavItemLink";
 
 /** Whether `href` is the current page: home matches exactly, other items match the page or any of
  *  its sub-paths. */
-export function isActiveHref(pathname: string, href: string, homeHref: string): boolean {
+export function isActiveHref(pathname: string, href: string | null, homeHref: string): boolean {
+  if (!href) return false;
   return href === homeHref ? pathname === homeHref : pathname === href || pathname.startsWith(href + "/");
+}
+
+/** Which of `items` is the page the visitor is on, by the path the browser shows. */
+export function useActiveItem(locale: string): (item: NavItem) => boolean {
+  const pathname = usePathname();
+  const { defaultLocale } = useSiteConfig();
+  const homeHref = localePath(locale, defaultLocale);
+  return (item) => isActiveHref(pathname, navHref(locale, defaultLocale, item), homeHref);
 }
 
 /**
@@ -19,18 +29,14 @@ export function isActiveHref(pathname: string, href: string, homeHref: string): 
  * plain links: each one leaves the website for the app at `/<name>/` on the same host.
  */
 export function NavLinks({ locale, items, apps }: { locale: string; items: NavItem[]; apps: string[] }) {
-  const pathname = usePathname();
-  const homeHref = `/${locale}`;
+  const isActive = useActiveItem(locale);
 
   return (
     <>
       {items.map((item, i) => {
-        const href = navHref(locale, item);
-        const active = isActiveHref(pathname, href, homeHref);
+        const active = isActive(item);
         return (
-          <Link key={`${item.label}-${i}`} href={href} aria-current={active ? "page" : undefined} data-ui="nav-leaf" className={navLeafClass(active)}>
-            {item.label}
-          </Link>
+          <NavItemLink key={`${item.label}-${i}`} locale={locale} item={item} current={active} data-ui="nav-leaf" className={navLeafClass(active)} />
         );
       })}
       {apps.map((app) => (

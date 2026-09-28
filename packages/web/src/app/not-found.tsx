@@ -15,7 +15,7 @@ export default function GlobalNotFound() {
         <p className="text-sm font-medium text-primary-600">404</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-textMain">Page not found</h1>
         <Link
-          href="/en"
+          href="/"
           {...buttonAttributes({ className: "mt-8" })}
         >
           Go home

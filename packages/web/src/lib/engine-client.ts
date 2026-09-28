@@ -82,7 +82,7 @@ export async function listPages(locale?: string): Promise<WebPage[]> {
   );
 }
 
-export async function getNav(locale: string, location: "header" | "footer"): Promise<WebNavMenu | null> {
+export async function getNav(locale: string, location: WebNavMenu["location"]): Promise<WebNavMenu | null> {
   const site = siteId();
   const rows = await query<WebNavMenu>(
     "WebNavMenu",
