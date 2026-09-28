@@ -8,6 +8,9 @@ if (!process.env["TRANSLATIONS_DIR"]) {
   );
 }
 
+// The tests reach the engine directly, with no proxy in front of it.
+process.env["API_TRUSTED_PROXY_HOPS"] ??= "0";
+
 export default defineConfig({
   test: {
     globals: true,

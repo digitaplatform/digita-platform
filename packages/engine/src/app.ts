@@ -4,6 +4,7 @@ import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
+import { engineRateLimitOptions, engineServerOptions } from "./core/api/http-options.js";
 import multipart from "@fastify/multipart";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
@@ -110,10 +111,12 @@ function parseBodyLimit(value: string): number {
 export async function createApp(
   opts: { authn?: import("./core/auth/authn-port.js").AuthnPort } = {},
 ) {
-  const app = Fastify({
-    logger: false,
-    bodyLimit: parseBodyLimit(env.API_MAX_BODY_SIZE),
-  });
+  const app = Fastify(
+    engineServerOptions({
+      bodyLimit: parseBodyLimit(env.API_MAX_BODY_SIZE),
+      trustedProxyHops: env.API_TRUSTED_PROXY_HOPS,
+    }),
+  );
 
   // ─── Core Services ─────────────────────────────────────
 
@@ -272,28 +275,10 @@ export async function createApp(
   // a fixture burst from a single identity would otherwise 429). Production keeps
   // the default 1000/min per identity.
   if (env.API_RATE_LIMIT_MAX > 0) {
-    await app.register(rateLimit, {
-      max: env.API_RATE_LIMIT_MAX,
-      timeWindow: env.API_RATE_LIMIT_WINDOW,
-      // Run in preParsing to make identity keying a phase GUARANTEE instead of an
-      // ordering accident: @fastify/rate-limit injects its check per-route via an
-      // onRoute listener that APPENDS to the route's own hook array, so at the
-      // default onRequest phase it happened to run after the scope-level auth
-      // hooks (each scope adds them before registering its routes) — request.user
-      // was populated by declaration-order luck, with nothing enforcing it.
-      // preParsing always runs after the entire onRequest phase (auth included),
-      // regardless of registration order or future global hooks, so each identity
-      // reliably gets its own budget; anonymous requests still key by IP.
-      // preParsing (not preHandler) also rejects an over-limit request BEFORE
-      // body parsing, instead of paying up to API_MAX_BODY_SIZE of parse cost
-      // for a request that just gets a 429 anyway.
-      // Trade-off: requests that auth or CSRF reject (401/403 in onRequest)
-      // never reach the limiter — acceptable, both are cheap local checks.
-      hook: "preParsing",
-      keyGenerator: (request) => {
-        return request.user?.email ?? request.ip;
-      },
-    });
+    await app.register(
+      rateLimit,
+      engineRateLimitOptions({ max: env.API_RATE_LIMIT_MAX, timeWindow: env.API_RATE_LIMIT_WINDOW }),
+    );
   }
 
   await app.register(multipart, {

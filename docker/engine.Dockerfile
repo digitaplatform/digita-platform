@@ -115,7 +115,8 @@ USER digita
 WORKDIR /app/packages/engine
 
 # Default env vars (override at runtime). Required at runtime but NOT set here:
-# MONGODB_URI, AUTH_JWKS_URL, AUTH_ISSUER, AUTH_AUDIENCE, and TRANSLATIONS_DIR, where
+# MONGODB_URI, AUTH_JWKS_URL, AUTH_ISSUER, AUTH_AUDIENCE, API_TRUSTED_PROXY_HOPS, and
+# TRANSLATIONS_DIR, where
 # the chart's init container puts the engine's texts. Apps are NOT baked in —
 # the chart points APPS_DIRS at the mounted app-bundle so the engine
 # auto-discovers every app; with no mount the engine runs app-less.

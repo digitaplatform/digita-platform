@@ -58,6 +58,15 @@ function getEnvInt(key: string, fallback: number): number {
   return parsed;
 }
 
+/** A required count of 0 or more; throws, naming the variable, when it is absent or anything else. */
+function getEnvCountRequired(key: string): number {
+  const val = getEnvRequired(key);
+  if (!/^\d+$/.test(val)) {
+    throw new Error(`Environment variable ${key} must be a whole number of 0 or more, got: ${val}`);
+  }
+  return parseInt(val, 10);
+}
+
 function getEnvBool(key: string, fallback: boolean): boolean {
   const val = process.env[key];
   if (val === undefined || val === "") return fallback;
@@ -251,6 +260,10 @@ export const env = {
   API_RATE_LIMIT_MAX: getEnvInt("API_RATE_LIMIT_MAX", 1000),
   API_RATE_LIMIT_WINDOW: getEnv("API_RATE_LIMIT_WINDOW", "1m"),
   API_MAX_BODY_SIZE: getEnv("API_MAX_BODY_SIZE", "10mb"),
+  // The proxies in front of the engine (the ingress controller: 1). The rate limit keys an
+  // anonymous request by the address the last of them saw; required, because a wrong count
+  // either lets clients choose their own key or gives every visitor the same one.
+  API_TRUSTED_PROXY_HOPS: getEnvCountRequired("API_TRUSTED_PROXY_HOPS"),
   API_TIMEOUT_MS: getEnvInt("API_TIMEOUT_MS", 60000),
   CORS_ORIGINS: getEnvArray("CORS_ORIGINS", ["http://localhost:5173"]),
   CORS_CREDENTIALS: getEnvBool("CORS_CREDENTIALS", true),
