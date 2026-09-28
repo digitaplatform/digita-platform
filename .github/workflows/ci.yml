@@ -11,8 +11,9 @@ on:
   pull_request:
     branches: [master]
   # The Release workflow commits a release with GITHUB_TOKEN, and GitHub starts no workflow from such
-  # a push. This runs the gates and the publish job after every release as well; for this event the
-  # checkout is the head of master, which is the release commit.
+  # a push. This runs the gates after every release as well; for this event the checkout is the head
+  # of master, which is the release commit. Packages are published only by the Release workflow's
+  # publish job.
   workflow_run:
     workflows: [Release]
     types: [completed]
@@ -155,58 +156,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build the web image
         run: docker build -f docker/web.Dockerfile --secret id=npmrc,src="$RUNNER_TEMP/npmrc" -t digita-web:ci .
-
-  # Every publishable package whose version is not yet in GitHub Packages, on every push to
-  # master and after every successful release: a version that is already there is skipped, so a
-  # push without a bump publishes nothing, and the release commit's stamped versions are the whole
-  # release. No tag, no script, no hand.
-  publish:
-    if: github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@digitaplatform'
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build the publishable foundation packages
-        run: >-
-          pnpm
-          --filter '@digitaplatform/shared'
-          --filter '@digitaplatform/theme'
-          --filter '@digitaplatform/components'
-          --filter '@digitaplatform/plugins'
-          build
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish what is not yet published
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -eu
-          for dir in $(pnpm -r ls --json --depth -1 | jq -r '.[].path'); do
-            name="$(jq -r .name "$dir/package.json")"
-            version="$(jq -r .version "$dir/package.json")"
-            [ "$(jq -r '.private // false' "$dir/package.json")" = "true" ] && continue
-            if npm view "$name@$version" version >/dev/null 2>&1; then
-              echo "$name@$version is published already"
-              continue
-            fi
-            tag=latest
-            case "$version" in *-*) tag="${version#*-}"; tag="${tag%%.*}" ;; esac
-            echo "publishing $name@$version with dist-tag $tag"
-            (cd "$dir" && pnpm publish --no-git-checks --tag "$tag")
-          done
 
   # Engine gate: typecheck (src + tests), dependency rules (dependency-cruiser),
   # build, and the full vitest suite (unit + mongodb-memory-server replica-set
