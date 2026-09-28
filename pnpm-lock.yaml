@@ -350,6 +350,9 @@ importers:
       '@digitaplatform/shared':
         specifier: workspace:*
         version: link:../shared
+      '@digitaplatform/simetrix':
+        specifier: ^0.3.0
+        version: 0.3.2
       '@digitaplatform/theme':
         specifier: workspace:*
         version: link:../theme
@@ -622,6 +625,9 @@ packages:
 
   '@digitaplatform/digita@0.3.0':
     resolution: {integrity: sha512-OG3YNe9kevwXSIhF6/HVBz3e0RlPvgNoiBhKbUhD1v+YB1P/a6TEn8zboA8ylNumZOxNnnC2Vjjy3Vn5y/sOPw==, tarball: https://npm.pkg.github.com/download/@digitaplatform/digita/0.3.0/d43793af6fd3ee3d461dd2c61da32df34e10f30c}
+
+  '@digitaplatform/simetrix@0.3.2':
+    resolution: {integrity: sha512-bq7r5eB/n2yb4LLdWXrNN36rvqcb3+8BHo1K9g/C/xOSiCGLMylrEsuenuxn7/BXuT2xQJcZ7zsI9yp8C4ggeA==, tarball: https://npm.pkg.github.com/download/@digitaplatform/simetrix/0.3.2/c2aedd104f90325232e1a117d44c26b7db7897fc}
 
   '@digitaplatform/usermenu@0.3.0':
     resolution: {integrity: sha512-pzsFJp8wj7fXAUHwhOIEuM57Q2zZYXeZwmxzudK9XTjMtzelXs6l82J10Y9hvCGjCYhyRpGbzK3U96qmXJHq9g==, tarball: https://npm.pkg.github.com/download/@digitaplatform/usermenu/0.3.0/9ac9d1f0f47146ea44533c1d5c43a6bf958b8311}
@@ -4300,6 +4306,8 @@ snapshots:
   '@csstools/css-tokenizer@4.0.0': {}
 
   '@digitaplatform/digita@0.3.0': {}
+
+  '@digitaplatform/simetrix@0.3.2': {}
 
   '@digitaplatform/usermenu@0.3.0(@digitaplatform/components@packages+components)(@digitaplatform/plugins@packages+plugins+sdk)(lucide-react@0.562.0(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react-router-dom@7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-router@7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)':
     dependencies:

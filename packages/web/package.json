@@ -14,6 +14,7 @@
   "dependencies": {
     "@digitaplatform/components": "workspace:*",
     "@digitaplatform/digita": "^0.3.0",
+    "@digitaplatform/simetrix": "^0.3.0",
     "@digitaplatform/plugins": "workspace:*",
     "@digitaplatform/shared": "workspace:*",
     "@digitaplatform/theme": "workspace:*",
