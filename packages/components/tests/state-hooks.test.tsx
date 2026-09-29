@@ -113,7 +113,7 @@ describe('DataGrid row', () => {
   const COLS: DataGridColumn[] = [{ key: 'name', label: 'Name', kind: 'text' }];
   const ROWS = [{ id: 'r1', name: 'Apple' }, { id: 'r2', name: 'Pear' }];
 
-  it('carries data-active on the row of the tab stop and no inline height', async () => {
+  it('carries data-active on the row of the focused cell and no inline height', async () => {
     const user = userEvent.setup();
     render(
       <DataGrid rows={ROWS} columns={COLS} getRowId={(r) => r.id} editable={false} aria-label="lines" />,

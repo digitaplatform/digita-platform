@@ -144,6 +144,8 @@ describe('CardList', () => {
     cards.forEach((card) => expectHooked(card, 'list-row'));
     expect(cards[0]).toHaveAttribute('aria-selected', 'false');
     expect(cards[1]).toHaveAttribute('aria-selected', 'true');
+    // The tab stop starts on the selected card, not on the first one.
+    expect(cards.map((c) => c.getAttribute('tabindex'))).toEqual(['-1', '0']);
     fireEvent.click(cards[0]!);
     expect(onRowClick).toHaveBeenCalledWith('SO-0043');
     fireEvent.keyDown(cards[1]!, { key: 'Enter' });

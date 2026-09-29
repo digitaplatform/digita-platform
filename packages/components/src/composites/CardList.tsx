@@ -21,12 +21,13 @@ const OPTION = '[role="option"]';
  * The phone-width sibling of DataGrid: one card per row, each an option that opens
  * the row on click, Enter or Space. A listbox, because `aria-selected` marks the
  * open record on `list-row` the way the grid marks its `table-row`, and a button
- * may not carry it. The list is one tab stop: the arrow keys, Home and End move
- * the stop between the cards, so Tab leaves the list in one step however long it
- * is. Hooks: `list-group` on the list, `list-row` on every card.
+ * may not carry it. The cards share one tab stop: the arrow keys, Home and End
+ * move it between them, so Tab skips the other cards; a link or a control inside
+ * a card keeps its own stop. Hooks: `list-group` on the list, `list-row` on every card.
  */
 export function CardList<T>({ rows, getRowId, selectedRowId, onRowClick, renderCard, className, 'aria-label': ariaLabel }: CardListProps<T>) {
-  const [stop, setStop] = useState(0);
+  // Focus enters on the selected card, so coming back to a list lands on the open record.
+  const [stop, setStop] = useState(() => Math.max(0, rows.findIndex((r) => getRowId(r) === selectedRowId)));
   // The rows may shrink under the stop (a filter, a page change): the stop follows.
   const stopIndex = Math.min(stop, rows.length - 1);
 
