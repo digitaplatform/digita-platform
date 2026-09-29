@@ -1,4 +1,4 @@
-import type { AggregateSection } from "@digitaplatform/shared";
+import type { AggregateSection, EntityDefinition } from "@digitaplatform/shared";
 import type { Document } from "mongodb";
 import type { MongoDBService } from "../../database/mongodb-service.js";
 import type { EntityRegistry } from "../../entity/entity-registry.js";
@@ -10,6 +10,7 @@ import { env } from "../../config/env.js";
 import { resolveTokens, type ResolverContext } from "../param-resolver.js";
 import { collectFieldReferences } from "./pipeline-field-walker.js";
 import { coerceMatchDates } from "../../database/filter-value-coercer.js";
+import { readStoredRow } from "../../entity/field-types.js";
 
 /** Pipeline stages after which field names / entity context change — date-match
  *  coercion (which resolves field types against the section entity) must stop here. */
@@ -105,6 +106,12 @@ export async function runAggregateSection(
 
   const refs = collectFieldReferences(section.pipeline, section.entity, deps.registry);
   for (const ref of refs) {
+    // A Password value leaves the engine on no read path (#78), so a pipeline
+    // that names the field, as a source or as an output name, is refused for
+    // every reader, an Administrator included.
+    if (deps.registry.has(ref.entity) && passwordFields(deps.registry.get(ref.entity)).includes(ref.field)) {
+      throw new PermissionDeniedError(user.email, ref.entity, "aggregation_references_protected_field");
+    }
     const readable = readableByEntity.get(ref.entity);
     if (readable === null || readable === undefined) continue; // null = all readable (admin/missing); permissive
     if (META_FIELDS.has(ref.field)) continue;
@@ -158,12 +165,23 @@ export async function runAggregateSection(
     return coerced;
   });
 
-  const finalPipeline = [...securityMatch, ...coercedUserPipeline];
+  // A Password value never enters the pipeline: it is dropped right after the
+  // security $match, and at the head of every $lookup sub-pipeline from an
+  // entity that stores one, so no later stage can output it under any name. A
+  // $lookup without a sub-pipeline joins whole rows; those are read below.
+  const finalPipeline = [
+    ...securityMatch,
+    ...unsetPasswords(entity),
+    ...coercedUserPipeline.map((stage) => unsetPasswordsInLookups(stage, deps.registry)),
+  ];
 
   // 4. Execute.
   const rows = await deps.db.aggregate(section.entity, finalPipeline, entity.database);
 
-  // 5. Defence in depth. Two per-row strips:
+  // 5. A row that keeps the entity's row shape is read as every path reads a
+  //    stored row (readStoredRow); the rows a bare $lookup joins whole are read
+  //    the same way through the joined entity. Then defence in depth, two
+  //    per-row strips:
   //   (a) section-entity output keys that shadow a protected source field.
   //   (b) H4: nested foreign docs emitted by a bare $lookup — mask each through
   //       the JOINED entity's readable field set, so perm_level-protected fields
@@ -175,12 +193,17 @@ export async function runAggregateSection(
   const lookupOutputs = collectLookupOutputs(section.pipeline);
   const needsSectionStrip = !!(sectionReadable && sectionAllFields);
   const needsLookupMask = lookupOutputs.some((o) => !!readableByEntity.get(o.from));
-  if (!needsSectionStrip && !needsLookupMask) return rows;
+  const joinedReads = lookupOutputs.filter((o) => o.joinsRows && deps.registry.has(o.from));
+  if (reshaped && !needsSectionStrip && !needsLookupMask && joinedReads.length === 0) return rows;
 
   return rows.map((row) => {
+    const read = reshaped ? row : readStoredRow(entity, row);
     const r: Document = needsSectionStrip
-      ? filterAggregateRow(row, sectionReadable!, sectionAllFields!)
-      : { ...row };
+      ? filterAggregateRow(read, sectionReadable!, sectionAllFields!)
+      : { ...read };
+    for (const { as, from } of joinedReads) {
+      if (as in r) r[as] = mapForeignValue(r[as], (doc) => readStoredRow(deps.registry.get(from), doc));
+    }
     for (const { as, from } of lookupOutputs) {
       if (!(as in r)) continue;
       const readable = readableByEntity.get(from);
@@ -191,13 +214,43 @@ export async function runAggregateSection(
   });
 }
 
+function passwordFields(def: EntityDefinition): string[] {
+  return (def.fields ?? []).filter((f) => f.fieldtype === "Password").map((f) => f.fieldname);
+}
+
+/** The stage that drops an entity's Password fields, or nothing when it stores none. */
+function unsetPasswords(def: EntityDefinition): Document[] {
+  const fields = passwordFields(def);
+  return fields.length ? [{ $unset: fields }] : [];
+}
+
+/** The stage with the Password fields of every joined entity dropped at the head
+ *  of its `$lookup` sub-pipeline, `$facet` branches included. */
+function unsetPasswordsInLookups(stage: Document, registry: EntityRegistry): Document {
+  const lookup = stage["$lookup"];
+  if (lookup && typeof lookup === "object" && Array.isArray(lookup["pipeline"]) && registry.has(lookup["from"])) {
+    const pipeline = (lookup["pipeline"] as Document[]).map((s) => unsetPasswordsInLookups(s, registry));
+    return { ...stage, $lookup: { ...lookup, pipeline: [...unsetPasswords(registry.get(lookup["from"])), ...pipeline] } };
+  }
+  const facet = stage["$facet"];
+  if (facet && typeof facet === "object") {
+    const branches = Object.entries(facet as Record<string, unknown>).map(([k, branch]) => [
+      k,
+      Array.isArray(branch) ? branch.map((s) => unsetPasswordsInLookups(s as Document, registry)) : branch,
+    ]);
+    return { ...stage, $facet: Object.fromEntries(branches) };
+  }
+  return stage;
+}
+
 /** Collect every $lookup `{ as, from }` in the pipeline (depth-first, incl.
  *  nested $lookup.pipeline and $facet children) so the runner can mask the
- *  foreign docs each one emits. */
+ *  foreign docs each one emits. `joinsRows` is true for a $lookup without a
+ *  sub-pipeline: it joins the foreign rows whole, in their stored shape. */
 function collectLookupOutputs(
   pipeline: unknown,
-  out: Array<{ as: string; from: string }> = [],
-): Array<{ as: string; from: string }> {
+  out: Array<{ as: string; from: string; joinsRows: boolean }> = [],
+): Array<{ as: string; from: string; joinsRows: boolean }> {
   if (!Array.isArray(pipeline)) return out;
   for (const stage of pipeline) {
     if (!stage || typeof stage !== "object") continue;
@@ -205,7 +258,8 @@ function collectLookupOutputs(
     if (lookup && typeof lookup === "object") {
       const from = (lookup as Record<string, unknown>)["from"];
       const as = (lookup as Record<string, unknown>)["as"];
-      if (typeof from === "string" && typeof as === "string") out.push({ as, from });
+      const joinsRows = !Array.isArray((lookup as Record<string, unknown>)["pipeline"]);
+      if (typeof from === "string" && typeof as === "string") out.push({ as, from, joinsRows });
       collectLookupOutputs((lookup as Record<string, unknown>)["pipeline"], out);
     }
     const facet = (stage as Record<string, unknown>)["$facet"];
@@ -221,8 +275,13 @@ function collectLookupOutputs(
 /** Mask a $lookup output (array of joined docs, or a single doc) through the
  *  joined entity's readable field set. */
 function maskForeignValue(value: unknown, readable: Set<string>): unknown {
-  if (Array.isArray(value)) return value.map((v) => maskForeignDoc(v, readable));
-  return maskForeignDoc(value, readable);
+  return mapForeignValue(value, (doc) => maskForeignDoc(doc, readable) as Document);
+}
+
+/** A $lookup output (array of joined docs, or a single doc) with `read` applied to each doc. */
+function mapForeignValue(value: unknown, read: (doc: Document) => Document): unknown {
+  const one = (doc: unknown) => (doc && typeof doc === "object" ? read(doc as Document) : doc);
+  return Array.isArray(value) ? value.map(one) : one(value);
 }
 
 function maskForeignDoc(doc: unknown, readable: Set<string>): unknown {

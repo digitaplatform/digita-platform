@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import type { AggregateSection } from "@digitaplatform/shared";
 
 vi.mock("../src/core/config/env.js", () => ({
   env: {
@@ -57,7 +58,8 @@ function deps(rows: unknown[]) {
 
 const user = { _id: "u1", email: "admin@example.com", roles: ["Administrator"] } as never;
 const rctx = { root: null, user, params: {}, now: new Date(), warnings: [] };
-const section = (entity: string, pipeline: unknown[]) => ({ key: "k", kind: "aggregate" as const, entity, pipeline });
+const section = (entity: string, pipeline: unknown[]) =>
+  ({ key: "k", kind: "aggregate" as const, entity, pipeline }) as AggregateSection;
 const stored = { _id: "V-1", title: "Mail server", secret: "hunter2-first", modified: new Date("2026-09-29T10:00:00Z") };
 
 describe("an aggregate section over an entity with a Password field", () => {
