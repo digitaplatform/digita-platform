@@ -104,6 +104,29 @@ describe("WorkflowEngine — validateTransition", () => {
     ).toThrow(IllegalTransitionError);
   });
 
+  it("accepts when the condition holds", () => {
+    const w = new WorkflowEngine();
+    const t = w.validateTransition(expenseEntity(), { amount: 5 }, "Draft", "Rejected", manager as never);
+    expect(t?.action).toBe("reject");
+  });
+
+  it.each([
+    ["does not parse", "doc.amount >"],
+    ["holds a node the evaluator does not allow", "doc.amount.toString() == '5'"],
+  ])("refuses with condition_failed when the condition %s", (_case, condition) => {
+    const e = expenseEntity();
+    e.transitions![1]!.condition = condition;
+    const w = new WorkflowEngine();
+    let thrown: unknown;
+    try {
+      w.validateTransition(e, { amount: 5 }, "Draft", "Rejected", manager as never);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(IllegalTransitionError);
+    expect((thrown as IllegalTransitionError).reason).toBe("condition_failed");
+  });
+
   it("wildcard from: '*' transitions match any prior state", () => {
     const w = new WorkflowEngine();
     expect(() =>

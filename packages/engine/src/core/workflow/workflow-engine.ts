@@ -205,10 +205,12 @@ export class WorkflowEngine {
       const roleOk = t.allowed_roles.length === 0 || t.allowed_roles.some((r) => userRoles.has(r));
       if (!roleOk) continue;
       if (t.condition) {
-        const ok = evaluateExpression(t.condition, {
-          doc,
-          user: user as unknown as Record<string, unknown>,
-        });
+        // Fail closed: a condition that cannot be evaluated refuses the move.
+        const ok = evaluateExpression(
+          t.condition,
+          { doc, user: user as unknown as Record<string, unknown> },
+          false,
+        );
         if (!ok) {
           lastFailure = "condition_failed";
           continue;
