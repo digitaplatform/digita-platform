@@ -308,13 +308,13 @@ function RevealApp({ locale }: { locale: Locale }) {
   );
 }
 
-/** Five columns of the definition's own tokens, falling behind the hero; still under reduced motion. */
+/** Five columns of the definition's own tokens, falling behind the hero, under reduced motion too. */
 const RAIN = [
-  { left: "4%", duration: "34s", delay: "0s", tokens: ['"customer"', "Link→Customer", '"lines"', "Table", '"qty"', "10", '"unit_price"', "149.00", '"line_total"', "1490.00", '"grand_total"', "1886.15", '"docstatus"', "1", '"naming"', "SO-{####}"] },
-  { left: "18%", duration: "46s", delay: "-12s", tokens: ['"_id"', "SO-2026-0042", '"states"', "draft", "confirmed", "delivered", '"hooks"', "computeTotals", "checkCreditLimit", '"permissions"', "level 0", "level 1"] },
-  { left: "35%", duration: "40s", delay: "-25s", tokens: ['"is_submittable"', "true", '"fields"', "product", "Aurora Lamp", "Cable Set", '"fiscal_year"', "2026", '"locale"', "en de fr it es tr"] },
-  { left: "76%", duration: "52s", delay: "-30s", tokens: ["POST", "/api/v1/resource/SalesOrder", "201", '"track_changes"', "true", '"storage_path"', "sales/order", "GET", "/api/v1/public/WebPage", "200", '"hreflang"', "x-default"] },
-  { left: "93%", duration: "38s", delay: "-8s", tokens: ['"role"', "Sales User", '"read"', "1", '"write"', "1", '"if_owner"', "0", '"snapshot"', "frozen", '"period"', "closed"] },
+  { left: "4%", duration: "17s", delay: "0s", tokens: ['"customer"', "Link→Customer", '"lines"', "Table", '"qty"', "10", '"unit_price"', "149.00", '"line_total"', "1490.00", '"grand_total"', "1886.15", '"docstatus"', "1", '"naming"', "SO-{####}"] },
+  { left: "18%", duration: "23s", delay: "-12s", tokens: ['"_id"', "SO-2026-0042", '"states"', "draft", "confirmed", "delivered", '"hooks"', "computeTotals", "checkCreditLimit", '"permissions"', "level 0", "level 1"] },
+  { left: "35%", duration: "20s", delay: "-25s", tokens: ['"is_submittable"', "true", '"fields"', "product", "Aurora Lamp", "Cable Set", '"fiscal_year"', "2026", '"locale"', "en de fr it es tr"] },
+  { left: "76%", duration: "26s", delay: "-30s", tokens: ["POST", "/api/v1/resource/SalesOrder", "201", '"track_changes"', "true", '"storage_path"', "sales/order", "GET", "/api/v1/public/WebPage", "200", '"hreflang"', "x-default"] },
+  { left: "93%", duration: "19s", delay: "-8s", tokens: ['"role"', "Sales User", '"read"', "1", '"write"', "1", '"if_owner"', "0", '"snapshot"', "frozen", '"period"', "closed"] },
 ];
 
 function DataRain() {
@@ -331,8 +331,9 @@ function DataRain() {
           className="absolute top-0 !animate-[rain-fall_var(--rain-duration)_linear_var(--rain-delay)_infinite] whitespace-pre font-mono text-xs leading-10 text-primary-600"
           style={{ left: column.left, "--rain-duration": column.duration, "--rain-delay": column.delay } as CSSProperties}
         >
-          {/* Twice, so a column is taller than the hero and never shows its end mid-fall. */}
-          {[...column.tokens, ...column.tokens].join("\n")}
+          {/* Four times: a cycle moves the column by one half, and the halves are equal, so a cycle ends
+              where the next begins; a half of two runs is taller than the opaque band of the hero. */}
+          {[...column.tokens, ...column.tokens, ...column.tokens, ...column.tokens].join("\n")}
         </div>
       ))}
     </div>

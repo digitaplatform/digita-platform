@@ -2,6 +2,8 @@
 // Every marketing block renders its props, and renders nothing, without throwing, when the prop it
 // cannot do without is missing: an editor saves a block half filled in, and the page still serves.
 import { describe, it, expect, afterEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -181,8 +183,24 @@ describe("the marketing blocks", () => {
     expect(hero({ atmosphere: "data-rain" })).not.toContain("motion-reduce:hidden");
     expect(hero({ atmosphere: "data-rain" })).not.toContain("motion-reduce:animate-none");
     expect(hero({ atmosphere: "data-rain" })).toContain("!animate-[rain-fall_var(--rain-duration)_linear_var(--rain-delay)_infinite]");
-    expect(hero({ atmosphere: "data-rain" })).toContain("--rain-duration:34s;--rain-delay:0s");
+    expect(hero({ atmosphere: "data-rain" })).toContain("--rain-duration:17s;--rain-delay:0s");
     expect(hero({ visual: "none" })).not.toContain("<svg");
+  });
+
+  it("hero_brand loops each rain column without a seam, and a half covers the hero", () => {
+    // vitest runs a package's tests from its root.
+    const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+    expect(css).toMatch(/@keyframes rain-fall \{\s*from \{ transform: translateY\(-50%\); \}\s*to \{ transform: translateY\(0\); \}\s*\}/);
+    const html = render("hero_brand", { heading: "One file.", atmosphere: "data-rain" });
+    const columns = [...html.matchAll(/--rain-duration:[^"]*">([^<]*)<\/div>/g)].map((match) => (match[1] ?? "").split("\n"));
+    expect(columns).toHaveLength(5);
+    for (const lines of columns) {
+      const half = lines.length / 2;
+      // The fall moves a column by one half, so the halves must be equal for a cycle to end where the next begins.
+      expect(lines.slice(0, half)).toEqual(lines.slice(half));
+      // leading-10 is 40px a line: 20 lines keep the band the mask leaves opaque (18% to 70%) covered up to a 1142px hero.
+      expect(half).toBeGreaterThanOrEqual(20);
+    }
   });
 
   it("keeps the restyled stats and cta props working", () => {
