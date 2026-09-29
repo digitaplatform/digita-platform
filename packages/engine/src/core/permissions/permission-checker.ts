@@ -1,5 +1,5 @@
 import type { EntityDefinition, EntityPermission, StatePermissionOverride } from "@digitaplatform/shared";
-import { SYSTEM_ROLES } from "@digitaplatform/shared";
+import { SYSTEM_ROLES, canGrantActionTo } from "@digitaplatform/shared";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import { docFieldsOf, evaluateExpression } from "../expression/expression-evaluator.js";
 import { scopeValueMatches } from "./scope-filter.js";
@@ -95,7 +95,7 @@ export class PermissionChecker {
     }
 
     // Find matching permissions for user's roles at level 0
-    const matchingPerms = permissions.filter((p) => p.level === 0 && user.roles.includes(p.role));
+    const matchingPerms = permissions.filter((p) => canGrantActionTo(p, user.roles));
 
     if (matchingPerms.length === 0) {
       return { allowed: false, reason: "No matching role" };

@@ -1,5 +1,5 @@
 import type { EntityDefinition } from '@digitaplatform/shared';
-import { SYSTEM_ROLES } from '@digitaplatform/shared';
+import { SYSTEM_ROLES, canGrantActionTo } from '@digitaplatform/shared';
 import type { SessionUser } from '@/types';
 
 /**
@@ -29,7 +29,7 @@ export function isAdministrator(user: SessionUser | null | undefined): boolean {
   return !!user?.roles?.includes(SYSTEM_ROLES.ADMINISTRATOR);
 }
 
-/** Does the user hold `action` on the entity at any permission level? */
+/** Does the user hold `action` on the entity through a level-0 row, as the engine requires? */
 export function hasEntityPermission(
   entity: Pick<EntityDefinition, 'permissions'>,
   user: SessionUser | null | undefined,
@@ -37,8 +37,7 @@ export function hasEntityPermission(
 ): boolean {
   if (!user) return false;
   if (isAdministrator(user)) return true;
-  const roles = new Set(user.roles);
-  return (entity.permissions ?? []).some((p) => roles.has(p.role) && p[action] === 1);
+  return (entity.permissions ?? []).some((p) => canGrantActionTo(p, user.roles) && p[action] === 1);
 }
 
 /**

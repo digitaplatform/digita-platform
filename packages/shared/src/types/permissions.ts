@@ -40,6 +40,16 @@ export interface EntityPermission {
   };
 }
 
+/**
+ * Whether a user with `roles` holds `permission` as a row that can grant an action
+ * (create, delete, submit, …). Only a level-0 row can; a row at a higher level opens
+ * the fields of that `perm_level` and grants no action. The engine checks an action
+ * through this rule, and the app offers one through it.
+ */
+export function canGrantActionTo(permission: EntityPermission, roles: readonly string[]): boolean {
+  return permission.level === 0 && roles.includes(permission.role);
+}
+
 export const SYSTEM_ROLES = {
   ADMINISTRATOR: "Administrator",
   SYSTEM_USER: "System User",
