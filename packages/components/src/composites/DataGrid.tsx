@@ -154,6 +154,7 @@ export function DataGrid<T = Record<string, unknown>>({
   sort,
   onSort,
   selectedRowId,
+  columnOverflow = 'collapse',
   rowHeight,
   overscan = DEFAULT_OVERSCAN,
   maxBodyHeight = DEFAULT_MAX_BODY_HEIGHT,
@@ -254,7 +255,7 @@ export function DataGrid<T = Record<string, unknown>>({
     f.dataset.scrollR = sc.scrollLeft + sc.clientWidth < sc.scrollWidth - 2 ? 'true' : 'false';
     // Nordstern F14c — recompute the priority collapse from the container
     // width (deterministic: depends on clientWidth + minima only).
-    if (sc.clientWidth > 40) {
+    if (columnOverflow === 'collapse' && sc.clientWidth > 40) {
       const actionsPx = showActions ? Math.max(actionCount, 1) * 36 + 8 : 0;
       let visible = allCols.length;
       let sum = allCols.reduce((a, c) => a + colMin(c), 0);
@@ -600,9 +601,10 @@ export function DataGrid<T = Record<string, unknown>>({
                   data-index={vi.index}
                   aria-rowindex={vi.index + 2}
                   aria-selected={selectedRowId === undefined ? undefined : rowId === selectedRowId}
-                  // The row of the tab stop, which is row 0 until a cell is focused, so
-                  // the hook and the kit's own ring below never disagree.
-                  data-active={(focused?.row ?? 0) === vi.index || undefined}
+                  // The row of the focused cell; none at rest, so a list nobody has
+                  // touched shows no active row, and the hook and the kit's own ring
+                  // below never disagree.
+                  data-active={focused?.row === vi.index || undefined}
                   className={cn('grid min-h-[calc(var(--density-row)*1px)]', tableSkin.row)}
                   style={{
                     position: 'absolute',
@@ -674,7 +676,7 @@ export function DataGrid<T = Record<string, unknown>>({
                           'flex items-center px-3 text-textMain outline-none',
                           colIndex === 0 && 'col-pin-l',
                           isActive ? 'overflow-visible' : 'overflow-hidden',
-                          !isActive && isTabStop && 'ring-1 ring-inset ring-primary-400',
+                          !isActive && isTabStop && focused && 'ring-1 ring-inset ring-primary-400',
                           ALIGN[c.align ?? 'start'],
                           cellEditable && !isActive && 'cursor-text',
                           cellClassName?.({ row, column: c, rowId }),

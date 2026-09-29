@@ -152,7 +152,7 @@ export function ListRenderer({
         kind: 'link',
         sortable: primaryKey !== '_id',
         tooltip: primaryKey !== '_id' ? tc('ui.list.sortHint') : undefined,
-        headerProps: primaryKey !== '_id' ? tid.col(primaryKey) : undefined,
+        headerProps: tid.col(primaryKey),
       },
     ];
     for (const f of dataFields) {
@@ -242,6 +242,8 @@ export function ListRenderer({
           sort={sort}
           onSort={onSort}
           selectedRowId={selectedRowId}
+          // The operator chose these columns; none may vanish behind a "+n" chip.
+          columnOverflow="scroll"
           maxBodyHeight={Math.round(window.innerHeight * GRID_VIEWPORT_SHARE)}
           renderDisplay={renderCell}
         />

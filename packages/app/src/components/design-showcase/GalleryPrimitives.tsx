@@ -225,7 +225,7 @@ function ChipGroup() {
         </Chip>
       </ShowcaseState>
       <ShowcaseState state="removable">
-        <Chip selected onRemove={noop}>
+        <Chip selected onRemove={noop} removeLabel="Remove">
           Customer: ACME GmbH
         </Chip>
       </ShowcaseState>

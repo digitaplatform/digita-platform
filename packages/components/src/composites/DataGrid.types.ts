@@ -113,6 +113,11 @@ export interface DataGridProps<T = Record<string, unknown>> {
   /** The selected row carries `aria-selected="true"`; the others "false". Omit for a
    *  grid without a selection model. */
   selectedRowId?: string;
+  /** What happens when the columns' minimum widths exceed the frame: `collapse` drops
+   *  trailing columns behind a "+n" chip (the default, for an entry grid whose columns
+   *  the form owns); `scroll` keeps every column and scrolls sideways (for a list whose
+   *  columns the operator chose). */
+  columnOverflow?: 'collapse' | 'scroll';
   /** Row height in px. Sets `--density-row` on the grid, the variable each row takes
    *  as its min-height, so it overrides the design's row height for this grid; the
    *  virtualizer's estimate reads the same value. Omitted → the theme's density row. */

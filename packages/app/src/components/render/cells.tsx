@@ -101,10 +101,12 @@ export function CellValue({
   }
 }
 
-/** The kit tone of a state's `color`: the catalog names a hue (gray, green, red, amber,
- *  yellow, blue, indigo, teal, purple), the kit names a meaning. The identity hues take
- *  the categorical slot of the same hue in the platform palette; a hue the table does
- *  not know is shown neutral and reported in DEV, not painted from the raw word. */
+/** The kit tone of a state's `color`: the catalog names a hue, the kit names a meaning.
+ *  The cool hues beside blue (indigo, teal, cyan, purple) carry no meaning of their own
+ *  in the kit and share the informational tone; the categorical palette is not an
+ *  option, because every design fills it with its own hues for belonging, not status
+ *  (`Design.categorical`). A hue the table does not know is shown neutral and reported
+ *  in DEV, not painted from the raw word. */
 const STATE_TONE: Record<string, BadgeProps['color']> = {
   gray: 'neutral',
   green: 'success',
@@ -112,9 +114,10 @@ const STATE_TONE: Record<string, BadgeProps['color']> = {
   amber: 'warning',
   yellow: 'warning',
   blue: 'info',
-  indigo: 'cat-1',
-  teal: 'cat-2',
-  purple: 'cat-7',
+  indigo: 'info',
+  teal: 'info',
+  cyan: 'info',
+  purple: 'info',
 };
 
 function stateTone(color: string | undefined): BadgeProps['color'] {

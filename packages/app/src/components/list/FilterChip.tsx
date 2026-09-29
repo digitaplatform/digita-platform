@@ -8,7 +8,7 @@ import { operatorArity } from '@/lib/filter-operators';
 
 /**
  * One applied filter tuple as the kit `Chip`, selected, reading "field op value";
- * pressing the chip or its × removes the filter. PURE: shows the tuple, calls onRemove.
+ * its × button removes the filter. PURE: shows the tuple, calls onRemove.
  * The operator label is a localized ui.filter.op.* chrome key; the value is
  * formatted by arity (presence → "set"/"not set"; range → "lo – hi"; multi →
  * comma list; check → yes/no). NOT a fail-loud surface — out-of-set operators
@@ -74,7 +74,7 @@ export function FilterChip({ meta, filter, onRemove }: FilterChipProps) {
   }
 
   return (
-    <Chip selected onClick={onRemove} onRemove={onRemove} title={tc('ui.filter.removeChip', { field: fieldLabel })}>
+    <Chip selected onRemove={onRemove} removeLabel={tc('ui.filter.removeChip', { field: fieldLabel })}>
       <span className="truncate">
         <span className="font-medium">{fieldLabel}</span>
         <span className="mx-1 text-textMuted">{opLabel}</span>

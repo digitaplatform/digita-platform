@@ -124,11 +124,16 @@ describe('DataGrid row', () => {
       expect(row.style.height).toBe('');
       expect(row.className).toContain('min-h-[calc(var(--density-row)*1px)]');
     }
-    // At rest the tab stop is cell 0-0, where the kit already paints its ring.
-    expect(rows()[0]).toHaveAttribute('data-active', 'true');
+    // At rest nothing is active and the kit paints no ring, although cell 0-0 is
+    // the tab stop; a list nobody has touched looks untouched.
+    const cell = (row: number) => rows()[row]!.querySelector<HTMLElement>('[role="gridcell"]')!;
+    expect(cell(0)).toHaveAttribute('tabindex', '0');
+    expect(cell(0).className).not.toContain('ring-primary-400');
+    expect(rows()[0]).not.toHaveAttribute('data-active');
     expect(rows()[1]).not.toHaveAttribute('data-active');
-    await user.click(rows()[1]!.querySelector('[role="gridcell"]')!);
+    await user.click(cell(1));
     expect(rows()[1]).toHaveAttribute('data-active', 'true');
+    expect(cell(1).className).toContain('ring-primary-400');
     expect(rows()[0]).not.toHaveAttribute('data-active');
     // The grid has no selection model, so focus is never reported as selection.
     expect(rows()[1]).not.toHaveAttribute('aria-selected');

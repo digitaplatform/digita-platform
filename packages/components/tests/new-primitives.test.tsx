@@ -87,11 +87,10 @@ describe('Badge categorical colors', () => {
 });
 
 describe('Chip', () => {
-  it('reflects selected via aria-pressed and fires onClick + onRemove', () => {
+  it('an action chip reflects selected via aria-pressed and fires onClick', () => {
     const onClick = vi.fn();
-    const onRemove = vi.fn();
     render(
-      <Chip selected onClick={onClick} onRemove={onRemove}>
+      <Chip selected onClick={onClick}>
         Active
       </Chip>,
     );
@@ -99,8 +98,17 @@ describe('Chip', () => {
     expect(chip).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(chip);
     expect(onClick).toHaveBeenCalled();
-    fireEvent.click(screen.getByText('×'));
-    expect(onRemove).toHaveBeenCalled();
+  });
+  it('a removable chip fires onRemove from its named button only', () => {
+    const onRemove = vi.fn();
+    render(
+      <Chip selected onRemove={onRemove} removeLabel="Remove Active">
+        Active
+      </Chip>,
+    );
+    expect(screen.queryByRole('button', { name: /^Active/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Active' }));
+    expect(onRemove).toHaveBeenCalledTimes(1);
   });
   it('keeps the neutral default when no color is passed', () => {
     render(<Chip>All</Chip>);

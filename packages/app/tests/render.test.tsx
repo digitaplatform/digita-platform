@@ -104,6 +104,44 @@ describe('ListRenderer (generic meta-driven render)', () => {
     expect(container.textContent ?? '').toContain('Acme');
   });
 
+  it('without a title field the primary column shows the id and keeps its col:_id handle', () => {
+    const m = meta([{ fieldname: 'name', fieldtype: 'Data', label: 'Name' }], { title_field: undefined });
+    const { container } = render(
+      <ListRenderer entity="Widget" meta={m} rows={[{ _id: 'c1', name: 'Acme' }]} page={1} total={1} totalPages={1} onRowClick={noop} onSort={noop} onPageChange={noop} />,
+    );
+    expect(container.querySelector('[data-testid="col:_id"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="row:c1"]')?.textContent).toBe('c1');
+  });
+
+  it('keeps every chosen column when they do not fit the frame, scrolling instead of collapsing', () => {
+    // jsdom reports every clientWidth as 0; the kit grid reads the frame's width from it.
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 300 });
+    try {
+      const m = meta(['name', 'city', 'phone', 'street', 'zip'].map((fieldname) => ({ fieldname, fieldtype: 'Data', label: fieldname, in_list_view: true })));
+      const { container } = render(
+        <ListRenderer
+          entity="Widget"
+          meta={m}
+          rows={[{ _id: 'c1', name: 'Acme', city: 'Berlin', phone: '123', street: 'Ring 1', zip: '10115' }]}
+          page={1}
+          total={1}
+          totalPages={1}
+          onRowClick={noop}
+          onSort={noop}
+          onPageChange={noop}
+          rowActions={() => <button type="button">print</button>}
+        />,
+      );
+      // 5 fields + the actions column; nothing hides behind a "+n" chip.
+      expect(container.querySelectorAll('[role="columnheader"]')).toHaveLength(6);
+      expect(container.querySelector('[data-ui="grid-collapsed-chip"]')).toBeNull();
+      expect(container.querySelector('[role="gridcell"] button')?.textContent).toBe('Acme');
+      expect(container.textContent).toContain('print');
+    } finally {
+      Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
+    }
+  });
+
   it('visibleColumns override controls which data columns appear', () => {
     const m = meta([
       { fieldname: 'name', fieldtype: 'Data', label: 'Name', in_list_view: true },
@@ -136,11 +174,11 @@ describe('ListRenderer (generic meta-driven render)', () => {
         { fieldname: 'name', fieldtype: 'Data', label: 'Name', in_list_view: true },
         { fieldname: 'city', fieldtype: 'Data', label: 'City', in_list_view: true },
       ],
-      { states: [{ value: 'open', color: 'green' }] },
+      { states: [{ value: 'open', color: 'green' }, { value: 'handover', color: 'cyan' }] },
     );
     const rows = [
       { _id: 'c1', name: 'Acme', city: 'Berlin', status: 'open' },
-      { _id: 'c2', name: 'Globex', city: 'Munich', status: 'open' },
+      { _id: 'c2', name: 'Globex', city: 'Munich', status: 'handover' },
     ];
     const { container } = render(
       <ListRenderer
@@ -174,6 +212,8 @@ describe('ListRenderer (generic meta-driven render)', () => {
     const badge = gridRows[0]!.querySelector('[data-ui="badge"]')!;
     expect(badge).toHaveAttribute('data-color', 'success');
     expect(badge.textContent).toBe('open');
+    // A cool hue the kit gives no meaning of its own shares the informational tone.
+    expect(gridRows[1]!.querySelector('[data-ui="badge"]')).toHaveAttribute('data-color', 'info');
     // The phone cards: the kit list, the current record's card marked.
     const cards = container.querySelectorAll('[data-ui="list-group"] [data-ui="list-row"]');
     expect(cards).toHaveLength(2);

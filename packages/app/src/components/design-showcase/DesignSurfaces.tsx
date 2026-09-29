@@ -61,7 +61,7 @@ function ListSurface() {
           <Badge size="sm">42</Badge>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Chip selected onRemove={noop}>
+          <Chip selected onRemove={noop} removeLabel="Remove">
             Status: confirmed
           </Chip>
           <Chip onClick={noop} icon={<Plus className="h-3.5 w-3.5" />}>
