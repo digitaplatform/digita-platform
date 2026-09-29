@@ -103,6 +103,17 @@ describe("an aggregate section over an entity with a Password field", () => {
     expect(JSON.stringify(rows)).not.toContain("hunter2");
   });
 
+  it("gives a $lookup without a sub-pipeline one that drops it before the rows join, in a $facet branch too", async () => {
+    const d = deps([]);
+    const bare = { from: "Vault", localField: "vault_id", foreignField: "_id", as: "vault" };
+    await runAggregateSection(
+      section("Note", [{ $lookup: bare }, { $facet: { a: [{ $lookup: bare }] } }]),
+      rctx, user, d.deps,
+    );
+    const joined = { $lookup: { ...bare, pipeline: [{ $unset: ["secret"] }] } };
+    expect(d.aggregate.mock.calls[0]![1]).toEqual([joined, { $facet: { a: [joined] } }]);
+  });
+
   it("drops it before a $lookup sub-pipeline from that entity runs", async () => {
     const d = deps([]);
     await runAggregateSection(
