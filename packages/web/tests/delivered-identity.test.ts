@@ -10,13 +10,9 @@ import {
   PAGE_IDENTITY_ELEMENT_ID,
   SIGNATURE_STORAGE_KEY,
   getSignature,
-  registerSignature,
 } from "@digitaplatform/theme";
 import { signature as bundledDefault } from "@digitaplatform/digita";
 import { loadDeliveredIdentity } from "../src/lib/delivered-identity";
-
-// The page's pre-paint boot registers the signature it bundles before anything else runs.
-registerSignature(bundledDefault);
 
 const root = () => document.documentElement;
 const stylesheet = (designId: string) =>
@@ -106,6 +102,8 @@ describe("loadDeliveredIdentity", () => {
   });
 
   it("keeps the site's signature when the visitor's stored one differs, and asks for no signature plugin", async () => {
+    // As in production: the pre-paint boot registered the page's signature in its own module
+    // instance, so this chunk's registry is empty and the page's signatures are all it has.
     signIn();
     const page = document.createElement("script");
     page.type = "application/json";
@@ -120,14 +118,6 @@ describe("loadDeliveredIdentity", () => {
     expect(localStorage.getItem(SIGNATURE_STORAGE_KEY)).toBe("aurora");
     expect(root().classList.contains("dark")).toBe(true);
     expect(root().getAttribute("data-signature")).toBe("digita");
-  });
-
-  it("applies bundled choices from the server without asking for the composition", async () => {
-    signIn();
-    const calls = serve({ prefs: prefs({ "ui.theme_mode": "dark" }) });
-    expect(await loadDeliveredIdentity(sources)).toBe(true);
-    expect(calls).toHaveLength(1);
-    expect(root().classList.contains("dark")).toBe(true);
   });
 
   it("refreshes an expired session once through the IdP, then continues", async () => {

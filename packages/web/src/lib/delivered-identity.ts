@@ -15,6 +15,7 @@ import {
   loadDeliveredDesign,
   readPageIdentity,
   registerDeliveredSignature,
+  registerSignature,
   resolveInitialDensity,
   resolveInitialDesign,
   resolveInitialMode,
@@ -54,6 +55,10 @@ export async function loadDeliveredIdentity(sources: DeliveredIdentitySources): 
   let changed = currentChoices() !== before;
 
   const page = readPageIdentity();
+  // The pre-paint boot registered the page's signatures in its own module instance; this chunk's
+  // registry starts empty, so the signature the page delivers would count as missing and be
+  // fetched as a plugin.
+  for (const delivered of page?.signatures ?? []) registerSignature(delivered);
   const design = resolveInitialDesign();
   const signature = page?.signature ?? resolveInitialSignature();
   let designMissing = !DESIGNS[design] && !getRuntimeDesign(design);

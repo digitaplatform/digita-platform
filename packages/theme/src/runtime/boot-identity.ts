@@ -24,8 +24,9 @@ export interface BootedIdentity {
 }
 
 export interface BootIdentityOptions {
-  /** Registered before the stored or default signature id is resolved, so it lands
-   *  with its full identity (the app and the website bundle the default one). */
+  /** Registered before the signature is applied, so the page's own signature, or in the
+   *  app the stored or default one, lands with its full identity (the website bundles the
+   *  site's signature, the app the default one). */
   signatures?: readonly Signature[];
   /** The signature the page is drawn in, applied as it is. A website's signature is the
    *  site's identity (its `theme`), not a choice of the visitor: the stored id and the
@@ -42,13 +43,14 @@ export interface BootIdentityOptions {
 }
 
 /**
- * Put a page into the identity this browser chose, in the order the layers
- * compose: the design (with its variant and the tint picked for it), the mode, the
+ * Put a page into its identity: the signature it delivers, or in the app the one this
+ * browser chose, and the design, mode and density this browser chose, in the order the
+ * layers compose: the design (with its variant and the tint picked for it), the mode, the
  * signature, the tenant's branding over the signature, and the density last —
  * the signature's teardown clears it, and a stored density beats the branding's.
  * The app runs it when its theme store initialises; the website runs the same
- * function before first paint. App and website share one origin, so one choice
- * made in either shows in both.
+ * function before first paint. App and website share one origin, so a design, mode or
+ * density chosen in either shows in both.
  */
 export function bootIdentity(options: BootIdentityOptions = {}): BootedIdentity {
   const target = options.target ?? document.documentElement;
