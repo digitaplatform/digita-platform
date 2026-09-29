@@ -349,3 +349,60 @@ describe("runAggregateSection — field levels granted only on some rows", () =>
     ]);
   });
 });
+
+// A level-0 read with a `condition` cannot become the security $match, and a row cannot be
+// re-checked after a reshaping stage, so an aggregate over such an entity is refused.
+describe("runAggregateSection — rows a read condition hides", () => {
+  function conditionDeps(postRead: Record<string, unknown>): never {
+    const defs: Record<string, unknown> = {
+      Post: {
+        name: "Post",
+        database: "app",
+        permissions: [{ role: "Guest", level: 0, select: 1, read: 1, ...postRead }],
+        fields: [{ fieldname: "status", fieldtype: "Data" }],
+      },
+      Comment: {
+        name: "Comment",
+        database: "app",
+        permissions: [{ role: "Guest", level: 0, select: 1, read: 1 }],
+        fields: [{ fieldname: "post", fieldtype: "Link", target: "Post" }],
+      },
+    };
+    const reg = { has: (n: string) => n in defs, get: (n: string) => defs[n] } as never;
+    const checker = Object.assign(new PermissionChecker(reg), { check: vi.fn() });
+    return {
+      db: { aggregate: vi.fn().mockResolvedValue([{ n: 24 }]) },
+      registry: reg,
+      permissionChecker: checker,
+    } as never;
+  }
+  const guest = { _id: "g", email: "guest@example.com", roles: ["Guest"] } as never;
+  const countPosts = { key: "k", kind: "aggregate" as const, entity: "Post", pipeline: [{ $count: "n" }] };
+  const published = { condition: 'doc.status == "published"' };
+
+  it("refuses to count the rows of an entity the reader reads only under a condition", async () => {
+    await expect(runAggregateSection(countPosts, rctx, guest, conditionDeps(published))).rejects.toMatchObject({
+      name: "PermissionDeniedError",
+      entity: "Post",
+      action: "aggregate_bypasses_read_condition",
+    });
+  });
+
+  it("refuses a $lookup into an entity the reader reads only under a condition", async () => {
+    const section = {
+      key: "k",
+      kind: "aggregate" as const,
+      entity: "Comment",
+      pipeline: [{ $lookup: { from: "Post", localField: "post", foreignField: "_id", as: "posts" } }],
+    };
+    await expect(runAggregateSection(section, rctx, guest, conditionDeps(published))).rejects.toMatchObject({
+      name: "PermissionDeniedError",
+      entity: "Post",
+      action: "lookup_bypasses_read_condition",
+    });
+  });
+
+  it("counts the rows of an entity the reader reads without a condition", async () => {
+    await expect(runAggregateSection(countPosts, rctx, guest, conditionDeps({}))).resolves.toEqual([{ n: 24 }]);
+  });
+});
