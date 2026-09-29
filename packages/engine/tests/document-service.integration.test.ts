@@ -557,6 +557,86 @@ describe("Write-field-level permissions (perm_level)", () => {
   });
 });
 
+describe("Read-field-level permissions: a link title or status color shows only with its field", () => {
+  // Clerk reads level 0 only: the Link `customer` and the `status` sit at level 1.
+  const clerk: UserContext = {
+    _id: "clerk-002",
+    email: "clerk2@test.local",
+    roles: ["Clerk"],
+    full_name: "Clerk",
+  };
+  let orderId: string;
+
+  beforeAll(async () => {
+    registry.register(
+      makeEntity({
+        name: "ReadGatedCustomer",
+        naming: { strategy: "user_set" },
+        title_field: "company_name",
+        fields: [{ fieldname: "company_name", fieldtype: "Data" as const, label: "Company" }],
+      }),
+    );
+    registry.register(
+      makeEntity({
+        name: "ReadGatedOrder",
+        fields: [
+          { fieldname: "title", fieldtype: "Data" as const, label: "Title" },
+          { fieldname: "buyer", fieldtype: "Link" as const, label: "Buyer", target: "ReadGatedCustomer" },
+          { fieldname: "customer", fieldtype: "Link" as const, label: "Customer", target: "ReadGatedCustomer", perm_level: 1 },
+          { fieldname: "status", fieldtype: "Select" as const, label: "Status", options: ["Open", "Closed"], perm_level: 1 },
+        ],
+        states: [
+          { value: "Open", color: "blue" },
+          { value: "Closed", color: "gray" },
+        ],
+        permissions: [
+          { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+          { role: SYSTEM_ROLES.ADMINISTRATOR, level: 1, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+          { role: "Clerk", level: 0, select: 1, read: 1, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0 },
+        ],
+      }),
+    );
+    await db.ensureCollection("ReadGatedCustomer", "app");
+    await db.ensureCollection("ReadGatedOrder", "app");
+    await docService.insert("ReadGatedCustomer", { _id: "C-ACME", company_name: "Acme GmbH" }, adminUser);
+    await docService.insert("ReadGatedCustomer", { _id: "C-BETA", company_name: "Beta AG" }, adminUser);
+    const order = await docService.insert(
+      "ReadGatedOrder",
+      { title: "O", buyer: "C-BETA", customer: "C-ACME", status: "Open" },
+      adminUser,
+    );
+    orderId = order._id;
+  });
+
+  it("getDoc names the title and the color of readable fields only", async () => {
+    const masked = (await docService.getDoc("ReadGatedOrder", orderId, clerk)).toJSON() as Record<string, unknown>;
+    expect(masked).not.toHaveProperty("customer");
+    expect(masked).not.toHaveProperty("status");
+    expect(masked["_link_titles"]).toEqual({ buyer: "Beta AG" });
+    expect(masked["_status_indicator"]).toBeUndefined();
+
+    const whole = (await docService.getDoc("ReadGatedOrder", orderId, adminUser)).toJSON() as Record<string, unknown>;
+    expect(whole["_link_titles"]).toEqual({ buyer: "Beta AG", customer: "Acme GmbH" });
+    expect(whole["_status_indicator"]).toEqual({ color: "blue" });
+  });
+
+  it("every list path names the titles of readable Links only", async () => {
+    for (const query of [{}, { fields: ["_id", "buyer", "customer"] }]) {
+      for (const options of [{}, { everyRowNeedsRead: true }]) {
+        const listed = await docService.getList("ReadGatedOrder", query, clerk, undefined, undefined, options);
+        const row = listed.data.find((r) => r["_id"] === orderId);
+        expect(row).not.toHaveProperty("customer");
+        expect(row?.["_link_titles"]).toEqual({ buyer: "Beta AG" });
+      }
+    }
+    const whole = await docService.getList("ReadGatedOrder", {}, adminUser);
+    expect(whole.data.find((r) => r["_id"] === orderId)?.["_link_titles"]).toEqual({
+      buyer: "Beta AG",
+      customer: "Acme GmbH",
+    });
+  });
+});
+
 describe("Available actions (ActionRunner)", () => {
   beforeAll(async () => {
     registry.register(

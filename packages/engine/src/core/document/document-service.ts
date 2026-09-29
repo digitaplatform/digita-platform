@@ -331,8 +331,8 @@ export class DocumentService {
   /**
    * Batched data-translation overlay for a list (one query for all rows). As in
    * applyDataTranslations, a translation replaces only a value the row carries:
-   * a row is already projected, and gated rows already masked, so a field it
-   * lacks was not asked for or may not be read, and the overlay never adds one.
+   * a row is already projected and masked, so a field it lacks was not asked
+   * for or may not be read, and the overlay never adds one.
    */
   private async applyListDataTranslations(
     entity: EntityDefinition,
@@ -388,6 +388,10 @@ export class DocumentService {
       throw new NotFoundError(doctype, name);
     }
 
+    // Filter fields by read permission before anything is derived from them: a
+    // link title or a status color resolved from a masked field would show it.
+    doc._data = this.permissionChecker.filterFieldsForRead(user, doctype, doc._data);
+
     // Apply per-document data translations for the request locale (translatable
     // fields only; falls back to the stored value). No-op when the entity has no
     // translatable fields or no locale was resolved.
@@ -400,10 +404,6 @@ export class DocumentService {
     // Resolve status indicator
     const statusIndicator = resolveStatusIndicator(entity, doc._data);
     if (statusIndicator) doc._status_indicator = statusIndicator;
-
-    // Filter fields by read permission
-    const filteredData = this.permissionChecker.filterFieldsForRead(user, doctype, doc._data);
-    doc._data = filteredData;
 
     // Log view
     if (entity.track_views) {
@@ -535,8 +535,12 @@ export class DocumentService {
       // no condition-hidden row appears in `data`.
       effectiveTotal = Math.max(0, total - (docs.length - visible.length));
       docs = visible;
+    } else {
+      docs = docs.map((doc) => this.permissionChecker.filterFieldsForRead(user, doctype, doc));
     }
 
+    // Every row is masked now: the translations and link titles below read only
+    // what the user may read, or a title would show a masked Link.
     // Apply per-document data translations (batched) for the request locale.
     await this.applyListDataTranslations(entity, docs, locale);
 
@@ -549,16 +553,11 @@ export class DocumentService {
       }
     }
 
-    // Filter fields by read permission; rows masked as stored above are done.
-    const filteredDocs = masksStoredRows
-      ? docs
-      : docs.map((doc) => this.permissionChecker.filterFieldsForRead(user, doctype, doc));
-
     const page = query.page ?? Math.floor(offset / limit) + 1;
     const page_size = limit;
 
     return {
-      data: filteredDocs,
+      data: docs,
       total: effectiveTotal,
       page,
       page_size,
