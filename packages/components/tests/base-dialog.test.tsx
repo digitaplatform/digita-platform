@@ -14,7 +14,10 @@ describe('BaseDialog hooks', () => {
     for (const hook of ['dialog-overlay', 'dialog', 'dialog-header', 'dialog-body', 'dialog-footer']) {
       expect(document.querySelectorAll(`[data-ui="${hook}"]`), hook).toHaveLength(1);
     }
-    expect(document.querySelector('[data-ui="dialog-body"]')).toHaveTextContent('Submitting freezes');
+    const body = document.querySelector('[data-ui="dialog-body"]');
+    expect(body).toHaveTextContent('Submitting freezes');
+    // The body carries the base type, so bare copy is never larger than the title a design sizes.
+    expect(body).toHaveClass('text-sm', 'text-textMain');
     expect(document.querySelector('[data-ui="dialog-footer"]')).toContainElement(screen.getByText('Submit'));
   });
 });

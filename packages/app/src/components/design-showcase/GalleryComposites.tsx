@@ -232,7 +232,7 @@ function OverlayGroup() {
           </ShowcaseOpener>
         </ShowcaseState>
         <BaseDialog open={open === 'dialog'} onClose={close} title="Submit SO-0042?" footer={footer}>
-          <p className="text-sm text-textMain">
+          <p>
             Submitting freezes the customer and the prices on this order and books it into the open period.
           </p>
         </BaseDialog>

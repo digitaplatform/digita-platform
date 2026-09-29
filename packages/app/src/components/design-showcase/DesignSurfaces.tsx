@@ -172,7 +172,7 @@ function DialogSurface() {
           </>
         }
       >
-        <p className="text-sm text-textMain">
+        <p>
           Submitting freezes the customer and the prices on this order and books it into the open period.
         </p>
       </BaseDialog>

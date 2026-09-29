@@ -403,7 +403,7 @@ export function BaseDialog({
             )}
           </div>
         )}
-        <div ref={bodyRef} data-ui="dialog-body" className="min-h-0 flex-1 overflow-auto px-5 py-4">
+        <div ref={bodyRef} data-ui="dialog-body" className="min-h-0 flex-1 overflow-auto px-5 py-4 text-sm text-textMain">
           {children}
         </div>
         {footer && <div data-ui="dialog-footer" className="border-t border-border px-5 py-3">{footer}</div>}
