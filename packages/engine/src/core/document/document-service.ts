@@ -506,12 +506,13 @@ export class DocumentService {
     // rows only. The check reads whatever fields the condition names, so it runs on
     // the stored row and the caller's projection comes after it: on a projected row
     // a missing field denies every row, or grants one where the condition negates.
-    // Field masking weighs conditions at every level the same way, so whenever one
-    // applies, the rows are masked as stored too, and projected only afterwards.
+    // Field masking weighs a grant's owner, condition and scope at every level on the
+    // row the same way, so whenever one applies, the rows are masked as stored too,
+    // and projected only afterwards.
     const gatesRows =
       options.everyRowNeedsRead === true ||
       this.permissionChecker.hasConditionalRowRead(user, doctype);
-    const masksStoredRows = gatesRows || this.permissionChecker.hasConditionalFieldRead(user, doctype);
+    const masksStoredRows = gatesRows || this.permissionChecker.hasRowDependentRead(user, doctype);
 
     const dbTarget = entity.database;
     let docs: Record<string, unknown>[];

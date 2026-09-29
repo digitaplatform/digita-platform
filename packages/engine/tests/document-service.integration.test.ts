@@ -1161,3 +1161,33 @@ describe("update — workflow side_effects.set persist to the DB (E3 latent-bug 
     expect(raw?.["activated_flag"]).toBe("YES");
   });
 });
+
+describe("An owner-only reader's list masks each row as stored, then projects it", () => {
+  const buyer: UserContext = { _id: "buyer-001", email: "buyer@test.local", roles: ["Buyer"], full_name: "Buyer" };
+
+  beforeAll(async () => {
+    registry.register(
+      makeEntity({
+        name: "OwnedOrder",
+        fields: [
+          { fieldname: "title", fieldtype: "Data" as const, label: "Title" },
+          { fieldname: "note", fieldtype: "Data" as const, label: "Note" },
+        ],
+        permissions: [
+          { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+          { role: "Buyer", level: 0, select: 1, read: 1, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0, if_owner: 1 },
+        ],
+      } as Partial<EntityDefinition>),
+    );
+    await db.ensureCollection("OwnedOrder", "app");
+    const row = { doctype: "OwnedOrder", docstatus: 0, modified_by: "system", creation: new Date(), modified: new Date() };
+    await db.insertOne("OwnedOrder", { ...row, _id: "OO-mine", owner: buyer.email, title: "Mine", note: "n-mine" }, "app");
+    await db.insertOne("OwnedOrder", { ...row, _id: "OO-theirs", owner: "other@test.local", title: "Theirs", note: "n-theirs" }, "app");
+  });
+
+  it("answers the projected fields of the reader's own rows, and no other row", async () => {
+    const listed = await docService.getList("OwnedOrder", { fields: ["_id", "title"] }, buyer);
+    expect(listed.data).toEqual([{ _id: "OO-mine", title: "Mine" }]);
+    expect(listed.total).toBe(1);
+  });
+});

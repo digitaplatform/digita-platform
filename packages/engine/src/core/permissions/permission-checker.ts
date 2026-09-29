@@ -207,27 +207,27 @@ export class PermissionChecker {
    * per-row cost) for Administrators and entities without such a grant.
    */
   hasConditionalRowRead(user: UserContext, entityName: string): boolean {
-    return this.hasConditionalRead(user, entityName, (p) => p.level === 0);
-  }
-
-  /**
-   * Does the user hold a read permission on this entity, at any level, that carries
-   * a `condition`, so which fields of a row may be read depends on its stored values?
-   * A list then masks each row as stored, before it projects.
-   */
-  hasConditionalFieldRead(user: UserContext, entityName: string): boolean {
-    return this.hasConditionalRead(user, entityName, () => true);
-  }
-
-  private hasConditionalRead(
-    user: UserContext,
-    entityName: string,
-    atLevel: (p: EntityDefinition["permissions"][number]) => boolean,
-  ): boolean {
     if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return false;
     const entity = this.registry.get(entityName);
     return entity.permissions.some(
-      (p) => atLevel(p) && !!p.read && !!p.condition && user.roles.includes(p.role),
+      (p) => p.level === 0 && !!p.read && !!p.condition && user.roles.includes(p.role),
+    );
+  }
+
+  /**
+   * Does any read grant the user holds on this entity, at any level, depend on the
+   * stored row: an owner, a condition or an enforced scope? Which fields of a row
+   * the user may read is then decided on the whole stored row, since a projection
+   * may lack the fields such a grant reads; a list or a search projects afterwards.
+   */
+  hasRowDependentRead(user: UserContext, entityName: string): boolean {
+    if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return false;
+    const entity = this.registry.get(entityName);
+    return entity.permissions.some(
+      (p) =>
+        !!p.read &&
+        user.roles.includes(p.role) &&
+        (!!p.if_owner || !!p.condition || (!!p.scope && env.PERMISSION_SCOPE_ENABLED)),
     );
   }
 

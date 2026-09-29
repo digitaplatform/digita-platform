@@ -52,11 +52,30 @@ const ticket: EntityDefinition = {
   ],
 } as unknown as EntityDefinition;
 
+// Sales reads an order only when it owns it; the owner check reads `owner`, which no
+// search asks for either.
+const order: EntityDefinition = {
+  name: "order",
+  module: "test",
+  database: "app",
+  naming: { strategy: "user_set" },
+  title_field: "title",
+  search_fields: ["title"],
+  fields: [
+    { fieldname: "title", fieldtype: "Data", label: "Title", idx: 1 },
+    { fieldname: "note", fieldtype: "Data", label: "Note", idx: 2 },
+    { fieldname: "rows", fieldtype: "Table", label: "Rows", idx: 3, child_fields: [{ fieldname: "label", fieldtype: "Data", label: "Label" }] },
+  ],
+  permissions: [{ role: "Sales", level: 0, select: 1, read: 1, if_owner: 1 }],
+} as unknown as EntityDefinition;
+
+const entities: Record<string, EntityDefinition> = { ticket, order };
 const registry = {
-  has: (n: string) => n === "ticket",
+  has: (n: string) => n in entities,
   get: (n: string) => {
-    if (n !== "ticket") throw new Error(`unknown entity ${n}`);
-    return ticket;
+    const e = entities[n];
+    if (!e) throw new Error(`unknown entity ${n}`);
+    return e;
   },
   getAll: () => [ticket],
 } as never;
@@ -128,5 +147,34 @@ describe("Global search answers only rows the user may read", () => {
     expect(orFields(db)).toContain('"title"');
     expect(orFields(db)).not.toContain('"note"');
     expect((await services().global.search("ticket", admin)).map((r) => r._id)).toEqual(["T-1", "T-2", "T-3"]);
+  });
+});
+
+describe("A search decides an owner-only reader's fields on the stored row", () => {
+  const owned = [{ _id: "O-1", owner: "sales@test", title: "Own order", note: "n-own", rows: [{ _row_id: "a", label: "A" }] }];
+  // Projects as MongoDB does, so a search that asks for fields gets only those.
+  const ownerServices = () => {
+    const db = {
+      find: vi.fn(async (_name: string, options: { fields?: string[] }) =>
+        options.fields
+          ? owned.map((row) => Object.fromEntries(Object.entries(row).filter(([key]) => options.fields!.includes(key))))
+          : owned,
+      ),
+    };
+    return { db, link: new LinkSearchService(registry, db as never, new PermissionChecker(registry)) };
+  };
+
+  it("expands the sub-rows of the reader's own document", async () => {
+    const { link, db } = ownerServices();
+    expect(await link.search("order", "A", sales, undefined, 20, "rows")).toEqual([
+      { _id: "O-1::a", display: "A", subtitle: "Own order" },
+    ]);
+    expect((db.find.mock.calls[0]![1] as { fields?: string[] }).fields).toBeUndefined();
+  });
+
+  it("answers the picker columns of the reader's own document", async () => {
+    const { link } = ownerServices();
+    const out = await link.search("order", "Own", sales, undefined, 20, undefined, ["note"]);
+    expect(out).toEqual([{ _id: "O-1", display: "Own order", fields: { note: "n-own" } }]);
   });
 });

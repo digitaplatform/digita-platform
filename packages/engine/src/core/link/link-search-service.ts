@@ -129,7 +129,8 @@ export class LinkSearchService {
    * What a search of `user` on `entityName` may name and must re-check, as getList
    * does: `filters` keys only from the fields the user may filter on (else
    * FilterFieldNotAllowedError), rows a read condition hides dropped per stored row,
-   * and fields masked on the stored row whenever a condition decides them.
+   * and fields masked on the stored row whenever a grant's owner, condition or scope
+   * decides them.
    */
   private readScope(
     user: UserContext,
@@ -139,7 +140,7 @@ export class LinkSearchService {
     const allowed = this.permissionChecker.getFilterAllowlist(user, entityName);
     for (const key of Object.keys(filters ?? {})) assertFieldAllowed(key, allowed);
     const gatesRows = this.permissionChecker.hasConditionalRowRead(user, entityName);
-    const masksStoredRows = gatesRows || this.permissionChecker.hasConditionalFieldRead(user, entityName);
+    const masksStoredRows = gatesRows || this.permissionChecker.hasRowDependentRead(user, entityName);
     return { allowed, gatesRows, masksStoredRows };
   }
 
