@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
-import { ChevronDown, Info, Snowflake, TriangleAlert } from 'lucide-react';
-import { Button, Card, Tooltip } from '@digitaplatform/components';
+import { Info, Snowflake, TriangleAlert } from 'lucide-react';
+import { Badge, Button, FormRow, FormSection, TabPanel, Tabs, Tooltip, cn } from '@digitaplatform/components';
 import type { FieldDefinition, FormLayoutConfig } from '@digitaplatform/shared';
 import { useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
@@ -30,6 +30,9 @@ interface FormRendererProps {
   errors: Record<string, string>;
   onFieldChange: (fieldname: string, value: unknown) => void;
   onButtonAction?: (fieldname: string) => void;
+  /** Classes for the tab strip: the page that draws the form owns where the strip pins
+   *  (`sticky` and its offset), because only the page knows what stands above the form. */
+  tabsClassName?: string;
 }
 
 const DEFAULT_STATE: FieldControlState = {
@@ -57,6 +60,7 @@ export function FormRenderer({
   errors,
   onFieldChange,
   onButtonAction,
+  tabsClassName,
 }: FormRendererProps) {
   const formId = useId();
   const tField = useI18nStore((s) => s.tField);
@@ -106,96 +110,65 @@ export function FormRenderer({
 
   const current = tabs.find((t) => t.key === activeTab) ?? tabs[0]!;
 
+  const sections = current.sections.map((section) => (
+    <SectionBlock
+      key={section.key}
+      entity={entity}
+      section={section}
+      collapsed={!!(collapsed[section.key] ?? section.defaultCollapsed)}
+      onToggle={() =>
+        setCollapsed((c) => ({
+          ...c,
+          [section.key]: !(c[section.key] ?? section.defaultCollapsed),
+        }))
+      }
+      columns={form?.columns}
+      render={(field, cellClassName) => (
+        <FieldSlot
+          key={field.fieldname}
+          entity={entity}
+          field={field}
+          value={doc[field.fieldname]}
+          doc={doc}
+          state={fieldState[field.fieldname]}
+          error={errors[field.fieldname]}
+          formId={formId}
+          tField={tField}
+          cellClassName={cellClassName}
+          onChange={(v) => onFieldChange(field.fieldname, v)}
+          onButtonAction={onButtonAction}
+        />
+      )}
+    />
+  ));
+
+  if (tabs.length === 1) return <div className="space-y-4">{sections}</div>;
+
   return (
     <div className="space-y-4">
-      {tabs.length > 1 && (
-        <div
-          data-ui="tabs"
-          className="sticky top-14 z-10 -mx-1 flex gap-1 overflow-x-auto border-b border-border bg-surface px-1 [scrollbar-width:none]"
-          role="tablist"
-          aria-orientation="horizontal"
-        >
-          {tabs.map((t) => {
-            const errCount = errorsByTab[t.key] ?? 0;
-            const isActive = t.key === current.key;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                data-ui="tab"
-                role="tab"
-                id={`${formId}-tab-${t.key}`}
-                aria-selected={isActive}
-                aria-controls={`${formId}-panel-${t.key}`}
-                onClick={() => setActiveTab(t.key)}
-                className={
-                  'inline-flex shrink-0 items-center border-b-2 px-3 py-2 text-sm font-medium transition duration-base ease-smooth ' +
-                  (isActive
-                    ? 'border-primary-600 text-primary-600'
-                    : errCount > 0
-                      ? 'border-transparent text-error hover:text-error'
-                      : 'border-transparent text-textMuted hover:text-textMain')
-                }
-              >
-                {t.key === '_tab_general'
-                  ? tc('ui.form.tabGeneral')
-                  : tSection(entity, t.key, t.label || t.key)}
-                {errCount > 0 && (
-                  <span
-                    className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-error px-1 text-[10px] font-semibold leading-none text-white"
-                    aria-label={`${errCount} error(s)`}
-                  >
-                    {errCount}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      <div
-        className="space-y-4"
-        {...(tabs.length > 1
-          ? {
-              role: 'tabpanel',
-              id: `${formId}-panel-${current.key}`,
-              'aria-labelledby': `${formId}-tab-${current.key}`,
-            }
-          : {})}
-      >
-        {current.sections.map((section) => (
-        <SectionBlock
-          key={section.key}
-          entity={entity}
-          section={section}
-          collapsed={!!(collapsed[section.key] ?? section.defaultCollapsed)}
-          onToggle={() =>
-            setCollapsed((c) => ({
-              ...c,
-              [section.key]: !(c[section.key] ?? section.defaultCollapsed),
-            }))
-          }
-          columns={form?.columns}
-          render={(field, cellClassName) => (
-            <FieldSlot
-              key={field.fieldname}
-              entity={entity}
-              field={field}
-              value={doc[field.fieldname]}
-              doc={doc}
-              state={fieldState[field.fieldname]}
-              error={errors[field.fieldname]}
-              formId={formId}
-              tField={tField}
-              cellClassName={cellClassName}
-              onChange={(v) => onFieldChange(field.fieldname, v)}
-              onButtonAction={onButtonAction}
-            />
-          )}
-        />
-        ))}
-      </div>
+      <Tabs
+        id={`${formId}-tabs`}
+        // -mx-1/px-1 lets the focus ring of the first tab show.
+        className={cn('-mx-1 px-1', tabsClassName)}
+        value={current.key}
+        onChange={setActiveTab}
+        items={tabs.map((t) => {
+          const errCount = errorsByTab[t.key] ?? 0;
+          return {
+            key: t.key,
+            label: t.key === '_tab_general' ? tc('ui.form.tabGeneral') : tSection(entity, t.key, t.label || t.key),
+            badge:
+              errCount > 0 ? (
+                <Badge variant="pill" size="sm" color="error" aria-label={`${errCount} error(s)`}>
+                  {errCount}
+                </Badge>
+              ) : undefined,
+          };
+        })}
+      />
+      <TabPanel tabsId={`${formId}-tabs`} tabKey={current.key} className="space-y-4">
+        {sections}
+      </TabPanel>
     </div>
   );
 }
@@ -216,57 +189,29 @@ function SectionBlock({
   render: (field: FieldDefinition, cellClassName?: string) => React.ReactNode;
 }) {
   const tSection = useI18nStore((s) => s.tSection);
-  const label = section.label ? tSection(entity, section.key, section.label) : '';
+  const label = section.label ? tSection(entity, section.key, section.label) : undefined;
   const cols = Math.min(Math.max(section.columns.length, 1), 3);
 
-  // Each section sits on a flat Card (bg-surface, rounded-card, density padding) like
-  // the account cards — flat means no border/shadow, so it stays weightless.
   return (
-    <Card>
-      <section className="space-y-5">
-      {label && (
-        <header className="border-b border-border pb-3">
-          {section.collapsible ? (
-            <button
-              type="button"
-              onClick={onToggle}
-              aria-expanded={!collapsed}
-              className="flex w-full items-center gap-2 text-sm font-semibold text-textMain transition-colors duration-base ease-smooth hover:text-textMain"
-            >
-              <span>{label}</span>
-              <ChevronDown
-                className={
-                  'h-3.5 w-3.5 shrink-0 transition-transform duration-base ease-smooth ' +
-                  (collapsed ? '-rotate-90' : '')
-                }
-                aria-hidden="true"
-              />
-            </button>
-          ) : (
-            <h3 className="text-sm font-semibold text-textMain">{label}</h3>
-          )}
-        </header>
+    <FormSection title={label} collapsible={section.collapsible} collapsed={collapsed} onToggle={onToggle}>
+      {section.columns.length <= 1 ? (
+        // Implicit single column → dense 12-track grid by intrinsic span (density-
+        // capped via entity.form.columns). EVERY field renders — organization comes
+        // from computeLayout (tabs/sections), never from hiding fields behind a bucket.
+        <div className="grid grid-cols-12 gap-x-8 gap-y-6">
+          {(section.columns[0]?.fields ?? []).map((f) => render(f, spanClass(f, columns)))}
+        </div>
+      ) : (
+        // Authored multi-column layout — rendered exactly as before.
+        <div className={`grid grid-cols-1 gap-x-8 gap-y-6 ${COL_LG[cols]}`}>
+          {section.columns.map((col, i) => (
+            <div key={i} className="space-y-6">
+              {col.fields.map((f) => render(f))}
+            </div>
+          ))}
+        </div>
       )}
-      {!collapsed &&
-        (section.columns.length <= 1 ? (
-          // Implicit single column → dense 12-track grid by intrinsic span (density-
-          // capped via entity.form.columns). EVERY field renders — organization comes
-          // from computeLayout (tabs/sections), never from hiding fields behind a bucket.
-          <div className="grid grid-cols-12 gap-x-8 gap-y-6">
-            {(section.columns[0]?.fields ?? []).map((f) => render(f, spanClass(f, columns)))}
-          </div>
-        ) : (
-          // Authored multi-column layout — rendered exactly as before.
-          <div className={`grid grid-cols-1 gap-x-8 gap-y-6 ${COL_LG[cols]}`}>
-            {section.columns.map((col, i) => (
-              <div key={i} className="space-y-6">
-                {col.fields.map((f) => render(f))}
-              </div>
-            ))}
-          </div>
-        ))}
-      </section>
-    </Card>
+    </FormSection>
   );
 }
 
@@ -337,31 +282,23 @@ function FieldSlot({
   const labelText = tField(entity, field.fieldname, field.label);
 
   return (
-    <div className={cell('space-y-1')} {...tid.field(entity, field.fieldname, field.fieldtype)}>
-      {/* Label row: the <label> itself (min-w-0 so its text still truncates) plus the
-          A2 description affordance as a SIBLING — an interactive button must not nest
-          inside a <label> (a label-click would forward to / toggle the control). */}
-      <div className="flex items-center gap-0.5">
-        <label
-          id={labelId}
-          htmlFor={controlId}
-          className="flex min-w-0 items-center gap-0.5 text-sm font-medium text-textMain"
-          title={labelText}
-        >
-          {/* Truncate only the text so a long label stays one line, while the required
-              star + frozen snowflake stay visible; full text via the title tooltip. */}
-          <span className="truncate">{labelText}</span>
-          {s.required && <span className="text-error">*</span>}
-          {s.isFrozen && (
-            <Snowflake className="ml-0.5 inline h-3 w-3 shrink-0 text-textMuted" aria-hidden="true" />
-          )}
-        </label>
-        {/* A2 · field.description behind an Info glyph instead of always-visible dev
-            prose under the control. Icon-only control ⇒ mandatory aria-label (= the
-            description, so accessible name == visible tooltip text, WCAG 2.5.3) + the
-            kit Tooltip for the visual hover/focus reveal. The full text also lives in
-            the sr-only <p> below (aria-describedby on the control). */}
-        {field.description && (
+    <FormRow
+      className={cellClassName}
+      {...tid.field(entity, field.fieldname, field.fieldtype)}
+      controlId={controlId}
+      labelId={labelId}
+      label={labelText}
+      required={s.required}
+      labelIcon={
+        s.isFrozen ? <Snowflake className="ml-0.5 inline h-3 w-3 shrink-0 text-textMuted" aria-hidden="true" /> : undefined
+      }
+      // A2 · field.description behind an Info glyph instead of always-visible dev
+      // prose under the control. Icon-only control ⇒ mandatory aria-label (= the
+      // description, so accessible name == visible tooltip text, WCAG 2.5.3) + the
+      // kit Tooltip for the visual hover/focus reveal. The full text also lives in
+      // the sr-only <p> below (aria-describedby on the control).
+      labelAction={
+        field.description ? (
           <Tooltip label={field.description} multiline className="shrink-0">
             <button
               type="button"
@@ -371,8 +308,11 @@ function FieldSlot({
               <Info className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           </Tooltip>
-        )}
-      </div>
+        ) : undefined
+      }
+      error={error}
+      errorId={errorId}
+    >
       <ControlRenderer
         field={field}
         value={value}
@@ -401,11 +341,6 @@ function FieldSlot({
           {s.warning}
         </p>
       )}
-      {error && (
-        <p id={errorId} role="alert" className="text-sm text-error">
-          {error}
-        </p>
-      )}
-    </div>
+    </FormRow>
   );
 }

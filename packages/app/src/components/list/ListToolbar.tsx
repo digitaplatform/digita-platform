@@ -147,8 +147,10 @@ export function ListToolbar(props: ListToolbarProps) {
     </>
   );
 
+  // No wrapper of its own: the header sticks inside its containing block, which must be the
+  // element that spans the page (the list page's root), not a box around the toolbar.
   return (
-    <div className="space-y-3">
+    <>
       {/* Pulled out by the header's own inset so its title lines up with the list. */}
       <PageHeader
         className="-mx-4"
@@ -349,7 +351,7 @@ export function ListToolbar(props: ListToolbarProps) {
           />
         </SheetOrPopover>
       )}
-    </div>
+    </>
   );
 }
 

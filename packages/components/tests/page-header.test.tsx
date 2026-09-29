@@ -92,6 +92,50 @@ describe('PageHeader', () => {
     expect(header).toHaveAttribute('data-collapsed', 'false');
   });
 
+  it('collapses the moment it sticks, not at an offset measured from its own height', () => {
+    // jsdom lays nothing out, so the harness answers the geometry: 40px of padding above a
+    // 120px header with a 48px bar, in a scroller with no top bar. The header sticks once
+    // 40 + 72 = 112px have scrolled; at 100px its lower 12px still show below the bar.
+    const getBoundingClientRect = Element.prototype.getBoundingClientRect;
+    const rect = (top: number, height: number) => ({ top, bottom: top + height, height }) as DOMRect;
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      const scrolled = screen.queryByTestId('scroller')?.scrollTop ?? 0;
+      const headerTop = Math.max(40 - scrolled, -72);
+      if (this.getAttribute('data-ui') === 'page-header') return rect(headerTop, 120);
+      if (this.getAttribute('data-ui') === 'page-header-bar') return rect(Math.max(headerTop, 0), 48);
+      return getBoundingClientRect.call(this);
+    };
+    try {
+      render(
+        <div data-testid="scroller" style={{ overflowY: 'auto', height: '200px' }}>
+          <div style={{ height: '40px' }} />
+          <PageHeader title="Invoices" search={<input type="search" aria-label="Search invoices" />} />
+        </div>,
+      );
+      const scroller = screen.getByTestId('scroller');
+      const header = screen.getByRole('banner');
+      scroller.scrollTop = 100;
+      fireEvent.scroll(scroller);
+      expect(header).toHaveAttribute('data-collapsed', 'false');
+      scroller.scrollTop = 112;
+      fireEvent.scroll(scroller);
+      expect(header).toHaveAttribute('data-collapsed', 'true');
+      // The faded search still takes focus; taking it scrolls the page to the top, where the
+      // header stands whole, and the header opens again with that scroll.
+      screen.getByRole('searchbox').focus();
+      expect(scroller.scrollTop).toBe(0);
+      fireEvent.scroll(scroller);
+      expect(header).toHaveAttribute('data-collapsed', 'false');
+    } finally {
+      Element.prototype.getBoundingClientRect = getBoundingClientRect;
+    }
+  });
+
+  it('wraps a title without a break opportunity instead of overflowing the page', () => {
+    render(<PageHeader title="billing.contact.acme.international@examplecustomerdomain.com" />);
+    expect(screen.getByRole('heading').className).toContain('[overflow-wrap:anywhere]');
+  });
+
   it('honors the controlled collapsed prop over scroll tracking', () => {
     const { rerender } = render(<PageHeader title="Invoices" collapsed />);
     expect(screen.getByRole('banner')).toHaveAttribute('data-collapsed', 'true');

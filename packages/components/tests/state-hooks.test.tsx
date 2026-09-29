@@ -30,6 +30,13 @@ describe('input-frame and textfield mirror the state of the control they frame',
     expect(frame()).toHaveAttribute('data-readonly', 'true');
   });
 
+  it('a framed input without a label still draws the frame with data-readonly', () => {
+    const { container } = render(<Input framed readOnly aria-label="Grand total" value="1" />);
+    const frame = container.querySelector('[data-ui="input-frame"]');
+    expect(frame).toHaveAttribute('data-readonly', 'true');
+    expect(frame).toContainElement(screen.getByLabelText('Grand total'));
+  });
+
   it('textfield carries aria-invalid, data-invalid, data-disabled and data-readonly', () => {
     const { container, rerender } = render(<TextField label="Name" error />);
     const field = () => container.querySelector('[data-ui="textfield"]')!;

@@ -136,6 +136,10 @@
    the page or feed back into the scroll position. ── */
 [data-ui="page-header"][data-collapsed="true"] [data-ui="page-header-title"] { opacity: 0; }
 [data-ui="page-header"][data-collapsed="true"] [data-ui="page-header-bar-title"] { opacity: 1; }
+/* The search slot ends up under the stuck bar, and a translucent bar would show it.
+   Opacity only: the field keeps its place in the tab order, and the kit scrolls
+   the page to the top when it takes focus there. */
+[data-ui="page-header"][data-collapsed="true"] [data-ui="page-header-search"] { opacity: 0; }
 
 /* ── Invalid state — one rule for every design, so no design has to repeat it
    over its resting rule. A design's resting border rule sits at

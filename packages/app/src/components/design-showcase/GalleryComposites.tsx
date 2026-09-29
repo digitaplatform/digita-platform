@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import {
+  Badge,
   BaseDialog,
   BrandMark,
   Button,
@@ -33,6 +34,8 @@ import {
   EmptyState,
   ErrorBlock,
   ErrorBoundary,
+  FormRow,
+  FormSection,
   FormSkeleton,
   IconButton,
   Input,
@@ -53,6 +56,8 @@ import {
   SignatureBackdrop,
   SplitPane,
   TabBar,
+  TabPanel,
+  Tabs,
   TableSkeleton,
   ToastHost,
   TopBar,
@@ -596,6 +601,50 @@ function NavigationGroup() {
   );
 }
 
+function RecordFormGroup() {
+  const [tab, setTab] = useState('lines');
+  const [collapsed, setCollapsed] = useState(false);
+  return (
+    <ShowcaseGroup title="Record form" exports={['Tabs', 'TabPanel', 'FormSection', 'FormRow']}>
+      <ShowcaseState state="tabs with an error count · collapsible section · required, invalid and read-only rows">
+        <div className="w-full max-w-xl space-y-4">
+          <Tabs
+            id="showcase-record"
+            value={tab}
+            onChange={setTab}
+            items={[
+              { key: 'lines', label: 'Lines' },
+              { key: 'payments', label: 'Payments', badge: <Badge variant="pill" size="sm" color="error">1</Badge> },
+              { key: 'history', label: 'History' },
+            ]}
+          />
+          <TabPanel tabsId="showcase-record" tabKey={tab} className="space-y-4">
+            <FormSection title="Order" collapsible collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)}>
+              <div className="grid gap-6 sm:grid-cols-2">
+                <FormRow controlId="showcase-record-customer" label="Customer" required>
+                  <Input id="showcase-record-customer" defaultValue="ACME GmbH" />
+                </FormRow>
+                <FormRow
+                  controlId="showcase-record-po"
+                  label="Customer PO"
+                  required
+                  error="A confirmed order needs the customer's PO number."
+                  errorId="showcase-record-po-error"
+                >
+                  <Input id="showcase-record-po" aria-invalid aria-describedby="showcase-record-po-error" placeholder="Required" />
+                </FormRow>
+                <FormRow controlId="showcase-record-total" label="Grand total">
+                  <Input id="showcase-record-total" framed readOnly value="€1,886.15" />
+                </FormRow>
+              </div>
+            </FormSection>
+          </TabPanel>
+        </div>
+      </ShowcaseState>
+    </ShowcaseGroup>
+  );
+}
+
 function LayoutGroup() {
   const back = { label: 'Orders', onClick: noop };
   const actions = <IconButton label="More actions" icon={<Settings className="h-4 w-4" />} />;
@@ -611,6 +660,16 @@ function LayoutGroup() {
             back={back}
             actions={actions}
             search={<Input placeholder="Search lines" />}
+          />
+        </ShowcaseState>
+        <ShowcaseState state="expanded · eyebrow and status">
+          <PageHeader
+            className="w-96"
+            headingLevel={3}
+            eyebrow="Sales Order"
+            title="SO-0042"
+            status={<Badge variant="pill" size="lg" color="success">confirmed</Badge>}
+            collapsed={false}
           />
         </ShowcaseState>
         <ShowcaseState state="collapsed">
@@ -708,6 +767,7 @@ export function GalleryComposites() {
       <DataGridGroup />
       <CardListGroup />
       <NavigationGroup />
+      <RecordFormGroup />
       <LayoutGroup />
       <FeedbackGroup />
       <BrandGroup />

@@ -25,6 +25,9 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   leftIcon?: ReactNode;
   rightIcon?: ReactNode;
   wrapperClassName?: string;
+  /** Draw the framed box without a label, icons or error text, so a design's `input-frame`
+   *  rules reach a control whose label the form renderer owns (a locked ReadOnly field). */
+  framed?: boolean;
 }
 
 /**
@@ -32,12 +35,13 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
  * label). Passing any of label/errorMessage/leftIcon/rightIcon switches it into a
  * self-contained form field (label + framed box with inline icons + error text) —
  * the single input for both the metadata form renderer and hand-built app forms.
+ * `framed` asks for the box alone.
  */
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { className, label, error, errorMessage, leftIcon, rightIcon, wrapperClassName, id, disabled, ...props },
+  { className, label, error, errorMessage, leftIcon, rightIcon, wrapperClassName, framed, id, disabled, ...props },
   ref,
 ) {
-  const fieldMode = label != null || errorMessage != null || leftIcon != null || rightIcon != null;
+  const fieldMode = framed || label != null || errorMessage != null || leftIcon != null || rightIcon != null;
   const invalid = error || errorMessage != null;
 
   if (!fieldMode) {
@@ -95,7 +99,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         {rightIcon && <span className="shrink-0 text-textMuted">{rightIcon}</span>}
       </div>
       {errorMessage && (
-        <p id={`${inputId}-error`} role="alert" className="text-xs text-error">
+        <p id={`${inputId}-error`} data-ui="field-error" role="alert" className="text-xs text-error">
           {errorMessage}
         </p>
       )}

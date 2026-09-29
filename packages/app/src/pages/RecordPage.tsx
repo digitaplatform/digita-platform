@@ -6,7 +6,7 @@ import { Lock } from 'lucide-react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { EntityDefinition } from '@digitaplatform/shared';
 import { LAYOUT_FIELD_TYPES } from '@digitaplatform/shared';
-import { Badge, Button } from '@digitaplatform/components';
+import { Badge, Button, PageHeader } from '@digitaplatform/components';
 import { useMeta } from '@/hooks/useMeta';
 import { useDocument, useSingle, useCreate, useUpdate, useDeleteDoc } from '@/hooks/useDocument';
 import { usePreview } from '@/hooks/usePreview';
@@ -61,7 +61,7 @@ function RecordKpis({ entity, meta, doc }: { entity: string; meta: EntityDefinit
   );
   if (kpis.length === 0) return null;
   return (
-    <div className="mt-4 flex flex-wrap gap-x-10 gap-y-3">
+    <div className="flex flex-wrap gap-x-10 gap-y-3 border-b border-border pb-4">
       {kpis.slice(0, 3).map((f) => {
         const cf = f.currency_field ? String(doc[f.currency_field] ?? '') : '';
         return (
@@ -554,43 +554,49 @@ function RecordForm({
       data-component="record-form"
       className="w-full space-y-4 pb-24"
     >
-      <header className="flex items-start justify-between border-b border-border pb-4">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-textMuted">{tEntity(entity, meta.label ?? entity)}</p>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-h1 font-display text-textMain">{title}</h1>
-            {stateBadge && (
-              <Badge variant="pill" size="lg" color={stateBadge.color}>
-                {stateBadge.label}
-              </Badge>
-            )}
-            {docLocked && (
-              <span
-                className="inline-flex items-center gap-1 rounded-full border border-border bg-subtle px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-textMuted"
-                {...tid.component('docstatus-badge')}
-              >
-                <Lock className="h-3 w-3" aria-hidden="true" />
-                {docstatus === 2 ? tc('ui.record.readonlyCancelled') : tc('ui.record.readonlySubmitted')}
-              </span>
-            )}
-          </div>
-          {!isNew && <RecordKpis entity={entity} meta={meta} doc={watched as Record<string, unknown>} />}
+      {/* Pulled out by the header's own inset so its title lines up with the form. A single
+          has no list to go back to. */}
+      <PageHeader
+        className="-mx-4"
+        back={
+          isSingle ? undefined : { label: meta.label_plural ?? meta.label ?? entity, onClick: () => navigate(`/${entity}`) }
+        }
+        eyebrow={tEntity(entity, meta.label ?? entity)}
+        title={title}
+        status={
+          stateBadge || docLocked ? (
+            <>
+              {stateBadge && (
+                <Badge variant="pill" size="lg" color={stateBadge.color}>
+                  {stateBadge.label}
+                </Badge>
+              )}
+              {docLocked && (
+                <Badge variant="outline" size="lg" leftIcon={<Lock className="h-3 w-3" aria-hidden="true" />} {...tid.component('docstatus-badge')}>
+                  {docstatus === 2 ? tc('ui.record.readonlyCancelled') : tc('ui.record.readonlySubmitted')}
+                </Badge>
+              )}
+            </>
+          ) : undefined
+        }
+      />
+      {/* The record's actions are text buttons that wrap on a phone; in the header's bar the
+          wrap would grow the band that stays pinned, so they stand under the title. */}
+      {!isNew && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <PrintMenu meta={meta} doc={watched} />
+          <ActionBar entity={entity} name={name!} disabled={form.formState.isDirty || saving} />
+          <WorkflowBar
+            entity={entity}
+            meta={meta}
+            name={name!}
+            doc={watched}
+            disabled={form.formState.isDirty || saving}
+            onApplied={(d) => form.reset(d)}
+          />
         </div>
-        {!isNew && (
-          <div className="flex flex-wrap items-center gap-2">
-            <PrintMenu meta={meta} doc={watched} />
-            <ActionBar entity={entity} name={name!} disabled={form.formState.isDirty || saving} />
-            <WorkflowBar
-              entity={entity}
-              meta={meta}
-              name={name!}
-              doc={watched}
-              disabled={form.formState.isDirty || saving}
-              onApplied={(d) => form.reset(d)}
-            />
-          </div>
-        )}
-      </header>
+      )}
+      {!isNew && <RecordKpis entity={entity} meta={meta} doc={watched as Record<string, unknown>} />}
 
       {conflict && (
         <div
@@ -624,6 +630,9 @@ function RecordForm({
           fieldState={renderState}
           errors={errors}
           onFieldChange={onFieldChange}
+          // Under the header's bar, which stays pinned below the topbar and publishes its
+          // height on the scroll container.
+          tabsClassName="sticky top-[calc(var(--topbar-h,0px)_+_var(--page-header-bar-h,0px))] z-10"
         />
         {hasContext && <ContextPanel entity={entity} meta={meta} doc={watched} />}
       </div>

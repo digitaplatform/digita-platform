@@ -6,6 +6,7 @@ import { PageHeader } from '../src/composites/PageHeader.js';
 import { Badge } from '../src/primitives/Badge.js';
 import { Chip } from '../src/primitives/Chip.js';
 import { Input } from '../src/primitives/Input.js';
+import { expectHooked } from './hooked.js';
 
 /** The hooks and states a list page is drawn by: a design reaches its rows, its
  *  status pill, its filter chips and its title only through these. */
@@ -36,12 +37,6 @@ const ROWS = [
   { id: 'SO-0043', customer: 'Nordlicht Media' },
   { id: 'SO-0042', customer: 'ACME GmbH' },
 ];
-
-/** The one check every element below passes: it carries the hook a design draws it by. */
-function expectHooked(el: Element | null, hook: string) {
-  expect(el, `an element hooked as ${hook}`).not.toBeNull();
-  expect(el!.getAttribute('data-ui'), `hook of <${el!.tagName.toLowerCase()}>`).toBe(hook);
-}
 
 describe('the hook check itself', () => {
   it('planted: an element drawn without its hook goes red beside a hooked one', () => {

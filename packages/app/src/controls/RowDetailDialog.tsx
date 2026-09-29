@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { BaseDialog, Button } from '@digitaplatform/components';
+import { BaseDialog, Button, FormRow } from '@digitaplatform/components';
 import type { FieldDefinition } from '@digitaplatform/shared';
 import type { FieldControlState } from '@/controls/types';
 import type { FieldStateMap } from '@/lib/evaluate-field';
@@ -96,19 +96,13 @@ export function RowDetailDialog({
           const id = `${baseId}-${f.fieldname}`;
           const labelId = `${id}-label`;
           return (
-            <div key={f.fieldname}>
-              <label
-                id={labelId}
-                htmlFor={id}
-                className="mb-1 block text-sm font-medium text-textMain"
-              >
-                {tField(entity, f.fieldname, f.label)}
-                {st.required && (
-                  <span className="ml-0.5 text-error" aria-hidden="true">
-                    *
-                  </span>
-                )}
-              </label>
+            <FormRow
+              key={f.fieldname}
+              controlId={id}
+              labelId={labelId}
+              label={tField(entity, f.fieldname, f.label)}
+              required={st.required}
+            >
               <ControlRenderer
                 field={f}
                 value={draft[f.fieldname]}
@@ -121,7 +115,7 @@ export function RowDetailDialog({
                 controlId={id}
                 labelId={labelId}
               />
-            </div>
+            </FormRow>
           );
         })}
       </div>

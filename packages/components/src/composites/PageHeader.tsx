@@ -2,7 +2,7 @@ import {
   forwardRef,
   isValidElement,
   useCallback,
-  useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type HTMLAttributes,
@@ -18,10 +18,29 @@ import { cn } from '../lib/cn.js';
  * Structure: a sticky compact BAR (back slot · aria-hidden title mirror ·
  * trailing actions) followed by the LARGE-TITLE block and an optional search
  * slot, both in normal flow. When the page scrolls, the large title slides
- * under the sticky bar naturally; past the collapse threshold the header flips
- * `data-collapsed="true"` and the CSS cross-fades large title ↔ bar mirror.
+ * under the sticky bar naturally; the moment the header sticks, which is when
+ * its bottom meets the bar's bottom and everything below the bar is under it,
+ * the header flips `data-collapsed="true"` and the CSS cross-fades the large
+ * title and the search slot ↔ bar mirror. The state is read from that
+ * geometry on every scroll and resize, never from a stored scroll offset.
  * Nothing ever changes size — the collapse is pure opacity/transform, so it can
  * NEVER reflow the page or feed back into the scroll position (no flicker loop).
+ *
+ * Why the whole header is sticky: a sticky element never leaves its containing
+ * block, so a bar sticky inside the header alone scrolls away with the header.
+ * The header itself sticks at `--topbar-h` minus the height of everything below
+ * the bar (`--page-header-rest-h`, measured here and set on the header), so once
+ * the page has scrolled that far the header stands with its title block under
+ * the top bar and exactly the bar's height showing; the bar, sticky at
+ * `--topbar-h` inside it, is that visible band. The header is confined by its
+ * own containing block, so a page renders it inside the element that spans the
+ * whole page, not inside a toolbar. The bar's height is published as
+ * `--page-header-bar-h` on the scroll container, so what pins under the bar
+ * (a form's tab strip) reads it. A collapsed search slot is faded, not hidden:
+ * it keeps its place in the tab order, and when it takes focus the header
+ * scrolls its source to the top, where the header stands whole. A browser
+ * scrolls a focused field into view from the field's current rect, and a stuck
+ * header does not move with the scroll, so that scroll alone never frees it.
  *
  * Collapse source: `scrollRef` if given, else the nearest scrollable ancestor,
  * else window. A controlled `collapsed` prop overrides tracking entirely
@@ -57,13 +76,18 @@ export interface PageHeaderProps extends Omit<HTMLAttributes<HTMLElement>, 'titl
   back?: PageHeaderBackAction | ReactNode;
   /** Trailing bar actions (IconButtons, menus, …). */
   actions?: ReactNode;
+  /** A caption above the title: the kind of thing the page shows (its entity). */
+  eyebrow?: ReactNode;
+  /** Sits beside the heading, outside it: a record's status pill and lock marker. */
+  status?: ReactNode;
   /** Search slot in the title area (policy §2 "Search"). */
   search?: ReactNode;
   /** Scroll source driving the collapse. Default: nearest scrollable ancestor
    *  of the header, else window. */
   scrollRef?: RefObject<HTMLElement | null>;
-  /** Scroll offset (px) beyond which the header collapses. Default: the
-   *  measured height of the large-title block. */
+  /** Scroll offset (px) beyond which the header collapses. Default: none; the
+   *  header collapses the moment it sticks, so the title block and the search
+   *  slot fade only once the bar hides both. */
   collapseThreshold?: number;
   /** Controlled collapse state — overrides scroll tracking entirely. */
   collapsed?: boolean;
@@ -133,6 +157,8 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
     headingLevel = 1,
     back,
     actions,
+    eyebrow,
+    status,
     search,
     scrollRef,
     collapseThreshold,
@@ -143,7 +169,8 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
   ref,
 ) {
   const innerRef = useRef<HTMLElement | null>(null);
-  const titleRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const scrollSourceRef = useRef<HTMLElement | Window | null>(null);
   const [scrollCollapsed, setScrollCollapsed] = useState(false);
   const isControlled = collapsedProp !== undefined;
   const collapsed = collapsedProp ?? scrollCollapsed;
@@ -157,20 +184,51 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
     [ref],
   );
 
-  useEffect(() => {
-    if (isControlled) return;
+  useLayoutEffect(() => {
     const header = innerRef.current;
-    if (!header) return;
-    const source: HTMLElement | Window = scrollRef?.current ?? findScrollContainer(header) ?? window;
-    // Measured once per bind: past the large title's own height it is fully
-    // under the bar. Unmeasurable (jsdom, display:none) → any offset collapses.
-    const threshold = collapseThreshold ?? Math.max(titleRef.current?.offsetHeight ?? 0, 1);
+    const bar = barRef.current;
+    if (!header || !bar) return;
+    const scroller = scrollRef?.current ?? findScrollContainer(header);
+    const source: HTMLElement | Window = scroller ?? window;
+    scrollSourceRef.current = source;
+    const barHeightTarget = scroller ?? document.documentElement;
     const offset = () => (source instanceof Window ? source.scrollY : source.scrollTop);
-    const onScroll = () => setScrollCollapsed(offset() > threshold);
-    onScroll(); // sync the initial state (mount mid-scroll, e.g. route restore)
-    source.addEventListener('scroll', onScroll, { passive: true });
-    return () => source.removeEventListener('scroll', onScroll);
+    // Stuck, the header shows exactly the bar: its bottom meets the bar's bottom, short of
+    // a pixel because --page-header-rest-h is whole pixels and rects are fractional. Read
+    // from the rects on every scroll, so the padding above the header and a width change
+    // cannot put the state off. Where nothing is laid out (jsdom, display:none) every
+    // rect is zero and the comparison holds at rest; then any offset collapses.
+    const isStuck = () =>
+      offset() > 0 && header.getBoundingClientRect().bottom - bar.getBoundingClientRect().bottom < 1;
+    const track = () =>
+      setScrollCollapsed(collapseThreshold === undefined ? isStuck() : offset() > collapseThreshold);
+    // Inline properties, not state: a re-render for every resize would run layout twice.
+    const measure = () => {
+      header.style.setProperty('--page-header-rest-h', `${header.offsetHeight - bar.offsetHeight}px`);
+      barHeightTarget.style.setProperty('--page-header-bar-h', `${bar.offsetHeight}px`);
+      // A new rest height moves the header's sticky top, so the collapse state follows.
+      if (!isControlled) track();
+    };
+    measure(); // also syncs the initial state (mount mid-scroll, e.g. route restore)
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
+    observer?.observe(header);
+    observer?.observe(bar);
+    if (!isControlled) source.addEventListener('scroll', track, { passive: true });
+    return () => {
+      observer?.disconnect();
+      barHeightTarget.style.removeProperty('--page-header-bar-h');
+      source.removeEventListener('scroll', track);
+    };
   }, [isControlled, scrollRef, collapseThreshold]);
+
+  // The header is the first thing on its page, so the top of the scroll content shows the
+  // search whole; see the docblock for why the browser's own focus scroll cannot.
+  const revealSearch = () => {
+    const source = scrollSourceRef.current;
+    if (!scrollCollapsed || !source) return;
+    if (source instanceof Window) source.scrollTo(0, 0);
+    else source.scrollTop = 0;
+  };
 
   const HeadingTag = `h${headingLevel}` as `h${typeof headingLevel}`;
 
@@ -198,14 +256,16 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
       {...props}
       data-ui="page-header"
       data-collapsed={collapsed ? 'true' : 'false'}
-      className={cn('relative', className)}
+      // Below the TopBar (z-30), above the grid's sticky header and a form's tab strip
+      // (z-10). The theme sets --topbar-h for every design, so the 0 fallback holds only
+      // where no theme is loaded.
+      className={cn('sticky top-[calc(var(--topbar-h,0px)_-_var(--page-header-rest-h,0px))] z-20', className)}
     >
       <div
+        ref={barRef}
         data-ui="page-header-bar"
-        // Sticks below a TopBar in the same scroll container; the theme sets the var
-        // for every design, so the 0 fallback holds only where no theme is loaded.
-        // Once the header scrolls out, its bar slides under the TopBar (z-30), so
-        // the bar stays below it and above the grid's sticky header (z-10).
+        // Sticky inside the stuck header: pulled down from the header's top, which is
+        // under the TopBar, to the band the header leaves visible.
         className="sticky top-[var(--topbar-h,0px)] z-20 flex min-h-12 items-center gap-2 bg-surface px-3"
       >
         {backNode}
@@ -228,16 +288,40 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
         )}
       </div>
       <div
-        ref={titleRef}
         data-ui="page-header-title"
         className="min-w-0 px-4 pb-2 pt-1 transition-opacity duration-base ease-smooth"
       >
-        <HeadingTag data-ui="page-header-heading" className="truncate text-h1 text-textMain">
-          {title}
-        </HeadingTag>
+        {eyebrow != null && (
+          <p data-ui="page-header-eyebrow" className="text-xs uppercase tracking-wide text-textMuted">
+            {eyebrow}
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* The heading wraps: a record's title must be read whole, and the truncating
+              mirror in the bar has no room for a tooltip. overflow-wrap breaks a title
+              without a break opportunity (an email address), which would otherwise
+              scroll the page sideways on a phone. One display font for every page
+              title is the design intent. */}
+          <HeadingTag
+            data-ui="page-header-heading"
+            className="min-w-0 text-balance text-h1 font-display text-textMain [overflow-wrap:anywhere]"
+          >
+            {title}
+          </HeadingTag>
+          {status != null && (
+            <span data-ui="page-header-status" className="flex flex-wrap items-center gap-2">
+              {status}
+            </span>
+          )}
+        </div>
       </div>
       {search && (
-        <div data-ui="page-header-search" className="px-4 pb-3">
+        // Fades with the title block and stays in the tab order; see the docblock.
+        <div
+          data-ui="page-header-search"
+          onFocus={revealSearch}
+          className="px-4 pb-3 transition-opacity duration-base ease-smooth"
+        >
           {search}
         </div>
       )}
