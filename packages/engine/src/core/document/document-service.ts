@@ -756,6 +756,19 @@ export class DocumentService {
    * derived fields) so the frontend can show live computed values for an unsaved
    * draft. Computed hooks run with no session, so nothing is written.
    */
+  /**
+   * `doc` as JSON the way `user` may read it, as getDoc answers it: fields above
+   * the user's levels masked, and a link title only with its Link. The write
+   * paths return the whole document, because hooks and internal callers read it,
+   * so the resource router answers a write with this.
+   */
+  toReadableJSON(doctype: string, doc: BaseDocument, user: UserContext): Record<string, unknown> {
+    const json = this.permissionChecker.filterFieldsForRead(user, doctype, doc.toJSON());
+    const titles = json["_link_titles"] as Record<string, string> | undefined;
+    if (!titles) return json;
+    return { ...json, _link_titles: Object.fromEntries(Object.entries(titles).filter(([field]) => field in json)) };
+  }
+
   async preview(
     doctype: string,
     data: Record<string, unknown>,

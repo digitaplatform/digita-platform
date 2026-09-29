@@ -140,7 +140,7 @@ export function registerResourceRoutes(
     const ctx = new ResponseContext();
 
     const doc = await documentService.preview(doctype, data, getUser(request), ctx);
-    return reply.send(successResponse(projectRead(request, doc.toJSON()), ctx.getMessages()));
+    return reply.send(successResponse(projectRead(request, documentService.toReadableJSON(doctype, doc, getUser(request))), ctx.getMessages()));
   });
 
   // ─── CREATE ────────────────────────────────────────────
@@ -150,7 +150,7 @@ export function registerResourceRoutes(
     const ctx = new ResponseContext();
 
     const doc = await documentService.insert(doctype, data, getUser(request), ctx);
-    const json = doc.toJSON();
+    const json = documentService.toReadableJSON(doctype, doc, getUser(request));
     emitChange("insert", doctype, (json as Record<string, unknown>)["_id"]);
     if (localeResolver.affects(doctype)) await localeResolver.refresh();
     return reply.code(201).send(successResponse(json, ctx.getMessages()));
@@ -173,7 +173,7 @@ export function registerResourceRoutes(
     });
     emitChange("update", doctype, name);
     if (localeResolver.affects(doctype)) await localeResolver.refresh();
-    return reply.send(successResponse(projectRead(request, doc.toJSON()), ctx.getMessages()));
+    return reply.send(successResponse(projectRead(request, documentService.toReadableJSON(doctype, doc, getUser(request))), ctx.getMessages()));
   });
 
   // ─── DELETE ────────────────────────────────────────────
@@ -196,7 +196,7 @@ export function registerResourceRoutes(
 
       const doc = await documentService.submit(doctype, name, getUser(request), ctx);
       emitChange("update", doctype, name);
-      return reply.send(successResponse(projectRead(request, doc.toJSON()), ctx.getMessages()));
+      return reply.send(successResponse(projectRead(request, documentService.toReadableJSON(doctype, doc, getUser(request))), ctx.getMessages()));
     },
   );
 
@@ -209,7 +209,7 @@ export function registerResourceRoutes(
 
       const doc = await documentService.cancel(doctype, name, getUser(request), ctx);
       emitChange("update", doctype, name);
-      return reply.send(successResponse(projectRead(request, doc.toJSON()), ctx.getMessages()));
+      return reply.send(successResponse(projectRead(request, documentService.toReadableJSON(doctype, doc, getUser(request))), ctx.getMessages()));
     },
   );
 
@@ -221,7 +221,7 @@ export function registerResourceRoutes(
       const ctx = new ResponseContext();
 
       const doc = await documentService.amend(doctype, name, getUser(request), ctx);
-      const json = doc.toJSON();
+      const json = documentService.toReadableJSON(doctype, doc, getUser(request));
       emitChange("insert", doctype, (json as Record<string, unknown>)["_id"]);
       return reply.code(201).send(successResponse(json, ctx.getMessages()));
     },
@@ -235,7 +235,7 @@ export function registerResourceRoutes(
       const ctx = new ResponseContext();
 
       const doc = await documentService.copyDoc(doctype, name, getUser(request), ctx);
-      return reply.code(201).send(successResponse(doc.toJSON(), ctx.getMessages()));
+      return reply.code(201).send(successResponse(documentService.toReadableJSON(doctype, doc, getUser(request)), ctx.getMessages()));
     },
   );
 
@@ -291,7 +291,7 @@ export function registerResourceRoutes(
 
       const doc = await documentService.transition(doctype, name, to, getUser(request), ctx);
       emitChange("update", doctype, name);
-      return reply.send(successResponse(projectRead(request, doc.toJSON()), ctx.getMessages()));
+      return reply.send(successResponse(projectRead(request, documentService.toReadableJSON(doctype, doc, getUser(request))), ctx.getMessages()));
     },
   );
 
