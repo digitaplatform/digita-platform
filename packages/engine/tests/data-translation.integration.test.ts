@@ -238,6 +238,28 @@ describe("GET /resource/:entity/:name/translations is read-gated", () => {
   });
 });
 
+// Red on master: the locale route answers every data row to every signed-in
+// caller. Both options of #74 (data namespace to Administrator only, or a
+// per-document read check) turn it green; skipped until the owner picks one.
+describe("GET /translations/:locale keeps data rows from a caller who may not read them", () => {
+  const strangerGet = async (url: string) => {
+    const strangerTok = await ta.sign({ sub: "stranger@d", email: "stranger@d", roles: ["System User"] });
+    return app.inject({ method: "GET", url, headers: { authorization: `Bearer ${strangerTok}` } });
+  };
+
+  it.skip("answers no GlAcct data row to a System User without a GlAcct grant (#74)", async () => {
+    for (const url of ["/api/v1/translations/de", "/api/v1/translations/de?namespace=data&entity=GlAcct"]) {
+      const res = await strangerGet(url);
+      expect(res.json().data?.["GlAcct.1200.name"]).toBeUndefined();
+    }
+  });
+
+  it("answers the data row to an Administrator", async () => {
+    const res = await get("/api/v1/translations/de?namespace=data&entity=GlAcct");
+    expect(res.json().data["GlAcct.1200.name"]).toBe("Forderungen aus Lieferungen und Leistungen");
+  });
+});
+
 describe("seedDataTranslations (co-located *.translations.json)", () => {
   it("seeds data translations from a file so the read path applies them", async () => {
     const dir = await mkdtemp(join(tmpdir(), "digita-dt-seed-"));
