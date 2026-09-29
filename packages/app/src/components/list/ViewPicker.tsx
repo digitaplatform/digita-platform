@@ -130,8 +130,10 @@ export function ViewPicker({
           role="menu"
           aria-label={tc('ui.view.menu')}
           // The Select consumes its own Escape (preventDefault) while its options are open.
+          // Marking ours consumed keeps SheetOrPopover's document listener from closing too.
           onKeyDown={(e) => {
             if (e.key !== 'Escape' || e.defaultPrevented) return;
+            e.preventDefault();
             if (saving) setSaving(false);
             else close();
           }}

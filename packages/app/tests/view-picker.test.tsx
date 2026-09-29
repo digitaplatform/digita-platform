@@ -72,10 +72,12 @@ describe('ViewPicker (saved views)', () => {
     expect(queryByTestId('view:all')).toBeNull();
   });
 
-  it('closes on Escape', async () => {
+  it('closes on Escape and marks the event consumed', async () => {
     const { getByTestId, queryByTestId } = setup();
     await userEvent.click(getByTestId('view:menu'));
-    fireEvent.keyDown(getByTestId('view:all'), { key: 'Escape' });
+    // dispatchEvent returns false once preventDefault ran, so an enclosing
+    // document listener (SheetOrPopover) sees the Escape as handled.
+    expect(fireEvent.keyDown(getByTestId('view:all'), { key: 'Escape' })).toBe(false);
     expect(queryByTestId('view:all')).toBeNull();
   });
 
