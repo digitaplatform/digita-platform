@@ -51,10 +51,13 @@ import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
+import type { EntityRegistry } from "../src/core/entity/entity-registry.js";
+import type { EntityDefinition } from "@digitaplatform/shared";
 
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
 let db: MongoDBService;
+let registry: EntityRegistry;
 let authToken: string;
 let signToken: Awaited<ReturnType<typeof buildTestAuth>>["sign"];
 
@@ -67,6 +70,7 @@ beforeAll(async () => {
   const result = await createApp({ authn: ta.authn });
   app = result.app;
   db = result.db;
+  registry = result.registry;
   await result.startup();
   await app.ready();
 
@@ -674,6 +678,80 @@ describe("H1 — sidebar routes enforce per-doc read authz", () => {
       const res = await app.inject({ method: "GET", url: `/api/v1/resource/File/${fileId}/${route}`, headers: authHeaders() });
       expect(res.statusCode).toBe(200);
     }
+  });
+});
+
+describe("/related counts only the linked rows a list answers (#120)", () => {
+  let deskToken: string;
+  let borrowerToken: string;
+
+  beforeAll(async () => {
+    registry.register({
+      name: "RelBook",
+      module: "test",
+      database: "core",
+      naming: { strategy: "user_set" },
+      fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
+      links: [{ label: "Loans", entity: "RelLoan", link_field: "book", show_count: true }],
+      permissions: [
+        { role: "LoanDesk", level: 0, select: 1, read: 1 },
+        { role: "Borrower", level: 0, select: 1, read: 1 },
+      ],
+    } as unknown as EntityDefinition);
+    // The desk reads an open loan only, and never a loan whose roles leave it out;
+    // a borrower reads only the loans it owns.
+    registry.register({
+      name: "RelLoan",
+      module: "test",
+      database: "core",
+      naming: { strategy: "user_set" },
+      role_visibility_field: "roles",
+      fields: [
+        { fieldname: "book", fieldtype: "Link", label: "Book", target: "RelBook" },
+        { fieldname: "status", fieldtype: "Data", label: "Status" },
+        { fieldname: "roles", fieldtype: "JSON", label: "Roles" },
+      ],
+      permissions: [
+        { role: "LoanDesk", level: 0, select: 1, read: 1, condition: "eval:doc.status == 'Open'" },
+        { role: "Borrower", level: 0, select: 1, read: 1, if_owner: true },
+      ],
+    } as unknown as EntityDefinition);
+    const row = { docstatus: 0, owner: "system", modified_by: "system", creation: new Date(), modified: new Date() };
+    await db.insertOne("RelBook", { ...row, _id: "RB-1", title: "Dune" }, "core");
+    await db.insertOne("RelLoan", { ...row, _id: "RL-open", book: "RB-1", status: "Open" }, "core");
+    await db.insertOne("RelLoan", { ...row, _id: "RL-closed", book: "RB-1", status: "Closed" }, "core");
+    await db.insertOne("RelLoan", { ...row, _id: "RL-staff", book: "RB-1", status: "Open", roles: ["Staff"] }, "core");
+    await db.insertOne("RelLoan", { ...row, _id: "RL-own", book: "RB-1", status: "Open", owner: "borrower@test" }, "core");
+    deskToken = await signToken({ sub: "desk@test", email: "desk@test", roles: ["LoanDesk"] });
+    borrowerToken = await signToken({ sub: "borrower@test", email: "borrower@test", roles: ["Borrower"] });
+  });
+
+  async function expectRelatedCountIsListTotal(token: string, listed: string[]) {
+    const headers = { authorization: `Bearer ${token}` };
+    const list = await app.inject({
+      method: "GET",
+      url: `/api/v1/resource/RelLoan?order_by=_id%20asc&filters=${encodeURIComponent(JSON.stringify([["book", "=", "RB-1"]]))}`,
+      headers,
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().data.map((r: Record<string, unknown>) => r["_id"])).toEqual(listed);
+
+    const related = await app.inject({ method: "GET", url: "/api/v1/resource/RelBook/RB-1/related", headers });
+    expect(related.statusCode).toBe(200);
+    expect(related.json().data).toEqual([{ label: "Loans", entity: "RelLoan", count: list.json().meta.total }]);
+  }
+
+  it("leaves out a loan the desk's read condition or the loan's roles hide", async () => {
+    await expectRelatedCountIsListTotal(deskToken, ["RL-open", "RL-own"]);
+  });
+
+  it("leaves out a loan another user owns from a borrower's count", async () => {
+    await expectRelatedCountIsListTotal(borrowerToken, ["RL-own"]);
+  });
+
+  it("answers every loan to an Administrator", async () => {
+    const related = await app.inject({ method: "GET", url: "/api/v1/resource/RelBook/RB-1/related", headers: authHeaders() });
+    expect(related.json().data[0].count).toBe(4);
   });
 });
 

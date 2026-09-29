@@ -57,40 +57,37 @@ const strangerUser: UserContext = { _id: "u2", email: "stranger@test", roles: ["
 const adminUser: UserContext = { _id: "u3", email: "admin@test", roles: ["Administrator"] };
 
 function makeService() {
-  const db = { count: vi.fn().mockResolvedValue(7) };
-  const svc = new RelatedDocService(registry, db as never, new PermissionChecker(registry));
-  return { svc, db };
+  const documentService = { count: vi.fn().mockResolvedValue(7) };
+  const svc = new RelatedDocService(documentService as never, new PermissionChecker(registry));
+  return { svc, documentService };
 }
 
 describe("RelatedDocService.getRelatedDocs — authorizes the counted entity", () => {
   it("returns count 0 and never counts for a user with no select grant", async () => {
-    const { svc, db } = makeService();
+    const { svc, documentService } = makeService();
     const out = await svc.getRelatedDocs(parentEntity, "PROD-1", strangerUser);
     expect(out[0]!.count).toBe(0);
-    expect(db.count).not.toHaveBeenCalled();
+    expect(documentService.count).not.toHaveBeenCalled();
   });
 
-  it("narrows the count filter by owner for an if_owner-restricted linked entity", async () => {
-    const { svc, db } = makeService();
-    await svc.getRelatedDocs(parentEntity, "PROD-1", salesUser);
-    expect(db.count).toHaveBeenCalledTimes(1);
-    const filterArg = db.count.mock.calls[0]![1];
-    const asJson = JSON.stringify(filterArg);
-    expect(asJson).toContain('"owner":"sales@test"');
-    expect(asJson).toContain('"lines.product":"PROD-1"');
+  it("asks count for the rows that point at the document, as the caller", async () => {
+    const { svc, documentService } = makeService();
+    const out = await svc.getRelatedDocs(parentEntity, "PROD-1", salesUser);
+    expect(documentService.count).toHaveBeenCalledWith("SalesInvoice", [{ "lines.product": "PROD-1" }], salesUser);
+    expect(out[0]!.count).toBe(7);
   });
 
-  it("counts for an Administrator (bypass) without scope narrowing", async () => {
-    const { svc, db } = makeService();
+  it("counts for an Administrator", async () => {
+    const { svc, documentService } = makeService();
     const out = await svc.getRelatedDocs(parentEntity, "PROD-1", adminUser);
-    expect(db.count).toHaveBeenCalledTimes(1);
+    expect(documentService.count).toHaveBeenCalledTimes(1);
     expect(out[0]!.count).toBe(7);
   });
 
   it("returns count 0 when no user is provided (fail closed)", async () => {
-    const { svc, db } = makeService();
+    const { svc, documentService } = makeService();
     const out = await svc.getRelatedDocs(parentEntity, "PROD-1");
     expect(out[0]!.count).toBe(0);
-    expect(db.count).not.toHaveBeenCalled();
+    expect(documentService.count).not.toHaveBeenCalled();
   });
 });

@@ -211,7 +211,7 @@ export async function createApp(
   const exportService = new ExportService(documentService, registry, bkResolver);
   const globalSearchService = new GlobalSearchService(registry, db, permissionChecker);
   const linkSearchService = new LinkSearchService(registry, db, permissionChecker);
-  const relatedDocService = new RelatedDocService(registry, db, permissionChecker);
+  const relatedDocService = new RelatedDocService(documentService, permissionChecker);
   const documentShareService = new DocumentShareService(db);
 
   // ─── Global Middleware ─────────────────────────────────
