@@ -52,6 +52,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import type { FastifyInstance } from "fastify";
 import { mkdir, writeFile, rm } from "fs/promises";
+import { mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { readFile } from "fs/promises";
@@ -69,13 +70,15 @@ import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 // Domain-loaded entities get their `database` FORCED to `<appDir-basename>_<domain>`
 // regardless of what the JSON declares (entity-registry.ts loadEntityFile) — the
 // same rule that makes the real WebPage/WebSite/WebNavMenu's declared "web_content"
-// line up with app "web" + domain "content". A fixed (not mkdtemp-random) app dir
-// name keeps that computed name predictable here too.
+// line up with app "web" + domain "content". A fixed app dir basename keeps that
+// computed name predictable here too; its parent is made per run, so parallel runs
+// of this file on one machine do not share the app or the marker file.
 const APP_BASENAME = "digita-site-scope-fixture";
 const DB = `${APP_BASENAME}_content`;
+const RUN_DIR = mkdtempSync(join(tmpdir(), `${APP_BASENAME}-`));
 let fixtureRoot: string;
 /** Every WebPage id the fixture's `after_delete` hook saw, one per line. */
-const DELETED_MARKER = join(tmpdir(), `${APP_BASENAME}-deleted.txt`);
+const DELETED_MARKER = join(RUN_DIR, "deleted.txt");
 
 async function writeJson(path: string, data: unknown): Promise<void> {
   await mkdir(join(path, ".."), { recursive: true });
@@ -83,8 +86,7 @@ async function writeJson(path: string, data: unknown): Promise<void> {
 }
 
 async function writeFixture(): Promise<string> {
-  const appDir = join(tmpdir(), APP_BASENAME);
-  await rm(appDir, { recursive: true, force: true });
+  const appDir = join(RUN_DIR, APP_BASENAME);
   const entities = join(appDir, "content", "entities");
   await mkdir(entities, { recursive: true });
   await writeJson(join(entities, "WebSite.entity.json"), {
@@ -118,7 +120,6 @@ async function writeFixture(): Promise<string> {
       `export const afterDelete = (doc: { _id: string }) => appendFileSync(${JSON.stringify(DELETED_MARKER)}, doc._id + "\\n");\n`,
     "utf-8",
   );
-  await rm(DELETED_MARKER, { force: true });
   for (const [site, label] of [["site-a", "Site A"], ["site-b", "Site B"]] as const) {
     const dir = join(appDir, "content", "sites", site);
     await writeJson(join(dir, "WebSite.seed.json"), [{ _id: site, site_name: label }]);
@@ -152,8 +153,7 @@ afterAll(async () => {
     await app.close();
     await db.disconnect();
   }
-  await rm(fixtureRoot, { recursive: true, force: true });
-  await rm(DELETED_MARKER, { force: true });
+  await rm(RUN_DIR, { recursive: true, force: true });
   await replSet.stop();
 }, 30000);
 
