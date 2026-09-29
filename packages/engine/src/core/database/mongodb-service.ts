@@ -103,6 +103,8 @@ export class MongoDBService {
    * transaction (server code 263), so writes to these drop the txn session.
    */
   private timeSeriesCollections = new Set<string>();
+  /** The work `afterCommit` queued, per session of a running `withTransaction`. */
+  private commitWork = new WeakMap<ClientSession, Array<() => Promise<void>>>();
   private connected = false;
 
   constructor() {
@@ -281,12 +283,29 @@ export class MongoDBService {
     try {
       let result: T;
       await session.withTransaction(async () => {
+        // The driver reruns the callback after a transient error, so work queued
+        // by an attempt that aborted is dropped with it.
+        this.commitWork.set(session, []);
         result = await callback(session);
       });
+      for (const work of this.commitWork.get(session) ?? []) await work();
       return result!;
     } finally {
+      this.commitWork.delete(session);
       await session.endSession();
     }
+  }
+
+  /**
+   * Run `work` once the transaction of `session` has committed, and never when
+   * it aborts: for effects no transaction can roll back, such as deleting a
+   * stored file. The transaction has committed when `work` runs, so `work`
+   * reports its own failures.
+   */
+  afterCommit(session: ClientSession, work: () => Promise<void>): void {
+    const queue = this.commitWork.get(session);
+    if (!queue) throw new Error("afterCommit needs a session that withTransaction started");
+    queue.push(work);
   }
 
   // ─── CRUD Operations ──────────────────────────────────

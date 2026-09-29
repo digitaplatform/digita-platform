@@ -919,7 +919,7 @@ export class DocumentService {
     }
 
     // Fetch-from (auto-fill from linked docs)
-    processed = await this.fetchFromResolver.resolve(entity, processed);
+    processed = await this.fetchFromResolver.resolve(entity, processed, sessionOverride);
 
     // Serialize fields
     const serialized = this.serializeFields(entity, processed);
@@ -1097,12 +1097,15 @@ export class DocumentService {
       expectedModified?: string;
       /** The locale the caller read the document in; its data translations are kept out of the write. */
       locale?: string;
+      /** Join the caller's transaction — same contract as insert()/submit()/cancel(). */
+      sessionOverride?: import("mongodb").ClientSession;
     } = {},
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
 
-    // Load existing
-    const doc = await this.loadDocInternal(doctype, name);
+    // Load existing — under the caller's session, so a write earlier in its
+    // transaction is visible.
+    const doc = await this.loadDocInternal(doctype, name, options.sessionOverride);
 
     // Snapshot attach-field file ids BEFORE the merge — so a save that clears or
     // replaces a file can delete the now-orphaned File (reference-counted) once
@@ -1211,7 +1214,7 @@ export class DocumentService {
       (f) => f.fieldtype === "Link" && changedFields.includes(f.fieldname),
     );
     if (hasChangedLinks) {
-      const fetched = await this.fetchFromResolver.resolve(entity, doc._data);
+      const fetched = await this.fetchFromResolver.resolve(entity, doc._data, options.sessionOverride);
       doc.merge(fetched);
     }
 
@@ -1219,7 +1222,8 @@ export class DocumentService {
     // write + on_update/on_change in a single transaction so any hook DB
     // write rolls back with the parent on failure. Hooks receive `session`
     // via merged services (`HookRunner.run/runFieldChangeHooks/runComputedHooks`).
-    await this.db.withTransaction(async (session) => {
+    // OR join the caller's existing session when supplied.
+    const runUpdate = async (session: import("mongodb").ClientSession) => {
       // Run field change hooks (transactional)
       await this.hookRunner.runFieldChangeHooks(doctype, doc, changedFields, ctx, session, user);
 
@@ -1342,22 +1346,31 @@ export class DocumentService {
         },
         session,
       );
-    });
 
-    // Reference-counted cleanup of files this save removed or replaced
-    // (post-commit, best-effort — a storage hiccup must never fail the save).
-    // doc._data now holds the new values; any file present before but gone now
-    // is an orphan.
-    if (this.storage && attachFilesBefore.length > 0) {
+      // Reference-counted cleanup of files this save removed or replaced, once
+      // the transaction commits — its own or the caller's — so a rollback never
+      // leaves the document pointing at a deleted file. Best-effort: a storage
+      // hiccup must never fail the save. doc._data now holds the new values;
+      // any file present before but gone now is an orphan.
+      const storage = this.storage;
       const after = new Set(collectAttachFileIds(entity.fields, doc._data));
-      for (const fileId of attachFilesBefore) {
-        if (after.has(fileId)) continue;
-        try {
-          await deleteFileRefCounted(this.db, this.storage, fileId);
-        } catch (err) {
-          log.warn({ doctype, name, fileId, err }, "Attachment cleanup failed on update");
-        }
+      const orphans = attachFilesBefore.filter((fileId) => !after.has(fileId));
+      if (storage && orphans.length > 0) {
+        this.db.afterCommit(session, async () => {
+          for (const fileId of orphans) {
+            try {
+              await deleteFileRefCounted(this.db, storage, fileId);
+            } catch (err) {
+              log.warn({ doctype, name, fileId, err }, "Attachment cleanup failed on update");
+            }
+          }
+        });
       }
+    };
+    if (options.sessionOverride) {
+      await runUpdate(options.sessionOverride);
+    } else {
+      await this.db.withTransaction(runUpdate);
     }
 
     ctx?.success("doc_saved", {
@@ -1842,9 +1855,12 @@ export class DocumentService {
     name: string,
     user: UserContext = GUEST_USER,
     ctx?: ResponseContext,
+    /** When provided, the delete joins the caller's transaction and sees what
+     * it wrote before — same contract as insert()/submit()/cancel(). */
+    sessionOverride?: import("mongodb").ClientSession,
   ): Promise<void> {
     const entity = this.registry.get(doctype);
-    const doc = await this.loadDocInternal(doctype, name);
+    const doc = await this.loadDocInternal(doctype, name, sessionOverride);
 
     // Permission check
     await this.permissionChecker.check(user, doctype, "delete", doc._data);
@@ -1853,7 +1869,7 @@ export class DocumentService {
     this.docStatusEngine.validateDelete(entity, doc);
 
     // Delete protection — check for references
-    const blockers = await this.deleteProtection.check(doctype, name);
+    const blockers = await this.deleteProtection.check(doctype, name, sessionOverride);
     if (blockers.length > 0) {
       const totalRefs = blockers.reduce((sum, b) => sum + b.count, 0);
       ctx?.error("link_delete_blocked", {
@@ -1865,7 +1881,7 @@ export class DocumentService {
 
     // Transactional delete — before_delete + after_delete run within the
     // same session as the deletion so cascade cleanup can be atomic.
-    await this.db.withTransaction(async (session) => {
+    const runDelete = async (session: import("mongodb").ClientSession) => {
       await this.hookRunner.run(doctype, "before_delete", doc, ctx, session, user);
       await this.db.deleteOne(entity.name, name, entity.database, session);
       // Cascade: remove this document's data-level translation rows so they don't
@@ -1889,12 +1905,19 @@ export class DocumentService {
         },
         session,
       );
-    });
 
-    // Cascade: reference-counted cleanup of the deleted doc's attachments
-    // (post-commit, best-effort — never fails the delete).
-    if (this.storage) {
-      await cleanupDocumentAttachments(this.db, this.storage, entity.fields, doc._data);
+      // Cascade: reference-counted cleanup of the deleted doc's attachments once
+      // the transaction commits — its own or the caller's — so a rollback keeps
+      // them (best-effort — never fails the delete).
+      const storage = this.storage;
+      if (storage) {
+        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, storage, entity.fields, doc._data));
+      }
+    };
+    if (sessionOverride) {
+      await runDelete(sessionOverride);
+    } else {
+      await this.db.withTransaction(runDelete);
     }
 
     ctx?.success("doc_deleted", {
@@ -1950,9 +1973,9 @@ export class DocumentService {
     // Run inside a transaction so the handler's spawned docs (e.g. a
     // document created from another via an action) commit or roll back as
     // a single unit with any side effects. HookRunner.runAction merges
-    // the session into its per-call services view, so the handler's
-    // `services.documentService.insert(...)` joins this transaction
-    // automatically (insert accepts a sessionOverride 6th arg).
+    // the session into its per-call services view; a handler that passes
+    // `services.session` to insert, update, transition, deleteDoc, submit,
+    // cancel or updateSubmitted joins this transaction.
     return this.db.withTransaction(async (session) => {
       const doc2 = await this.loadDocInternal(doctype, name);
       return this.hookRunner.runAction(doctype, actionName, doc2, ctx, session, user, params, extraServices);
@@ -1988,10 +2011,13 @@ export class DocumentService {
     toState: string,
     user: UserContext = GUEST_USER,
     ctx?: ResponseContext,
+    /** When provided, the move joins the caller's transaction — same contract
+     * as insert()/submit()/cancel(). */
+    sessionOverride?: import("mongodb").ClientSession,
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
     const workflowField = entity.workflow_field ?? "status";
-    const doc = await this.loadDocInternal(doctype, name);
+    const doc = await this.loadDocInternal(doctype, name, sessionOverride);
 
     if (entity.is_submittable && doc.docstatus === DocStatus.Submitted) {
       const toStateDef = (entity.states ?? []).find((s) => s.value === toState);
@@ -2005,7 +2031,7 @@ export class DocumentService {
           { set: { [workflowField]: toState } },
           user,
           ctx,
-          { skipWritePermCheck: true, allowWorkflowField: true },
+          { skipWritePermCheck: true, allowWorkflowField: true, sessionOverride },
         );
       }
       if (hasWorkflow && toStateDef && toStateDef.doc_status !== 1) {
@@ -2020,6 +2046,7 @@ export class DocumentService {
 
     return this.update(doctype, name, { [workflowField]: toState }, user, ctx, {
       skipWritePermCheck: true,
+      sessionOverride,
     });
   }
 

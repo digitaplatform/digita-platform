@@ -1,3 +1,4 @@
+import type { ClientSession } from "mongodb";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import { createLogger } from "../logging/logger.js";
@@ -20,7 +21,7 @@ export class DeleteProtection {
     private db: MongoDBService,
   ) {}
 
-  async check(doctype: string, name: string): Promise<DeleteBlocker[]> {
+  async check(doctype: string, name: string, session?: ClientSession): Promise<DeleteBlocker[]> {
     const blockers: DeleteBlocker[] = [];
     const incomingLinks = this.registry.getIncomingLinks(doctype);
 
@@ -32,7 +33,7 @@ export class DeleteProtection {
         ? { $regex: `^${escapeRegex(name)}::` }
         : name;
       const filter = { [link.fieldname]: linkValueFilter };
-      const count = await this.db.count(link.entity, [filter], linkDb);
+      const count = await this.db.count(link.entity, [filter], linkDb, session);
 
       if (count > 0) {
         blockers.push({

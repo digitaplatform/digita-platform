@@ -1,5 +1,6 @@
 import type { EntityDefinition, DatabaseTarget } from "@digitaplatform/shared";
 import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from "@digitaplatform/shared";
+import type { ClientSession } from "mongodb";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import { parseSubRowLink } from "../document/row-id.js";
@@ -49,6 +50,7 @@ export class FetchFromResolver {
   async resolve(
     entity: EntityDefinition,
     data: Record<string, unknown>,
+    session?: ClientSession,
   ): Promise<Record<string, unknown>> {
     const result = { ...data };
     const requests: FetchRequest[] = [];
@@ -161,21 +163,22 @@ export class FetchFromResolver {
       group.ids.add(r.id);
     }
 
+    // One query after the other: the driver does not support parallel operations
+    // inside a transaction, and `session` may be one.
     const docsByGroup = new Map<string, Map<string, Record<string, unknown>>>();
-    await Promise.all(
-      [...groups.values()].map(async (group) => {
-        const docs = await this.db.find(
-          group.target,
-          { filters: [{ _id: { $in: [...group.ids] } }] },
-          group.db,
-        );
-        const byId = new Map<string, Record<string, unknown>>();
-        for (const doc of docs) {
-          byId.set(String((doc as Record<string, unknown>)["_id"]), doc as Record<string, unknown>);
-        }
-        docsByGroup.set(`${String(group.db)}:${group.target}`, byId);
-      }),
-    );
+    for (const group of groups.values()) {
+      const docs = await this.db.find(
+        group.target,
+        { filters: [{ _id: { $in: [...group.ids] } }] },
+        group.db,
+        session,
+      );
+      const byId = new Map<string, Record<string, unknown>>();
+      for (const doc of docs) {
+        byId.set(String((doc as Record<string, unknown>)["_id"]), doc as Record<string, unknown>);
+      }
+      docsByGroup.set(`${String(group.db)}:${group.target}`, byId);
+    }
 
     // ── Phase 3: assign resolved values ──────────────────────────────────
     for (const r of requests) {
