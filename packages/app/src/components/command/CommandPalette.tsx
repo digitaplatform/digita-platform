@@ -74,26 +74,28 @@ export function CommandPalette() {
     [navigable, tEntity, tc, hasRole],
   );
 
+  const recordsGroup = tc('ui.cmd.recordsGroup');
   const records = useMemo<CommandItem[]>(() => {
     if (!searchActive || search.isError) return [];
-    const group = tc('ui.cmd.recordsGroup');
-    return (search.data ?? []).flatMap((hit) => hitToItem(hit, group) ?? []);
-  }, [searchActive, search.isError, search.data, tc]);
+    return (search.data ?? []).flatMap((hit) => hitToItem(hit, recordsGroup) ?? []);
+  }, [searchActive, search.isError, search.data, recordsGroup]);
 
   const items = useMemo(
     () => [...filterCommandItems(navItems, query), ...records],
     [navItems, query, records],
   );
 
-  const loading = searchActive && (search.isFetching || search.isLoading);
-  const status = !searchActive ? null : search.isError ? (
+  // The catalog still loading counts as a search in flight: the palette must not report
+  // "no matches" before it has anything to match against.
+  const loading = catalogLoading || (searchActive && (search.isFetching || search.isLoading));
+  const status = searchActive && search.isError ? (
     <span className="flex items-center gap-2 text-error">
       <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
       {tc('ui.cmd.searchError')}
     </span>
   ) : loading ? (
     <Spinner className="h-4 w-4" />
-  ) : records.length === 0 ? (
+  ) : searchActive && records.length === 0 ? (
     tc('ui.cmd.noRecords')
   ) : null;
 
@@ -111,9 +113,11 @@ export function CommandPalette() {
       query={query}
       onQueryChange={setQuery}
       status={status}
+      statusGroup={searchActive ? recordsGroup : undefined}
       hints={{ navigate: tc('ui.cmd.hintNavigate'), select: tc('ui.cmd.hintSelect'), close: tc('ui.cmd.hintClose') }}
       placeholder={tc('ui.cmd.placeholder')}
       aria-label={tc('ui.cmd.title')}
+      listLabel={tc('ui.cmd.resultsLabel')}
       emptyText={tc(navCatalogEmpty ? 'ui.cmd.noNavConfigured' : 'ui.cmd.noMatches')}
       closeLabel={tc('ui.action.close')}
     />

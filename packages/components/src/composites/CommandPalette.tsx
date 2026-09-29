@@ -42,17 +42,22 @@ export interface CommandPaletteProps<T extends CommandPaletteItem = CommandPalet
    *  already narrowed (an async search cannot be re-filtered by substring). */
   query?: string;
   onQueryChange?: (query: string) => void;
-  /** Controlled highlight (index into `items`); uncontrolled when absent. */
+  /** Controlled highlight: an index into the visible rows, which are `items` narrowed by the
+   *  substring filter, or `items` as handed over when the query is controlled. */
   activeIndex?: number;
   onActiveIndexChange?: (index: number) => void;
   /** Row under the items for what is not an item: a search in flight, a failed
    *  search, an async group that came back empty. It replaces the empty row. */
   status?: ReactNode;
+  /** Group heading over the status row, so a reader knows which group the status is about. */
+  statusGroup?: string;
   /** Labels of the footer's key hints. */
   hints?: CommandPaletteHints;
   placeholder?: string;
   /** Accessible dialog name. */
   'aria-label'?: string;
+  /** Accessible name of the result list; a screen reader announces it after the dialog name. */
+  listLabel?: string;
   /** Row shown when the filter matches nothing. */
   emptyText?: string;
   closeLabel?: string;
@@ -81,9 +86,11 @@ export function CommandPalette<T extends CommandPaletteItem>({
   activeIndex: activeProp,
   onActiveIndexChange,
   status,
+  statusGroup,
   hints = { navigate: 'navigate', select: 'select', close: 'close' },
   placeholder = 'Type a command or search…',
   'aria-label': ariaLabel = 'Command palette',
+  listLabel = 'Results',
   emptyText = 'No results',
   closeLabel = 'Close',
   className,
@@ -98,6 +105,8 @@ export function CommandPalette<T extends CommandPaletteItem>({
   const [queryState, setQueryState] = useState('');
   const query = queryProp ?? queryState;
   const setQuery = (value: string) => {
+    // A new query starts at the top; the highlighted row is only kept across list changes.
+    activeIdRef.current = undefined;
     setQueryState(value);
     onQueryChange?.(value);
   };
@@ -114,7 +123,11 @@ export function CommandPalette<T extends CommandPaletteItem>({
 
   const [activeState, setActiveState] = useState(-1);
   const active = activeProp ?? activeState;
+  // The highlighted row by id, so a list that changes under the same query (an async host
+  // handing over its hits) keeps the operator's arrow position instead of the index.
+  const activeIdRef = useRef<string | undefined>(undefined);
   const setActive = (index: number) => {
+    activeIdRef.current = filtered[index]?.id;
     setActiveState(index);
     onActiveIndexChange?.(index);
   };
@@ -132,9 +145,11 @@ export function CommandPalette<T extends CommandPaletteItem>({
     if (open) inputRef.current?.focus();
   }, [open]);
 
-  // (Re)seat the highlight on the first enabled row whenever the list changes.
+  // Seat the highlight whenever the list changes: on the row highlighted before while it is
+  // still there, else on the first enabled row.
   useEffect(() => {
-    setActive(filtered.findIndex((it) => !it.disabled));
+    const kept = filtered.findIndex((it) => it.id === activeIdRef.current);
+    setActive(kept >= 0 ? kept : filtered.findIndex((it) => !it.disabled));
   }, [filtered, open]);
 
   // Keep the active row scrolled into view.
@@ -188,22 +203,24 @@ export function CommandPalette<T extends CommandPaletteItem>({
 
   if (!open || typeof document === 'undefined') return null;
 
-  // One flat pass: a heading is emitted whenever the (defined) group changes.
+  // One flat pass: a heading is emitted whenever the (defined) group changes, the status row
+  // included, so a status about a group that has rows does not repeat its heading.
   const rows: ReactNode[] = [];
   let lastGroup: string | undefined;
+  const pushGroup = (group: string, key: string) => {
+    rows.push(
+      <li key={key} role="presentation">
+        <div
+          data-ui="command-group"
+          className="px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-textMuted"
+        >
+          {group}
+        </div>
+      </li>,
+    );
+  };
   filtered.forEach((item, i) => {
-    if (item.group && item.group !== lastGroup) {
-      rows.push(
-        <li key={`group:${item.group}:${i}`} role="presentation">
-          <div
-            data-ui="command-group"
-            className="px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-textMuted"
-          >
-            {item.group}
-          </div>
-        </li>,
-      );
-    }
+    if (item.group && item.group !== lastGroup) pushGroup(item.group, `group:${item.group}:${i}`);
     lastGroup = item.group;
     const isActive = i === active;
     rows.push(
@@ -243,6 +260,7 @@ export function CommandPalette<T extends CommandPaletteItem>({
       </li>,
     );
   });
+  if (status != null && statusGroup && statusGroup !== lastGroup) pushGroup(statusGroup, 'group:status');
 
   return createPortal(
     <div
@@ -304,7 +322,7 @@ export function CommandPalette<T extends CommandPaletteItem>({
           ref={listRef}
           id={listboxId}
           role="listbox"
-          aria-label={ariaLabel}
+          aria-label={listLabel}
           className="min-h-0 flex-1 overflow-y-auto py-1"
         >
           {rows}

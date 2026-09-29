@@ -82,12 +82,14 @@ describe('CommandPalette', () => {
   });
 
   it('emits every palette hook, and a row that lost its hook is caught', () => {
-    renderPalette({ status: 'Searching…' });
+    renderPalette({ status: 'Searching…', statusGroup: 'Records', listLabel: 'Results' });
     const hook = (name: string) => Array.from(document.body.querySelectorAll(`[data-ui="${name}"]`));
     expect(hook('command-overlay')).toHaveLength(1);
     expect(hook('command-palette')[0]).toHaveAttribute('role', 'dialog');
     expect(hook('command-input')[0]).toHaveAttribute('role', 'combobox');
-    expect(hook('command-group').map((g) => g.textContent)).toEqual(['Navigate', 'Actions']);
+    expect(screen.getByRole('listbox', { name: 'Results' })).toBeTruthy();
+    // The status row sits under its own heading, so a reader knows which group it is about.
+    expect(hook('command-group').map((g) => g.textContent)).toEqual(['Navigate', 'Actions', 'Records']);
     expect(hook('command-kbd').map((k) => k.textContent)).toEqual(['Ctrl+O', '↑↓', '↵', 'esc']);
     expect(hook('command-status')[0]).toHaveTextContent('Searching…');
     expect(hook('command-footer')[0]).toHaveTextContent('↑↓navigate↵selectescclose');
@@ -112,6 +114,29 @@ describe('CommandPalette', () => {
     expect(onQueryChange).toHaveBeenCalledWith('wipe');
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     expect(onActiveIndexChange).toHaveBeenLastCalledWith(2);
+  });
+
+  it('keeps the highlighted row when the list changes under the same query, and starts at the top on a new query', () => {
+    const controlled = (rows: CommandPaletteItem[], query: string) => (
+      <CommandPalette open items={rows} onSelect={() => {}} onClose={() => {}} query={query} onQueryChange={() => {}} />
+    );
+    const { rerender } = render(controlled(items, 'or'));
+    const input = screen.getByRole('combobox');
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(screen.getByRole('option', { name: /Orders/ })).toHaveAttribute('aria-selected', 'true');
+    // An async host hands over a new array when its hits arrive: the highlight stays on Orders.
+    const hit: CommandPaletteItem = { id: 'hit', label: 'Order 1', group: 'Records' };
+    rerender(controlled([hit, ...items], 'or'));
+    expect(screen.getByRole('option', { name: /Orders/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('option', { name: /Order 1/ })).toHaveAttribute('aria-selected', 'false');
+    // A new query starts at the first row again.
+    fireEvent.change(input, { target: { value: 'ord' } });
+    rerender(controlled([hit, ...items], 'ord'));
+    expect(screen.getByRole('option', { name: /Order 1/ })).toHaveAttribute('aria-selected', 'true');
+    // The highlighted row leaving the list reseats the highlight on the first enabled row.
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    rerender(controlled(items, 'ord'));
+    expect(screen.getByRole('option', { name: /^Home$/ })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('Home and End jump to the first and the last enabled row', () => {
