@@ -1,10 +1,11 @@
 import { randomUUID } from "crypto";
 import type { ClientSession } from "mongodb";
 import type { MongoDBService } from "../database/mongodb-service.js";
-import { DIGITA } from "@digitaplatform/shared";
+import { DIGITA, type EntityDefinition } from "@digitaplatform/shared";
 import { calculateChanges, type FieldChange } from "../document/change-tracker.js";
 import type { BaseDocument } from "../document/base-document.js";
 import { createLogger } from "../logging/logger.js";
+import { readStoredRow } from "../entity/field-types.js";
 
 const log = createLogger("version-service");
 
@@ -15,6 +16,15 @@ export interface Version {
   changed_by: string;
   timestamp: Date;
   changes: FieldChange[];
+}
+
+/** Each change's old and new value as a reader of the document gets it: a Password value is hidden. */
+export function readVersionChanges(version: Version, entity: EntityDefinition): Version {
+  const read = (field: string, value: unknown) => readStoredRow(entity, { [field]: value })[field];
+  return {
+    ...version,
+    changes: version.changes.map((c) => ({ ...c, old: read(c.field, c.old), new: read(c.field, c.new) })),
+  };
 }
 
 export class VersionService {

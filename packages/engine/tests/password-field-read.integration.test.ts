@@ -172,6 +172,16 @@ describe("a stored Password value never leaves the engine", () => {
     expect(res.body).not.toContain("hunter2");
   });
 
+  it("the audit log still answers for an entity that is no longer registered", async () => {
+    await db.insertOne("_versions", {
+      _id: "gone-1", entity: "GoneEntity", document_name: "G-0001", changed_by: "admin@digita.local",
+      timestamp: new Date(), changes: [{ field: "title", old: "a", new: "b" }],
+    }, "audits");
+    const res = await app.inject({ method: "GET", url: "/api/v1/audit?entity=GoneEntity", headers: authHeaders() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data[0].changes).toEqual([{ field: "title", old: "a", new: "b" }]);
+  });
+
   it("the link search omits it when the picker asks for it as a column", async () => {
     const res = await app.inject({ method: "GET", url: "/api/v1/search/Vault?q=Mail&fields=title,secret", headers: authHeaders() });
     expect(res.statusCode).toBe(200);

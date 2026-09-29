@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import type { VersionService } from "../version/version-service.js";
+import type { EntityRegistry } from "../entity/entity-registry.js";
+import { readVersionChanges, type VersionService } from "../version/version-service.js";
 import { requireAdministrator } from "../auth/require-admin.js";
 import { successResponse } from "./response-model.js";
 
@@ -13,6 +14,7 @@ export function registerAuditLogRoutes(
   app: FastifyInstance,
   prefix: string,
   versionService: VersionService,
+  registry: EntityRegistry,
 ): void {
   // Global audit log — recent field-level changes (with optional filters).
   // Administrator-gated: this cross-entity stream carries raw old→new values for
@@ -31,8 +33,10 @@ export function registerAuditLogRoutes(
     const offset = parseInt(query["offset"] ?? "0", 10);
 
     const result = await versionService.queryVersions(filters, limit, offset);
+    // A row of an entity no longer registered has no field types left to read it by, so it goes out as stored.
+    const data = result.data.map((v) => (registry.has(v.entity) ? readVersionChanges(v, registry.get(v.entity)) : v));
     return reply.send(
-      successResponse(result.data, [], {
+      successResponse(data, [], {
         total: result.total,
         page: Math.floor(offset / limit) + 1,
         page_size: limit,

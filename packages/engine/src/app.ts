@@ -445,7 +445,7 @@ export async function createApp(
       getDomainDirs: () => discoveredDomainDirs,
     });
     registerActivityLogRoutes(scope, env.API_PREFIX, activityLogService, documentService);
-    registerAuditLogRoutes(scope, env.API_PREFIX, versionService);
+    registerAuditLogRoutes(scope, env.API_PREFIX, versionService, registry);
     registerImportExportRoutes(scope, env.API_PREFIX, importService, exportService, permissionChecker, registry);
     registerUploadRoutes(scope, env.API_PREFIX, db, storage, registry, permissionChecker);
     registerSidebarRoutes(
