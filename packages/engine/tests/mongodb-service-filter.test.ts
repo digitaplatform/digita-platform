@@ -129,6 +129,19 @@ describe("MongoDBService filter formats", () => {
     expect(c).toBe(3);
   });
 
+  // A hook gets this service as services.db and writes the tuples the list route reads (#197).
+  it("count() ANDs two tuples on the same field, as the list route does", async () => {
+    expect(await db.count(COLL, [["n", ">=", 2], ["n", "<=", 3]], TARGET)).toBe(2);
+    const r = await db.find(COLL, { filters: [["n", ">=", 2], ["n", "<=", 3]] }, TARGET);
+    expect(r.map((d) => d._id).sort()).toEqual(["b", "c"]);
+  });
+
+  it("count() reads the list route's exists operator", async () => {
+    await db.insertOne(COLL, { _id: "e", n: 5 }, TARGET);
+    expect(await db.count(COLL, [["group", "exists", false]], TARGET)).toBe(1);
+    expect(await db.count(COLL, [["group", "exists", true]], TARGET)).toBe(4);
+  });
+
   it("empty filter array returns all rows", async () => {
     const r = await db.find(COLL, { filters: [] }, TARGET);
     expect(r.length).toBe(4);

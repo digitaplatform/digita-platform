@@ -170,7 +170,8 @@ export function parsePagination(query: ListQuery): { limit: number; offset: numb
   };
 }
 
-function mapOperatorToMongo(operator: string, value: unknown): unknown {
+/** The Mongo condition of one filter tuple's operator and value: the list route's and a hook's `services.db` alike. */
+export function mapOperatorToMongo(operator: string, value: unknown): unknown {
   switch (operator) {
     case "=":
     case "==":

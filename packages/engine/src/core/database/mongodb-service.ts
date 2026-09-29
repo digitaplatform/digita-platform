@@ -17,7 +17,7 @@ import { DIGITA } from "@digitaplatform/shared";
 import { env } from "../config/env.js";
 import { dbName } from "../config/db-names.js";
 import { createLogger } from "../logging/logger.js";
-import { safeUserRegex } from "./filter-builder.js";
+import { mapOperatorToMongo } from "./filter-builder.js";
 import { toIdString, toIdStorage, normalizeIdFilterValue } from "../document/id-codec.js";
 
 const log = createLogger("mongodb-service");
@@ -702,10 +702,16 @@ export class MongoDBService {
 
   // ─── Helpers ───────────────────────────────────────────
 
+  /**
+   * Every entry is a condition of its own and all of them must hold, as in the
+   * list route: two tuples on one field narrow the match instead of the second
+   * replacing the first. A tuple's operator maps as the list route maps it.
+   */
   private buildMongoFilter(filters: FilterEntry[]): Filter<Document> {
-    if (!filters.length) return {};
-
-    const mongoFilter: Record<string, unknown> = {};
+    const conditions: Record<string, unknown>[] = [];
+    const tupleCondition = ([field, operator, val]: [string, string, unknown]) => ({
+      [field]: mapOperatorToMongo(operator, val),
+    });
 
     for (const filter of filters) {
       // Form 1: top-level tuple [field, operator, value]
@@ -713,8 +719,7 @@ export class MongoDBService {
         if (filter.length !== 3 || typeof filter[0] !== "string" || typeof filter[1] !== "string") {
           throw new MalformedFilterError(filter);
         }
-        const [field, operator, val] = filter;
-        mongoFilter[field] = this.mapOperator(operator, val);
+        conditions.push(tupleCondition(filter));
         continue;
       }
 
@@ -725,8 +730,8 @@ export class MongoDBService {
         throw new MalformedFilterError(filter);
       }
 
-      const entries = Object.entries(filter);
-      for (const [key, value] of entries) {
+      const condition: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(filter)) {
         if (
           Array.isArray(value) &&
           value.length === 3 &&
@@ -734,70 +739,24 @@ export class MongoDBService {
           typeof value[1] === "string"
         ) {
           // Tuple-as-value: outer key is ignored, value is [field, op, val]
-          const [field, operator, val] = value as [string, string, unknown];
-          mongoFilter[field] = this.mapOperator(operator, val);
+          conditions.push(tupleCondition(value as [string, string, unknown]));
         } else {
           // Simple key-value: { status: "Active" } or { field: { $ne: x } }
-          mongoFilter[key] = value;
+          condition[key] = value;
         }
       }
+      if (Object.keys(condition).length > 0) conditions.push(condition);
     }
 
     // Match `_id` queries against native ObjectIds (a 24-hex string → ObjectId).
     // Link-field filters are left as strings — only `_id` is stored as ObjectId.
-    if (mongoFilter["_id"] !== undefined) {
-      mongoFilter["_id"] = normalizeIdFilterValue(mongoFilter["_id"]);
+    for (const condition of conditions) {
+      if (condition["_id"] !== undefined) condition["_id"] = normalizeIdFilterValue(condition["_id"]);
     }
 
-    return mongoFilter as Filter<Document>;
-  }
-
-  private mapOperator(operator: string, value: unknown): unknown {
-    switch (operator) {
-      case "=":
-      case "==":
-        return value;
-      case "!=":
-      case "<>":
-        return { $ne: value };
-      case ">":
-        return { $gt: value };
-      case ">=":
-        return { $gte: value };
-      case "<":
-        return { $lt: value };
-      case "<=":
-        return { $lte: value };
-      case "in":
-        return { $in: value };
-      case "not in":
-        return { $nin: value };
-      case "like":
-        return { $regex: this.likeToRegex(value as string), $options: "i" };
-      case "not like":
-        return { $not: { $regex: this.likeToRegex(value as string), $options: "i" } };
-      case "between":
-        if (Array.isArray(value) && value.length === 2) {
-          return { $gte: value[0], $lte: value[1] };
-        }
-        return value;
-      case "is":
-        if (value === "set" || value === "not null") return { $ne: null };
-        if (value === "not set" || value === "null") return null;
-        return value;
-      case "regex":
-        return { $regex: safeUserRegex(value), $options: "i" };
-      default:
-        return value;
-    }
-  }
-
-  private likeToRegex(pattern: string): string {
-    // Convert SQL LIKE pattern to regex: % → .*, _ → .
-    return pattern
-      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-      .replace(/%/g, ".*")
-      .replace(/_/g, ".");
+    if (conditions.length === 0) return {};
+    if (conditions.length === 1) return conditions[0] as Filter<Document>;
+    return { $and: conditions } as Filter<Document>;
   }
 
   private parseOrderBy(orderBy: string): Record<string, 1 | -1> {
