@@ -556,6 +556,87 @@ describe("Write-field-level permissions (perm_level)", () => {
   });
 });
 
+describe("A save keeps the stored value of a child field the user may not write", () => {
+  // Technician writes level 0 only: `step` is read_only, `note` is on level 1.
+  const technician: UserContext = { _id: "tech-001", email: "tech@test.local", roles: ["Technician"], full_name: "Tech" };
+
+  beforeAll(async () => {
+    registry.register(
+      makeEntity({
+        name: "ChecklistDoc",
+        fields: [
+          { fieldname: "title", fieldtype: "Data" as const, label: "Title" },
+          {
+            fieldname: "checklist",
+            fieldtype: "Table" as const,
+            label: "Checklist",
+            child_fields: [
+              { fieldname: "step", fieldtype: "Data" as const, label: "Step", read_only: true, default: "Extra step" },
+              { fieldname: "done", fieldtype: "Check" as const, label: "Done" },
+              { fieldname: "note", fieldtype: "Data" as const, label: "Note", perm_level: 1 },
+            ],
+          },
+        ],
+        permissions: [
+          { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
+          { role: "Technician", level: 0, select: 1, read: 1, write: 1 },
+        ],
+      }),
+    );
+    await db.ensureCollection("ChecklistDoc", "app");
+  });
+
+  async function storedRows(name: string): Promise<Record<string, unknown>[]> {
+    const raw = (await db.findOne("ChecklistDoc", name, "app")) as Record<string, unknown>;
+    return raw["checklist"] as Record<string, unknown>[];
+  }
+
+  it("keeps a gated child field on every existing row and defaults it on a new row", async () => {
+    const created = await docService.insert(
+      "ChecklistDoc",
+      { title: "WO", checklist: [{ step: "Brakes", note: "pads worn" }, { step: "Chain", note: "stretched" }] },
+      adminUser,
+    );
+    const [brakes, chain] = await storedRows(created._id);
+
+    // The technician resends the rows as read (no `note`), tries to rename one
+    // step, and adds a row.
+    await docService.update(
+      "ChecklistDoc",
+      created._id,
+      {
+        checklist: [
+          { _row_id: brakes!["_row_id"], step: "Brakes", done: true },
+          { _row_id: chain!["_row_id"], step: "Renamed", done: true },
+          { step: "Forged", done: false },
+        ],
+      },
+      technician,
+    );
+
+    const rows = await storedRows(created._id);
+    expect(rows.map((r) => r["step"])).toEqual(["Brakes", "Chain", "Extra step"]);
+    expect(rows.map((r) => r["note"])).toEqual(["pads worn", "stretched", undefined]);
+    expect(rows.map((r) => r["done"])).toEqual([true, true, false]);
+  });
+
+  it("lets Administrator change the gated child field", async () => {
+    const created = await docService.insert("ChecklistDoc", { title: "WO", checklist: [{ step: "Brakes" }] }, adminUser);
+    const [brakes] = await storedRows(created._id);
+
+    await docService.update(
+      "ChecklistDoc",
+      created._id,
+      { checklist: [{ _row_id: brakes!["_row_id"], step: "Brakes and pads", note: "checked" }] },
+      adminUser,
+    );
+
+    const [row] = await storedRows(created._id);
+    expect(row!["step"]).toBe("Brakes and pads");
+    expect(row!["note"]).toBe("checked");
+  });
+});
+
 describe("Read-field-level permissions: a link title or status color shows only with its field", () => {
   // Clerk reads level 0 only: the Link `customer` and the `status` sit at level 1.
   const clerk: UserContext = {

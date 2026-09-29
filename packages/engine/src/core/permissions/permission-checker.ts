@@ -1,5 +1,5 @@
 import type { EntityDefinition, EntityPermission, FieldDefinition, StatePermissionOverride } from "@digitaplatform/shared";
-import { SYSTEM_ROLES, canGrantActionTo } from "@digitaplatform/shared";
+import { ROW_ID_FIELD, SYSTEM_ROLES, canGrantActionTo } from "@digitaplatform/shared";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import { docFieldsOf, evaluateExpression } from "../expression/expression-evaluator.js";
 import { scopeValueMatches } from "./scope-filter.js";
@@ -524,9 +524,12 @@ export class PermissionChecker {
   /**
    * Filter incoming write data to only the fields the user may write (based on
    * perm_level + read_only). Mirrors filterFieldsForRead: recurses into Table
-   * fields with per-child-field masking. Strips silently — protected fields
-   * fall back to defaults/computed/existing values downstream. `_`-prefixed
-   * meta keys always pass.
+   * fields with per-child-field masking. Strips silently: an update merges the
+   * result, so a stripped top-level field keeps its stored value. A Table is
+   * stored whole, so on an update (`contextDoc`) each row matched by `_row_id`
+   * takes the child fields the user may not write from its stored row; a new
+   * row has none and gets its defaults downstream. `_`-prefixed meta keys
+   * always pass.
    */
   filterFieldsForWrite(
     user: UserContext,
@@ -555,8 +558,19 @@ export class PermissionChecker {
         if (allowedChildKeys === null) {
           filtered[key] = value;
         } else {
+          const storedTable = contextDoc?.[key];
+          const storedRows = new Map<string, Record<string, unknown>>();
+          for (const stored of Array.isArray(storedTable) ? (storedTable as Array<Record<string, unknown>>) : []) {
+            const rowId = stored?.[ROW_ID_FIELD];
+            if (typeof rowId === "string" && rowId !== "") storedRows.set(rowId, stored);
+          }
           filtered[key] = (value as Array<Record<string, unknown>>).map((row) => {
             const filteredRow: Record<string, unknown> = {};
+            const rowId = row[ROW_ID_FIELD];
+            const stored = typeof rowId === "string" ? storedRows.get(rowId) : undefined;
+            for (const [k, v] of Object.entries(stored ?? {})) {
+              if (!allowedChildKeys.has(k) && !k.startsWith("_")) filteredRow[k] = v;
+            }
             for (const [k, v] of Object.entries(row)) {
               if (allowedChildKeys.has(k) || k.startsWith("_")) filteredRow[k] = v;
             }
