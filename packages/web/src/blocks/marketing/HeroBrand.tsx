@@ -308,7 +308,7 @@ function RevealApp({ locale }: { locale: Locale }) {
   );
 }
 
-/** Five columns of the definition's own tokens, falling behind the hero; none under reduced motion. */
+/** Five columns of the definition's own tokens, falling behind the hero; still under reduced motion. */
 const RAIN = [
   { left: "4%", duration: "34s", delay: "0s", tokens: ['"customer"', "Link→Customer", '"lines"', "Table", '"qty"', "10", '"unit_price"', "149.00", '"line_total"', "1490.00", '"grand_total"', "1886.15", '"docstatus"', "1", '"naming"', "SO-{####}"] },
   { left: "18%", duration: "46s", delay: "-12s", tokens: ['"_id"', "SO-2026-0042", '"states"', "draft", "confirmed", "delivered", '"hooks"', "computeTotals", "checkCreditLimit", '"permissions"', "level 0", "level 1"] },
