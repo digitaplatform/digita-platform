@@ -638,28 +638,6 @@ export async function createApp(
       }
     }
 
-    // 4b-ter. A website engine (SITE_ID set) always seeds its own site from
-    //     `<domainDir>/sites/<SITE_ID>/`: a website has no demo tier to opt into,
-    //     and without its content it is an empty page. The catalog is the source
-    //     of a site's content, so the seed UPSERTS: a page changed in the catalog
-    //     reaches the live site with the next boot, an edit made in the app lasts
-    //     until then, and nothing is deleted (rows the seed does not carry are
-    //     reported). Translation files of a site stay insert-only. Non-fatal, as
-    //     4b-bis.
-    if (env.SITE_ID) {
-      const siteSeedDirs = domainDirs.map((d) => join(d.root, "sites", env.SITE_ID));
-      try {
-        await seedAppData(db, registry, new NamingService(db), siteSeedDirs, { mode: "upsert" });
-        await seedDataTranslations(db, registry, translationService, siteSeedDirs);
-        log.info({ site: env.SITE_ID, dirs: siteSeedDirs.length }, "Site content seeded at boot");
-      } catch (e) {
-        log.error(
-          { err: (e as Error).message },
-          "Boot site-content seed failed (non-fatal) — continuing startup",
-        );
-      }
-    }
-
     // 4c. Load RoleRegistry from the seeded Role collection.
     //     Boot sees only platform-built-in roles (Administrator / System
     //     User / Website User / Guest); app-specific roles (Sales
@@ -793,6 +771,39 @@ export async function createApp(
       await seedViewsFromFiles(db, viewDirs, viewRegistry, new Set(env.VIEW_FORCE));
     }
     await viewRegistry.loadFromDb(db);
+
+    // 6d. A website engine (SITE_ID set) always seeds its own site from
+    //     `<domainDir>/sites/<SITE_ID>/`: a website has no demo tier to opt into,
+    //     and without its content it is an empty page. Site content is Git-owned:
+    //     the catalog is the whole truth of a site, so the seed upserts and deletes:
+    //     a page changed in the catalog reaches the live site with the next boot, a
+    //     page dropped from the catalog leaves it, an edit made in the app lasts
+    //     until the next boot, and a page a person created or last changed stays
+    //     and is logged. The delete goes through the document service and runs
+    //     after 6, so a `before_delete` or `after_delete` hook of the bundle sees
+    //     it as any delete. A dropped page a stored menu still links is deleted
+    //     once the seed has rewritten the menu; one a person's menu still links
+    //     stays and is logged. In a rolling deploy an engine of the previous
+    //     release deletes the pages the newer catalog added until an engine of
+    //     the new release boots again. Translation files of a site stay insert-only.
+    //     Non-fatal, as 4b-bis.
+    if (env.SITE_ID) {
+      const siteSeedDirs = domainDirs.map((d) => join(d.root, "sites", env.SITE_ID));
+      try {
+        await seedAppData(db, registry, new NamingService(db), siteSeedDirs, {
+          mode: "upsert-delete",
+          site: env.SITE_ID,
+          documentService,
+        });
+        await seedDataTranslations(db, registry, translationService, siteSeedDirs);
+        log.info({ site: env.SITE_ID, dirs: siteSeedDirs.length }, "Site content seeded at boot");
+      } catch (e) {
+        log.error(
+          { err: (e as Error).message },
+          "Boot site-content seed failed (non-fatal) — continuing startup",
+        );
+      }
+    }
 
     // 7. Initialize locale resolver
     await localeResolver.initialize();

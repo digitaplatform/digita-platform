@@ -4,7 +4,9 @@ import { ObjectId } from "mongodb";
 import { ROW_ID_FIELD, type EntityDefinition } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
+import { DeleteBlockedError, NotFoundError, type DocumentService } from "../document/document-service.js";
 import type { NamingService } from "../document/naming-service.js";
+import { SYSTEM_ROLES, type UserContext } from "../permissions/types.js";
 import { injectRowIds } from "../document/base-document.js";
 import { deepEqual } from "../document/change-tracker.js";
 import { toIdString } from "../document/id-codec.js";
@@ -52,17 +54,37 @@ interface Collected {
  *
  * is_single entities: the file MUST contain exactly one row.
  *
- * Two modes, never destructive:
+ * Two modes:
  *  - `insert` (default): skip rows whose `_id` already exists. The reference and demo
- *    tiers use it, so a runtime edit survives every boot.
- *  - `upsert`: a row whose `_id` exists is replaced by the seed row (its `creation` and
- *    `owner` carried forward); rows the seed does not carry stay and are reported. The
- *    website engine uses it for `sites/<SITE_ID>/`, where the catalog is the source of
- *    the content and a deploy must carry a changed page to the live site.
+ *    tiers use it, so a runtime edit survives every boot. Nothing is deleted.
+ *  - `upsert-delete`: first the rows of `site` that the seed does not carry are deleted
+ *    when the seed itself wrote them and no person changed them since (`owner` and
+ *    `modified_by` are `system`, as this loader writes them); a row a person created or
+ *    last changed stays and is logged. Then a row whose `_id` exists is replaced by the
+ *    seed row (its `creation` and `owner` carried forward) and a new row is inserted.
+ *    A delete another row still links to (a menu item's page) is refused by the document
+ *    service and retried after the write, as the seed may have rewritten the linking
+ *    row; the retry reads the row again and keeps it once a person changed it meanwhile;
+ *    a row still linked after that stays and is logged with the linking entity.
+ *    `system` is also the identity a rule action writes as when no user triggered it
+ *    (rules/actions/create-document.ts, update-document.ts), so a row such a rule
+ *    creates for the site is swept as if the seed wrote it. The website engine uses it for
+ *    `sites/<SITE_ID>/`: site content is Git-owned, the catalog is the whole truth of a
+ *    site, so a page dropped from the catalog leaves the live site at the next boot.
+ *    The delete takes the path an API delete takes (the document service), so hooks and
+ *    the activity log see it as any delete; the caller runs it after the app's hooks are
+ *    loaded. Rows of another site are never read.
  */
-export interface SeedOptions {
-  mode?: "insert" | "upsert";
-}
+export type SeedOptions =
+  | { mode?: "insert" }
+  | { mode: "upsert-delete"; site: string; documentService: DocumentService };
+
+/** The identity this loader writes into `owner` and `modified_by`, and deletes as. */
+const SEED_IDENTITY = "system";
+const SEED_USER: UserContext = { _id: SEED_IDENTITY, email: SEED_IDENTITY, roles: [SYSTEM_ROLES.ADMINISTRATOR] };
+/** True when this loader wrote the row and no person changed it since. */
+const seedWrote = (doc: Record<string, unknown>) =>
+  doc.owner === SEED_IDENTITY && doc.modified_by === SEED_IDENTITY;
 
 export async function seedAppData(
   db: MongoDBService,
@@ -221,24 +243,50 @@ export async function seedAppData(
     }
   }
 
-  // ── Pass 4: insert (non-destructive, chunked); upsert mode replaces existing rows ──
-  for (const { entity, rows } of collected) {
-    await insertRows(db, entity, rows, mode);
+  // ── Pass 3c: in upsert-delete mode, delete the site's rows the seed no longer carries ──
+  // Before Pass 4: a stale row can hold a unique key (WebPage's site, locale, slug) that
+  // a carried row now needs, and the write would fail on it at every boot. One sweep per
+  // entity over the ids of every seed dir: two dirs may each carry a file of the same
+  // entity, and a sweep per file would delete what the other seeded. A delete the document
+  // service refuses because a stored row still links the row is retried after Pass 4.
+  const blocked: Array<{ entity: EntityDefinition; ids: string[] }> = [];
+  if (options.mode === "upsert-delete") {
+    for (const { entity, seeded } of seededIdsByEntity(collected).values()) {
+      const stale = await findSiteRowsTheSeedWroteAndDoesNotCarry(db, entity, seeded, options.site);
+      const { blocked: ids } = await deleteSiteRows(options.documentService, entity, stale, options.site);
+      if (ids.size > 0) blocked.push({ entity, ids: [...ids.keys()] });
+    }
   }
 
-  // ── Pass 4b: in upsert mode, report the rows in the collection the seed does not carry ──
-  // Upsert never deletes: a page dropped from the catalog, or one created in the app,
-  // stays in the database until an operation removes it. Naming them on every boot
-  // keeps that visible.
-  if (mode === "upsert") {
-    for (const { entity, rows } of collected) {
-      const seeded = new Set(rows.map((row) => toIdString(row.__seedId ?? String(row["_id"]))));
-      const stored = await db.find(entity.name, { fields: ["_id"] }, entity.database);
-      const unseeded = stored.map((doc) => toIdString(String(doc._id))).filter((id) => !seeded.has(id));
-      if (unseeded.length > 0) {
-        log.warn(
-          { entity: entity.name, db: entity.database, unseeded: unseeded.length, ids: unseeded.slice(0, 50) },
-          "seed-app-data: rows in the collection that the seed does not carry stay as they are",
+  // ── Pass 4: insert (non-destructive, chunked); upsert-delete replaces existing rows ──
+  for (const { entity, rows } of collected) {
+    await insertRows(db, entity, rows, mode === "insert" ? "insert" : "upsert");
+  }
+
+  // ── Pass 4b: retry the deletes a stored row blocked, now that the seed rewrote its rows ──
+  // A link that survives comes from a row the sweep did not delete or from a carried row the
+  // seed itself points at the page, so the page stays. Pass 4's writes lie between the Pass 3c
+  // check and this retry, and a person may have changed the row through another engine
+  // meanwhile, so each row is read again and stays unless it still carries the seed's identity.
+  if (options.mode === "upsert-delete") {
+    for (const { entity, ids } of blocked) {
+      const retry: string[] = [];
+      for (const id of ids) {
+        const row = await db.findOne(entity.name, id, entity.database);
+        if (row != null && !seedWrote(row)) {
+          log.warn(
+            { entity: entity.name, db: entity.database, site: options.site, id },
+            "seed-app-data: a row the seed does not carry stays, a person changed it since the sweep",
+          );
+          continue;
+        }
+        retry.push(id);
+      }
+      const { blocked: still } = await deleteSiteRows(options.documentService, entity, retry, options.site);
+      for (const [id, blockers] of still) {
+        log.error(
+          { entity: entity.name, id, blockers },
+          "seed-app-data: a row the seed does not carry stays, another row still links it",
         );
       }
     }
@@ -295,11 +343,84 @@ export async function seedAppData(
   }
 }
 
+function seededIdsByEntity(collected: Collected[]): Map<string, { entity: EntityDefinition; seeded: Set<string> }> {
+  const byEntity = new Map<string, { entity: EntityDefinition; seeded: Set<string> }>();
+  for (const { entity, rows } of collected) {
+    const { seeded } = byEntity.get(entity.name) ?? { seeded: new Set<string>() };
+    for (const row of rows) seeded.add(toIdString(row.__seedId ?? String(row["_id"])));
+    byEntity.set(entity.name, { entity, seeded });
+  }
+  return byEntity;
+}
+
+/**
+ * Only the site's rows are read: `site` is the field every seeded page and menu carries.
+ * A row a person created or last changed is the one thing the catalog cannot know, so it
+ * stays whatever the seed carries, and the log names it on every boot.
+ */
+async function findSiteRowsTheSeedWroteAndDoesNotCarry(
+  db: MongoDBService,
+  entity: EntityDefinition,
+  seeded: Set<string>,
+  site: string,
+): Promise<string[]> {
+  const stored = await db.find(
+    entity.name,
+    { filters: [{ site }], fields: ["_id", "owner", "modified_by"] },
+    entity.database,
+  );
+  const unseeded = stored.filter((doc) => !seeded.has(toIdString(String(doc._id))));
+  const kept = unseeded.filter((doc) => !seedWrote(doc)).map((doc) => toIdString(String(doc._id)));
+  if (kept.length > 0) {
+    log.warn(
+      { entity: entity.name, db: entity.database, site, kept: kept.length, ids: kept },
+      "seed-app-data: rows the seed does not carry stay, a person created or changed them",
+    );
+  }
+  return unseeded.filter(seedWrote).map((doc) => toIdString(String(doc._id)));
+}
+
+/** Deletes through the document service; returns the rows another row still links, with the link. */
+async function deleteSiteRows(
+  documentService: DocumentService,
+  entity: EntityDefinition,
+  ids: string[],
+  site: string,
+): Promise<{ blocked: Map<string, DeleteBlockedError["blockers"]> }> {
+  const deleted: string[] = [];
+  const blocked = new Map<string, DeleteBlockedError["blockers"]>();
+  for (const id of ids) {
+    try {
+      await documentService.deleteDoc(entity.name, id, SEED_USER);
+      deleted.push(id);
+    } catch (err) {
+      // Another engine of the same site booting at the same time deleted it first.
+      if (err instanceof NotFoundError) continue;
+      if (err instanceof DeleteBlockedError) {
+        blocked.set(id, err.blockers);
+        continue;
+      }
+      // One failed row must not hide the rest of the sweep.
+      log.error(
+        { entity: entity.name, id, err: (err as Error).message },
+        "seed-app-data: could not delete a row the seed does not carry",
+      );
+    }
+  }
+  if (deleted.length > 0) {
+    log.info(
+      { entity: entity.name, db: entity.database, site, deleted: deleted.length, ids: deleted },
+      "seed-app-data: deleted rows the seed no longer carries",
+    );
+  }
+  return { blocked };
+}
+
 async function insertRows(
   db: MongoDBService,
   entity: EntityDefinition,
   rows: CollectedRow[],
-  mode: NonNullable<SeedOptions["mode"]>,
+  mode: "insert" | "upsert",
 ): Promise<void> {
   const target = entity.database;
   let inserted = 0;
@@ -356,7 +477,7 @@ async function insertRows(
         _id: existing._id,
         doctype: entity.name,
         docstatus,
-        owner: existing.owner ?? "system",
+        owner: existing.owner ?? SEED_IDENTITY,
         creation: existing.creation ?? now,
       };
       if (sameDocument(candidate, existing)) {
@@ -367,7 +488,7 @@ async function insertRows(
       // matters for an entity whose ids are ObjectIds (findOne hands them back as strings).
       const { _id: _compared, ...body } = candidate;
       void _compared;
-      await db.upsertOne(entity.name, idString, { ...body, modified_by: "system", modified: now }, target);
+      await db.upsertOne(entity.name, idString, { ...body, modified_by: SEED_IDENTITY, modified: now }, target);
       updated++;
       continue;
     }
@@ -379,8 +500,8 @@ async function insertRows(
       _id: id,
       doctype: entity.name,
       docstatus,
-      owner: "system",
-      modified_by: "system",
+      owner: SEED_IDENTITY,
+      modified_by: SEED_IDENTITY,
       creation: now,
       modified: now,
     });

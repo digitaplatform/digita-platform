@@ -54,6 +54,8 @@ import type { FastifyInstance } from "fastify";
 import { mkdir, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
+import { readFile } from "fs/promises";
+import { DIGITA } from "@digitaplatform/shared";
 import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
@@ -72,6 +74,8 @@ import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 const APP_BASENAME = "digita-site-scope-fixture";
 const DB = `${APP_BASENAME}_content`;
 let fixtureRoot: string;
+/** Every WebPage id the fixture's `after_delete` hook saw, one per line. */
+const DELETED_MARKER = join(tmpdir(), `${APP_BASENAME}-deleted.txt`);
 
 async function writeJson(path: string, data: unknown): Promise<void> {
   await mkdir(join(path, ".."), { recursive: true });
@@ -103,7 +107,18 @@ async function writeFixture(): Promise<string> {
       { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
       { role: "Guest", level: 0, select: 1, read: 1 },
     ],
+    hooks: { after_delete: "web/page.afterDelete" },
   });
+  // The hook records what it saw, so a boot delete proves that it took the API's path.
+  const modules = join(appDir, "content", "modules", "web");
+  await mkdir(modules, { recursive: true });
+  await writeFile(
+    join(modules, "page.ts"),
+    `import { appendFileSync } from "fs";\n` +
+      `export const afterDelete = (doc: { _id: string }) => appendFileSync(${JSON.stringify(DELETED_MARKER)}, doc._id + "\\n");\n`,
+    "utf-8",
+  );
+  await rm(DELETED_MARKER, { force: true });
   for (const [site, label] of [["site-a", "Site A"], ["site-b", "Site B"]] as const) {
     const dir = join(appDir, "content", "sites", site);
     await writeJson(join(dir, "WebSite.seed.json"), [{ _id: site, site_name: label }]);
@@ -138,6 +153,7 @@ afterAll(async () => {
     await db.disconnect();
   }
   await rm(fixtureRoot, { recursive: true, force: true });
+  await rm(DELETED_MARKER, { force: true });
   await replSet.stop();
 }, 30000);
 
@@ -196,5 +212,27 @@ describe("Per-site website engine (hostyour-manager#308)", () => {
     expect(a.statusCode).toBe(200);
     const b = await app.inject({ method: "GET", url: "/api/v1/public/resource/WebSite/site-b" });
     expect(b.statusCode).toBe(200);
+  });
+
+  it("deletes the site's rows the seed no longer carries through the document service, hooks loaded (#67)", async () => {
+    // Rows of an earlier catalog: one this loader wrote, one a person changed since.
+    const db = booted[0]!.db;
+    const stamps = { doctype: "WebPage", docstatus: 0, creation: new Date(), modified: new Date() };
+    await db.insertOne("WebPage", { ...stamps, _id: "site-a::stale", site: "site-a", title: "Stale", owner: "system", modified_by: "system" }, DB);
+    await db.insertOne("WebPage", { ...stamps, _id: "site-a::mine", site: "site-a", title: "Mine", owner: "system", modified_by: "admin@example.com" }, DB);
+
+    await boot("site-a");
+
+    expect(await db.findOne("WebPage", "site-a::stale", DB)).toBeNull();
+    expect(await db.findOne("WebPage", "site-a::mine", DB)).toBeTruthy();
+    expect(await db.findOne("WebPage", "site-a::home", DB)).toBeTruthy();
+    // The planted defect this test guards: a sweep that runs before the app's hooks are loaded.
+    expect(await readFile(DELETED_MARKER, "utf-8")).toBe("site-a::stale\n");
+    const logged = await db.find(
+      DIGITA.COLLECTIONS.LOG,
+      { filters: [{ entity: "WebPage" }, { document_name: "site-a::stale" }, { action: "Deleted" }] },
+      DIGITA.DATABASES.LOGS,
+    );
+    expect(logged.map((row) => row.user)).toEqual(["system"]);
   });
 });
