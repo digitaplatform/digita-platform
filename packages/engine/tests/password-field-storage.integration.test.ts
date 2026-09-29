@@ -106,9 +106,7 @@ function authHeaders() {
 }
 
 describe("a Password value at rest", () => {
-  // Skipped until the owner decides how it is stored (#76): a red test on master
-  // would stop the push gate.
-  it.skip("is not the value as sent (#76)", async () => {
+  it("is not the value as sent", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/v1/resource/Vault",
