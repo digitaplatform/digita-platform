@@ -31,8 +31,10 @@ const log = createLogger("mongodb-service");
  *
  *   2. Tuple-style — `[field, operator, value]`
  *      Operator is one of: `=`, `==`, `!=`, `<>`, `>`, `>=`, `<`, `<=`,
- *      `in`, `not in`, `like`, `not like`, `between`, `is`, `regex`.
- *      Mirrors the format used by the HTTP resource-router (filter-builder.ts).
+ *      `in`, `not in`, `like`, `not like`, `between`, `is`, `regex`, `exists`.
+ *      Mapped by `mapOperatorToMongo` (filter-builder.ts), as the HTTP list route
+ *      maps it; the values are compared as given, without the list route's date
+ *      coercion.
  *
  * Both styles can be mixed in the same `filters` array. Each entry is
  * AND-merged into the final Mongo filter.
