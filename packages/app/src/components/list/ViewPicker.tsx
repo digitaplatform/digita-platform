@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Check, Star, Building2, Trash2, Save, Plus, Users, RotateCcw, ListX } from 'lucide-react';
-import { Button, Input, Select, IconButton } from '@digitaplatform/components';
+import { Button, Input, Select, IconButton, useFocusTrap } from '@digitaplatform/components';
 import { useChrome } from '@/lib/chrome-i18n';
-import { useFocusTrap } from '@/lib/use-focus-trap';
 import { tid } from '@/lib/testid';
 import type { ListPreferenceDoc, ViewVisibility } from '@/services/listPreference';
 

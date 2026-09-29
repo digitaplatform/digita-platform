@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Search, Columns3, Download, Upload, Repeat, X, Plus, MoreHorizontal } from 'lucide-react';
 import type { EntityDefinition } from '@digitaplatform/shared';
-import { Button, Chip, Input, Fab, Menu, MenuItem, PageHeader, Tooltip } from '@digitaplatform/components';
+import { Button, Chip, Input, Fab, Menu, MenuItem, PageHeader, Tooltip, useFocusTrap } from '@digitaplatform/components';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useSessionStore } from '@/stores/session';
 import { formatNumber } from '@/lib/format';
-import { useFocusTrap } from '@/lib/use-focus-trap';
 import type { FilterTuple } from '@/lib/filter-from-url';
 import type { ListPreferenceDoc, ViewVisibility } from '@/services/listPreference';
 import { FilterChip } from './FilterChip';

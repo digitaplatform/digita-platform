@@ -8,11 +8,10 @@ import type { ListPreferenceDoc } from '@/services/listPreference';
  * Saved-views (Weg-B) UI contract: the ViewPicker addresses every control by a
  * meta-derived data-testid (tid.view) — never by i18n label — and fires the right
  * callback for apply / all-records / update / delete / set-default / save-as.
- * Pure component: callbacks are spies; only useChrome + useFocusTrap are stubbed.
+ * Pure component: callbacks are spies; only useChrome is stubbed.
  */
 
 vi.mock('@/lib/chrome-i18n', () => ({ useChrome: () => (k: string) => k }));
-vi.mock('@/lib/use-focus-trap', () => ({ useFocusTrap: () => {} }));
 
 import { ViewPicker } from '@/components/list/ViewPicker';
 
