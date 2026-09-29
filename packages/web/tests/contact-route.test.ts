@@ -68,9 +68,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
+
+const HOUR = 60 * 60 * 1000;
 
 describe("POST /api/contact", () => {
   it("creates the ContactRequest through the public create without a credential and nothing else", async () => {
@@ -129,11 +132,17 @@ describe("POST /api/contact", () => {
     expect(create?.[1].headers["X-Forwarded-For"]).toBe("198.51.100.20");
   });
 
-  it("answers 429 to the sixth request in an hour from one address", async () => {
+  it("PLANTED DEFECT: answers 429 to the sixth request in an hour from one address and 200 again once the hour has passed", async () => {
+    vi.useFakeTimers();
     const route = await loadRoute();
     for (let i = 0; i < 5; i++) expect((await send(route, valid(), "198.51.100.7")).status).toBe(200);
     expect((await send(route, valid(), "198.51.100.7")).status).toBe(429);
     expect((await send(route, valid(), "198.51.100.8")).status).toBe(200);
+    // The window is the route's own, so a wrong RATE_WINDOW_MS or a swapped constructor argument goes red here.
+    vi.advanceTimersByTime(HOUR - 1);
+    expect((await send(route, valid(), "198.51.100.7")).status).toBe(429);
+    vi.advanceTimersByTime(1);
+    expect((await send(route, valid(), "198.51.100.7")).status).toBe(200);
   });
 
   it("answers 500 without an internal URL when the engine fails the create", async () => {

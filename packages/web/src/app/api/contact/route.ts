@@ -2,29 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getConfig } from "@/config/env";
 import { createContactRequest, getSite } from "@/lib/engine-client";
 import { CONTACT_TOPICS, type ContactRequest } from "@/lib/contact-request";
+import { ContactRateLimit } from "@/lib/contact-rate-limit";
 
 /** A form sent sooner than this after the server rendered its page was filled by a program. */
 const MIN_FILL_MS = 3000;
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 
-// ponytail: in-memory, per process: a restart forgets it and each replica counts on its own, so
-// the real ceiling is 5 per hour per replica. Move it to a shared store (Redis) once the site
-// runs more than one replica or sees real abuse.
-const sentAt = new Map<string, number[]>();
-
-/** Counts this request against its address and answers whether the address is over the limit. */
-function isRateLimited(address: string, now: number): boolean {
-  for (const [key, times] of sentAt) {
-    const recent = times.filter((t) => now - t < RATE_WINDOW_MS);
-    if (recent.length) sentAt.set(key, recent);
-    else sentAt.delete(key);
-  }
-  const times = sentAt.get(address) ?? [];
-  times.push(now);
-  sentAt.set(address, times);
-  return times.length > RATE_LIMIT;
-}
+const rateLimit = new ContactRateLimit(RATE_LIMIT, RATE_WINDOW_MS);
 
 /** The ingress appends the address it saw as the last x-forwarded-for entry; an earlier entry is
  *  whatever the visitor wrote themselves, so only the last one identifies them. */
@@ -69,7 +54,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const config = getConfig();
   const now = Date.now();
   const visitor = clientAddress(req);
-  if (isRateLimited(visitor, now)) return answer(429, { ok: false, message: "Too many requests" });
+  rateLimit.recordSend(visitor);
+  if (rateLimit.isOverLimit(visitor)) return answer(429, { ok: false, message: "Too many requests" });
 
   let body: unknown;
   try {
