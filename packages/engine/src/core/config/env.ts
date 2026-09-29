@@ -294,6 +294,9 @@ export const env = {
   API_PUBLIC_CREATE_RATE_LIMIT_MAX: getEnvPositiveInt("API_PUBLIC_CREATE_RATE_LIMIT_MAX", 5),
   API_PUBLIC_CREATE_RATE_LIMIT_WINDOW: getEnvDurationMs("API_PUBLIC_CREATE_RATE_LIMIT_WINDOW", "1m"),
   API_PUBLIC_CREATE_MAX_BODY_SIZE: getEnv("API_PUBLIC_CREATE_MAX_BODY_SIZE", "16kb"),
+  // A list whose rows a read condition gates re-checks every matching row, so one request
+  // loads them all; past this many matching rows it answers 400 and asks for a narrower filter.
+  LIST_GATED_MAX_ROWS: getEnvPositiveInt("LIST_GATED_MAX_ROWS", 5000),
   API_TIMEOUT_MS: getEnvInt("API_TIMEOUT_MS", 60000),
   CORS_ORIGINS: getEnvArray("CORS_ORIGINS", ["http://localhost:5173"]),
   CORS_CREDENTIALS: getEnvBool("CORS_CREDENTIALS", true),

@@ -246,6 +246,44 @@ describe("Public list counts and pages only the rows the Guest may read", () => 
   });
 });
 
+describe("Public list bounds and narrows the rows it re-checks", () => {
+  it("answers 400 LIST_TOO_BROAD past LIST_GATED_MAX_ROWS matching rows, and lists within it", async () => {
+    const limits = env as { LIST_GATED_MAX_ROWS: number };
+    const before = limits.LIST_GATED_MAX_ROWS;
+    limits.LIST_GATED_MAX_ROWS = 2;
+    try {
+      const tooBroad = await app.inject({ method: "GET", url: "/api/v1/public/resource/GatedPage" });
+      expect(tooBroad.statusCode).toBe(400);
+      expect(tooBroad.json().error.code).toBe("LIST_TOO_BROAD");
+      const narrowed = await app.inject({
+        method: "GET",
+        url: `/api/v1/public/resource/GatedPage?filters=${encodeURIComponent(JSON.stringify([["status", "=", "published"]]))}`,
+      });
+      expect(narrowed.statusCode).toBe(200);
+      expect(narrowed.json().meta.total).toBe(2);
+    } finally {
+      limits.LIST_GATED_MAX_ROWS = before;
+    }
+  });
+
+  it("re-checks rows carrying only the fields the read condition reads, and answers the page whole", async () => {
+    const find = vi.spyOn(db, "find");
+    try {
+      const res = await app.inject({ method: "GET", url: "/api/v1/public/resource/GatedPage?page_size=1&order_by=title%20asc" });
+      expect(res.statusCode).toBe(200);
+      const scans = find.mock.calls.filter(([name, options]) => name === "GatedPage" && !(options as { limit?: number }).limit);
+      const scanned = (scans[0]?.[1] as { fields?: string[] } | undefined)?.fields;
+      expect(scanned).toContain("status");
+      expect(scanned).not.toContain("title");
+      const row = (res.json() as { data: Array<Record<string, unknown>> }).data[0]!;
+      expect(row["_id"]).toBe("G-1");
+      expect(row["title"]).toBe("G-1");
+    } finally {
+      find.mockRestore();
+    }
+  });
+});
+
 describe("projectFields answers what a MongoDB projection answers", () => {
   const cases: string[][] = [
     ["title"], ["meta"], ["meta.a"], ["meta.b.c"], ["meta.missing"], ["items.q"], ["items.q", "items.r"],

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  docFieldsOf,
   evaluateExpression,
   evaluateExpressionValue,
   evaluateExpressionValueIn,
@@ -1139,5 +1140,19 @@ describe("evaluateExpression — sandbox hardening (attack strings safe-default)
     expect(
       evaluateExpression("eval:1, doc.x", ctx({ x: "y" })),
     ).toBe(true);
+  });
+});
+
+describe("docFieldsOf", () => {
+  it("names the top-level doc fields an expression reads", () => {
+    expect(docFieldsOf("eval:doc.status=='published'")).toEqual(["status"]);
+    expect(docFieldsOf("doc.a && doc.b.c > 1 || user.email == doc.owner")).toEqual(["a", "b", "owner"]);
+    expect(docFieldsOf("user.roles")).toEqual([]);
+  });
+
+  it("names nothing it cannot vouch for: a whole doc, a computed member, a parse failure", () => {
+    expect(docFieldsOf("doc")).toBeUndefined();
+    expect(docFieldsOf("doc[user.field] == 1")).toBeUndefined();
+    expect(docFieldsOf("doc.status ==")).toBeUndefined();
   });
 });

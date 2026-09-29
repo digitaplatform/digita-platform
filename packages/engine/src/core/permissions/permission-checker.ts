@@ -1,7 +1,7 @@
 import type { EntityDefinition, EntityPermission, StatePermissionOverride } from "@digitaplatform/shared";
 import { SYSTEM_ROLES } from "@digitaplatform/shared";
 import type { EntityRegistry } from "../entity/entity-registry.js";
-import { evaluateExpression } from "../expression/expression-evaluator.js";
+import { docFieldsOf, evaluateExpression } from "../expression/expression-evaluator.js";
 import { scopeValueMatches } from "./scope-filter.js";
 import type { UserContext, PermissionCheckResult } from "./types.js";
 import { env } from "../config/env.js";
@@ -412,6 +412,28 @@ export class PermissionChecker {
     if (level === 0) return true;
     const readable = this.getReadableFields(user, entityName, row);
     return readable === null || readable.has(displayField);
+  }
+
+  /**
+   * The stored fields a row read check of `user` on `entityName` reads
+   * (hasPermission "read" with a row): the owner, a scope field, the fields a
+   * condition names, and the workflow state a state strip reads. `undefined` when
+   * a condition's fields cannot be named, so the caller loads whole rows.
+   */
+  listReadGateFields(user: UserContext, entityName: string): string[] | undefined {
+    const entity = this.registry.get(entityName);
+    const fields = new Set<string>(["_id", "docstatus", entity.workflow_field ?? "status"]);
+    for (const perm of entity.permissions) {
+      if (perm.level !== 0 || !perm.read || !user.roles.includes(perm.role)) continue;
+      if (perm.if_owner) fields.add("owner");
+      if (perm.scope) fields.add(perm.scope.field);
+      if (perm.condition) {
+        const named = docFieldsOf(perm.condition);
+        if (!named) return undefined;
+        for (const field of named) fields.add(field);
+      }
+    }
+    return [...fields];
   }
 
   /** The set of field names a list, count or search query of `user` may filter,

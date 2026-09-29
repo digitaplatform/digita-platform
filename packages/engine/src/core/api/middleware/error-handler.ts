@@ -12,6 +12,7 @@ import {
   ValidationFailedError,
   ConcurrentModificationError,
   DeleteBlockedError,
+  GatedListTooBroadError,
   LinkTargetCancelledError,
   TimeSeriesImmutableError,
 } from "../../document/document-service.js";
@@ -312,6 +313,18 @@ export function globalErrorHandler(
         field: error.field,
         trace_id: traceId,
       },
+    };
+    reply.code(400).send(response);
+    return;
+  }
+
+  if (error instanceof GatedListTooBroadError) {
+    const response: ApiResponse<null> = {
+      success: false,
+      status_code: 400,
+      data: null,
+      messages: [{ text: error.message, type: "error", show: true }],
+      error: { code: "LIST_TOO_BROAD", detail: error.message, trace_id: traceId },
     };
     reply.code(400).send(response);
     return;

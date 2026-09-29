@@ -261,6 +261,41 @@ function evalNode(node: AstNode, resolveId: IdentifierResolver): unknown {
  * gating ACCESS (permission conditions) MUST pass `false` so a typo'd condition
  * fails CLOSED (denies) instead of silently granting.
  */
+/**
+ * The top-level `doc` fields an expression reads, for a caller that loads only
+ * those; `undefined` when it cannot name them (a parse failure, or `doc` read as
+ * a whole), so the caller loads the whole row.
+ */
+export function docFieldsOf(expression: string): string[] | undefined {
+  let expr = expression.trim();
+  if (expr.startsWith("eval:")) expr = expr.slice(5).trim();
+  let ast: AstNode;
+  try {
+    ast = jsep(expr) as unknown as AstNode;
+  } catch {
+    return undefined;
+  }
+  const fields = new Set<string>();
+  let whole = false;
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+    const n = node as AstNode;
+    const object = n["object"] as AstNode | undefined;
+    if (n.type === "MemberExpression" && object?.type === "Identifier" && object["name"] === "doc") {
+      if (n["computed"]) whole = true;
+      else fields.add(String((n["property"] as AstNode)["name"]));
+      return;
+    }
+    if (n.type === "Identifier" && n["name"] === "doc") whole = true;
+    for (const value of Object.values(n)) {
+      if (Array.isArray(value)) value.forEach(walk);
+      else walk(value);
+    }
+  };
+  walk(ast);
+  return whole ? undefined : [...fields];
+}
+
 export function evaluateExpression(
   expression: string,
   context: ExpressionContext,

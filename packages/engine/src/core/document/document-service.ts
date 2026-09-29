@@ -39,6 +39,18 @@ import { createLogger } from "../logging/logger.js";
 
 const log = createLogger("document-service");
 
+/** A list whose rows a read condition gates matches more rows than it may re-check
+ *  one by one (env LIST_GATED_MAX_ROWS); the caller narrows the filter. */
+export class GatedListTooBroadError extends Error {
+  constructor(
+    public readonly doctype: string,
+    public readonly max: number,
+  ) {
+    super(`The list of ${doctype} matches more than ${max} rows whose read condition is checked one by one; narrow the filter`);
+    this.name = "GatedListTooBroadError";
+  }
+}
+
 export class NotFoundError extends Error {
   constructor(
     public doctype: string,
@@ -543,7 +555,7 @@ export class DocumentService {
       // reads a hidden row's values one answer at a time.
       const readable = await this.listReadableRows(user, doctype, entity, filterArray, query.order_by ?? defaultSort);
       total = readable.length;
-      docs = readable.slice(offset, offset + limit);
+      docs = await this.loadRowsInOrder(entity, readable.slice(offset, offset + limit).map((row) => row["_id"]));
     } else {
       const [data, count] = await Promise.all([
         this.db.find(
@@ -666,10 +678,10 @@ export class DocumentService {
   }
 
   /**
-   * The rows `filters` matches that `user` may read, in `orderBy`. A read
-   * `condition` cannot be a Mongo filter, so every matching row is loaded and
-   * re-checked (fail-closed). ponytail: loads every matching row; project the
-   * fields the conditions read if a gated collection grows large.
+   * The rows `filters` matches that `user` may read, in `orderBy`, each carrying
+   * only the fields its read check reads (whole when a condition's fields cannot
+   * be named). A read `condition` cannot be a Mongo filter, so every matching row
+   * is loaded and re-checked (fail-closed), at most LIST_GATED_MAX_ROWS of them.
    */
   private async listReadableRows(
     user: UserContext,
@@ -678,7 +690,13 @@ export class DocumentService {
     filters: Record<string, unknown>[],
     orderBy?: string,
   ): Promise<Record<string, unknown>[]> {
-    const rows = (await this.db.find(entity.name, { filters, order_by: orderBy }, entity.database)) as Record<string, unknown>[];
+    // Every matching row is re-checked, so the work is bounded before any row loads,
+    // and each row carries only the fields its read check reads.
+    if ((await this.db.count(entity.name, filters, entity.database)) > env.LIST_GATED_MAX_ROWS) {
+      throw new GatedListTooBroadError(doctype, env.LIST_GATED_MAX_ROWS);
+    }
+    const fields = this.permissionChecker.listReadGateFields(user, doctype);
+    const rows = (await this.db.find(entity.name, { filters, fields, order_by: orderBy }, entity.database)) as Record<string, unknown>[];
     const readable: Record<string, unknown>[] = [];
     // Read as getDoc reads, before the row gate sees it.
     for (const stored of rows) {
@@ -686,6 +704,14 @@ export class DocumentService {
       if ((await this.permissionChecker.hasPermission(user, doctype, "read", row)).allowed) readable.push(row);
     }
     return readable;
+  }
+
+  /** The whole stored rows with these ids, read as getDoc reads, in the order given. */
+  private async loadRowsInOrder(entity: EntityDefinition, ids: unknown[]): Promise<Record<string, unknown>[]> {
+    if (ids.length === 0) return [];
+    const rows = (await this.db.find(entity.name, { filters: [{ _id: { $in: ids } }] }, entity.database)) as Record<string, unknown>[];
+    const byId = new Map(rows.map((row) => [String(row["_id"]), readStoredRow(entity, row)]));
+    return ids.map((id) => byId.get(String(id))).filter((row): row is Record<string, unknown> => row !== undefined);
   }
 
   /**
