@@ -7,4 +7,4 @@ import { bootIdentity, readPageIdentity } from './boot-identity.js';
  * The mode class is set once; the page's own runtime follows the OS afterwards.
  */
 const data = readPageIdentity();
-bootIdentity({ signatures: data?.signatures, branding: data?.branding, followSystemMode: false });
+bootIdentity({ signature: data?.signature, signatures: data?.signatures, branding: data?.branding, followSystemMode: false });

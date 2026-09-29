@@ -1,6 +1,6 @@
-// The locale layout leaves the bare URL's language negotiation to the pages, and links the
+// The locale layout leaves the bare URL's language negotiation to the pages, links the
 // tenant's apps in the header unless the site turns them off, so a WebSite row written before
-// `link_apps` existed keeps the apps it linked.
+// `link_apps` existed keeps the apps it linked, and hands the pre-paint boot the site's signature.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { WebSite } from "../src/lib/types";
@@ -87,5 +87,13 @@ describe("the locale layout", () => {
   it("PLANTED INNOCENT: hides the tenant's apps when the site sets link_apps to false", async () => {
     site = { ...site, link_apps: false };
     expect(await render()).not.toContain('href="/crm/"');
+  });
+
+  it("hands the pre-paint boot the site's signature, so a stored one does not replace it", async () => {
+    site = { ...site, theme: "simetrix" };
+    const html = await render();
+    expect(html).toContain('data-signature="simetrix"');
+    // A page identity without `signature` lets the boot resolve the stored id; this goes red then.
+    expect(html).toContain('"signature":"simetrix"');
   });
 });

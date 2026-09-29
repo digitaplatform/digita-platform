@@ -37,9 +37,11 @@ export interface DeliveredIdentitySources {
  * Put a signed-in visitor's page into the identity the app shows them, the way the app does it:
  * the choices the server keeps for them (mode, density, design, signature) become this browser's
  * own, and a design or signature the page does not bundle is loaded from the composition of the
- * tenant's app, whose entitlement check decides. Without a session cookie nothing is asked and
- * the default stays, as in the app before login. When anything changed, every identity layer is
- * applied again in its order. Returns whether anything changed.
+ * tenant's app, whose entitlement check decides. A page drawn in its site's signature keeps it:
+ * the visitor's signature is stored for the app on the same origin, not applied here. Without a
+ * session cookie nothing is asked and the default stays, as in the app before login. When
+ * anything changed, every identity layer is applied again in its order. Returns whether anything
+ * changed.
  */
 export async function loadDeliveredIdentity(sources: DeliveredIdentitySources): Promise<boolean> {
   const [firstApp] = sources.apps;
@@ -51,8 +53,9 @@ export async function loadDeliveredIdentity(sources: DeliveredIdentitySources): 
   storeIdentityPreferences(preferences);
   let changed = currentChoices() !== before;
 
+  const page = readPageIdentity();
   const design = resolveInitialDesign();
-  const signature = resolveInitialSignature();
+  const signature = page?.signature ?? resolveInitialSignature();
   let designMissing = !DESIGNS[design] && !getRuntimeDesign(design);
   let signatureMissing = !getRuntimeSignature(signature);
 
@@ -75,8 +78,7 @@ export async function loadDeliveredIdentity(sources: DeliveredIdentitySources): 
   }
 
   if (changed) {
-    const page = readPageIdentity();
-    bootIdentity({ signatures: page?.signatures, branding: page?.branding, followSystemMode: false });
+    bootIdentity({ signature: page?.signature, signatures: page?.signatures, branding: page?.branding, followSystemMode: false });
   }
   return changed;
 }

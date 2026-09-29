@@ -50,11 +50,11 @@ export default async function LocaleLayout({
     listPublishedSlugs(),
   ]);
 
-  // The identity a visitor without choices of their own sees, rendered on the server: the site's
-  // signature with the tenant's branding over it. Before first paint the app's own identity boot
-  // (IDENTITY_BOOT_SCRIPT, the bootIdentity the app runs) applies this browser's stored design,
-  // tint, mode, signature and density — app and website share one origin, so one choice shows in
-  // both.
+  // The identity rendered on the server: the site's signature with the tenant's branding over it.
+  // Before first paint the app's own identity boot (IDENTITY_BOOT_SCRIPT, the bootIdentity the app
+  // runs) applies this browser's stored design, tint, mode and density — app and website share one
+  // origin, so one choice shows in both — and keeps the site's signature, which is the site's
+  // identity, not a visitor's choice.
   const signature = siteSignature(site?.theme);
   const signatureStyles = signatureStyle(signature);
   const tenant = brandingStyle(branding);
@@ -81,7 +81,7 @@ export default async function LocaleLayout({
         <script
           type="application/json"
           id={PAGE_IDENTITY_ELEMENT_ID}
-          dangerouslySetInnerHTML={{ __html: jsonForScript({ signatures: [signature], branding }) }}
+          dangerouslySetInnerHTML={{ __html: jsonForScript({ signature: signature.id, signatures: [signature], branding }) }}
         />
         <script dangerouslySetInnerHTML={{ __html: IDENTITY_BOOT_SCRIPT }} />
       </head>

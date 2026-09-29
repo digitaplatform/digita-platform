@@ -26,7 +26,7 @@ writeFileSync(join(root, 'dist/identity-boot.js'), `export const IDENTITY_BOOT_S
 writeFileSync(
   join(root, 'dist/identity-boot.d.ts'),
   `/** The pre-paint identity boot: a classic script a server-rendered page inlines in its <head>,
- *  after a <script type="application/json" id="digita-identity"> holding { signatures, branding }. */
+ *  after a <script type="application/json" id="digita-identity"> holding { signature, signatures, branding }. */
 export declare const IDENTITY_BOOT_SCRIPT: string;
 `,
 );

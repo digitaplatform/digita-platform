@@ -15,7 +15,7 @@ import {
 import { applySignature, resolveInitialSignature, type Signature } from '../signatures/index.js';
 import { registerSignature } from '../signatures/runtime-registry.js';
 
-/** The choices bootIdentity resolved from what this browser stored. */
+/** The choices bootIdentity applied: what this browser stored, or the page's own signature. */
 export interface BootedIdentity {
   design: string;
   mode: ThemeMode;
@@ -27,6 +27,11 @@ export interface BootIdentityOptions {
   /** Registered before the stored or default signature id is resolved, so it lands
    *  with its full identity (the app and the website bundle the default one). */
   signatures?: readonly Signature[];
+  /** The signature the page is drawn in, applied as it is. A website's signature is the
+   *  site's identity (its `theme`), not a choice of the visitor: the stored id and the
+   *  default belong to the app, which delivers no page signature and resolves it from
+   *  storage. */
+  signature?: string;
   /** The tenant's branding, when the caller has it at boot (the website's server
    *  read it); the app applies it later, when /boot answers. */
   branding?: BrandingInput | null;
@@ -54,7 +59,7 @@ export function bootIdentity(options: BootIdentityOptions = {}): BootedIdentity 
   const mode = resolveInitialMode();
   if (options.followSystemMode === false) paintMode(mode, target);
   else applyMode(mode, target);
-  const signature = resolveInitialSignature();
+  const signature = options.signature ?? resolveInitialSignature();
   applySignature(signature, target);
   if (options.branding) applyBranding(options.branding, target);
   const density = resolveInitialDensity();
@@ -63,13 +68,12 @@ export function bootIdentity(options: BootIdentityOptions = {}): BootedIdentity 
 }
 
 /** The id of the <script type="application/json"> a server-rendered page writes its
- *  identity data into: { signatures, branding }, the options its pre-paint boot runs with. */
+ *  identity data into: { signature, signatures, branding }, the options its pre-paint boot runs with. */
 export const PAGE_IDENTITY_ELEMENT_ID = 'digita-identity';
 
+export type PageIdentity = Pick<BootIdentityOptions, 'signature' | 'signatures' | 'branding'>;
+
 /** The identity data this server-rendered page carries, or null on a page without it. */
-export function readPageIdentity(doc: Document = document): Pick<BootIdentityOptions, 'signatures' | 'branding'> | null {
-  return JSON.parse(doc.getElementById(PAGE_IDENTITY_ELEMENT_ID)?.textContent || 'null') as Pick<
-    BootIdentityOptions,
-    'signatures' | 'branding'
-  > | null;
+export function readPageIdentity(doc: Document = document): PageIdentity | null {
+  return JSON.parse(doc.getElementById(PAGE_IDENTITY_ELEMENT_ID)?.textContent || 'null') as PageIdentity | null;
 }

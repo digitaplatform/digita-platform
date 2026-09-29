@@ -7,6 +7,7 @@ import type { PluginInventory } from "@digitaplatform/plugins";
 import {
   DESIGN_STORAGE_KEY,
   MODE_STORAGE_KEY,
+  PAGE_IDENTITY_ELEMENT_ID,
   SIGNATURE_STORAGE_KEY,
   getSignature,
   registerSignature,
@@ -68,6 +69,7 @@ beforeEach(() => {
   document.cookie = "digita_csrf_acme1=; expires=Thu, 01 Jan 1970 00:00:00 GMT";
   root().removeAttribute("data-design");
   root().removeAttribute("data-design-variant");
+  root().removeAttribute("data-signature");
   root().classList.remove("dark");
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -101,6 +103,23 @@ describe("loadDeliveredIdentity", () => {
     expect(root().getAttribute("data-design")).toBe("material");
     expect(root().getAttribute("data-design-variant")).toBe("material");
     expect(getSignature("aurora")).toMatchObject({ id: "aurora", accent: "#123456" });
+  });
+
+  it("keeps the site's signature when the visitor's stored one differs, and asks for no signature plugin", async () => {
+    signIn();
+    const page = document.createElement("script");
+    page.type = "application/json";
+    page.id = PAGE_IDENTITY_ELEMENT_ID;
+    page.textContent = JSON.stringify({ signature: "digita", signatures: [bundledDefault] });
+    document.head.appendChild(page);
+    const calls = serve({ prefs: prefs({ "ui.theme_mode": "dark", "ui.signature": "aurora" }) });
+
+    expect(await loadDeliveredIdentity(sources)).toBe(true);
+
+    expect(calls).toHaveLength(1);
+    expect(localStorage.getItem(SIGNATURE_STORAGE_KEY)).toBe("aurora");
+    expect(root().classList.contains("dark")).toBe(true);
+    expect(root().getAttribute("data-signature")).toBe("digita");
   });
 
   it("applies bundled choices from the server without asking for the composition", async () => {

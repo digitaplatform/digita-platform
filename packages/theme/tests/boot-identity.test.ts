@@ -25,6 +25,13 @@ const brand: Signature = {
   graphics: { grid: { light: 'url(l)', dark: 'url(d)' } },
 };
 
+const site: Signature = {
+  id: 'simetrix',
+  name: 'simetrix',
+  accent: '#00b2f6',
+  colors: { bg: { light: '#f4f7fb', dark: '#050c1a' } },
+};
+
 const root = () => document.documentElement;
 
 beforeEach(() => {
@@ -52,6 +59,21 @@ describe('bootIdentity', () => {
     expect(root().getAttribute('data-signature')).toBe('brand1');
     expect(root().getAttribute('data-density')).toBe('spacious');
     expect(root().style.getPropertyValue('--sig-grid-d')).toBe('url(d)');
+  });
+
+  it("PLANTED DEFECT: applies the page's signature over the stored one, because a site's signature is not a visitor's choice", () => {
+    localStorage.setItem(SIGNATURE_STORAGE_KEY, 'digita');
+    localStorage.setItem(MODE_STORAGE_KEY, 'dark');
+
+    const booted = bootIdentity({ signature: 'simetrix', signatures: [brand, site] });
+
+    // A boot that resolves the stored id lands on the NONE floor here (digita is not registered):
+    // no data-signature, no colour world; that goes red.
+    expect(booted.signature).toBe('simetrix');
+    expect(root().getAttribute('data-signature')).toBe('simetrix');
+    expect(root().style.getPropertyValue('--color-bg')).toBe('light-dark(#f4f7fb, #050c1a)');
+    expect(root().style.getPropertyValue('--color-primary-600')).toBe('#00b2f6');
+    expect(root().classList.contains('dark')).toBe(true);
   });
 
   it('lays the tenant branding over the signature, and keeps the stored density over the branding one', () => {
@@ -100,6 +122,22 @@ describe('the pre-paint script', () => {
     expect(root().classList.contains('dark')).toBe(true);
     expect(root().getAttribute('data-signature')).toBe('brand1');
     expect(root().style.getPropertyValue('--font-mono')).toBe("'JetBrains Mono', monospace");
+    data.remove();
+  });
+
+  it("keeps the page's signature over the one this browser stored", async () => {
+    localStorage.setItem(SIGNATURE_STORAGE_KEY, 'brand1');
+    const data = document.createElement('script');
+    data.type = 'application/json';
+    data.id = 'digita-identity';
+    data.textContent = JSON.stringify({ signature: 'simetrix', signatures: [brand, site] });
+    document.head.appendChild(data);
+
+    vi.resetModules();
+    await import('../src/runtime/identity-boot-script.js');
+
+    expect(root().getAttribute('data-signature')).toBe('simetrix');
+    expect(root().style.getPropertyValue('--color-primary-600')).toBe('#00b2f6');
     data.remove();
   });
 });
