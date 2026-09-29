@@ -391,7 +391,9 @@ export class DocumentService {
 
     // Filter fields by read permission before anything is derived from them: a
     // link title or a status color resolved from a masked field would show it.
-    doc._data = this.permissionChecker.filterFieldsForRead(user, doctype, doc._data);
+    // When no role may read the row, the share admitted it and shows level 0.
+    const sharedForRead = !(await this.permissionChecker.hasPermission(user, doctype, "read", doc._data)).allowed;
+    doc._data = this.permissionChecker.filterFieldsForRead(user, doctype, doc._data, sharedForRead);
 
     // Apply per-document data translations for the request locale (translatable
     // fields only; falls back to the stored value). No-op when the entity has no
@@ -544,9 +546,14 @@ export class DocumentService {
       total = count;
     }
 
+    // A row shared with the user for reading shows what a level-0 read shows, as in
+    // getDoc, so a filter or a sort that matched it never read a value it masks.
+    const shared = new Set(sharedIds.map(String));
+    const mask = (doc: Record<string, unknown>) =>
+      this.permissionChecker.filterFieldsForRead(user, doctype, doc, shared.has(String(doc["_id"])));
     docs = masksStoredRows
-      ? docs.map((doc) => projectFields(this.permissionChecker.filterFieldsForRead(user, doctype, doc), query.fields))
-      : docs.map((doc) => this.permissionChecker.filterFieldsForRead(user, doctype, doc));
+      ? docs.map((doc) => projectFields(mask(doc), query.fields))
+      : docs.map(mask);
 
     // Every row is masked now: the translations and link titles below read only
     // what the user may read, or a title would show a masked Link.

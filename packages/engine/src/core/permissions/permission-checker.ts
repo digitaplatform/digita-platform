@@ -258,11 +258,16 @@ export class PermissionChecker {
     user: UserContext,
     entityName: string,
     doc?: Record<string, unknown>,
+    sharedForRead = false,
   ): Set<string> | null {
     // A conditional (if_owner/condition/scope) grant only contributes its level
-    // when it admits `doc`.
-    return this.getReadableFieldsWhere(user, entityName, (perm) =>
-      this.permMatchesDoc(perm, user, doc),
+    // when it admits `doc`. A document shared with the user for reading shows what
+    // a level-0 read shows; higher levels stay with the user's roles.
+    return this.getReadableFieldsWhere(
+      user,
+      entityName,
+      (perm) => this.permMatchesDoc(perm, user, doc),
+      sharedForRead,
     );
   }
 
@@ -284,6 +289,7 @@ export class PermissionChecker {
     user: UserContext,
     entityName: string,
     admits: (perm: EntityDefinition["permissions"][number]) => boolean,
+    readsLevel0 = false,
   ): Set<string> | null {
     // Administrator can read everything
     if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) {
@@ -292,7 +298,7 @@ export class PermissionChecker {
 
     const entity = this.registry.get(entityName);
     const readableFields = new Set<string>();
-    const readableLevels = new Set<number>();
+    const readableLevels = new Set<number>(readsLevel0 ? [0] : []);
 
     for (const perm of entity.permissions) {
       if (!user.roles.includes(perm.role)) continue;
@@ -331,6 +337,7 @@ export class PermissionChecker {
     entityName: string,
     tableFieldname: string,
     doc?: Record<string, unknown>,
+    sharedForRead = false,
   ): Set<string> | null {
     if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return null;
     const entity = this.registry.get(entityName);
@@ -339,7 +346,7 @@ export class PermissionChecker {
     const anyGated = tableField.child_fields.some((c) => (c.perm_level ?? 0) > 0);
     if (!anyGated) return null;
 
-    const readableLevels = new Set<number>();
+    const readableLevels = new Set<number>(sharedForRead ? [0] : []);
     for (const perm of entity.permissions) {
       if (!user.roles.includes(perm.role)) continue;
       if (perm.read && this.permMatchesDoc(perm, user, doc)) readableLevels.add(perm.level);
@@ -572,14 +579,16 @@ export class PermissionChecker {
   /**
    * Filter document data to only include fields the user can read. Recurses
    * into Table fields, applying per-child-field `perm_level` masking when
-   * the entity declares any gated child field.
+   * the entity declares any gated child field. `sharedForRead`: the document is
+   * shared with the user for reading, which shows what a level-0 read shows.
    */
   filterFieldsForRead(
     user: UserContext,
     entityName: string,
     data: Record<string, unknown>,
+    sharedForRead = false,
   ): Record<string, unknown> {
-    const readableFields = this.getReadableFields(user, entityName, data);
+    const readableFields = this.getReadableFields(user, entityName, data, sharedForRead);
 
     // null means all fields are readable
     if (!readableFields) return data;
@@ -595,7 +604,7 @@ export class PermissionChecker {
 
       // Mask child-field rows when the Table declares any gated child.
       if (tableFields.has(key) && Array.isArray(value)) {
-        const allowedChildKeys = this.getReadableChildFields(user, entityName, key, data);
+        const allowedChildKeys = this.getReadableChildFields(user, entityName, key, data, sharedForRead);
         if (allowedChildKeys === null) {
           filtered[key] = value;
         } else {

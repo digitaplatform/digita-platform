@@ -1287,3 +1287,53 @@ describe("A link title shows only where the reader may see it on the target", ()
     expect(doc["_link_titles"]).toEqual({ visible: "Visible name", deep: "Secret name", hidden: "Hidden name" });
   });
 });
+
+describe("A document shared for reading shows what a level-0 read shows", () => {
+  // Owner-only reader: level 0 on their own documents, nothing above.
+  const reader: UserContext = { _id: "share-001", email: "share-reader@test.local", roles: ["ShareReader"], full_name: "Reader" };
+  let sharedId: string;
+
+  beforeAll(async () => {
+    registry.register(makeEntity({
+      name: "ShareShownDoc",
+      fields: [
+        { fieldname: "title", fieldtype: "Data" as const, label: "Title" },
+        { fieldname: "secret", fieldtype: "Data" as const, label: "Secret", perm_level: 1 },
+      ],
+      permissions: [
+        { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+        { role: "ShareReader", level: 0, select: 1, read: 1, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0, if_owner: 1 },
+      ],
+    } as Partial<EntityDefinition>));
+    await db.ensureCollection("ShareShownDoc", "app");
+    await db.ensureCollection(DIGITA.COLLECTIONS.DOC_SHARE, DIGITA.DATABASES.IDENTITY);
+    const doc = await docService.insert("ShareShownDoc", { title: "Theirs", secret: "s-theirs" }, adminUser);
+    sharedId = doc._id;
+    await new DocumentShareService(db).share({
+      entity: "ShareShownDoc",
+      document_name: sharedId,
+      shared_with: reader.email,
+      shared_by: adminUser.email,
+      can_read: true,
+      can_write: false,
+      can_share: false,
+      notify: false,
+    });
+  });
+
+  it("shows the shared document's level-0 fields on getDoc, never a higher level", async () => {
+    const seen = (await docService.getDoc("ShareShownDoc", sharedId, reader)).toJSON() as Record<string, unknown>;
+    expect(seen["title"]).toBe("Theirs");
+    expect(seen).not.toHaveProperty("secret");
+  });
+
+  it("shows the same in the list, so a filter or a sort on title reads a value the reader sees", async () => {
+    const byTitle = await docService.getList("ShareShownDoc", { filters: [["title", "=", "Theirs"]] }, reader);
+    expect(byTitle.data).toHaveLength(1);
+    expect(byTitle.data[0]?.["title"]).toBe("Theirs");
+    expect(byTitle.data[0]).not.toHaveProperty("secret");
+    await expect(docService.getList("ShareShownDoc", { filters: [["secret", "=", "s-theirs"]] }, reader)).rejects.toBeInstanceOf(
+      FilterFieldNotAllowedError,
+    );
+  });
+});
