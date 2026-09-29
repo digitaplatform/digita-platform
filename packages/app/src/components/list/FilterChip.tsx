@@ -78,7 +78,7 @@ export function FilterChip({ meta, filter, onRemove }: FilterChipProps) {
       <span className="truncate">
         <span className="font-medium">{fieldLabel}</span>
         <span className="mx-1 text-textMuted">{opLabel}</span>
-        <span className="text-primary-700">{valueLabel}</span>
+        <span data-ui="chip-value">{valueLabel}</span>
       </span>
     </Chip>
   );
