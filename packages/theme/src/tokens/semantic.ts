@@ -45,6 +45,10 @@ export interface SemanticTokens {
    *  ramp knows whether white reaches AA on its step 600 (onPrimaryFor); a
    *  design must not define it, or a light tint gets an unreadable label. */
   onPrimary?: string;
+  /** The fill of a primary action on hover: step 600 moved away from onPrimary
+   *  (primaryHoverFor), so the label keeps its contrast. Tint-derived, like
+   *  onPrimary; a design must not define it. */
+  primaryHover?: string;
   /** Foreground that sits ON an error fill — destructive button labels. */
   onError: string;
   /** The veil an overlay (dialog, command palette, drawer) lays over the page.

@@ -22,9 +22,10 @@ export function contrastRatio(a: string, b: string): number {
   return (hi! + 0.05) / (lo! + 0.05);
 }
 
-function scaled(hex: string, factor: number): string {
-  return `#${channels(hex)
-    .map((v) => Math.round(v * factor).toString(16).padStart(2, '0'))
+function mixed(hex: string, toward: string, weight: number): string {
+  const [a, b] = [channels(hex), channels(toward)];
+  return `#${a
+    .map((v, i) => Math.round(v + (b[i]! - v) * weight).toString(16).padStart(2, '0'))
     .join('')}`;
 }
 
@@ -38,9 +39,20 @@ export function onPrimaryFor(ramp: Record<string, string>): string {
   if (!fill) throw new Error('primary ramp has no step 600');
   if (contrastRatio(WHITE, fill) >= AA_TEXT) return WHITE;
   const ink = ramp['950'] ?? '#000000';
-  for (let factor = 1; factor > 0; factor -= 0.05) {
-    const label = scaled(ink, factor);
+  for (let step = 0; step < 20; step += 1) {
+    const label = mixed(ink, '#000000', step * 0.05);
     if (contrastRatio(label, fill) >= AA_TEXT) return label;
   }
   return '#000000';
+}
+
+/**
+ * The fill of a primary action on hover: step 600 moved 12% away from its label, darker under a
+ * white label and lighter under a dark one, so hovering never lowers the label's contrast below
+ * the rest state's. A ramp step cannot serve: under a dark label step 700 falls to about 2:1.
+ */
+export function primaryHoverFor(ramp: Record<string, string>): string {
+  const fill = ramp['600'];
+  if (!fill) throw new Error('primary ramp has no step 600');
+  return mixed(fill, onPrimaryFor(ramp) === WHITE ? '#000000' : WHITE, 0.12);
 }

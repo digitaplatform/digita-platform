@@ -39,7 +39,7 @@ function BootError({ error }: { error: Error }) {
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="rounded bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+          className="rounded bg-primary-600 px-4 py-2 text-sm font-medium text-onPrimary hover:bg-primaryHover"
         >
           {tc('ui.action.reload')}
         </button>

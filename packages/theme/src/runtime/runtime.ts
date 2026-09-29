@@ -1,7 +1,7 @@
 import { COLOR_PALETTES, type PaletteName } from '../tokens/palettes.js';
 import { cssVarName } from '../tokens/index.js';
 import { synthesizeRamp } from '../tokens/synthesize.js';
-import { onPrimaryFor } from '../tokens/on-primary.js';
+import { onPrimaryFor, primaryHoverFor } from '../tokens/on-primary.js';
 import { TINT_PALETTES, type TintKey } from '../tokens/tints.js';
 import { DEFAULT_DESIGN_ID, DESIGNS, getDesign } from '../designs/index.js';
 import { getRuntimeDesign } from '../designs/runtime-registry.js';
@@ -98,11 +98,13 @@ function clearRamp(target: HTMLElement, name: 'primary' | 'accent'): void {
  * signal light-dark() resolves against, so the roles track the live mode
  * toggle with zero JS. Steps mirror the semantic defaults: container =
  * ramp 100 (light) / 800 (dark), on-container = ramp 900 (light) / 100 (dark).
- * The label on a primary fill is mode-static, because the kit fills with step
- * 600 in both modes; it is white or a dark ink, whichever reaches AA.
+ * The label on a primary fill and the fill on hover are mode-static, because
+ * the kit fills with step 600 in both modes; the label is white or a dark ink,
+ * whichever reaches AA, and the hover fill moves away from it.
  */
 function tintRoleProperties(ramp: Record<string, string>, properties: Record<string, string>): void {
   properties[cssVarName('onPrimary')] = onPrimaryFor(ramp);
+  properties[cssVarName('primaryHover')] = primaryHoverFor(ramp);
   const { 100: c100, 800: c800, 900: c900 } = ramp;
   if (!c100 || !c800 || !c900) return;
   properties[cssVarName('primaryContainer')] = `light-dark(${c100}, ${c800})`;
@@ -111,6 +113,7 @@ function tintRoleProperties(ramp: Record<string, string>, properties: Record<str
 
 function clearTintRoles(target: HTMLElement): void {
   target.style.removeProperty(cssVarName('onPrimary'));
+  target.style.removeProperty(cssVarName('primaryHover'));
   target.style.removeProperty(cssVarName('primaryContainer'));
   target.style.removeProperty(cssVarName('onPrimaryContainer'));
 }
