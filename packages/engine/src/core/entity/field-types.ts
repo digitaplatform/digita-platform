@@ -35,6 +35,14 @@ export class FieldValueError extends Error {
   }
 }
 
+/**
+ * A value that stands for no value: absent, null, or a string of only whitespace.
+ * A required field refuses it.
+ */
+export function isBlank(value: unknown): boolean {
+  return value === null || value === undefined || (typeof value === "string" && value.trim() === "");
+}
+
 // ─── Individual Field Type Handlers ──────────────────────
 
 const dataHandler: FieldTypeHandler = {
@@ -51,7 +59,7 @@ const dataHandler: FieldTypeHandler = {
 const intHandler: FieldTypeHandler = {
   isStored: true,
   toStorage(value) {
-    if (value === null || value === undefined || value === "") return null;
+    if (isBlank(value)) return null;
     return parseInt(String(value), 10);
   },
   fromStorage(value) {
@@ -62,7 +70,7 @@ const intHandler: FieldTypeHandler = {
 const durationHandler: FieldTypeHandler = {
   isStored: true,
   toStorage(value, field) {
-    if (value === null || value === undefined || value === "") return null;
+    if (isBlank(value)) return null;
     const num = Number(value);
     // Duration is a non-negative INTEGER count of seconds. Fail loud instead of
     // silently truncating (parseInt("1.5") → 1) or storing NaN (parseInt("abc")).
@@ -81,7 +89,7 @@ const durationHandler: FieldTypeHandler = {
 const floatHandler: FieldTypeHandler = {
   isStored: true,
   toStorage(value, field) {
-    if (value === null || value === undefined || value === "") return null;
+    if (isBlank(value)) return null;
     const num = parseFloat(String(value));
     const precision = field.precision ?? 6;
     return parseFloat(num.toFixed(precision));
@@ -115,7 +123,7 @@ const selectHandler: FieldTypeHandler = {
 const dateHandler: FieldTypeHandler = {
   isStored: true,
   toStorage(value, field) {
-    if (value === null || value === undefined || value === "") return null;
+    if (isBlank(value)) return null;
     // Canonical storage form is a "YYYY-MM-DD" string (UTC calendar day). Accept a
     // Date object (hooks bypass the HTTP zod layer) → its UTC day. Reject anything
     // that isn't a canonical date string, so a stray non-ISO value fails LOUD at
@@ -140,7 +148,7 @@ const dateHandler: FieldTypeHandler = {
 const datetimeHandler: FieldTypeHandler = {
   isStored: true,
   toStorage(value) {
-    if (value === null || value === undefined || value === "") return null;
+    if (isBlank(value)) return null;
     return new Date(value as string);
   },
   fromStorage(value) {
@@ -162,7 +170,7 @@ const textHandler: FieldTypeHandler = {
 const jsonHandler: FieldTypeHandler = {
   isStored: true,
   toStorage(value, field) {
-    if (value === null || value === undefined) return null;
+    if (isBlank(value)) return null;
     if (typeof value === "string") {
       try {
         return JSON.parse(value);
@@ -184,7 +192,7 @@ const jsonHandler: FieldTypeHandler = {
 const passwordHandler: FieldTypeHandler = {
   isStored: true,
   toStorage(value) {
-    if (value === null || value === undefined || value === "") return null;
+    if (isBlank(value)) return null;
     if (isEncryptedPassword(value)) return value;
     return encryptPassword(String(value));
   },

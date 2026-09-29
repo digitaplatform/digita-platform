@@ -3,6 +3,7 @@ import type { EntityDefinition, FieldDefinition, FieldType } from "@digitaplatfo
 import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from "@digitaplatform/shared";
 import { isValidColor } from "../validation/validators/color.js";
 import { evaluateExpression } from "../expression/expression-evaluator.js";
+import { isBlank } from "./field-types.js";
 
 const encryptedPasswordSchema = z.object({ key_id: z.string(), iv: z.string(), tag: z.string(), data: z.string() });
 
@@ -39,9 +40,7 @@ export function buildEntitySchema(entity: EntityDefinition): ZodTypeAny {
     const d = data as Record<string, unknown>;
     for (const f of conditionalFields) {
       if (!evaluateExpression(f.mandatory_depends_on!, { doc: d })) continue;
-      const v = d[f.fieldname];
-      const empty = v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0);
-      if (empty) {
+      if (isEmptyValue(d[f.fieldname])) {
         ctx.addIssue({ code: "custom", path: [f.fieldname], message: "field_mandatory_depends_on" });
       }
     }
@@ -57,13 +56,20 @@ export function buildFieldSchema(field: FieldDefinition): ZodTypeAny {
   s = applyNumberConstraints(s, field);
   s = applyNumericEmptyGuard(s, field);
 
-  // Required ⇄ optional. Empty string treated as missing for compatibility
-  // with the previous validator (Data fields treat "" as empty).
-  if (!field.required) {
-    s = s.nullable().optional();
+  if (field.required) {
+    // The blank check runs before the type rules, so a blank value gets only
+    // field_required, whatever the type schema would say about it.
+    return z.unknown().refine((v) => !isBlank(v), "field_required").pipe(s);
   }
+  // An optional text field left blank has no value for its format rules to check.
+  // Other types are left to their own rules: a blank Tag is not a list.
+  if (isStringSchema(s)) s = z.preprocess((v) => (isBlank(v) ? undefined : v), s.optional());
+  return s.nullable().optional();
+}
 
-  return s;
+/** The emptiness a mandatory_depends_on field is checked for. */
+function isEmptyValue(v: unknown): boolean {
+  return isBlank(v) || (Array.isArray(v) && v.length === 0);
 }
 
 function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
@@ -283,10 +289,7 @@ function tableSchema(field: FieldDefinition): ZodTypeAny {
           const r = row as Record<string, unknown>;
           for (const cf of conditionalFields) {
             if (!evaluateExpression(cf.mandatory_depends_on!, { doc: r })) continue;
-            const v = r[cf.fieldname];
-            const empty =
-              v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0);
-            if (empty) {
+            if (isEmptyValue(r[cf.fieldname])) {
               // "custom" string literal (not the deprecated z.ZodIssueCode enum).
               ctx.addIssue({
                 code: "custom",

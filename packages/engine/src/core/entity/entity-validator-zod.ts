@@ -68,7 +68,7 @@ function pathToString(path: ReadonlyArray<PropertyKey>): string {
 function mapZodIssue(code: string, message: string): string {
   // Custom refinements carry their own message key (e.g. the per-row
   // mandatory_depends_on check) — preserve it instead of flattening to a generic.
-  if (message === "field_mandatory_depends_on") return message;
+  if (message === "field_mandatory_depends_on" || message === "field_required") return message;
   switch (code) {
     case "invalid_type":
       // Zod uses invalid_type for missing required fields too — distinguish

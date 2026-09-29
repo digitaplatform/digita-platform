@@ -15,6 +15,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { validateEntityDataZod } from "../src/core/entity/entity-validator-zod.js";
 import { ZodSchemaBuilder } from "../src/core/entity/zod-schema-builder.js";
+import { getFieldTypeHandler } from "../src/core/entity/field-types.js";
 
 function entity(fields: Record<string, unknown>[]): EntityDefinition {
   return {
@@ -449,5 +450,83 @@ describe("validateEntityDataZod — top-level conditional-required (A11)", () =>
     expect(validateEntityDataZod(e(), { type: "debit", reason: "x" }, builder).valid).toBe(true);
     builder.invalidate("TestDoc");
     expect(validateEntityDataZod(e(), { type: "credit", reason: "" }, builder).valid).toBe(true);
+  });
+});
+
+describe("validateEntityDataZod — a blank value is no value", () => {
+  // Each value goes through its type's handler and then the validator, the order
+  // DocumentService.insert and update use. Check and Rating are left out: their
+  // handlers store a missing value as false and 0.
+  const blankableTypes = [
+    "Data", "Phone", "Barcode", "Signature", "Password", "Time", "Attach", "AttachImage", "Image",
+    "Text", "SmallText", "TextEditor", "Code", "Markdown", "Select", "Link", "Color",
+    "Int", "Float", "Currency", "Percent", "Duration", "Date", "Datetime", "JSON", "Tag",
+    "Geolocation", "ReadOnly",
+  ];
+  const validateStored = (field: Record<string, unknown>, value: unknown) => {
+    const stored = getFieldTypeHandler(field.fieldtype as never).toStorage(value, field as never);
+    builder.invalidate("TestDoc");
+    return validateEntityDataZod(entity([field]), { [field.fieldname as string]: stored }, builder);
+  };
+
+  for (const fieldtype of blankableTypes) {
+    for (const value of ["", "   "]) {
+      it(`a required ${fieldtype} field refuses ${JSON.stringify(value)} with field_required`, () => {
+        const r = validateStored({ fieldname: "f", fieldtype, label: "F", required: true }, value);
+        expect(r.errors.map((e) => [e.field, e.message_key])).toEqual([["f", "field_required"]]);
+      });
+    }
+  }
+
+  // Tag is left out: its handler stores "" as it is, and a Tag holds a list.
+  for (const fieldtype of blankableTypes.filter((t) => t !== "Tag")) {
+    it(`an optional ${fieldtype} field accepts ""`, () => {
+      expect(validateStored({ fieldname: "f", fieldtype, label: "F" }, "").errors).toEqual([]);
+    });
+  }
+
+  it("an optional text field with a format rule accepts a blank value", () => {
+    for (const rule of [{ options: "Email" }, { options: "URL" }, { regex: "^[A-Z]{3}$" }, { min_length: 3 }]) {
+      expect(validateStored({ fieldname: "f", fieldtype: "Data", label: "F", ...rule }, "   ").errors).toEqual([]);
+    }
+    const e = entity([
+      {
+        fieldname: "lines",
+        fieldtype: "Table",
+        label: "Lines",
+        child_fields: [{ fieldname: "email", fieldtype: "Data", label: "Email", options: "Email" }],
+      },
+    ]);
+    builder.invalidate("TestDoc");
+    expect(validateEntityDataZod(e, { lines: [{ email: "   " }] }, builder).errors).toEqual([]);
+  });
+
+  it("a required Data or Time field with a value passes", () => {
+    expect(validateStored({ fieldname: "f", fieldtype: "Data", label: "F", required: true }, "x").valid).toBe(true);
+    expect(validateStored({ fieldname: "f", fieldtype: "Time", label: "F", required: true }, "09:30").valid).toBe(true);
+  });
+
+  it("a required cell of a Table row refuses a whitespace-only value", () => {
+    const e = entity([
+      {
+        fieldname: "lines",
+        fieldtype: "Table",
+        label: "Lines",
+        child_fields: [{ fieldname: "sku", fieldtype: "Data", label: "SKU", required: true }],
+      },
+    ]);
+    builder.invalidate("TestDoc");
+    const r = validateEntityDataZod(e, { lines: [{ sku: "A-1" }, { sku: "   " }] }, builder);
+    expect(r.errors.map((x) => [x.field, x.message_key])).toEqual([["lines[1].sku", "field_required"]]);
+  });
+
+  it("a field whose mandatory_depends_on holds refuses a whitespace-only value", () => {
+    const e = entity([
+      { fieldname: "type", fieldtype: "Data", label: "Type" },
+      { fieldname: "reason", fieldtype: "Text", label: "Reason", mandatory_depends_on: "eval:doc.type=='debit'" },
+    ]);
+    builder.invalidate("TestDoc");
+    const r = validateEntityDataZod(e, { type: "debit", reason: "   " }, builder);
+    expect(r.errors.map((x) => [x.field, x.message_key])).toEqual([["reason", "field_mandatory_depends_on"]]);
   });
 });
