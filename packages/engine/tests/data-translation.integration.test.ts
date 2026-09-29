@@ -253,6 +253,23 @@ describe("GET /translations/:locale keeps data rows from a caller who may not re
     }
   });
 
+  it("still answers the system and entity texts to that caller", async () => {
+    for (const key of ["t74.greeting", "entity.GlAcct"]) {
+      const put = await app.inject({
+        method: "PUT",
+        url: `/api/v1/translations/de/${key}`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { value: `de ${key}` },
+      });
+      expect(put.statusCode).toBe(200);
+    }
+    const res = await strangerGet("/api/v1/translations/de");
+    expect(res.json().data["t74.greeting"]).toBe("de t74.greeting");
+    expect(res.json().data["entity.GlAcct"]).toBe("de entity.GlAcct");
+    const scoped = await strangerGet("/api/v1/translations/de?namespace=entity");
+    expect(scoped.json().data).toEqual({ "entity.GlAcct": "de entity.GlAcct" });
+  });
+
   it("answers the data row to an Administrator", async () => {
     const res = await get("/api/v1/translations/de?namespace=data&entity=GlAcct");
     expect(res.json().data["GlAcct.1200.name"]).toBe("Forderungen aus Lieferungen und Leistungen");

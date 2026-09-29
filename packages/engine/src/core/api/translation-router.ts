@@ -2,9 +2,13 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { TranslationService } from "../i18n/translation-service.js";
 import type { DocumentService } from "../document/document-service.js";
 import type { UserContext } from "../permissions/types.js";
+import { SYSTEM_ROLES } from "@digitaplatform/shared";
 import { requireAdministrator } from "../auth/require-admin.js";
 import { successResponse } from "./response-model.js";
 import { ResponseContext } from "./response-context.js";
+
+/** The namespaces of the screen texts, which every signed-in caller may load. */
+const SCREEN_TEXT_NAMESPACES = ["system", "entity"];
 
 /**
  * Register translation management API endpoints.
@@ -23,7 +27,15 @@ export function registerTranslationRoutes(
     const query = request.query as Record<string, string>;
 
     const filters: Record<string, unknown>[] = [{ locale }];
-    if (query["namespace"]) filters.push({ namespace: query["namespace"] });
+    const namespace = query["namespace"];
+    if (request.user?.roles?.includes(SYSTEM_ROLES.ADMINISTRATOR)) {
+      if (namespace) filters.push({ namespace });
+    } else {
+      // A data row is a document value. Every other reader gets it through the document and
+      // list routes, which apply the read check; this route has none.
+      const allowed = SCREEN_TEXT_NAMESPACES.filter((n) => !namespace || n === namespace);
+      filters.push({ namespace: { $in: allowed } });
+    }
     if (query["entity"]) filters.push({ entity: query["entity"] });
     if (query["document"]) filters.push({ document_name: query["document"] });
 
