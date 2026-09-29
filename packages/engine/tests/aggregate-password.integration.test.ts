@@ -58,7 +58,11 @@ const run = (pipeline: unknown[]) =>
   runAggregateSection({ key: "k", kind: "aggregate", entity: "Note", pipeline } as AggregateSection, rctx, user, {
     db,
     registry,
-    permissionChecker: { check: vi.fn().mockResolvedValue(undefined), getReadableFieldsOnEveryRow: vi.fn(() => null) },
+    permissionChecker: {
+      check: vi.fn().mockResolvedValue(undefined),
+      getReadableFieldsOnEveryRow: vi.fn(() => null),
+      hasConditionalRowRead: vi.fn(() => false), // #86: no read condition on this Administrator
+    },
   } as never);
 
 describe("a $lookup without a sub-pipeline from an entity with a Password field", () => {

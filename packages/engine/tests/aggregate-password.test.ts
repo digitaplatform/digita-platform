@@ -50,6 +50,7 @@ function deps(rows: unknown[]) {
       permissionChecker: {
         check: vi.fn().mockResolvedValue(undefined),
         getReadableFieldsOnEveryRow: vi.fn(() => null), // an Administrator: every field readable
+        hasConditionalRowRead: vi.fn(() => false), // #86: and no read condition
       },
     } as never,
     aggregate,
