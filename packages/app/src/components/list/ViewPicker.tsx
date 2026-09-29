@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Check, Star, Building2, Trash2, Save, Plus, Users, RotateCcw, ListX } from 'lucide-react';
-import { Button, Input, Select, IconButton, useFocusTrap } from '@digitaplatform/components';
+import { Button, Input, Select, IconButton, Popover, useFocusTrap } from '@digitaplatform/components';
 import { useChrome } from '@/lib/chrome-i18n';
 import { tid } from '@/lib/testid';
 import type { ListPreferenceDoc, ViewVisibility } from '@/services/listPreference';
@@ -62,6 +62,7 @@ export function ViewPicker({
   const [visibility, setVisibility] = useState<ViewVisibility>('private');
   const [rolesCsv, setRolesCsv] = useState('');
   const [usersCsv, setUsersCsv] = useState('');
+  const anchorRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const insidePointer = useRef<Event | null>(null);
   useFocusTrap(panelRef, open);
@@ -81,8 +82,8 @@ export function ViewPicker({
   // document listener, not a fixed backdrop: the picker sits in the page header's
   // bar, and a design's backdrop-filter on that bar would confine a fixed
   // backdrop to the bar. Inside is judged by the React tree, not the DOM: the
-  // Select's options are portaled to document.body, and React events bubble
-  // through portals where DOM containment says outside.
+  // panel and the Select's options are portaled to document.body, and React
+  // events bubble through portals where DOM containment says outside.
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: PointerEvent) => {
@@ -101,12 +102,12 @@ export function ViewPicker({
 
   return (
     <div
-      className="relative"
       onPointerDownCapture={(e) => {
         insidePointer.current = e.nativeEvent;
       }}
     >
       <Button
+        ref={anchorRef}
         type="button"
         variant="secondary"
         size="sm"
@@ -123,7 +124,18 @@ export function ViewPicker({
         <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
       </Button>
 
-      {open && (
+      {/* Popover portals the panel and clamps it to the viewport: in the page
+          header's actions slot an in-flow `right-0` panel starts left of a
+          375px screen. Popover's own Escape and outside-pointer handling is
+          off; the handlers above and below keep the picker's dismissal rules. */}
+      <Popover
+        open={open}
+        anchorRef={anchorRef}
+        onRequestClose={close}
+        align="end"
+        closeOnEscape={false}
+        closeOnOutsidePointer={false}
+      >
         <div
           ref={panelRef}
           role="menu"
@@ -136,7 +148,7 @@ export function ViewPicker({
             if (saving) setSaving(false);
             else close();
           }}
-          className="anim-pop-in absolute right-0 z-40 mt-2 w-80 rounded-dialog border border-border bg-surfaceGlass p-2 shadow-lg backdrop-blur-md"
+          className="w-80 p-2"
         >
           {/* Modified banner: discard edits back to the clean view. */}
           {active && modified && (
@@ -351,7 +363,7 @@ export function ViewPicker({
             )}
           </div>
         </div>
-      )}
+      </Popover>
     </div>
   );
 }

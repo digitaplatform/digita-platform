@@ -51,7 +51,10 @@ function setup(overrides: Record<string, unknown> = {}) {
   return { ...utils, cb };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('ViewPicker (saved views)', () => {
   it('opens via the menu trigger and applies a view by id', async () => {
@@ -60,6 +63,23 @@ describe('ViewPicker (saved views)', () => {
     await userEvent.click(getByTestId('view:menu'));
     await userEvent.click(getByTestId('view:apply:v1'));
     expect(cb.onApply).toHaveBeenCalledWith('v1');
+  });
+
+  it('keeps the whole panel inside a 375px viewport when the trigger sits at the right edge', async () => {
+    const { getByTestId, getByRole } = setup();
+    await userEvent.click(getByTestId('view:menu'));
+    // jsdom has no layout: stub the viewport, the anchor rect (the header's
+    // actions slot ends at the right edge) and the panel's w-80 width, then
+    // re-place through the resize listener Popover installs.
+    vi.stubGlobal('innerWidth', 375);
+    getByTestId('view:menu').getBoundingClientRect = () =>
+      ({ top: 8, bottom: 40, left: 291, right: 371, width: 80, height: 32 }) as DOMRect;
+    const panel = getByRole('menu').parentElement!;
+    Object.defineProperty(panel, 'offsetWidth', { value: 320 });
+    fireEvent(window, new Event('resize'));
+    const left = parseFloat(panel.style.left);
+    expect(left).toBeGreaterThanOrEqual(4);
+    expect(left + 320).toBeLessThanOrEqual(371);
   });
 
   it('closes on a pointer down outside, and stays open on one inside', async () => {
