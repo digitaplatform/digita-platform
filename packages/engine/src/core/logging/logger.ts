@@ -16,6 +16,9 @@ const redactPaths = [
     `body.${field}`,
   ]),
   ...CREDENTIAL_HEADERS.flatMap((header) => [`*["${header}"]`, `req.headers["${header}"]`]),
+  // The realtime socket takes the access token as ?token=, and the debug request
+  // line carries the parsed query.
+  "query.token",
 ];
 
 // Build transport targets

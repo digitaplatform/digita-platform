@@ -30,6 +30,7 @@ import { UnknownDoctypeError } from "../../entity/entity-registry.js";
 import { FilterFieldNotAllowedError, MalformedFieldsError } from "../../database/filter-builder.js";
 import { FieldValueError } from "../../entity/field-types.js";
 import { createLogger } from "../../logging/logger.js";
+import { urlPath } from "../../logging/url-path.js";
 
 const log = createLogger("error-handler");
 
@@ -46,7 +47,7 @@ export function globalErrorHandler(
       trace_id: traceId,
       err: error,
       method: request.method,
-      url: request.url,
+      url: urlPath(request.url),
       user: request.user?.email,
     },
     "Request error",

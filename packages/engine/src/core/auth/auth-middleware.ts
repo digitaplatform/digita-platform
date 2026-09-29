@@ -5,6 +5,7 @@ import type { AuthnPort } from "./authn-port.js";
 import type { UserContext } from "../permissions/types.js";
 import { env } from "../config/env.js";
 import { createLogger } from "../logging/logger.js";
+import { urlPath } from "../logging/url-path.js";
 
 const log = createLogger("auth-middleware");
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -50,7 +51,7 @@ function rejection(err: unknown, fromCookie: boolean, request: FastifyRequest): 
     ...(e && typeof e === "object" && e.code !== undefined ? { code: String(e.code) } : {}),
     source: fromCookie ? "cookie" : "bearer",
     method: request.method,
-    url: request.url,
+    url: urlPath(request.url),
   };
 }
 

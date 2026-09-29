@@ -1,5 +1,6 @@
 import type { FastifyRequest, FastifyReply, HookHandlerDoneFunction } from "fastify";
 import { createLogger } from "../../logging/logger.js";
+import { urlPath } from "../../logging/url-path.js";
 
 const log = createLogger("http");
 
@@ -20,7 +21,7 @@ export function requestLoggerOnRequest(
       direction: "REQUEST",
       trace_id: request.traceId,
       method: request.method,
-      url: request.url,
+      url: urlPath(request.url),
       params: request.params,
       query: request.query,
       body: request.body,
@@ -29,7 +30,7 @@ export function requestLoggerOnRequest(
       user: request.user?.email ?? "anonymous",
       locale: request.locale,
     },
-    `${request.method} ${request.url}`,
+    `${request.method} ${urlPath(request.url)}`,
   );
 
   done();
@@ -47,12 +48,12 @@ export function requestLoggerOnResponse(
     {
       trace_id: request.traceId,
       method: request.method,
-      url: request.url,
+      url: urlPath(request.url),
       status_code: reply.statusCode,
       duration_ms: durationMs,
       user: request.user?.email ?? "anonymous",
     },
-    `${request.method} ${request.url} → ${reply.statusCode} (${durationMs}ms)`,
+    `${request.method} ${urlPath(request.url)} → ${reply.statusCode} (${durationMs}ms)`,
   );
 
   done();
@@ -90,12 +91,12 @@ export function requestLoggerOnSend(
       direction: "RESPONSE",
       trace_id: request.traceId,
       method: request.method,
-      url: request.url,
+      url: urlPath(request.url),
       status_code: reply.statusCode,
       body: bodyForLog,
       user: request.user?.email ?? "anonymous",
     },
-    `RESPONSE ${request.method} ${request.url}`,
+    `RESPONSE ${request.method} ${urlPath(request.url)}`,
   );
 
   done(null, payload);
