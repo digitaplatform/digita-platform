@@ -197,6 +197,45 @@ describe("GET /resource/:entity/:name/translations is read-gated", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().data.translations.de.name).toBe("Forderungen aus Lieferungen und Leistungen");
   });
+
+  it("leaves out the translation of a field above the caller's read level", async () => {
+    registry.register({
+      name: "GlMemo",
+      module: "test",
+      database: "core",
+      naming: { strategy: "user_set" },
+      fields: [
+        { fieldname: "title", fieldtype: "Data", label: "Title", translatable: true },
+        { fieldname: "memo", fieldtype: "Data", label: "Memo", translatable: true, perm_level: 1 },
+      ],
+      permissions: [...ADMIN_PERMS, { role: "System User", level: 0, select: 1, read: 1 }],
+    } as unknown as EntityDefinition);
+    const now = new Date();
+    await db.insertOne(
+      "GlMemo",
+      { _id: "M1", title: "Rent", memo: "landlord owes a refund", docstatus: 0, owner: "system", modified_by: "system", creation: now, modified: now },
+      DIGITA.DATABASES.CORE,
+    );
+    for (const [fieldname, value] of [["title", "Miete"], ["memo", "Vermieter schuldet eine Erstattung"]]) {
+      await db.insertOne(
+        DIGITA.COLLECTIONS.TRANSLATION,
+        {
+          _id: `data:de:GlMemo.M1.${fieldname}`, namespace: "data", locale: "de", key: `GlMemo.M1.${fieldname}`, value,
+          entity: "GlMemo", document_name: "M1", fieldname,
+          source: "file", overridden: false, owner: "system", modified_by: "system", creation: now, modified: now,
+        },
+        DIGITA.DATABASES.CORE,
+      );
+    }
+    const readerTok = await ta.sign({ sub: "reader@d", email: "reader@d", roles: ["System User"] });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/resource/GlMemo/M1/translations",
+      headers: { authorization: `Bearer ${readerTok}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.translations.de).toEqual({ title: "Miete" });
+  });
 });
 
 describe("seedDataTranslations (co-located *.translations.json)", () => {
