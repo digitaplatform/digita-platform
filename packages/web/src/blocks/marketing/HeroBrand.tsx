@@ -321,12 +321,13 @@ function DataRain() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 -z-10 overflow-hidden opacity-[.12] [mask-image:linear-gradient(to_bottom,transparent,black_18%,black_70%,transparent)] motion-reduce:hidden"
+      className="pointer-events-none absolute inset-0 -z-10 overflow-hidden opacity-[.12] [mask-image:linear-gradient(to_bottom,transparent,black_18%,black_70%,transparent)]"
     >
+      {/* Reduced motion stops the fall; the columns stay as a still texture. */}
       {RAIN.map((column) => (
         <div
           key={column.left}
-          className="absolute top-0 animate-[rain-fall_40s_linear_infinite] whitespace-pre font-mono text-xs leading-10 text-primary-600"
+          className="absolute top-0 animate-[rain-fall_40s_linear_infinite] motion-reduce:animate-none whitespace-pre font-mono text-xs leading-10 text-primary-600"
           style={{ left: column.left, animationDuration: column.duration, animationDelay: column.delay }}
         >
           {/* Twice, so a column is taller than the hero and never shows its end mid-fall. */}
