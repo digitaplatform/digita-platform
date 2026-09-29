@@ -259,6 +259,32 @@ export class PermissionChecker {
     entityName: string,
     doc?: Record<string, unknown>,
   ): Set<string> | null {
+    // A conditional (if_owner/condition/scope) grant only contributes its level
+    // when it admits `doc`.
+    return this.getReadableFieldsWhere(user, entityName, (perm) =>
+      this.permMatchesDoc(perm, user, doc),
+    );
+  }
+
+  /**
+   * Fields the user reads on every row of the entity, for a read over many rows
+   * such as a view aggregate. A grant gated by if_owner, condition or scope does
+   * not count: nothing checks the gate per row, and an empty document can pass a
+   * condition such as `doc.status != "Closed"`.
+   */
+  getReadableFieldsOnEveryRow(user: UserContext, entityName: string): Set<string> | null {
+    return this.getReadableFieldsWhere(
+      user,
+      entityName,
+      (perm) => !perm.if_owner && !perm.condition && !(perm.scope && env.PERMISSION_SCOPE_ENABLED),
+    );
+  }
+
+  private getReadableFieldsWhere(
+    user: UserContext,
+    entityName: string,
+    admits: (perm: EntityDefinition["permissions"][number]) => boolean,
+  ): Set<string> | null {
     // Administrator can read everything
     if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) {
       return null; // null means all fields
@@ -266,14 +292,11 @@ export class PermissionChecker {
 
     const entity = this.registry.get(entityName);
     const readableFields = new Set<string>();
-
-    // Determine which perm_levels the user can read. A conditional (if_owner/
-    // condition/scope) grant only contributes its level when it admits `doc`.
     const readableLevels = new Set<number>();
 
     for (const perm of entity.permissions) {
       if (!user.roles.includes(perm.role)) continue;
-      if (perm.read && this.permMatchesDoc(perm, user, doc)) {
+      if (perm.read && admits(perm)) {
         readableLevels.add(perm.level);
       }
     }

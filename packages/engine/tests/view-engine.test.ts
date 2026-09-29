@@ -44,7 +44,7 @@ function makeDeps() {
     // Default mocks return null (= all fields readable, admin-equivalent)
     // so the new aggregation field-masking layer doesn't block these tests
     // which exercise other concerns.
-    getReadableFields: vi.fn().mockReturnValue(null),
+    getReadableFieldsOnEveryRow: vi.fn().mockReturnValue(null),
   };
   return { documentService, db, registry, permissionChecker };
 }

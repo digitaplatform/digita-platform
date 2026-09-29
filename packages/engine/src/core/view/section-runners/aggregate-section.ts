@@ -95,7 +95,7 @@ export async function runAggregateSection(
   const learnEntity = (name: string): void => {
     if (readableByEntity.has(name)) return;
     if (!deps.registry.has(name)) return;
-    readableByEntity.set(name, deps.permissionChecker.getReadableFields(user, name));
+    readableByEntity.set(name, deps.permissionChecker.getReadableFieldsOnEveryRow(user, name));
     const def = deps.registry.get(name);
     const fieldList = def.fields ?? [];
     allFieldsByEntity.set(name, new Set(fieldList.map((f) => f.fieldname)));

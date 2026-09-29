@@ -56,7 +56,7 @@ function makeDeps(opts: {
     registry: fakeRegistry,
     permissionChecker: {
       check: vi.fn().mockResolvedValue(undefined),
-      getReadableFields: vi.fn((_user: unknown, entity: string) => {
+      getReadableFieldsOnEveryRow: vi.fn((_user: unknown, entity: string) => {
         if (entity === "Employee") return opts.readable;
         return opts.readableByLookup?.get(entity) ?? null;
       }),
@@ -100,7 +100,7 @@ describe("runAggregateSection — field-level perm_level enforcement", () => {
     expect(out).toEqual([{ _id: "DE", count: 3 }]);
   });
 
-  it("admin sees protected fields (getReadableFields returns null → bypass)", async () => {
+  it("admin sees protected fields (getReadableFieldsOnEveryRow returns null → bypass)", async () => {
     const deps = makeDeps({
       readable: null, // admin
       rows: [{ _id: "DE", total: 999 }],
@@ -214,7 +214,7 @@ describe("runAggregateSection — field-level perm_level enforcement", () => {
       registry: reg,
       permissionChecker: {
         check: vi.fn().mockResolvedValue(undefined),
-        getReadableFields: vi.fn(() => null),
+        getReadableFieldsOnEveryRow: vi.fn(() => null),
       },
     } as never;
     const section = {
