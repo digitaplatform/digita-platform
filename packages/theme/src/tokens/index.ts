@@ -1,4 +1,5 @@
 import { semantic } from './semantic.js';
+import { onPrimaryFor } from './on-primary.js';
 import { PRIMARY, NEUTRAL, ACCENT } from './colors.js';
 import {
   fontFamily,
@@ -21,6 +22,7 @@ export type { SemanticTokens } from './semantic.js';
 export { PRIMARY, NEUTRAL, ACCENT } from './colors.js';
 export { COLOR_PALETTES } from './palettes.js';
 export { synthesizeRamp, RAMP_STEPS } from './synthesize.js';
+export { onPrimaryFor, contrastRatio } from './on-primary.js';
 export type { RampStep } from './synthesize.js';
 export { TINT_PALETTES, DEFAULT_TINT_KEY, tintRamp } from './tints.js';
 export type { TintKey } from './tints.js';
@@ -96,6 +98,7 @@ export function varsForTint(ramp: Record<string, string>, mode: 'light' | 'dark'
   for (const [step, value] of Object.entries(ramp)) out[cssVarName(`primary-${step}`)] = value;
   out[cssVarName('primaryContainer')] = mode === 'light' ? ramp['100']! : ramp['800']!;
   out[cssVarName('onPrimaryContainer')] = mode === 'light' ? ramp['900']! : ramp['100']!;
+  out[cssVarName('onPrimary')] = onPrimaryFor(ramp);
   return out;
 }
 

@@ -36,10 +36,10 @@ describe('design registry + runtime', () => {
     }
   });
 
-  it('every BAKED design defines all on-color tokens for both modes', () => {
+  it('every BAKED design defines its on-error token and leaves on-primary to the tint layer', () => {
     for (const d of Object.values(DESIGNS)) {
       for (const mode of ['light', 'dark'] as const) {
-        expect(d.semantic[mode].onPrimary).toBeTruthy();
+        expect(d.semantic[mode].onPrimary).toBeUndefined();
         expect(d.semantic[mode].onError).toBeTruthy();
       }
     }

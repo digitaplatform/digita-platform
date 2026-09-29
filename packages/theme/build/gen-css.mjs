@@ -396,7 +396,9 @@ for (const f of [
 //    --color-primary-* / container entries are UNCHANGED from the ADR-V2 tint
 //    decoupling: the bare-:root default primary stays the BLUE default tint =
 //    synthesizeRamp('#007AFF') (container roles: ramp 100/900 light, 800/100
-//    dark) — the tint layer owns primary, no design defines it. An INTENTIONAL
+//    dark; the label on the fill is onPrimaryFor's dark ink, because white
+//    reaches only 4.02:1 on #007aff) — the tint layer owns primary, no design
+//    defines it. An INTENTIONAL
 //    token change must update EXPECTED here too, or the build fails; the guard
 //    catches UNINTENDED drift from the baked default design. ──
 const EXPECTED = {
@@ -408,7 +410,7 @@ const EXPECTED = {
     '--color-text-main': '#09090B', '--color-text-muted': '#71717A',
     '--color-error': '#DC2626', '--color-error-light': '#FEF2F2', '--color-warning': '#D97706', '--color-warning-light': '#FFFBEB',
     '--color-success': '#16A34A', '--color-success-light': '#F0FDF4', '--color-info': '#2563EB', '--color-info-light': '#EFF6FF',
-    '--color-on-primary': '#FFFFFF', '--color-on-error': '#FFFFFF', '--color-scrim': 'rgba(0,0,0,0.30)', '--control-h': '2.625rem',
+    '--color-on-primary': '#021535', '--color-on-error': '#FFFFFF', '--color-scrim': 'rgba(0,0,0,0.30)', '--control-h': '2.625rem',
     '--color-primary-container': '#cfe6ff', '--color-on-primary-container': '#002f74',
     '--color-primary-50': '#e9f5ff', '--color-primary-100': '#cfe6ff', '--color-primary-200': '#a4cdff', '--color-primary-300': '#6badff',
     '--color-primary-400': '#0d87ff', '--color-primary-500': '#006ed3', '--color-primary-600': '#007aff', '--color-primary-700': '#00499d',
@@ -422,7 +424,7 @@ const EXPECTED = {
     '--color-text-main': '#FAFAFA', '--color-text-muted': '#A1A1AA',
     '--color-error': '#F87171', '--color-error-light': 'rgba(220,38,38,0.15)', '--color-warning': '#FBBF24', '--color-warning-light': 'rgba(217,119,6,0.15)',
     '--color-success': '#4ADE80', '--color-success-light': 'rgba(22,163,74,0.15)', '--color-info': '#60A5FA', '--color-info-light': 'rgba(37,99,235,0.15)',
-    '--color-on-primary': '#FFFFFF', '--color-on-error': '#FFFFFF', '--color-scrim': 'rgba(0,0,0,0.30)',
+    '--color-on-primary': '#021535', '--color-on-error': '#FFFFFF', '--color-scrim': 'rgba(0,0,0,0.30)',
     '--color-primary-container': '#003b87', '--color-on-primary-container': '#cfe6ff',
     '--color-primary-50': '#e9f5ff', '--color-primary-100': '#cfe6ff', '--color-primary-200': '#a4cdff', '--color-primary-300': '#6badff',
     '--color-primary-400': '#0d87ff', '--color-primary-500': '#006ed3', '--color-primary-600': '#007aff', '--color-primary-700': '#00499d',
@@ -445,10 +447,10 @@ if (offenders.length) {
 // ── Coverage guard — every design MUST define all semantic keys × 2 modes, so an
 //    incomplete design can never ship a half-painted surface (fails the build loud).
 //    ADR-V2: the tint-derived keys are EXEMPT — designs must NOT define them
-//    (primaryContainer/onPrimaryContainer come from the tint layer; selection/
+//    (onPrimary/primaryContainer/onPrimaryContainer come from the tint layer; selection/
 //    selectionSoft derive from the active primary via var()/color-mix in the
 //    default semantic and cascade design-agnostically). ──
-const TINT_DERIVED_KEYS = new Set(['primaryContainer', 'onPrimaryContainer', 'selection', 'selectionSoft']);
+const TINT_DERIVED_KEYS = new Set(['onPrimary', 'primaryContainer', 'onPrimaryContainer', 'selection', 'selectionSoft']);
 const SEMANTIC_KEYS = Object.keys(getDesign(DEFAULT_DESIGN_ID).semantic.light).filter(
   (k) => !TINT_DERIVED_KEYS.has(k),
 );

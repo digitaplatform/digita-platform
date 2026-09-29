@@ -40,10 +40,11 @@ export interface SemanticTokens {
   info: string;
   infoLight: string;
   /** Foreground (text/icon) that sits ON a primary-600 fill — button labels,
-   *  checkbox tick. A design with a LIGHT primary overrides this to a dark value
-   *  so the label stays legible (this is the token that replaces hardwired
-   *  `text-white` in the shared kit). */
-  onPrimary: string;
+   *  checkbox tick; the token that replaces hardwired `text-white` in the kit.
+   *  ADR-V2: the tint layer owns it like primaryContainer, because only the
+   *  ramp knows whether white reaches AA on its step 600 (onPrimaryFor); a
+   *  design must not define it, or a light tint gets an unreadable label. */
+  onPrimary?: string;
   /** Foreground that sits ON an error fill — destructive button labels. */
   onError: string;
   /** The veil an overlay (dialog, command palette, drawer) lays over the page.
@@ -96,10 +97,9 @@ export const semantic: { light: SemanticTokens; dark: SemanticTokens } = {
     successLight: '#ecfdf5',
     info: '#3b82f6',
     infoLight: '#eff6ff',
-    onPrimary: '#FFFFFF',
     onError: '#FFFFFF',
     scrim: 'rgba(0,0,0,0.30)',
-    // ADR-V2: primaryContainer/onPrimaryContainer come from the TINT layer
+    // ADR-V2: onPrimary/primaryContainer/onPrimaryContainer come from the TINT layer
     // (gen-css varsForTint — default blue at :root, per-[data-tint] blocks).
     // selection/selectionSoft derive from the ACTIVE primary so they follow
     // any tint with zero per-tint emission (light anchors on the solid 600
@@ -130,7 +130,6 @@ export const semantic: { light: SemanticTokens; dark: SemanticTokens } = {
     successLight: 'rgba(16,185,129,0.1)',
     info: '#60a5fa',
     infoLight: 'rgba(59,130,246,0.1)',
-    onPrimary: '#FFFFFF',
     onError: '#FFFFFF',
     scrim: 'rgba(0,0,0,0.30)',
     // ADR-V2: container roles from the tint layer (see the light block note).
