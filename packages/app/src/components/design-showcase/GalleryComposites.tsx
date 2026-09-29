@@ -513,7 +513,7 @@ function CardListGroup() {
           aria-label="Order lines"
           rows={LINES}
           getRowId={(r) => r.id}
-          currentRowId="l2"
+          selectedRowId="l2"
           onRowClick={noop}
           renderCard={(r) => (
             <>

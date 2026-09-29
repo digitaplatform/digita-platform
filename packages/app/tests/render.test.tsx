@@ -185,7 +185,7 @@ describe('ListRenderer (generic meta-driven render)', () => {
         entity="Widget"
         meta={m}
         rows={rows}
-        orderBy="city desc"
+        orderBy="city desc, name asc"
         page={1}
         total={2}
         totalPages={1}
@@ -208,6 +208,11 @@ describe('ListRenderer (generic meta-driven render)', () => {
     expect(city).toHaveAttribute('aria-sort', 'descending');
     fireEvent.click(city.querySelector('button')!, { shiftKey: true });
     expect(onSort).toHaveBeenCalledWith('city', true);
+    // The title column sorts by the title field itself, so the server knows the name.
+    const name = container.querySelector('[data-testid="col:name"]')!;
+    expect(name).toHaveAttribute('aria-sort', 'ascending');
+    fireEvent.click(name.querySelector('button')!);
+    expect(onSort).toHaveBeenCalledWith('name', false);
     // The status pill is the kit badge, toned by the state's color.
     const badge = gridRows[0]!.querySelector('[data-ui="badge"]')!;
     expect(badge).toHaveAttribute('data-color', 'success');
@@ -217,8 +222,8 @@ describe('ListRenderer (generic meta-driven render)', () => {
     // The phone cards: the kit list, the current record's card marked.
     const cards = container.querySelectorAll('[data-ui="list-group"] [data-ui="list-row"]');
     expect(cards).toHaveLength(2);
-    expect(cards[0]).not.toHaveAttribute('aria-current');
-    expect(cards[1]).toHaveAttribute('aria-current', 'true');
+    expect(cards[0]).toHaveAttribute('aria-selected', 'false');
+    expect(cards[1]).toHaveAttribute('aria-selected', 'true');
   });
 });
 

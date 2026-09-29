@@ -92,6 +92,20 @@ describe('DataGrid as a list', () => {
     expect(screen.queryByRole('button', { name: 'Customer' })).toBeNull();
   });
 
+  it('leaves a text selection to the browser on copy and copies the focused row otherwise', () => {
+    render(<DataGrid rows={ROWS} columns={COLS} getRowId={(r) => r.id} editable={false} />);
+    const cell = screen.getByText('ACME GmbH').closest('[role="gridcell"]')!;
+    fireEvent.focus(cell);
+    const setData = vi.fn();
+    const copy = () => fireEvent.copy(cell, { clipboardData: { setData } });
+    document.getSelection()!.selectAllChildren(cell);
+    expect(copy()).toBe(true);
+    expect(setData).not.toHaveBeenCalled();
+    document.getSelection()!.removeAllRanges();
+    expect(copy()).toBe(false);
+    expect(setData).toHaveBeenCalledWith('text/plain', 'SO-0042\tACME GmbH');
+  });
+
   describe('when the columns do not fit the frame', () => {
     // jsdom reports every clientWidth as 0; the collapse reads the frame's width from it.
     const FRAME_WIDTH = 300;
@@ -122,16 +136,18 @@ describe('CardList', () => {
   it('draws every row as a list-row card in a list-group and marks the current one', () => {
     const onRowClick = vi.fn();
     render(
-      <CardList rows={ROWS} getRowId={(r) => r.id} currentRowId="SO-0042" onRowClick={onRowClick} renderCard={(r) => r.customer} />,
+      <CardList rows={ROWS} getRowId={(r) => r.id} selectedRowId="SO-0042" onRowClick={onRowClick} renderCard={(r) => r.customer} />,
     );
-    expectHooked(screen.getByRole('list'), 'list-group');
-    const cards = screen.getAllByRole('button');
+    expectHooked(screen.getByRole('listbox'), 'list-group');
+    const cards = screen.getAllByRole('option');
     expect(cards).toHaveLength(2);
     cards.forEach((card) => expectHooked(card, 'list-row'));
-    expect(cards[0]).not.toHaveAttribute('aria-current');
-    expect(cards[1]).toHaveAttribute('aria-current', 'true');
+    expect(cards[0]).toHaveAttribute('aria-selected', 'false');
+    expect(cards[1]).toHaveAttribute('aria-selected', 'true');
     fireEvent.click(cards[0]!);
     expect(onRowClick).toHaveBeenCalledWith('SO-0043');
+    fireEvent.keyDown(cards[1]!, { key: 'Enter' });
+    expect(onRowClick).toHaveBeenCalledWith('SO-0042');
   });
 });
 
@@ -153,6 +169,8 @@ describe('the status pill and the filter chips', () => {
     const chip = screen.getByText('Status: confirmed');
     expectHooked(chip, 'chip');
     expect(chip).toHaveAttribute('data-selected', 'true');
+    // A long filter label truncates inside its row instead of widening a phone page.
+    expect(chip.className).toContain('max-w-full');
     // The chip body is not a button: it neither toggles nor removes.
     expect(chip).not.toHaveAttribute('aria-pressed');
     fireEvent.click(chip);

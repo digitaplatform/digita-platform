@@ -3,6 +3,7 @@ import { Inbox, Plus } from 'lucide-react';
 import type { EntityDefinition, FieldDefinition, FieldType } from '@digitaplatform/shared';
 import { LAYOUT_FIELD_TYPES, NUMERIC_FIELD_TYPES } from '@digitaplatform/shared';
 import {
+  Badge,
   Button,
   CardList,
   DataGrid,
@@ -17,12 +18,11 @@ import { resolveWorkflowField } from '@/lib/workflow-field';
 import { parseSort } from '@/lib/sort';
 import { tid } from '@/lib/testid';
 import { EmptyState } from '@/components/status';
-import { CellValue, StatusBadge } from './cells';
+import { CellValue, workflowBadge } from './cells';
 
 type Row = Record<string, unknown>;
 
 /** The grid's own columns, beside the entity's fields. */
-const PRIMARY_COLUMN = '__primary';
 const STATUS_COLUMN = '__status';
 const ACTIONS_COLUMN = '__actions';
 
@@ -126,6 +126,7 @@ export function ListRenderer({
   rowActions,
 }: ListRendererProps) {
   const tField = useI18nStore((s) => s.tField);
+  const tOption = useI18nStore((s) => s.tOption);
   const tc = useChrome();
 
   const primaryKey = meta.title_field || '_id';
@@ -137,7 +138,7 @@ export function ListRenderer({
 
   // The workflow-state field (declared `workflow_field`, else `status` when the
   // entity has a state machine; null when it has no workflow at all). When it is
-  // ALSO a visible data column that column renders the StatusBadge in place —
+  // ALSO a visible data column that column renders the status badge in place —
   // otherwise the value would show twice: plain text there + the appended status
   // column.
   const wf = resolveWorkflowField(meta);
@@ -147,7 +148,8 @@ export function ListRenderer({
   const columns = useMemo<DataGridColumn[]>(() => {
     const defs: DataGridColumn[] = [
       {
-        key: PRIMARY_COLUMN,
+        // Keyed by the field itself, so a header click sorts by a name the server knows.
+        key: primaryKey,
         label: tField(entity, primaryKey, meta.title_field ? undefined : 'ID'),
         kind: 'link',
         sortable: primaryKey !== '_id',
@@ -183,10 +185,18 @@ export function ListRenderer({
   const rowId = (r: Row) => String(r['_id']);
   const primaryLabel = (r: Row) =>
     primaryKey !== '_id' && r[primaryKey] ? String(r[primaryKey]) : String(r['_id'] ?? '—');
+  const statusBadge = (r: Row) => {
+    const state = workflowBadge(meta, r, tOption);
+    return state ? (
+      <Badge variant="pill" color={state.color}>
+        {state.label}
+      </Badge>
+    ) : null;
+  };
 
   const renderCell = ({ row, column }: { row: Row; column: DataGridColumn }): ReactNode => {
     switch (column.key) {
-      case PRIMARY_COLUMN:
+      case primaryKey:
         return (
           <button
             type="button"
@@ -198,12 +208,12 @@ export function ListRenderer({
           </button>
         );
       case STATUS_COLUMN:
-        return <StatusBadge meta={meta} row={row} />;
+        return statusBadge(row);
       case ACTIONS_COLUMN:
         return rowActions!(row);
       default:
         return column.key === wf ? (
-          <StatusBadge meta={meta} row={row} />
+          statusBadge(row)
         ) : (
           <CellValue field={fieldByName.get(column.key)!} row={row} entity={entity} />
         );
@@ -253,13 +263,13 @@ export function ListRenderer({
         className={cn('md:hidden', isFetching && 'opacity-60')}
         rows={rows}
         getRowId={rowId}
-        currentRowId={selectedRowId}
+        selectedRowId={selectedRowId}
         onRowClick={onRowClick}
         renderCard={(r) => (
           <>
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium text-primary-600">{primaryLabel(r)}</span>
-              {hasStates && <StatusBadge meta={meta} row={r} />}
+              {hasStates && statusBadge(r)}
             </div>
             <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-textMuted">
               {dataFields.slice(0, 4).map((f) => (

@@ -6,7 +6,7 @@ import { Lock } from 'lucide-react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { EntityDefinition } from '@digitaplatform/shared';
 import { LAYOUT_FIELD_TYPES } from '@digitaplatform/shared';
-import { Button } from '@digitaplatform/components';
+import { Badge, Button } from '@digitaplatform/components';
 import { useMeta } from '@/hooks/useMeta';
 import { useDocument, useSingle, useCreate, useUpdate, useDeleteDoc } from '@/hooks/useDocument';
 import { usePreview } from '@/hooks/usePreview';
@@ -28,7 +28,7 @@ import { ApiClientError } from '@/lib/errors';
 import { useSessionStore } from '@/stores/session';
 import { useI18nStore } from '@/stores/i18n';
 import { FormRenderer } from '@/components/render/FormRenderer';
-import { StatusBadge } from '@/components/render/cells';
+import { workflowBadge } from '@/components/render/cells';
 import { ContextPanel } from '@/components/record/ContextPanel';
 import { WorkflowBar } from '@/components/workflow/WorkflowBar';
 import { ActionBar } from '@/components/workflow/ActionBar';
@@ -220,6 +220,7 @@ function RecordForm({
   const user = useSessionStore((s) => s.user);
   const t = useI18nStore((s) => s.t);
   const tEntity = useI18nStore((s) => s.tEntity);
+  const tOption = useI18nStore((s) => s.tOption);
   const tc = useChrome();
 
   const computedSet = useMemo(() => deriveComputedSet(meta), [meta]);
@@ -270,6 +271,7 @@ function RecordForm({
   });
 
   const watched = form.watch();
+  const stateBadge = isNew ? null : workflowBadge(meta, watched as Record<string, unknown>, tOption);
   const docstatus = Number((watched['docstatus'] ?? initial['docstatus'] ?? 0) as number);
   // Any Link field with a declared context_view AND a current value activates
   // the two-column layout with the metadata-driven side panel.
@@ -557,7 +559,11 @@ function RecordForm({
           <p className="text-xs uppercase tracking-wide text-textMuted">{tEntity(entity, meta.label ?? entity)}</p>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-h1 font-display text-textMain">{title}</h1>
-            {!isNew && <StatusBadge meta={meta} row={watched as Record<string, unknown>} size="lg" />}
+            {stateBadge && (
+              <Badge variant="pill" size="lg" color={stateBadge.color}>
+                {stateBadge.label}
+              </Badge>
+            )}
             {docLocked && (
               <span
                 className="inline-flex items-center gap-1 rounded-full border border-border bg-subtle px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-textMuted"

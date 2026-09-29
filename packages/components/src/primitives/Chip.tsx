@@ -46,7 +46,7 @@ export type ChipProps = ActionChipProps | RemovableChipProps;
  */
 export function Chip({ children, selected, onClick, onRemove, removeLabel, icon, disabled, color, className, ...props }: ChipProps) {
   const look = cn(
-    'inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs font-medium',
+    'inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border px-3 text-xs font-medium',
     'transition-colors duration-base ease-smooth focus-visible:outline-none focus-visible:shadow-focus',
     color
       ? cn(CATEGORICAL_SOFT[color], selected ? CATEGORICAL_OUTLINE[color] : 'border-transparent')
@@ -77,7 +77,7 @@ export function Chip({ children, selected, onClick, onRemove, removeLabel, icon,
           aria-label={removeLabel}
           disabled={disabled}
           onClick={onRemove}
-          className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full text-current opacity-70 hover:bg-bgHover hover:opacity-100 focus-visible:outline-none focus-visible:shadow-focus disabled:cursor-not-allowed"
+          className="-mr-1.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-current opacity-70 hover:bg-bgHover hover:opacity-100 focus-visible:outline-none focus-visible:shadow-focus disabled:cursor-not-allowed"
         >
           ×
         </button>

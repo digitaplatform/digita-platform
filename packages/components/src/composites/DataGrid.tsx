@@ -517,7 +517,8 @@ export function DataGrid<T = Record<string, unknown>>({
   };
 
   const onGridCopy = (e: ClipboardEvent<HTMLDivElement>) => {
-    if (active || !focused) return;
+    // Text the operator selected is theirs to copy; the row goes only for a bare cell focus.
+    if (active || !focused || document.getSelection()?.toString()) return;
     const r = rows[focused.row];
     if (!r) return;
     const tsv = cols.map((c) => String((r as Record<string, unknown>)[c.key] ?? '')).join('\t');

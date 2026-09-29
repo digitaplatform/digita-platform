@@ -1,5 +1,5 @@
 import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
-import { Badge, type BadgeProps } from '@digitaplatform/components';
+import type { BadgeProps } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
 import { useI18nStore } from '@/stores/i18n';
 import { resolveWorkflowField } from '@/lib/workflow-field';
@@ -122,32 +122,23 @@ const STATE_TONE: Record<string, BadgeProps['color']> = {
 
 function stateTone(color: string | undefined): BadgeProps['color'] {
   const tone = color ? STATE_TONE[color] : undefined;
-  if (color && !tone && import.meta.env.DEV) console.warn(`[StatusBadge] state color "${color}" has no kit tone — shown neutral`);
+  if (color && !tone && import.meta.env.DEV) console.warn(`[workflowBadge] state color "${color}" has no kit tone — shown neutral`);
   return tone ?? 'neutral';
 }
 
-/** The workflow state of a row as the kit `Badge`, so every design reaches it through
- *  `data-ui="badge"` and `data-color`. The tone comes from the declared `states[].color`,
- *  never from the value text; rendered only for an entity that declares a workflow (see
- *  resolveWorkflowField). */
-export function StatusBadge({
-  meta,
-  row,
-  size = 'md',
-}: {
-  meta: EntityDefinition;
-  row: Row;
-  size?: BadgeProps['size'];
-}) {
-  const tOption = useI18nStore((s) => s.tOption);
+/** What the kit `Badge` shows for a row's workflow state: the localized option label and
+ *  the tone of the declared `states[].color`, never a tone read from the value text. Null
+ *  for an entity without a workflow (see resolveWorkflowField) and for a row without a
+ *  state; `tOption` is the caller's, because a cell renderer cannot call a hook. */
+export function workflowBadge(
+  meta: EntityDefinition,
+  row: Row,
+  tOption: (entity: string, field: string, value: string) => string,
+): { label: string; color: BadgeProps['color'] } | null {
   const wf = resolveWorkflowField(meta);
   if (!wf) return null;
   const val = row[wf];
   if (val == null || val === '') return null;
   const state = meta.states?.find((s) => s.value === val);
-  return (
-    <Badge variant="pill" color={stateTone(state?.color)} size={size}>
-      {tOption(meta.name, wf, String(val))}
-    </Badge>
-  );
+  return { label: tOption(meta.name, wf, String(val)), color: stateTone(state?.color) };
 }

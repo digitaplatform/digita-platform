@@ -194,7 +194,7 @@ describe('legacy literal → token cleanup (B5, no behavior change)', () => {
     expect(fab.className).not.toContain('z-40');
   });
   it('Chip remove affordance hovers with bg-bgHover, not black/10', () => {
-    render(<Chip onRemove={() => {}}>Tag</Chip>);
+    render(<Chip onRemove={() => {}} removeLabel="Remove Tag">Tag</Chip>);
     const remove = screen.getByText('×');
     expect(remove.className).toContain('hover:bg-bgHover');
     expect(remove.className).not.toContain('bg-black/10');
