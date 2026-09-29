@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import type { ReactElement } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Input } from '../src/primitives/Input.js';
@@ -7,6 +8,7 @@ import { Select } from '../src/primitives/Select.js';
 import { Badge } from '../src/primitives/Badge.js';
 import { IconButton } from '../src/primitives/IconButton.js';
 import { DataGrid, type DataGridColumn } from '../src/composites/DataGrid.js';
+import { DatePicker } from '../src/composites/DatePicker.js';
 
 /** The attributes a design's CSS keys on: a state the kit used to hold only in a class
  *  or in React state is an attribute on the hook, so every design reaches it. */
@@ -54,16 +56,24 @@ describe('Select', () => {
     expect(beta).toHaveAttribute('data-active', 'true');
   });
 
-  it('emits aria-expanded on a searchable trigger too', async () => {
-    const user = userEvent.setup();
-    const { container } = render(
-      <Select searchable value="a" onChange={() => {}} options={OPTIONS} aria-label="pick" />,
-    );
-    const trigger = container.querySelector('[data-ui="select-trigger"]')!;
-    expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    await user.click(trigger);
-    expect(trigger).toHaveAttribute('aria-expanded', 'true');
-  });
+});
+
+describe('every select-trigger carries aria-expanded', () => {
+  const triggers: Array<[string, ReactElement]> = [
+    ['Select', <Select value="a" onChange={() => {}} options={OPTIONS} aria-label="pick" />],
+    ['searchable Select', <Select searchable value="a" onChange={() => {}} options={OPTIONS} aria-label="pick" />],
+    ['DatePicker', <DatePicker onChange={() => {}} />],
+  ];
+  for (const [name, element] of triggers) {
+    it(`${name} trigger flips aria-expanded when it opens`, async () => {
+      const user = userEvent.setup();
+      const { container } = render(element);
+      const trigger = container.querySelector('[data-ui="select-trigger"]')!;
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      await user.click(trigger);
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    });
+  }
 });
 
 describe('badge and icon-button expose the axis a design sizes or tints by', () => {
@@ -103,7 +113,7 @@ describe('DataGrid row', () => {
   const COLS: DataGridColumn[] = [{ key: 'name', label: 'Name', kind: 'text' }];
   const ROWS = [{ id: 'r1', name: 'Apple' }, { id: 'r2', name: 'Pear' }];
 
-  it('carries data-active on the row of the focused cell and no inline height', async () => {
+  it('carries data-active on the row of the tab stop and no inline height', async () => {
     const user = userEvent.setup();
     render(
       <DataGrid rows={ROWS} columns={COLS} getRowId={(r) => r.id} editable={false} aria-label="lines" />,
@@ -111,10 +121,12 @@ describe('DataGrid row', () => {
     const rows = () => document.querySelectorAll<HTMLElement>('[data-ui="table-row"]');
     expect(rows()).toHaveLength(2);
     for (const row of rows()) {
-      expect(row).not.toHaveAttribute('data-active');
       expect(row.style.height).toBe('');
       expect(row.className).toContain('min-h-[calc(var(--density-row)*1px)]');
     }
+    // At rest the tab stop is cell 0-0, where the kit already paints its ring.
+    expect(rows()[0]).toHaveAttribute('data-active', 'true');
+    expect(rows()[1]).not.toHaveAttribute('data-active');
     await user.click(rows()[1]!.querySelector('[role="gridcell"]')!);
     expect(rows()[1]).toHaveAttribute('data-active', 'true');
     expect(rows()[0]).not.toHaveAttribute('data-active');

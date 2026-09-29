@@ -549,7 +549,9 @@ export function DataGrid<T = Record<string, unknown>>({
                   ref={virtualizer.measureElement}
                   data-index={vi.index}
                   aria-rowindex={vi.index + 2}
-                  data-active={focused?.row === vi.index || undefined}
+                  // The row of the tab stop, which is row 0 until a cell is focused, so
+                  // the hook and the kit's own ring below never disagree.
+                  data-active={(focused?.row ?? 0) === vi.index || undefined}
                   className={cn('grid min-h-[calc(var(--density-row)*1px)]', tableSkin.row)}
                   style={{
                     position: 'absolute',

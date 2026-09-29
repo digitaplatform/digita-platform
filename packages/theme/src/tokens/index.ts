@@ -58,7 +58,8 @@ export const RAMPS: Record<string, Record<string, string>> = {
 };
 
 /** Flat { cssVarName: value } for one DESIGN + mode = its semantic tokens + every
- *  ramp step (design ramp override, else the platform default). The generalization
+ *  ramp step (design ramp override, else the platform default), plus the
+ *  mode-agnostic `--control-h` in the light block only. The generalization
  *  of varsForMode — drives the per-design scoped blocks in gen-css.mjs.
  *  ADR-V2: the PRIMARY ramp is deliberately EXCLUDED — design blocks are
  *  primary-less so the tint layer (bare :root blue default, later-source
