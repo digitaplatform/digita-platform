@@ -43,7 +43,6 @@
     { "fields": ["overridden", "namespace"], "name": "idx_overridden" }
   ],
   "permissions": [
-    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1 },
-    { "role": "System User", "level": 0, "select": 1, "read": 1 }
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1 }
   ]
 }
