@@ -187,6 +187,39 @@ describe("PeriodCloseValidator — by-date lookup", () => {
     ).rejects.toBeInstanceOf(NoMatchingPeriodError);
   });
 
+  it("passes a date no period covers when require_period is false", async () => {
+    const entity = journalEntity({
+      period_check: {
+        date_field: "posting_date",
+        period_entity: "fiscalPeriod",
+        block_on: ["submit"],
+        require_period: false,
+      },
+    });
+    const registry = makeRegistry({ journalEntry: entity, fiscalPeriod: fiscalPeriodEntity() });
+    const v = new PeriodCloseValidator(registry, makeDb() as never);
+    await expect(
+      v.assertPeriodOpen(entity, { posting_date: "2026-04-15" }, "submit"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("still refuses a closed period when require_period is false", async () => {
+    const entity = journalEntity({
+      period_check: {
+        date_field: "posting_date",
+        period_entity: "fiscalPeriod",
+        block_on: ["submit"],
+        require_period: false,
+      },
+    });
+    const registry = makeRegistry({ journalEntry: entity, fiscalPeriod: fiscalPeriodEntity() });
+    const db = makeDb({ byDate: { "2026-04-15": { _id: "FP-Q2", is_closed: true } } });
+    const v = new PeriodCloseValidator(registry, db as never);
+    await expect(
+      v.assertPeriodOpen(entity, { posting_date: "2026-04-15" }, "submit"),
+    ).rejects.toBeInstanceOf(PeriodClosedError);
+  });
+
   it("throws AmbiguousPeriodError when MULTIPLE periods cover the date (A3)", async () => {
     const entity = journalEntity({
       period_check: { date_field: "posting_date", period_entity: "fiscalPeriod", block_on: ["submit"] },

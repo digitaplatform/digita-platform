@@ -615,6 +615,7 @@ export class EntityRegistry {
    *   the date_field doesn't exist or isn't Date/Datetime
    *   the period_field (if set) isn't a Link
    *   block_on entries are unknown phases
+   *   require_period is set but not a boolean
    *   the entity also declares time_series (the two are mutually exclusive
    *     time-series collections never update so period-close on update has
    *     no surface)
@@ -657,6 +658,9 @@ export class EntityRegistry {
       const valid = new Set(["insert", "update", "submit", "cancel", "post_submit_update"]);
       const bad = pc.block_on.filter((p) => !valid.has(p));
       if (bad.length) reasons.push(`block_on contains unknown phases: ${bad.join(", ")}`);
+    }
+    if (pc.require_period !== undefined && typeof pc.require_period !== "boolean") {
+      reasons.push("require_period must be a boolean");
     }
     if (reasons.length) {
       log.warn(

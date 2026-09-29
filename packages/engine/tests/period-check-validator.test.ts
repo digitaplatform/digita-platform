@@ -101,6 +101,25 @@ describe("entity-registry — period_check validation", () => {
     expect(r.get("journalEntry").period_check).toBeUndefined();
   });
 
+  it("keeps require_period: false", async () => {
+    const r = await loadEntity(
+      baseJournal({
+        period_check: { date_field: "posting_date", period_entity: "fiscalPeriod", require_period: false },
+      }),
+    );
+    expect(r.get("journalEntry").period_check?.require_period).toBe(false);
+  });
+
+  it("strips when require_period is not a boolean", async () => {
+    const r = await loadEntity(
+      baseJournal({
+        period_check: { date_field: "posting_date", period_entity: "fiscalPeriod", require_period: "no" },
+      }),
+    );
+    expect(r.get("journalEntry").period_check).toBeUndefined();
+    expect(warn).toHaveBeenCalled();
+  });
+
   it("strips when entity also declares time_series (mutually exclusive)", async () => {
     const r = await loadEntity(
       baseJournal({

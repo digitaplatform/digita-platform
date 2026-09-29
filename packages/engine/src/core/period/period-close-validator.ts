@@ -124,7 +124,8 @@ export class PeriodCloseValidator {
    * Throws `PeriodClosedError` when the period covering the doc is closed
    * AND the current phase is in the entity's `block_on` list. Throws
    * `NoMatchingPeriodError` when by-date lookup finds no covering period
-   * (loud failure — silent acceptance would mask misconfigured calendars).
+   * (loud failure — silent acceptance would mask misconfigured calendars),
+   * unless the config sets `require_period: false`.
    */
   async assertPeriodOpen(
     entity: EntityDefinition,
@@ -139,7 +140,7 @@ export class PeriodCloseValidator {
     if (!blockOn.includes(phase)) return;
 
     const period = await this.resolvePeriod(entity.name, cfg, data, session);
-    if (!period) return; // resolvePeriod throws when nothing matches
+    if (!period) return;
 
     // when the doc explicitly references a period via
     // period_field, also assert the doc's date_field value falls inside
@@ -185,9 +186,9 @@ export class PeriodCloseValidator {
   }
 
   /**
-   * Resolve the matching period row (or throw NoMatchingPeriodError when
-   * by-date lookup fails). Returns null only when there is no date value
-   * to look up at all.
+   * Resolve the matching period row. When by-date lookup finds none, throws
+   * NoMatchingPeriodError, or returns null under `require_period: false`.
+   * Also returns null when there is no date value to look up at all.
    */
   private async resolvePeriod(
     entityName: string,
@@ -248,6 +249,7 @@ export class PeriodCloseValidator {
       session,
     );
     if (matches.length === 0) {
+      if (cfg.require_period === false) return null;
       throw new NoMatchingPeriodError(entityName, cfg.period_entity, date);
     }
     if (matches.length > 1) {

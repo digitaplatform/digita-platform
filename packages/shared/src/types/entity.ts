@@ -625,6 +625,12 @@ export interface PeriodCheckConfig {
    * settlements in a closed period without also blocking draft edits.
    */
   block_on?: ("insert" | "update" | "submit" | "cancel" | "post_submit_update")[];
+  /**
+   * Whether a date that no period covers is refused. Default `true`.
+   * `false` lets such a date pass, so a new tenant can write before it has
+   * created any period; a date inside a closed period is still refused.
+   */
+  require_period?: boolean;
 }
 
 // ─── Post-Submit Patch (updateSubmitted) ─────────────────
