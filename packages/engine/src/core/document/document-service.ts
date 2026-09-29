@@ -504,7 +504,7 @@ export class DocumentService {
     // scope restriction but still respect the search/query filter.
     let effectiveFilter = scopedFilter as Record<string, unknown>;
     const sharedIds = user.email
-      ? await this.documentShareService.sharedDocumentIds(doctype, user.email, "read")
+      ? await this.documentShareService.sharedDocumentIds(doctype, user.email)
       : [];
     if (sharedIds.length > 0 && Object.keys(scopedFilter).length > 0) {
       const base = baseFilter as Record<string, unknown>;

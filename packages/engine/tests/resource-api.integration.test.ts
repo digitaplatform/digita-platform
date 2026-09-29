@@ -403,7 +403,6 @@ describe("Resource API Integration", () => {
           document_name: "F-SHARE-3",
           shared_with: "carol@test.local",
           can_read: true,
-          can_write: false,
           can_share: false,
           notify: false,
         },

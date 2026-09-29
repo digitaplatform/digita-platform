@@ -21,7 +21,6 @@
     { "fieldname": "shared_by_name", "fieldtype": "Data", "label": "Shared By (Name)", "read_only": true, "description": "Denormalized display name of the sharer at write time (from JWT claims).", "idx": 6 },
     { "fieldname": "cb_1", "fieldtype": "ColumnBreak", "idx": 7 },
     { "fieldname": "can_read", "fieldtype": "Check", "label": "Can Read", "default": true, "idx": 8 },
-    { "fieldname": "can_write", "fieldtype": "Check", "label": "Can Write", "default": false, "idx": 9 },
     { "fieldname": "can_share", "fieldtype": "Check", "label": "Can Share", "default": false, "idx": 10 },
     { "fieldname": "expires_at", "fieldtype": "Datetime", "label": "Expires At", "idx": 11 },
     { "fieldname": "notify", "fieldtype": "Check", "label": "Notify User", "default": true, "idx": 12 }

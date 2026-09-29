@@ -472,7 +472,6 @@ describe("DocShare read access (D10b)", () => {
       shared_with: viewer.email,
       shared_by: adminUser.email,
       can_read: true,
-      can_write: false,
       can_share: false,
       notify: false,
     });
@@ -500,7 +499,6 @@ describe("DocShare read access (D10b)", () => {
       shared_with: viewer.email,
       shared_by: adminUser.email,
       can_read: true,
-      can_write: false,
       can_share: false,
       notify: false,
     });

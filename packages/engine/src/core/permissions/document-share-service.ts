@@ -11,7 +11,6 @@ export interface DocumentShare {
   shared_with: string;
   shared_by: string;
   can_read: boolean;
-  can_write: boolean;
   can_share: boolean;
   expires_at?: Date;
   notify: boolean;
@@ -32,7 +31,6 @@ export class DocumentShareService {
         _id,
         {
           can_read: share.can_read,
-          can_write: share.can_write,
           can_share: share.can_share,
           expires_at: share.expires_at,
           modified: new Date(),
@@ -82,7 +80,7 @@ export class DocumentShareService {
     entity: string,
     documentName: string,
     userEmail: string,
-    action: "read" | "write" | "share",
+    action: "read" | "share",
   ): Promise<boolean> {
     const _id = `${entity}:${documentName}:${userEmail}`;
     const share = await this.db.findOne(DIGITA.COLLECTIONS.DOC_SHARE, _id, DIGITA.DATABASES.IDENTITY);
@@ -97,19 +95,14 @@ export class DocumentShareService {
     }
 
     if (action === "read") return shareData.can_read;
-    if (action === "write") return shareData.can_write;
     return shareData.can_share;
   }
 
   /**
-   * IDs of all documents of `entity` shared with `userEmail` for `action`
+   * IDs of all documents of `entity` shared with `userEmail` for read
    * (excluding expired shares). Used to surface shared docs in list views.
    */
-  async sharedDocumentIds(
-    entity: string,
-    userEmail: string,
-    action: "read" | "write",
-  ): Promise<string[]> {
+  async sharedDocumentIds(entity: string, userEmail: string): Promise<string[]> {
     const shares = (await this.db.find(
       DIGITA.COLLECTIONS.DOC_SHARE,
       { filters: [{ entity, shared_with: userEmail }] },
@@ -117,7 +110,7 @@ export class DocumentShareService {
     )) as unknown as DocumentShare[];
     const now = new Date();
     return shares
-      .filter((s) => (action === "read" ? s.can_read : s.can_write))
+      .filter((s) => s.can_read)
       .filter((s) => !s.expires_at || new Date(s.expires_at) > now)
       .map((s) => s.document_name);
   }
