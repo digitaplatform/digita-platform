@@ -1,14 +1,20 @@
 import pino, { type Logger as PinoLogger, type TransportTargetOptions } from "pino";
 import { env } from "../config/env.js";
 
-// Build redaction paths from environment config
-const redactPaths = env.LOG_REDACT_FIELDS.flatMap((field) => [
-  `*.${field}`,
-  `req.headers.${field}`,
-  `req.body.${field}`,
-  `res.body.${field}`,
-  `body.${field}`,
-]);
+// The request line at debug carries the whole header set. These headers carry a
+// credential, so they are redacted whatever LOG_REDACT_FIELDS a deployment sets.
+const CREDENTIAL_HEADERS = ["authorization", "cookie", "x-engine-api-key", "x-delegation-token"];
+
+const redactPaths = [
+  ...env.LOG_REDACT_FIELDS.flatMap((field) => [
+    `*.${field}`,
+    `req.headers.${field}`,
+    `req.body.${field}`,
+    `res.body.${field}`,
+    `body.${field}`,
+  ]),
+  ...CREDENTIAL_HEADERS.map((header) => `*["${header}"]`),
+];
 
 // Build transport targets
 function buildTransport(): pino.TransportMultiOptions | pino.TransportSingleOptions | undefined {
