@@ -1,4 +1,5 @@
 import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
+import { Badge, type BadgeProps } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
 import { useI18nStore } from '@/stores/i18n';
 import { resolveWorkflowField } from '@/lib/workflow-field';
@@ -100,18 +101,40 @@ export function CellValue({
   }
 }
 
-/** Status pill — color ALWAYS paired with the state text (color-blind safe). The
- *  tone comes from the declared `states[].color` (metadata), NEVER from parsing the
- *  value text; rendered only for an entity that actually declares a workflow (see
- *  resolveWorkflowField). `size="md"` is the larger record-header variant. */
+/** The kit tone of a state's `color`: the catalog names a hue (gray, green, red, amber,
+ *  yellow, blue, indigo, teal, purple), the kit names a meaning. The identity hues take
+ *  the categorical slot of the same hue in the platform palette; a hue the table does
+ *  not know is shown neutral and reported in DEV, not painted from the raw word. */
+const STATE_TONE: Record<string, BadgeProps['color']> = {
+  gray: 'neutral',
+  green: 'success',
+  red: 'error',
+  amber: 'warning',
+  yellow: 'warning',
+  blue: 'info',
+  indigo: 'cat-1',
+  teal: 'cat-2',
+  purple: 'cat-7',
+};
+
+function stateTone(color: string | undefined): BadgeProps['color'] {
+  const tone = color ? STATE_TONE[color] : undefined;
+  if (color && !tone && import.meta.env.DEV) console.warn(`[StatusBadge] state color "${color}" has no kit tone — shown neutral`);
+  return tone ?? 'neutral';
+}
+
+/** The workflow state of a row as the kit `Badge`, so every design reaches it through
+ *  `data-ui="badge"` and `data-color`. The tone comes from the declared `states[].color`,
+ *  never from the value text; rendered only for an entity that declares a workflow (see
+ *  resolveWorkflowField). */
 export function StatusBadge({
   meta,
   row,
-  size = 'sm',
+  size = 'md',
 }: {
   meta: EntityDefinition;
   row: Row;
-  size?: 'sm' | 'md';
+  size?: BadgeProps['size'];
 }) {
   const tOption = useI18nStore((s) => s.tOption);
   const wf = resolveWorkflowField(meta);
@@ -119,19 +142,9 @@ export function StatusBadge({
   const val = row[wf];
   if (val == null || val === '') return null;
   const state = meta.states?.find((s) => s.value === val);
-  const pad = size === 'md' ? 'px-2.5 py-1 text-sm' : 'px-2 py-0.5 text-xs';
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full bg-subtle ${pad} text-textMain`}
-    >
-      {state && (
-        <span
-          className="h-2 w-2 shrink-0 rounded-full"
-          style={{ backgroundColor: state.color }}
-          aria-hidden="true"
-        />
-      )}
+    <Badge variant="pill" color={stateTone(state?.color)} size={size}>
       {tOption(meta.name, wf, String(val))}
-    </span>
+    </Badge>
   );
 }

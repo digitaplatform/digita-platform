@@ -66,7 +66,10 @@ export type {
   DataGridDisplayArgs,
   DataGridEditArgs,
   DataGridApi,
+  DataGridSort,
 } from './composites/DataGrid.js';
+export { CardList } from './composites/CardList.js';
+export type { CardListProps } from './composites/CardList.js';
 export { NavList, NavGroup, NavLeafContent, navLeafClass } from './composites/NavRail.js';
 export type { NavGroupProps } from './composites/NavRail.js';
 export { SplitPane } from './composites/SplitPane.js';

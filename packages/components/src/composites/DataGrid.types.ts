@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 
 /**
  * Closed, generic cell-kind vocabulary owned by DataGrid. A consumer maps its own
@@ -47,6 +47,16 @@ export interface DataGridColumn {
   trigger?: DataGridRecomputeTrigger;
   /** Show −/+ stepper buttons on this (numeric) cell, clamped to `min`. */
   stepper?: { min?: number; step?: number };
+  /** The header is a button that reports a click to `onSort`. */
+  sortable?: boolean;
+  /** Extra attributes of the column header cell (a test handle, for instance). */
+  headerProps?: HTMLAttributes<HTMLDivElement>;
+}
+
+/** One level of the applied sort, in order of precedence. */
+export interface DataGridSort {
+  key: string;
+  dir: 'asc' | 'desc';
 }
 
 /** Imperative grid handle (populated into a consumer-supplied `apiRef`). */
@@ -96,6 +106,13 @@ export interface DataGridProps<T = Record<string, unknown>> {
   autoAppendRow?: boolean;
   /** 0 or undefined means unbounded. */
   maxRows?: number;
+  /** The applied sort levels; each sortable column shows its own. */
+  sort?: DataGridSort[];
+  /** A sortable header was clicked; `additive` (Shift-click) asks for one more level. */
+  onSort?: (key: string, additive: boolean) => void;
+  /** The selected row carries `aria-selected="true"`; the others "false". Omit for a
+   *  grid without a selection model. */
+  selectedRowId?: string;
   /** Row height in px. Sets `--density-row` on the grid, the variable each row takes
    *  as its min-height, so it overrides the design's row height for this grid; the
    *  virtualizer's estimate reads the same value. Omitted → the theme's density row. */

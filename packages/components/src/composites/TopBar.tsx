@@ -24,7 +24,7 @@ export const TopBar = forwardRef<HTMLElement, HTMLAttributes<HTMLElement>>(funct
     <header
       ref={ref}
       data-ui="topbar"
-      className={cn('sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-border bg-surface px-4', className)}
+      className={cn('sticky top-0 z-30 flex h-[var(--topbar-h)] items-center justify-between gap-3 border-b border-border bg-surface px-4', className)}
       {...props}
     />
   );

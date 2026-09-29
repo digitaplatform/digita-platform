@@ -202,7 +202,9 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
     >
       <div
         data-ui="page-header-bar"
-        className="sticky top-0 z-30 flex min-h-12 items-center gap-2 bg-surface px-3"
+        // Below a TopBar in the same scroll container, so the two bars stack instead
+        // of painting over each other; alone, the var is unset and the bar sits at 0.
+        className="sticky top-[var(--topbar-h,0px)] z-30 flex min-h-12 items-center gap-2 bg-surface px-3"
       >
         {backNode}
         <span

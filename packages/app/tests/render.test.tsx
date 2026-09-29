@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { describe, it, expect, afterEach, beforeAll, afterAll, vi } from 'vitest';
+import { render, cleanup, fireEvent } from '@testing-library/react';
 import { Suspense } from 'react';
 import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
 import { ListRenderer } from '@/components/render/ListRenderer';
@@ -8,6 +8,32 @@ import TableControl from '@/controls/TableControl';
 import type { FieldControlState } from '@/controls/types';
 
 afterEach(cleanup);
+
+// jsdom has no layout, so the kit grid's virtualizer would measure a 0px viewport and
+// mount no rows: give it a measurable rect and a ResizeObserver for this file.
+const origRect = HTMLElement.prototype.getBoundingClientRect;
+const origRO = globalThis.ResizeObserver;
+const RECT = { width: 600, height: 480, top: 0, left: 0, right: 600, bottom: 480, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+beforeAll(() => {
+  HTMLElement.prototype.getBoundingClientRect = () => RECT;
+  globalThis.ResizeObserver = class {
+    cb: ResizeObserverCallback;
+    constructor(cb: ResizeObserverCallback) {
+      this.cb = cb;
+    }
+    observe(target: Element) {
+      const size = [{ inlineSize: RECT.width, blockSize: RECT.height }];
+      const entry = { target, contentRect: RECT, borderBoxSize: size, contentBoxSize: size };
+      this.cb([entry as unknown as ResizeObserverEntry], this as unknown as ResizeObserver);
+    }
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+});
+afterAll(() => {
+  HTMLElement.prototype.getBoundingClientRect = origRect;
+  globalThis.ResizeObserver = origRO;
+});
 
 const noop = () => {};
 
@@ -74,7 +100,7 @@ describe('ListRenderer (generic meta-driven render)', () => {
         onPageChange={noop}
       />,
     );
-    expect(container.querySelector('table')).toBeTruthy();
+    expect(container.querySelector('[role="grid"]')).toBeTruthy();
     expect(container.textContent ?? '').toContain('Acme');
   });
 
@@ -98,9 +124,61 @@ describe('ListRenderer (generic meta-driven render)', () => {
         onPageChange={noop}
       />,
     );
-    const headers = Array.from(container.querySelectorAll('th')).map((h) => h.textContent ?? '');
+    const headers = Array.from(container.querySelectorAll('[role="columnheader"]')).map((h) => h.textContent ?? '');
     expect(headers.some((h) => h.includes('Phone'))).toBe(true);
     expect(headers.some((h) => h.includes('City'))).toBe(false); // excluded by the override
+  });
+
+  it('draws the rows through the kit grid and cards: selected row, sort click, status badge', () => {
+    const onSort = vi.fn();
+    const m = meta(
+      [
+        { fieldname: 'name', fieldtype: 'Data', label: 'Name', in_list_view: true },
+        { fieldname: 'city', fieldtype: 'Data', label: 'City', in_list_view: true },
+      ],
+      { states: [{ value: 'open', color: 'green' }] },
+    );
+    const rows = [
+      { _id: 'c1', name: 'Acme', city: 'Berlin', status: 'open' },
+      { _id: 'c2', name: 'Globex', city: 'Munich', status: 'open' },
+    ];
+    const { container } = render(
+      <ListRenderer
+        entity="Widget"
+        meta={m}
+        rows={rows}
+        orderBy="city desc"
+        page={1}
+        total={2}
+        totalPages={1}
+        selectedRowId="c2"
+        onRowClick={noop}
+        onSort={onSort}
+        onPageChange={noop}
+      />,
+    );
+    // The desktop grid: the kit hooks, the row of the current record selected.
+    const table = container.querySelector('[data-testid="list-table"] [data-ui="table"]')!;
+    expect(table).toBeTruthy();
+    const gridRows = table.querySelectorAll('[data-ui="table-row"]');
+    expect(gridRows).toHaveLength(2);
+    expect(gridRows[0]).toHaveAttribute('aria-selected', 'false');
+    expect(gridRows[1]).toHaveAttribute('aria-selected', 'true');
+    // The e2e handles stay: the row by id, the column by fieldname.
+    expect(gridRows[1]!.querySelector('[data-testid="row:c2"]')).toBeTruthy();
+    const city = container.querySelector('[data-testid="col:city"]')!;
+    expect(city).toHaveAttribute('aria-sort', 'descending');
+    fireEvent.click(city.querySelector('button')!, { shiftKey: true });
+    expect(onSort).toHaveBeenCalledWith('city', true);
+    // The status pill is the kit badge, toned by the state's color.
+    const badge = gridRows[0]!.querySelector('[data-ui="badge"]')!;
+    expect(badge).toHaveAttribute('data-color', 'success');
+    expect(badge.textContent).toBe('open');
+    // The phone cards: the kit list, the current record's card marked.
+    const cards = container.querySelectorAll('[data-ui="list-group"] [data-ui="list-row"]');
+    expect(cards).toHaveLength(2);
+    expect(cards[0]).not.toHaveAttribute('aria-current');
+    expect(cards[1]).toHaveAttribute('aria-current', 'true');
   });
 });
 

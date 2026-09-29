@@ -34,6 +34,7 @@ import { qkPrefix } from '@/lib/query-keys';
 import { buildListCsv, downloadCsv } from '@/lib/csv';
 import { nextSort } from '@/lib/sort';
 import { tid } from '@/lib/testid';
+import { readCurrentRecord, rememberCurrentRecord } from '@/lib/list-current';
 import { reportRenderUrl, resolveReportParams } from '@/lib/report-link';
 import { RowPrintButton } from '@/components/workflow/RowPrintButton';
 import { useRealtimeEntity } from '@/hooks/useRealtime';
@@ -86,6 +87,14 @@ export default function ListPage() {
 
   // Live-sync: refresh this list when another user (or tab) writes to the entity.
   useRealtimeEntity(entity);
+
+  // The row of the record last opened from here stays marked when the operator
+  // comes back, so they see where they were.
+  const currentRecord = useMemo(() => (entity ? readCurrentRecord(entity) : undefined), [entity]);
+  const openRecord = (name: string) => {
+    rememberCurrentRecord(entity!, name);
+    navigate(`/${entity}/${encodeURIComponent(name)}`);
+  };
 
   // ── URL → raw params ───────────────────────────────────────────────────────
   const page = Number(sp.get('page') ?? '1') || 1;
@@ -414,7 +423,8 @@ export default function ListPage() {
           visibleColumns={effColumns}
           canCreate={canCreate}
           isFetching={listQ.isFetching}
-          onRowClick={(name) => navigate(`/${entity}/${encodeURIComponent(name)}`)}
+          selectedRowId={currentRecord}
+          onRowClick={openRecord}
           onCreate={() => navigate(`/${entity}/new`)}
           onSort={onSort}
           onPageChange={(p) => updateParam({ page: String(p) })}

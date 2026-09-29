@@ -36,6 +36,10 @@ export const spacing = {
  *  mounts. A design overrides it through Design.controlHeight. */
 export const controlHeight = '2.625rem';
 
+/** Height of the top bar (56px), emitted as `--topbar-h`: the bar takes it, and a
+ *  page header sticks below it by the same value, so the two never overlap. */
+export const topBarHeight = '3.5rem';
+
 /** Radius differentiated by element class — the contrast (crisp inputs vs softer
  *  cards) is what kills the uniform-box feel. Additive: Tailwind's sm/md/lg stay. */
 export const borderRadius = {

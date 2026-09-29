@@ -1,14 +1,16 @@
 import { useMemo, type ReactNode } from 'react';
-import {
-  useReactTable,
-  getCoreRowModel,
-  flexRender,
-  type ColumnDef,
-} from '@tanstack/react-table';
 import { Inbox, Plus } from 'lucide-react';
-import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
+import type { EntityDefinition, FieldDefinition, FieldType } from '@digitaplatform/shared';
 import { LAYOUT_FIELD_TYPES, NUMERIC_FIELD_TYPES } from '@digitaplatform/shared';
-import { Button, cn, tableSkin } from '@digitaplatform/components';
+import {
+  Button,
+  CardList,
+  DataGrid,
+  cn,
+  type DataGridCellKind,
+  type DataGridColumn,
+  type DataGridSort,
+} from '@digitaplatform/components';
 import { useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
 import { resolveWorkflowField } from '@/lib/workflow-field';
@@ -19,12 +21,14 @@ import { CellValue, StatusBadge } from './cells';
 
 type Row = Record<string, unknown>;
 
-interface ColumnMeta {
-  sortable: boolean;
-  fieldname?: string;
-  /** Numeric fieldtype → right-align the header + cell (see NUMERIC_FIELD_TYPES). */
-  numeric?: boolean;
-}
+/** The grid's own columns, beside the entity's fields. */
+const PRIMARY_COLUMN = '__primary';
+const STATUS_COLUMN = '__status';
+const ACTIONS_COLUMN = '__actions';
+
+/** Share of the viewport the desktop grid may take before it scrolls inside its frame,
+ *  which is what lets its header pin. */
+const GRID_VIEWPORT_SHARE = 0.7;
 
 interface ListRendererProps {
   entity: string;
@@ -39,6 +43,8 @@ interface ListRendererProps {
   /** Drives the empty-state hint + its New CTA (the toolbar owns the primary New button). */
   canCreate?: boolean;
   isFetching?: boolean;
+  /** The record last opened from this list; its row is marked selected. */
+  selectedRowId?: string;
   onRowClick: (name: string) => void;
   /** Invoked by the empty-state New CTA (mirrors the toolbar's onCreate). */
   onCreate?: () => void;
@@ -76,12 +82,30 @@ function resolveColumns(meta: EntityDefinition, visibleColumns?: string[]): Fiel
   return meta.fields.filter((f) => f.in_list_view === true && isColumnField(f));
 }
 
+/** The grid sizes a column by its kind; the fieldtypes fold onto the grid's vocabulary. */
+function cellKind(fieldtype: FieldType): DataGridCellKind {
+  if (NUMERIC_FIELD_TYPES.includes(fieldtype)) return fieldtype === 'Currency' ? 'currency' : 'number';
+  switch (fieldtype) {
+    case 'Link':
+      return 'link';
+    case 'Date':
+    case 'Datetime':
+      return 'date';
+    case 'Check':
+      return 'check';
+    case 'Select':
+      return 'select';
+    default:
+      return 'text';
+  }
+}
+
 /**
  * Pure presentation list (no toolbar — the ListPage renders <ListToolbar> above
- * it). Built on @tanstack/react-table headless with manualSorting/manualPagination
- * forced — a future contributor enabling client-side sort would silently sort just
- * one page. Desktop = table, phone = cards (same cells). Columns derive from
- * `visibleColumns` when given, else in_list_view (fallback primary: title/_id).
+ * it). Desktop = the kit DataGrid, phone = the kit CardList (same cells); sorting
+ * and paging stay with the server, so the grid only reports a header click.
+ * Columns derive from `visibleColumns` when given, else in_list_view (fallback
+ * primary: title/_id).
  */
 export function ListRenderer({
   entity,
@@ -94,6 +118,7 @@ export function ListRenderer({
   visibleColumns,
   canCreate,
   isFetching,
+  selectedRowId,
   onRowClick,
   onCreate,
   onSort,
@@ -108,101 +133,81 @@ export function ListRenderer({
     () => resolveColumns(meta, visibleColumns).filter((f) => f.fieldname !== primaryKey),
     [meta, visibleColumns, primaryKey],
   );
+  const fieldByName = useMemo(() => new Map(dataFields.map((f) => [f.fieldname, f] as const)), [dataFields]);
 
-  const sortSegs = parseSort(orderBy);
+  // The workflow-state field (declared `workflow_field`, else `status` when the
+  // entity has a state machine; null when it has no workflow at all). When it is
+  // ALSO a visible data column that column renders the StatusBadge in place —
+  // otherwise the value would show twice: plain text there + the appended status
+  // column.
+  const wf = resolveWorkflowField(meta);
+  const wfInColumns = wf != null && dataFields.some((f) => f.fieldname === wf);
+  const hasStates = !!meta.states && meta.states.length > 0;
 
-  const columns = useMemo<ColumnDef<Row>[]>(() => {
-    const defs: ColumnDef<Row>[] = [];
-    // The workflow-state field (declared `workflow_field`, else `status` when the
-    // entity has a state machine; null when it has no workflow at all). When it is
-    // ALSO a visible data column we render THAT column as a StatusBadge in place —
-    // otherwise the value would show twice: plain text here + the appended __status
-    // badge below (BUG-1).
-    const wf = resolveWorkflowField(meta);
-    const wfInColumns = wf != null && dataFields.some((f) => f.fieldname === wf);
-    defs.push({
-      id: '__primary',
-      header: () => tField(entity, primaryKey, meta.title_field ? undefined : 'ID'),
-      cell: ({ row }) => {
-        const r = row.original;
-        const label = (primaryKey !== '_id' && r[primaryKey] ? String(r[primaryKey]) : String(r['_id'] ?? '—'));
+  const columns = useMemo<DataGridColumn[]>(() => {
+    const defs: DataGridColumn[] = [
+      {
+        key: PRIMARY_COLUMN,
+        label: tField(entity, primaryKey, meta.title_field ? undefined : 'ID'),
+        kind: 'link',
+        sortable: primaryKey !== '_id',
+        tooltip: primaryKey !== '_id' ? tc('ui.list.sortHint') : undefined,
+        headerProps: primaryKey !== '_id' ? tid.col(primaryKey) : undefined,
+      },
+    ];
+    for (const f of dataFields) {
+      defs.push({
+        key: f.fieldname,
+        label: tField(entity, f.fieldname, f.label),
+        kind: cellKind(f.fieldtype),
+        sortable: true,
+        tooltip: tc('ui.list.sortHint'),
+        align: NUMERIC_FIELD_TYPES.includes(f.fieldtype) ? 'end' : 'start',
+        headerProps: tid.col(f.fieldname),
+      });
+    }
+    if (!wfInColumns && hasStates) {
+      defs.push({ key: STATUS_COLUMN, label: tc('ui.list.status'), kind: 'select' });
+    }
+    if (rowActions) {
+      defs.push({ key: ACTIONS_COLUMN, label: '', kind: 'check', width: 48, align: 'end' });
+    }
+    return defs;
+  }, [meta, entity, primaryKey, dataFields, wfInColumns, hasStates, rowActions, tField, tc]);
+
+  const sort = useMemo<DataGridSort[]>(
+    () => parseSort(orderBy).map((s) => ({ key: s.field, dir: s.dir })),
+    [orderBy],
+  );
+
+  const rowId = (r: Row) => String(r['_id']);
+  const primaryLabel = (r: Row) =>
+    primaryKey !== '_id' && r[primaryKey] ? String(r[primaryKey]) : String(r['_id'] ?? '—');
+
+  const renderCell = ({ row, column }: { row: Row; column: DataGridColumn }): ReactNode => {
+    switch (column.key) {
+      case PRIMARY_COLUMN:
         return (
           <button
             type="button"
-            {...tid.row(entity, String(r['_id']))}
-            onClick={() => onRowClick(String(r['_id']))}
+            {...tid.row(entity, rowId(row))}
+            onClick={() => onRowClick(rowId(row))}
             className="font-medium text-primary-600 hover:underline"
           >
-            {label || '—'}
+            {primaryLabel(row) || '—'}
           </button>
         );
-      },
-      meta: { sortable: primaryKey !== '_id', fieldname: primaryKey } satisfies ColumnMeta,
-    });
-    for (const f of dataFields) {
-      const isWorkflow = f.fieldname === wf;
-      const numeric = NUMERIC_FIELD_TYPES.includes(f.fieldtype);
-      defs.push({
-        id: f.fieldname,
-        accessorKey: f.fieldname,
-        header: () => tField(entity, f.fieldname, f.label),
-        // Workflow field renders as the same StatusBadge used by the appended column,
-        // keeping the field's own label + its ColumnChooser position (BUG-1).
-        cell: isWorkflow
-          ? ({ row }) => <StatusBadge meta={meta} row={row.original} />
-          : ({ row }) => <CellValue field={f} row={row.original} entity={entity} />,
-        meta: { sortable: true, fieldname: f.fieldname, numeric } satisfies ColumnMeta,
-      });
+      case STATUS_COLUMN:
+        return <StatusBadge meta={meta} row={row} />;
+      case ACTIONS_COLUMN:
+        return rowActions!(row);
+      default:
+        return column.key === wf ? (
+          <StatusBadge meta={meta} row={row} />
+        ) : (
+          <CellValue field={fieldByName.get(column.key)!} row={row} entity={entity} />
+        );
     }
-    // Only append the synthetic status column when the workflow field is NOT already
-    // a visible column (else it's rendered in place above → no duplicate).
-    if (!wfInColumns && meta.states && meta.states.length > 0) {
-      defs.push({
-        id: '__status',
-        header: () => tc('ui.list.status'),
-        cell: ({ row }) => <StatusBadge meta={meta} row={row.original} />,
-        meta: { sortable: false } satisfies ColumnMeta,
-      });
-    }
-    if (rowActions) {
-      defs.push({
-        id: '__actions',
-        header: () => null,
-        cell: ({ row }) => <div className="flex justify-end">{rowActions(row.original)}</div>,
-        meta: { sortable: false } satisfies ColumnMeta,
-      });
-    }
-    return defs;
-  }, [meta, entity, primaryKey, dataFields, tField, tc, onRowClick, rowActions]);
-
-  const table = useReactTable({
-    data: rows,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    manualSorting: true,
-    manualPagination: true,
-    pageCount: totalPages,
-  });
-
-  // Chevron per sorted column; a 1-based index too when more than one level is active.
-  const sortIndicator = (fieldname?: string) => {
-    if (!fieldname) return null;
-    const i = sortSegs.findIndex((s) => s.field === fieldname);
-    if (i === -1) return null;
-    const desc = sortSegs[i]!.dir === 'desc';
-    return (
-      <span className="inline-flex items-center" aria-label={desc ? 'desc' : 'asc'}>
-        <svg
-          viewBox="0 0 20 20"
-          fill="none"
-          aria-hidden="true"
-          className={cn('h-3 w-3 transition-transform duration-base', desc && 'rotate-180')}
-        >
-          <path d="M5 12l5-5 5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        {sortSegs.length > 1 ? <span className="text-micro">{i + 1}</span> : null}
-      </span>
-    );
   };
 
   if (rows.length === 0) {
@@ -227,99 +232,46 @@ export function ListRenderer({
 
   return (
     <div className="space-y-4">
-      {/* Desktop table. C4: cap the height so this wrapper becomes the vertical
-          scroll container — that is what lets the <thead> pin via position:sticky.
-          (An overflow-x-only wrapper captures sticky but never scrolls vertically,
-          so the header would not pin; the kit DataGrid uses the same bounded-height
-          idiom.) */}
-      <div data-ui="table" className={cn('hidden max-h-[70vh] overflow-auto md:block', tableSkin.frame)}>
-        <table {...tid.component('list-table', entity)} className="w-full text-sm">
-          {/* Sticky within the scroll container above; tableSkin.header is opaque
-              (bg-subtle) so body rows layer cleanly beneath it while scrolling. */}
-          <thead data-ui="table-header" className={cn('sticky top-0 z-10 text-left', tableSkin.header)}>
-            {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id}>
-                {hg.headers.map((h) => {
-                  const cm = h.column.columnDef.meta as ColumnMeta | undefined;
-                  return (
-                    <th
-                      key={h.id}
-                      {...(cm?.fieldname ? tid.col(cm.fieldname) : {})}
-                      className={cn('px-4 py-[var(--density-gap)]', tableSkin.headerCell, cm?.numeric && 'text-right')}
-                    >
-                      {cm?.sortable ? (
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded transition-colors duration-base ease-smooth hover:text-textMain focus-visible:shadow-focus focus-visible:outline-none"
-                          title={tc('ui.list.sortHint')}
-                          onClick={(e) => onSort(cm.fieldname!, e.shiftKey)}
-                        >
-                          {flexRender(h.column.columnDef.header, h.getContext())}
-                          {sortIndicator(cm.fieldname)}
-                        </button>
-                      ) : (
-                        flexRender(h.column.columnDef.header, h.getContext())
-                      )}
-                    </th>
-                  );
-                })}
-              </tr>
-            ))}
-          </thead>
-          <tbody className={isFetching ? 'opacity-60' : ''}>
-            {table.getRowModel().rows.map((row) => (
-              <tr
-                key={String(row.original['_id'])}
-                data-ui="table-row"
-                className={cn('cursor-pointer last:border-b-0', tableSkin.row)}
-              >
-                {row.getVisibleCells().map((cell) => {
-                  const cm = cell.column.columnDef.meta as ColumnMeta | undefined;
-                  return (
-                    <td
-                      key={cell.id}
-                      className={cn('px-4 py-[var(--density-gap)] text-textMain', cm?.numeric && 'text-right')}
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div {...tid.component('list-table', entity)} className={cn('hidden md:block', isFetching && 'opacity-60')}>
+        <DataGrid<Row>
+          aria-label={meta.label_plural ?? meta.label ?? entity}
+          rows={rows}
+          columns={columns}
+          getRowId={rowId}
+          editable={false}
+          sort={sort}
+          onSort={onSort}
+          selectedRowId={selectedRowId}
+          maxBodyHeight={Math.round(window.innerHeight * GRID_VIEWPORT_SHARE)}
+          renderDisplay={renderCell}
+        />
       </div>
 
-      {/* Mobile cards */}
-      <ul data-ui="list-group" className={'space-y-3 md:hidden ' + (isFetching ? 'opacity-60' : '')}>
-        {rows.map((r) => (
-          <li key={String(r['_id'])}>
-            <button
-              type="button"
-              data-ui="list-row"
-              onClick={() => onRowClick(String(r['_id']))}
-              className="block w-full rounded-card border border-border bg-surface p-[var(--density-pad)] text-left shadow-xs transition duration-base ease-smooth active:scale-[0.99]"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-primary-600">
-                  {primaryKey !== '_id' && r[primaryKey] ? String(r[primaryKey]) : String(r['_id'])}
-                </span>
-                {meta.states && meta.states.length > 0 && <StatusBadge meta={meta} row={r} />}
-              </div>
-              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-textMuted">
-                {dataFields.slice(0, 4).map((f) => (
-                  <div key={f.fieldname} className="truncate">
-                    <dt className="inline text-textMuted">{tField(entity, f.fieldname, f.label)}: </dt>
-                    <dd className="inline text-textMain">
-                      <CellValue field={f} row={r} entity={entity} />
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <CardList<Row>
+        className={cn('md:hidden', isFetching && 'opacity-60')}
+        rows={rows}
+        getRowId={rowId}
+        currentRowId={selectedRowId}
+        onRowClick={onRowClick}
+        renderCard={(r) => (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium text-primary-600">{primaryLabel(r)}</span>
+              {hasStates && <StatusBadge meta={meta} row={r} />}
+            </div>
+            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-textMuted">
+              {dataFields.slice(0, 4).map((f) => (
+                <div key={f.fieldname} className="truncate">
+                  <dt className="inline text-textMuted">{tField(entity, f.fieldname, f.label)}: </dt>
+                  <dd className="inline text-textMain">
+                    <CellValue field={f} row={r} entity={entity} />
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </>
+        )}
+      />
 
       {/* Pagination */}
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-textMuted">

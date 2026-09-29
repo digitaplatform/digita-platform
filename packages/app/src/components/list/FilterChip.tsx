@@ -1,5 +1,5 @@
-import { X } from 'lucide-react';
 import type { EntityDefinition } from '@digitaplatform/shared';
+import { Chip } from '@digitaplatform/components';
 import { useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
 import type { FilterTuple } from '@/lib/filter-from-url';
@@ -7,8 +7,8 @@ import type { FilterOp } from '@/lib/filter-operators';
 import { operatorArity } from '@/lib/filter-operators';
 
 /**
- * A compact, removable chip rendering one active filter tuple as
- * "field op value". PURE: shows the tuple, calls onRemove on the × button.
+ * One applied filter tuple as the kit `Chip`, selected, reading "field op value";
+ * pressing the chip or its × removes the filter. PURE: shows the tuple, calls onRemove.
  * The operator label is a localized ui.filter.op.* chrome key; the value is
  * formatted by arity (presence → "set"/"not set"; range → "lo – hi"; multi →
  * comma list; check → yes/no). NOT a fail-loud surface — out-of-set operators
@@ -74,21 +74,12 @@ export function FilterChip({ meta, filter, onRemove }: FilterChipProps) {
   }
 
   return (
-    <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-subtle py-1 pl-3 pr-1 text-xs text-textMain">
+    <Chip selected onClick={onRemove} onRemove={onRemove} title={tc('ui.filter.removeChip', { field: fieldLabel })}>
       <span className="truncate">
         <span className="font-medium">{fieldLabel}</span>
         <span className="mx-1 text-textMuted">{opLabel}</span>
-        {arity !== 'presence' && <span className="text-primary-700">{valueLabel}</span>}
-        {arity === 'presence' && <span className="text-primary-700">{valueLabel}</span>}
+        <span className="text-primary-700">{valueLabel}</span>
       </span>
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label={tc('ui.filter.removeChip', { field: fieldLabel })}
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-textMuted hover:bg-border hover:text-textMain"
-      >
-        <X className="h-3 w-3" aria-hidden="true" />
-      </button>
-    </span>
+    </Chip>
   );
 }

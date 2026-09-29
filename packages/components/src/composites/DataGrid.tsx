@@ -27,6 +27,7 @@ export type {
   DataGridDisplayArgs,
   DataGridEditArgs,
   DataGridApi,
+  DataGridSort,
 } from './DataGrid.types.js';
 
 /**
@@ -108,6 +109,22 @@ function EditIcon() {
   );
 }
 
+/** Chevron of a sorted header, plus the level's 1-based index when more than one level is applied. */
+function SortIndicator({ level, dir, levels }: { level: number; dir: 'asc' | 'desc'; levels: number }) {
+  return (
+    <span className="inline-flex items-center" aria-hidden="true">
+      <svg
+        viewBox="0 0 20 20"
+        fill="none"
+        className={cn('h-3 w-3 transition-transform duration-base', dir === 'desc' && 'rotate-180')}
+      >
+        <path d="M5 12l5-5 5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      {levels > 1 ? <span className="text-micro">{level + 1}</span> : null}
+    </span>
+  );
+}
+
 function isPrintableKey(e: KeyboardEvent): boolean {
   return e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
 }
@@ -134,6 +151,9 @@ export function DataGrid<T = Record<string, unknown>>({
   canRemoveRow = false,
   autoAppendRow = false,
   maxRows = 0,
+  sort,
+  onSort,
+  selectedRowId,
   rowHeight,
   overscan = DEFAULT_OVERSCAN,
   maxBodyHeight = DEFAULT_MAX_BODY_HEIGHT,
@@ -523,21 +543,43 @@ export function DataGrid<T = Record<string, unknown>>({
             className={cn('sticky top-0 z-10 grid', tableSkin.header)}
             style={{ gridTemplateColumns: templateColumns }}
           >
-            {cols.map((c, ci) => (
-              <div
-                key={c.key}
-                role="columnheader"
-                title={c.tooltip}
-                className={cn('flex items-center px-3 py-2', tableSkin.headerCell, ALIGN[c.align ?? 'start'], ci === 0 && 'col-pin-l')}
-              >
-                <span className="truncate">{c.label}</span>
-                {c.required && (
-                  <span className="ml-0.5 text-error" aria-hidden="true">
-                    *
-                  </span>
-                )}
-              </div>
-            ))}
+            {cols.map((c, ci) => {
+              const level = sort?.findIndex((s) => s.key === c.key) ?? -1;
+              const applied = level >= 0 ? sort![level]! : undefined;
+              const label = (
+                <>
+                  <span className="truncate">{c.label}</span>
+                  {c.required && (
+                    <span className="ml-0.5 text-error" aria-hidden="true">
+                      *
+                    </span>
+                  )}
+                </>
+              );
+              return (
+                <div
+                  key={c.key}
+                  role="columnheader"
+                  title={c.tooltip}
+                  aria-sort={applied ? (applied.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+                  {...c.headerProps}
+                  className={cn('flex items-center px-3 py-2', tableSkin.headerCell, ALIGN[c.align ?? 'start'], ci === 0 && 'col-pin-l')}
+                >
+                  {c.sortable && onSort ? (
+                    <button
+                      type="button"
+                      onClick={(e) => onSort(c.key, e.shiftKey)}
+                      className="inline-flex min-w-0 items-center gap-1 rounded transition-colors duration-base ease-smooth hover:text-textMain focus-visible:shadow-focus focus-visible:outline-none"
+                    >
+                      {label}
+                      {applied && <SortIndicator level={level} dir={applied.dir} levels={sort!.length} />}
+                    </button>
+                  ) : (
+                    label
+                  )}
+                </div>
+              );
+            })}
             {showActions && <div role="columnheader" className="col-pin-r" aria-hidden="true" />}
           </div>
 
@@ -557,6 +599,7 @@ export function DataGrid<T = Record<string, unknown>>({
                   ref={virtualizer.measureElement}
                   data-index={vi.index}
                   aria-rowindex={vi.index + 2}
+                  aria-selected={selectedRowId === undefined ? undefined : rowId === selectedRowId}
                   // The row of the tab stop, which is row 0 until a cell is focused, so
                   // the hook and the kit's own ring below never disagree.
                   data-active={(focused?.row ?? 0) === vi.index || undefined}

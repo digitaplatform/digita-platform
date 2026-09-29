@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, SlidersHorizontal, Columns3, Download, Upload, Repeat, X, Plus, MoreHorizontal } from 'lucide-react';
+import { Search, Columns3, Download, Upload, Repeat, X, Plus, MoreHorizontal } from 'lucide-react';
 import type { EntityDefinition } from '@digitaplatform/shared';
-import { Button, Input, Badge, Fab, Menu, MenuItem, Tooltip } from '@digitaplatform/components';
+import { Button, Chip, Input, Fab, Menu, MenuItem, PageHeader, Tooltip } from '@digitaplatform/components';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useSessionStore } from '@/stores/session';
 import { formatNumber } from '@/lib/format';
@@ -14,10 +14,11 @@ import { ColumnChooser } from './ColumnChooser';
 import { ViewPicker } from './ViewPicker';
 
 /**
- * The single entry the ListPage renders above ListRenderer. Composes: search
- * input · ViewPicker · a Filter button opening a popover (desktop) / bottom-sheet
- * (mobile) of FilterEditor rows with an AND/OR group toggle · active FilterChips ·
- * a Columns button opening ColumnChooser · the New button.
+ * The single entry the ListPage renders above ListRenderer. Composes the kit
+ * PageHeader (title with the total · search · Columns, data menu, ViewPicker and
+ * the New action) and, under it, the applied FilterChips with the Filter chip
+ * that opens a popover (desktop) / bottom-sheet (mobile) of FilterEditor rows
+ * with an AND/OR group toggle.
  *
  * PURE: the ListPage owns ALL state (URL params + useListPreferences) and passes
  * it down; this component only emits via callbacks. The AND list lives in
@@ -133,188 +134,188 @@ export function ListToolbar(props: ListToolbarProps) {
     onFiltersChange(filters, orFilters.filter((_, idx) => idx !== i));
   }
 
+  const title = (
+    <>
+      {meta.label_plural ?? meta.label ?? entity}
+      {/* C4: locale-formatted total beside the title (muted, non-display weight
+          so it reads as a subtitle, not part of the heading). */}
+      {total != null && (
+        <span className="ml-2 align-middle text-base font-normal text-textMuted">
+          · {formatNumber(total, locale?.format_locale)}
+        </span>
+      )}
+    </>
+  );
+
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {/* C7: use the shared text-h1 scale token (weight + tracking ride along)
-            so the list page title matches record/page titles exactly. */}
-        <h1 className="text-h1 font-display text-textMain">
-          {meta.label_plural ?? meta.label ?? entity}
-          {/* C4: locale-formatted total beside the title (muted, non-display weight
-              so it reads as a subtitle, not part of the heading). */}
-          {total != null && (
-            <span className="ml-2 align-middle text-base font-normal text-textMuted">
-              · {formatNumber(total, locale?.format_locale)}
-            </span>
-          )}
-        </h1>
+      {/* Pulled out by the header's own inset so its title lines up with the list. */}
+      <PageHeader
+        className="-mx-4"
+        title={title}
+        search={
+          <Input
+            type="search"
+            wrapperClassName="md:max-w-xs"
+            leftIcon={<Search className="h-4 w-4" aria-hidden="true" />}
+            placeholder={tc('ui.list.search')}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            aria-label={tc('ui.list.search')}
+          />
+        }
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              aria-expanded={columnsOpen}
+              onClick={() => setColumnsOpen((o) => !o)}
+              aria-label={tc('ui.column.title')}
+            >
+              <Columns3 className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden lg:inline">{tc('ui.column.title')}</span>
+            </Button>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-textMuted"
-              aria-hidden="true"
-            />
-            <Input
-              type="search"
-              placeholder={tc('ui.list.search')}
-              className="h-8 w-44 py-1 pl-8"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              aria-label={tc('ui.list.search')}
-            />
-          </div>
+            {/* A1: data-exchange overflow menu. The three tertiary actions
+                (Export CSV / Export for re-import / Import) collapse into ONE
+                icon trigger + the kit Menu so they stop out-weighting the primary
+                toolbar actions. Icon-only trigger ⇒ accessible name via Menu.label
+                plus a visual Tooltip. The E2E data-testids ride on the wrapping
+                role="none" <div> because MenuItem doesn't forward arbitrary props —
+                keep them EXACT (action:export-round-trip / action:import). The
+                trigger needs a stable, unlocalized handle of its own (the panel
+                only exists while open, and the trigger's only other hook is a
+                localized aria-label) — the `action:data-menu` wrapper is that
+                handle; `contents` keeps it out of the flex layout. */}
+            {hasDataMenu && (
+              <div data-testid="action:data-menu" className="contents">
+                <Tooltip label={tc('ui.list.dataMenu')}>
+                  <Menu
+                    label={tc('ui.list.dataMenu')}
+                    align="end"
+                    panelClassName="w-56"
+                    /* Mirror <Button variant="secondary"> so the trigger lines up
+                       with the other (icon-collapsed) toolbar buttons. */
+                    triggerClassName="inline-flex items-center justify-center rounded-btn bg-subtle px-4 py-2.5 text-sm font-medium text-textMain transition duration-base ease-smooth hover:bg-bgHover focus-visible:outline-none focus-visible:shadow-focus"
+                    trigger={<MoreHorizontal className="h-4 w-4" aria-hidden="true" />}
+                  >
+                    {(close) => (
+                      <>
+                        {onExport && (
+                          <div role="none" data-testid="action:export-csv">
+                            <MenuItem
+                              icon={<Download className="h-4 w-4" aria-hidden="true" />}
+                              onSelect={() => {
+                                close();
+                                onExport();
+                              }}
+                            >
+                              {tc('ui.list.export')}
+                            </MenuItem>
+                          </div>
+                        )}
+                        {onExportRoundTrip && (
+                          <div role="none" data-testid="action:export-round-trip">
+                            <MenuItem
+                              icon={<Repeat className="h-4 w-4" aria-hidden="true" />}
+                              onSelect={() => {
+                                close();
+                                onExportRoundTrip();
+                              }}
+                            >
+                              {tc('ui.list.exportRoundTrip')}
+                            </MenuItem>
+                          </div>
+                        )}
+                        {onImport && (
+                          <div role="none" data-testid="action:import">
+                            <MenuItem
+                              icon={<Upload className="h-4 w-4" aria-hidden="true" />}
+                              onSelect={() => {
+                                close();
+                                onImport();
+                              }}
+                            >
+                              {tc('ui.list.import')}
+                            </MenuItem>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </Menu>
+                </Tooltip>
+              </div>
+            )}
 
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
+            <ViewPicker
+              views={savedViews}
+              activeId={activeViewId}
+              modified={modified}
+              canSave={canSaveView}
+              isAdmin={isAdmin}
+              canEdit={canEditView}
+              onApply={onApplyView}
+              onReset={onResetView}
+              onAllRecords={onAllRecords}
+              onSaveAs={onSaveView}
+              onUpdate={onUpdateView}
+              onDelete={onDeleteView}
+              onSetDefault={onSetDefaultView}
+              onClearDefault={onClearDefaultView}
+              onSetOrgDefault={onSetOrgDefaultView}
+              onClearOrgDefault={onClearOrgDefaultView}
+            />
+
+            {canCreate && (
+              <>
+                {/* Under Material the toolbar button hides (the FAB is the M3 create
+                    affordance); everywhere else it stays. `contents` keeps layout
+                    identical until the variant rule flips it to display:none. */}
+                <span data-ui="create-action" className="contents">
+                  <Button type="button" size="sm" onClick={onCreate}>
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    {tc('ui.action.new')}
+                  </Button>
+                </span>
+                {/* Adaptive M3 FAB — hidden by default, shown only under the Material
+                    variant. */}
+                <Fab
+                  adaptive
+                  label={tc('ui.action.new')}
+                  icon={<Plus className="h-6 w-6" aria-hidden="true" />}
+                  onClick={onCreate}
+                />
+              </>
+            )}
+          </>
+        }
+      />
+
+      {/* The applied filters, each a removable chip, and the Filter chip that opens
+          the editor; `filter-action` is the hook a design draws that chip by. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {filters.map((f, i) => (
+          <FilterChip key={`and-${i}`} meta={meta} filter={f} onRemove={() => removeAndAt(i)} />
+        ))}
+        {orFilters.length > 0 && (
+          <span className="text-xs font-medium uppercase text-textMuted">{tc('ui.filter.or')}</span>
+        )}
+        {orFilters.map((f, i) => (
+          <FilterChip key={`or-${i}`} meta={meta} filter={f} onRemove={() => removeOrAt(i)} />
+        ))}
+        <span data-ui="filter-action" className="contents">
+          <Chip
+            icon={<Plus className="h-3.5 w-3.5" aria-hidden="true" />}
             aria-expanded={filterOpen}
+            aria-haspopup="dialog"
             onClick={() => setFilterOpen((o) => !o)}
           >
-            <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">{tc('ui.filter.button')}</span>
-            {activeCount > 0 && <Badge variant="pill" color="info">{activeCount}</Badge>}
-          </Button>
-
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            aria-expanded={columnsOpen}
-            onClick={() => setColumnsOpen((o) => !o)}
-            aria-label={tc('ui.column.title')}
-          >
-            <Columns3 className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden lg:inline">{tc('ui.column.title')}</span>
-          </Button>
-
-          {/* A1: data-exchange overflow menu. The three tertiary actions
-              (Export CSV / Export for re-import / Import) collapse into ONE
-              icon trigger + the kit Menu so they stop out-weighting the primary
-              toolbar actions. Icon-only trigger ⇒ accessible name via Menu.label
-              plus a visual Tooltip. The E2E data-testids ride on the wrapping
-              role="none" <div> because MenuItem doesn't forward arbitrary props —
-              keep them EXACT (action:export-round-trip / action:import). The
-              trigger needs a stable, unlocalized handle of its own (the panel
-              only exists while open, and the trigger's only other hook is a
-              localized aria-label) — the `action:data-menu` wrapper is that
-              handle; `contents` keeps it out of the flex layout. */}
-          {hasDataMenu && (
-            <div data-testid="action:data-menu" className="contents">
-              <Tooltip label={tc('ui.list.dataMenu')}>
-                <Menu
-                  label={tc('ui.list.dataMenu')}
-                  align="end"
-                  panelClassName="w-56"
-                  /* Mirror <Button variant="secondary"> so the trigger lines up
-                     with the other (icon-collapsed) toolbar buttons. */
-                  triggerClassName="inline-flex items-center justify-center rounded-btn bg-subtle px-4 py-2.5 text-sm font-medium text-textMain transition duration-base ease-smooth hover:bg-bgHover focus-visible:outline-none focus-visible:shadow-focus"
-                  trigger={<MoreHorizontal className="h-4 w-4" aria-hidden="true" />}
-                >
-                  {(close) => (
-                    <>
-                      {onExport && (
-                        <div role="none" data-testid="action:export-csv">
-                          <MenuItem
-                            icon={<Download className="h-4 w-4" aria-hidden="true" />}
-                            onSelect={() => {
-                              close();
-                              onExport();
-                            }}
-                          >
-                            {tc('ui.list.export')}
-                          </MenuItem>
-                        </div>
-                      )}
-                      {onExportRoundTrip && (
-                        <div role="none" data-testid="action:export-round-trip">
-                          <MenuItem
-                            icon={<Repeat className="h-4 w-4" aria-hidden="true" />}
-                            onSelect={() => {
-                              close();
-                              onExportRoundTrip();
-                            }}
-                          >
-                            {tc('ui.list.exportRoundTrip')}
-                          </MenuItem>
-                        </div>
-                      )}
-                      {onImport && (
-                        <div role="none" data-testid="action:import">
-                          <MenuItem
-                            icon={<Upload className="h-4 w-4" aria-hidden="true" />}
-                            onSelect={() => {
-                              close();
-                              onImport();
-                            }}
-                          >
-                            {tc('ui.list.import')}
-                          </MenuItem>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </Menu>
-              </Tooltip>
-            </div>
-          )}
-
-          <ViewPicker
-            views={savedViews}
-            activeId={activeViewId}
-            modified={modified}
-            canSave={canSaveView}
-            isAdmin={isAdmin}
-            canEdit={canEditView}
-            onApply={onApplyView}
-            onReset={onResetView}
-            onAllRecords={onAllRecords}
-            onSaveAs={onSaveView}
-            onUpdate={onUpdateView}
-            onDelete={onDeleteView}
-            onSetDefault={onSetDefaultView}
-            onClearDefault={onClearDefaultView}
-            onSetOrgDefault={onSetOrgDefaultView}
-            onClearOrgDefault={onClearOrgDefaultView}
-          />
-
-          {canCreate && (
-            <>
-              {/* Under Material the toolbar button hides (the FAB is the M3 create
-                  affordance); everywhere else it stays. `contents` keeps layout
-                  identical until the variant rule flips it to display:none. */}
-              <span data-ui="create-action" className="contents">
-                <Button type="button" size="sm" onClick={onCreate}>
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  {tc('ui.action.new')}
-                </Button>
-              </span>
-              {/* Adaptive M3 FAB — hidden by default, shown only under the Material
-                  variant. */}
-              <Fab
-                adaptive
-                label={tc('ui.action.new')}
-                icon={<Plus className="h-6 w-6" aria-hidden="true" />}
-                onClick={onCreate}
-              />
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Active filter chips (always visible, even when the editor is closed). */}
-      {activeCount > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {filters.map((f, i) => (
-            <FilterChip key={`and-${i}`} meta={meta} filter={f} onRemove={() => removeAndAt(i)} />
-          ))}
-          {orFilters.length > 0 && (
-            <span className="text-xs font-medium uppercase text-textMuted">{tc('ui.filter.or')}</span>
-          )}
-          {orFilters.map((f, i) => (
-            <FilterChip key={`or-${i}`} meta={meta} filter={f} onRemove={() => removeOrAt(i)} />
-          ))}
+            {tc('ui.filter.button')}
+          </Chip>
+        </span>
+        {activeCount > 0 && (
           <button
             type="button"
             onClick={() => onFiltersChange([], [])}
@@ -322,8 +323,8 @@ export function ListToolbar(props: ListToolbarProps) {
           >
             {tc('ui.filter.clearAll')}
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {filterOpen && (
         <FilterPanel

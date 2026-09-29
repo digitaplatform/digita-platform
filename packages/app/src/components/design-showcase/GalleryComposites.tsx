@@ -23,6 +23,7 @@ import {
   BaseDialog,
   BrandMark,
   Button,
+  CardList,
   CardsSkeleton,
   Combobox,
   CommandPalette,
@@ -503,6 +504,31 @@ function DataGridGroup() {
   );
 }
 
+function CardListGroup() {
+  return (
+    <ShowcaseGroup title="CardList" exports={['CardList']}>
+      <ShowcaseState state="phone rows · the current record marked">
+        <CardList<Line>
+          className="w-72"
+          aria-label="Order lines"
+          rows={LINES}
+          getRowId={(r) => r.id}
+          currentRowId="l2"
+          onRowClick={noop}
+          renderCard={(r) => (
+            <>
+              <span className="font-medium text-primary-600">{r.item}</span>
+              <span className="mt-1 block text-xs text-textMuted">
+                {r.quantity} × {r.price} · {r.amount}
+              </span>
+            </>
+          )}
+        />
+      </ShowcaseState>
+    </ShowcaseGroup>
+  );
+}
+
 function NavigationGroup() {
   const [open, setOpen] = useState(true);
   const [collapsedOpen, setCollapsedOpen] = useState(false);
@@ -680,6 +706,7 @@ export function GalleryComposites() {
         </ShowcaseGroup>
       </ToastHost>
       <DataGridGroup />
+      <CardListGroup />
       <NavigationGroup />
       <LayoutGroup />
       <FeedbackGroup />

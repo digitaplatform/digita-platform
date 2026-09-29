@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { cn } from '../lib/cn.js';
 import {
   CATEGORICAL_OUTLINE,
@@ -6,7 +6,8 @@ import {
   type CategoricalColor,
 } from '../lib/categorical.js';
 
-export interface ChipProps {
+export interface ChipProps
+  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'className' | 'color' | 'disabled' | 'onClick'> {
   children: ReactNode;
   /** Filter-chip selection state; omit for an assist/action chip. */
   selected?: boolean;
@@ -29,10 +30,11 @@ export interface ChipProps {
  * Badge. Neutral default rounded pill; iOS = gray fill → filled-primary when
  * selected, Material = 8px outlined → tonal + leading check when selected.
  */
-export function Chip({ children, selected, onClick, onRemove, icon, disabled, color, className }: ChipProps) {
+export function Chip({ children, selected, onClick, onRemove, icon, disabled, color, className, ...props }: ChipProps) {
   return (
     <button
       type="button"
+      {...props}
       data-ui="chip"
       data-selected={selected || undefined}
       data-color={color}

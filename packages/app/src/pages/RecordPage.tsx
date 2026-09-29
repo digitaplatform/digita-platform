@@ -557,7 +557,7 @@ function RecordForm({
           <p className="text-xs uppercase tracking-wide text-textMuted">{tEntity(entity, meta.label ?? entity)}</p>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-h1 font-display text-textMain">{title}</h1>
-            {!isNew && <StatusBadge meta={meta} row={watched as Record<string, unknown>} size="md" />}
+            {!isNew && <StatusBadge meta={meta} row={watched as Record<string, unknown>} size="lg" />}
             {docLocked && (
               <span
                 className="inline-flex items-center gap-1 rounded-full border border-border bg-subtle px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-textMuted"
