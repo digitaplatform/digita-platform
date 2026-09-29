@@ -31,6 +31,7 @@ import {
   requestLoggerOnResponse,
   requestLoggerOnSend,
 } from "../src/core/api/middleware/request-logger.js";
+import { createLogger } from "../src/core/logging/logger.js";
 
 const credentials = {
   cookie: "digita_at=eyJhbGciOiJFUzI1NiJ9.cookie-jwt.sig",
@@ -69,4 +70,25 @@ describe("the request log line", () => {
       expect(log).not.toContain(value);
     });
   }
+});
+
+// logger.ts serializes `req` with pino.stdSerializers.req, whose output nests
+// the header set one level deeper than the request line does.
+describe("a log line that passes the request as req", () => {
+  it("never carries a credential header's value", async () => {
+    const app = Fastify({ logger: false });
+    app.get("/api/v1/boot", async (request) => {
+      createLogger("redaction-test").info({ req: request }, "handled");
+      return { ok: true };
+    });
+    await app.inject({
+      method: "GET",
+      url: "/api/v1/boot",
+      headers: { ...credentials, "x-trace-marker": "visible-marker" },
+    });
+    await app.close();
+    const log = lines.join("");
+    expect(log).toContain("visible-marker");
+    for (const value of Object.values(credentials)) expect(log).not.toContain(value);
+  });
 });
