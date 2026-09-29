@@ -1,6 +1,7 @@
 import { ROW_ID_FIELD } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
+import { readStoredRow } from "../entity/field-types.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
 import { applyScopeFilters } from "../permissions/scope-filter.js";
@@ -104,7 +105,7 @@ export class LinkSearchService {
     // ponytail: rows a read condition hides are dropped after the query, so the
     // page is short by them; fetch past them if a picker ever needs its full limit.
     const out: LinkSearchResult[] = [];
-    for (const doc of docs as Record<string, unknown>[]) {
+    for (const doc of (docs as Record<string, unknown>[]).map((row) => readStoredRow(entity, row))) {
       if (gatesRows && !(await this.permissionChecker.hasPermission(user, targetEntity, "read", doc)).allowed) continue;
       const result: LinkSearchResult = {
         _id: String(doc["_id"]),

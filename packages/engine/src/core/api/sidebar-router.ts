@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import type { EntityDefinition } from "@digitaplatform/shared";
 import type { EntityRegistry } from "../entity/entity-registry.js";
+import { readStoredRow } from "../entity/field-types.js";
 import type { VersionService, Version } from "../version/version-service.js";
 import type { DocumentShareService } from "../permissions/document-share-service.js";
 import type { RelatedDocService } from "../related/related-doc-service.js";
@@ -56,7 +58,8 @@ export function registerSidebarRoutes(
       const user = request.user as UserContext | undefined;
       const readable = user ? permissionChecker.getReadableFields(user, doctype, doc._data) : null;
       const result = readable ? versions.map((v) => maskVersionChanges(v, readable)) : versions;
-      return reply.send(successResponse(result));
+      const entity = registry.get(doctype);
+      return reply.send(successResponse(result.map((v) => readVersionChanges(v, entity))));
     },
   );
 
@@ -70,6 +73,15 @@ export function registerSidebarRoutes(
       return reply.send(successResponse(shares));
     },
   );
+}
+
+/** Each change's old and new value as a reader of the document gets it: a Password value is hidden. */
+function readVersionChanges(version: Version, entity: EntityDefinition): Version {
+  const read = (field: string, value: unknown) => readStoredRow(entity, { [field]: value })[field];
+  return {
+    ...version,
+    changes: version.changes.map((c) => ({ ...c, old: read(c.field, c.old), new: read(c.field, c.new) })),
+  };
 }
 
 /** Drop change entries whose field the user may not read (perm_level gating). */

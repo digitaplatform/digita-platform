@@ -12,7 +12,7 @@ import { DocStatusEngine, DocStatusError } from "./docstatus-engine.js";
 import { validateEntityDataZod } from "../entity/entity-validator-zod.js";
 import { ZodSchemaBuilder } from "../entity/zod-schema-builder.js";
 import { IllegalTransitionError } from "../workflow/workflow-engine.js";
-import { getFieldTypeHandler, isStoredFieldType, FieldValueError } from "../entity/field-types.js";
+import { getFieldTypeHandler, isStoredFieldType, FieldValueError, readStoredRow } from "../entity/field-types.js";
 import { copyDocumentData } from "./copy-service.js";
 import { projectFields } from "./project-fields.js";
 import { resolveDefaults, applyNewChildRowDefaults } from "../defaults/default-resolver.js";
@@ -378,7 +378,7 @@ export class DocumentService {
     if (!raw) throw new NotFoundError(doctype, name);
 
     const doc = new BaseDocument(doctype, raw as Record<string, unknown>);
-    this.deserializeFields(entity, doc);
+    doc._data = readStoredRow(entity, doc._data);
 
     // Permission check on specific document (owner, condition, scope)
     await this.assertReadAccess(user, doctype, name, doc._data);
@@ -538,7 +538,8 @@ export class DocumentService {
         ),
         this.db.count(entity.name, filterArray, dbTarget),
       ]);
-      docs = data as Record<string, unknown>[];
+      // Read as getDoc reads, before the masks see it.
+      docs = (data as Record<string, unknown>[]).map((row) => readStoredRow(entity, row));
       total = count;
     }
 
@@ -654,7 +655,9 @@ export class DocumentService {
   ): Promise<Record<string, unknown>[]> {
     const rows = (await this.db.find(entity.name, { filters, order_by: orderBy }, entity.database)) as Record<string, unknown>[];
     const readable: Record<string, unknown>[] = [];
-    for (const row of rows) {
+    // Read as getDoc reads, before the row gate sees it.
+    for (const stored of rows) {
+      const row = readStoredRow(entity, stored);
       if ((await this.permissionChecker.hasPermission(user, doctype, "read", row)).allowed) readable.push(row);
     }
     return readable;
@@ -1014,6 +1017,7 @@ export class DocumentService {
     // field would regress to its raw id until a full reload (getDoc/getList
     // resolve them; the write paths must too).
     doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data);
+    doc._data = readStoredRow(entity, doc._data);
 
     return doc;
   }
@@ -1304,6 +1308,7 @@ export class DocumentService {
     // Same contract as insert: the save response carries the link titles the
     // form needs to keep displaying labels instead of raw ids.
     doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data);
+    doc._data = readStoredRow(entity, doc._data);
 
     return doc;
   }
@@ -2441,7 +2446,7 @@ export class DocumentService {
     const raw = await this.db.findOne(entity.name, name, entity.database, session);
     if (!raw) throw new NotFoundError(doctype, name);
     const doc = new BaseDocument(doctype, raw as Record<string, unknown>);
-    this.deserializeFields(entity, doc);
+    doc._data = readStoredRow(entity, doc._data);
     return doc;
   }
 
@@ -2480,21 +2485,5 @@ export class DocumentService {
     }
 
     return result;
-  }
-
-  private deserializeFields(entity: EntityDefinition, doc: BaseDocument): void {
-    for (const field of entity.fields) {
-      if (!isStoredFieldType(field.fieldtype)) continue;
-
-      const value = doc.get(field.fieldname);
-      if (value === undefined || value === null) continue;
-
-      const handler = getFieldTypeHandler(field.fieldtype);
-      const deserialized = handler.fromStorage(value, field);
-
-      if (deserialized !== value) {
-        doc._data[field.fieldname] = deserialized;
-      }
-    }
   }
 }

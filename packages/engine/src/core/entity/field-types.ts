@@ -1,4 +1,4 @@
-import type { FieldType, FieldDefinition } from "@digitaplatform/shared";
+import type { EntityDefinition, FieldType, FieldDefinition } from "@digitaplatform/shared";
 import { LAYOUT_FIELD_TYPES } from "@digitaplatform/shared";
 
 /**
@@ -322,4 +322,22 @@ export function getFieldTypeHandler(fieldtype: FieldType): FieldTypeHandler {
 
 export function isStoredFieldType(fieldtype: FieldType): boolean {
   return !LAYOUT_FIELD_TYPES.includes(fieldtype);
+}
+
+/**
+ * The row a reader gets from a stored row: each stored field through its type's
+ * `fromStorage`, which is what hides a Password value. Every path that returns a
+ * stored row to a caller goes through here. Table rows are not descended into.
+ */
+export function readStoredRow(
+  entity: EntityDefinition,
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const read = { ...row };
+  for (const field of entity.fields) {
+    const value = row[field.fieldname];
+    if (!isStoredFieldType(field.fieldtype) || value === undefined || value === null) continue;
+    read[field.fieldname] = getFieldTypeHandler(field.fieldtype).fromStorage(value, field);
+  }
+  return read;
 }
