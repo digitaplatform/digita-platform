@@ -4,6 +4,7 @@ import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
 import { applyScopeFilters } from "../permissions/scope-filter.js";
 import { isFieldAllowed } from "../database/filter-builder.js";
+import { readStoredRow } from "../entity/field-types.js";
 import { env } from "../config/env.js";
 
 export interface SearchResult {
@@ -69,7 +70,7 @@ export class GlobalSearchService {
         );
 
         // A read condition cannot be a Mongo filter: rows it hides are dropped per
-        // stored row, as getList does. ponytail: the page is then short by the rows
+        // row, as getList does. ponytail: the page is then short by the rows
         // dropped; fetch past them if a search ever needs its full limit.
         const gatesRows = this.permissionChecker.hasConditionalRowRead(user, entity.name);
         const docs = await this.db.find(
@@ -82,8 +83,8 @@ export class GlobalSearchService {
           entity.database,
         );
 
-        for (const doc of docs) {
-          const d = doc as Record<string, unknown>;
+        // Read as getDoc reads, before the row gate sees it.
+        for (const d of (docs as Record<string, unknown>[]).map((row) => readStoredRow(entity, row))) {
           if (gatesRows && !(await this.permissionChecker.hasPermission(user, entity.name, "read", d)).allowed) continue;
           results.push({
             entity: entity.name,

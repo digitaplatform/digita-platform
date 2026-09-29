@@ -216,10 +216,11 @@ export class LinkSearchService {
       "_row_id";
 
     const out: LinkSearchResult[] = [];
-    for (const doc of docs as Record<string, unknown>[]) {
+    // Read as getDoc reads, before the row gate sees it.
+    for (const doc of (docs as Record<string, unknown>[]).map((row) => readStoredRow(entity, row))) {
       if (gatesRows && !(await this.permissionChecker.hasPermission(user, targetEntity, "read", doc)).allowed) continue;
-      // The rows are the parent's content: masked on the stored parent like a
-      // read of it, so a row label is never a child field the user may not read.
+      // The rows are the parent's content: masked on the parent like a read of
+      // it, so a row label is never a child field the user may not read.
       const readable = this.permissionChecker.filterFieldsForRead(user, targetEntity, doc);
       const rows = readable[targetPath] as Array<Record<string, unknown>> | undefined;
       if (!Array.isArray(rows)) continue;

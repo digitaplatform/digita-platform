@@ -617,16 +617,11 @@ export class DocumentService {
     // C1: a `condition` read grant can't be a scope filter, so a scope-visible
     // row may still be condition-hidden. Re-check the specific doc.
     if (this.permissionChecker.hasConditionalRowRead(user, doctype)) {
-      const raw = await this.db.findOne(entity.name, name, entity.database);
-      if (!raw) return false;
-      return (
-        await this.permissionChecker.hasPermission(
-          user,
-          doctype,
-          "read",
-          raw as Record<string, unknown>,
-        )
-      ).allowed;
+      const stored = await this.db.findOne(entity.name, name, entity.database);
+      if (!stored) return false;
+      // Read as getDoc reads, before the row gate sees it.
+      const row = readStoredRow(entity, stored as Record<string, unknown>);
+      return (await this.permissionChecker.hasPermission(user, doctype, "read", row)).allowed;
     }
     return true;
   }
