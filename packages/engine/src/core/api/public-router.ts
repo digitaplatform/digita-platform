@@ -155,8 +155,7 @@ export function registerPublicRoutes(
     // Every row must be readable, not only listable: getList checks each stored row's
     // read permission (its `condition` and any workflow-state strip), which gates
     // drafts even if a caller omits a status filter, and projects only afterwards.
-    // `total` is the query's count less the rows dropped on this page, so a caller
-    // passes its own published filter for exact pagination.
+    // `total` and the pages count only the rows the caller may read.
     const result = await documentService.getList(doctype, listQuery, u, ctx, await localeOf(request), {
       everyRowNeedsRead: true,
     });

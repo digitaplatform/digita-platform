@@ -224,6 +224,28 @@ describe("Public list filters and sorts only on fields the Guest may read", () =
   });
 });
 
+describe("Public list counts and pages only the rows the Guest may read", () => {
+  const get = async (qs: string) => {
+    const res = await app.inject({ method: "GET", url: `/api/v1/public/resource/GatedPage?${qs}` });
+    expect(res.statusCode).toBe(200);
+    return res.json() as { data: Array<Record<string, unknown>>; meta: { total: number; total_pages: number } };
+  };
+  const filters = (f: unknown) => `filters=${encodeURIComponent(JSON.stringify(f))}`;
+
+  it("never counts a hidden draft, not even past the last page", async () => {
+    expect((await get(`${filters([["status", "=", "draft"]])}&page=50&page_size=1`)).meta.total).toBe(0);
+    expect((await get(`${filters([["title", "like", "G-3%"]])}&page=50&page_size=1`)).meta.total).toBe(0);
+    expect((await get(`${filters([["title", "like", "G-%"]])}&page=50&page_size=1`)).meta.total).toBe(2);
+  });
+
+  it("pages over the readable rows, so each one is on exactly one page", async () => {
+    const byTitle = `order_by=${encodeURIComponent("title desc")}&page_size=1`;
+    const pages = await Promise.all([1, 2, 3].map((page) => get(`${byTitle}&page=${page}`)));
+    expect(pages.map((p) => p.data.map((r) => r["_id"]))).toEqual([["G-2"], ["G-1"], []]);
+    expect(pages[0]!.meta).toMatchObject({ total: 2, total_pages: 2 });
+  });
+});
+
 describe("projectFields answers what a MongoDB projection answers", () => {
   const cases: string[][] = [
     ["title"], ["meta"], ["meta.a"], ["meta.b.c"], ["meta.missing"], ["items.q"], ["items.q", "items.r"],

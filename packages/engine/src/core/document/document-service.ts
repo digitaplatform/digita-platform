@@ -514,38 +514,37 @@ export class DocumentService {
     const masksStoredRows = gatesRows || this.permissionChecker.hasConditionalFieldRead(user, doctype);
 
     const dbTarget = entity.database;
-    const [data, total] = await Promise.all([
-      this.db.find(
-        entity.name,
-        {
-          filters: filterArray,
-          fields: masksStoredRows ? undefined : query.fields,
-          order_by: query.order_by ?? defaultSort,
-          limit,
-          offset,
-        },
-        dbTarget,
-      ),
-      this.db.count(entity.name, filterArray, dbTarget),
-    ]);
-
-    let docs = data as Record<string, unknown>[];
-    let effectiveTotal = total;
-
-    if (masksStoredRows) {
-      const visible: Record<string, unknown>[] = [];
-      for (const doc of docs) {
-        if (gatesRows && !(await this.permissionChecker.hasPermission(user, doctype, "read", doc)).allowed) continue;
-        visible.push(projectFields(this.permissionChecker.filterFieldsForRead(user, doctype, doc), query.fields));
-      }
-      // Lower-bound correction: subtract rows dropped on this page. An exact total
-      // would require scanning the whole collection; the security guarantee is that
-      // no condition-hidden row appears in `data`.
-      effectiveTotal = Math.max(0, total - (docs.length - visible.length));
-      docs = visible;
+    let docs: Record<string, unknown>[];
+    let total: number;
+    if (gatesRows) {
+      // The page and the total both come from the rows the user may read. A total
+      // over every matching row counts hidden rows past the page, and a filter then
+      // reads a hidden row's values one answer at a time.
+      const readable = await this.listReadableRows(user, doctype, entity, filterArray, query.order_by ?? defaultSort);
+      total = readable.length;
+      docs = readable.slice(offset, offset + limit);
     } else {
-      docs = docs.map((doc) => this.permissionChecker.filterFieldsForRead(user, doctype, doc));
+      const [data, count] = await Promise.all([
+        this.db.find(
+          entity.name,
+          {
+            filters: filterArray,
+            fields: masksStoredRows ? undefined : query.fields,
+            order_by: query.order_by ?? defaultSort,
+            limit,
+            offset,
+          },
+          dbTarget,
+        ),
+        this.db.count(entity.name, filterArray, dbTarget),
+      ]);
+      docs = data as Record<string, unknown>[];
+      total = count;
     }
+
+    docs = masksStoredRows
+      ? docs.map((doc) => projectFields(this.permissionChecker.filterFieldsForRead(user, doctype, doc), query.fields))
+      : docs.map((doc) => this.permissionChecker.filterFieldsForRead(user, doctype, doc));
 
     // Every row is masked now: the translations and link titles below read only
     // what the user may read, or a title would show a masked Link.
@@ -566,10 +565,10 @@ export class DocumentService {
 
     return {
       data: docs,
-      total: effectiveTotal,
+      total,
       page,
       page_size,
-      total_pages: Math.ceil(effectiveTotal / page_size),
+      total_pages: Math.ceil(total / page_size),
     };
   }
 
@@ -633,21 +632,32 @@ export class DocumentService {
     // count=0 while getList shows every row (fail-closed inconsistency).
     const scopedFilter = applyScopeFilters(entity, user, merged, env.PERMISSION_SCOPE_ENABLED);
     // C1: a `condition` read grant cannot be a Mongo filter, so count only the
-    // condition-visible rows by loading the scope-visible set and re-checking each.
-    // Costlier, but only when the user holds a conditional read grant.
+    // condition-visible rows, as getList's total does.
     if (this.permissionChecker.hasConditionalRowRead(user, doctype)) {
-      const rows = (await this.db.find(
-        entity.name,
-        { filters: [scopedFilter] },
-        entity.database,
-      )) as Record<string, unknown>[];
-      let n = 0;
-      for (const row of rows) {
-        if ((await this.permissionChecker.hasPermission(user, doctype, "read", row)).allowed) n++;
-      }
-      return n;
+      return (await this.listReadableRows(user, doctype, entity, [scopedFilter])).length;
     }
     return this.db.count(entity.name, [scopedFilter], entity.database);
+  }
+
+  /**
+   * The rows `filters` matches that `user` may read, in `orderBy`. A read
+   * `condition` cannot be a Mongo filter, so every matching row is loaded and
+   * re-checked (fail-closed). ponytail: loads every matching row; project the
+   * fields the conditions read if a gated collection grows large.
+   */
+  private async listReadableRows(
+    user: UserContext,
+    doctype: string,
+    entity: EntityDefinition,
+    filters: Record<string, unknown>[],
+    orderBy?: string,
+  ): Promise<Record<string, unknown>[]> {
+    const rows = (await this.db.find(entity.name, { filters, order_by: orderBy }, entity.database)) as Record<string, unknown>[];
+    const readable: Record<string, unknown>[] = [];
+    for (const row of rows) {
+      if ((await this.permissionChecker.hasPermission(user, doctype, "read", row)).allowed) readable.push(row);
+    }
+    return readable;
   }
 
   /**
