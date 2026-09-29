@@ -777,4 +777,55 @@ describe("PermissionChecker", () => {
       expect(out["discount"]).toBe(90);
     });
   });
+
+  describe("a Table cell's read_only_depends_on, evaluated with the row as doc", () => {
+    beforeEach(() => {
+      registry.register(
+        makeEntity({
+          fields: [
+            {
+              fieldname: "lines",
+              fieldtype: "Table",
+              label: "Lines",
+              child_fields: [
+                { fieldname: "state", fieldtype: "Data", label: "State" },
+                { fieldname: "note", fieldtype: "Data", label: "Note", read_only_depends_on: "eval:doc.state=='returned'" },
+                { fieldname: "grade", fieldtype: "Data", label: "Grade", perm_level: 1, read_only_depends_on: "eval:doc.state=='returned'" },
+              ],
+            },
+          ],
+          permissions: [{ role: "System User", level: 0, read: 1, write: 1 }],
+        } as Partial<EntityDefinition>),
+      );
+    });
+    const stored = { lines: [{ _row_id: "r1", state: "returned", note: "scratch", grade: "B" }] };
+
+    it("rejects a write that erases a locked cell by leaving it out of the row", () => {
+      expect(() =>
+        checker.filterFieldsForWrite(makeUser(), "TestDoc", { lines: [{ _row_id: "r1", state: "returned" }] }, stored),
+      ).toThrow(PermissionDeniedError);
+    });
+
+    it("allows a write that unlocks the row and changes the cell in the same save", () => {
+      const out = checker.filterFieldsForWrite(
+        makeUser(),
+        "TestDoc",
+        { lines: [{ _row_id: "r1", state: "out", note: "fixed" }] },
+        stored,
+      );
+      expect((out["lines"] as Record<string, unknown>[])[0]!["note"]).toBe("fixed");
+    });
+
+    it("leaves a new row and a cell the user may not write to the other gates", () => {
+      const out = checker.filterFieldsForWrite(
+        makeUser(),
+        "TestDoc",
+        { lines: [{ _row_id: "r1", state: "returned", note: "scratch", grade: "A" }, { state: "returned", note: "n" }] },
+        stored,
+      );
+      const rows = out["lines"] as Record<string, unknown>[];
+      expect(rows[0]!["grade"]).toBeUndefined();
+      expect(rows[1]!["note"]).toBe("n");
+    });
+  });
 });

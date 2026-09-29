@@ -1,4 +1,4 @@
-import type { EntityDefinition, EntityPermission, StatePermissionOverride } from "@digitaplatform/shared";
+import type { EntityDefinition, EntityPermission, FieldDefinition, StatePermissionOverride } from "@digitaplatform/shared";
 import { SYSTEM_ROLES, canGrantActionTo } from "@digitaplatform/shared";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import { docFieldsOf, evaluateExpression } from "../expression/expression-evaluator.js";
@@ -594,9 +594,56 @@ export class PermissionChecker {
           );
         }
       }
+      for (const [tableName, tableField] of tableFields) {
+        this.assertChildLocksKept(user, entityName, tableField, filtered[tableName], contextDoc[tableName], contextDoc);
+      }
     }
 
     return filtered;
+  }
+
+  /**
+   * The Table counterpart of the read_only_depends_on lock above. The condition
+   * sees the row as `doc`, as the grid evaluates it, with the stored values of
+   * the cells the write leaves out. A Table save stores its rows whole, so a
+   * writable cell left out of a row is erased, which changes it. A new row has
+   * no stored value to keep, and a cell the write filter strips is not the
+   * client's change.
+   */
+  private assertChildLocksKept(
+    user: UserContext,
+    entityName: string,
+    tableField: FieldDefinition,
+    rows: unknown,
+    storedRows: unknown,
+    contextDoc: Record<string, unknown>,
+  ): void {
+    const lockable = tableField.child_fields?.filter((c) => c.read_only_depends_on) ?? [];
+    if (lockable.length === 0 || !Array.isArray(rows) || !Array.isArray(storedRows)) return;
+    const writable = this.getWritableChildFields(user, entityName, tableField.fieldname, contextDoc);
+    const storedById = new Map(
+      (storedRows as Array<Record<string, unknown>>).map((r) => [r["_row_id"], r] as const),
+    );
+    for (const row of rows as Array<Record<string, unknown>>) {
+      const stored = row["_row_id"] === undefined ? undefined : storedById.get(row["_row_id"]);
+      if (!stored) continue;
+      const resultingRow = { ...stored, ...row };
+      for (const child of lockable) {
+        if (writable && !writable.has(child.fieldname)) continue;
+        if (JSON.stringify(row[child.fieldname] ?? null) === JSON.stringify(stored[child.fieldname] ?? null)) continue;
+        const locked = evaluateExpression(child.read_only_depends_on!, {
+          doc: resultingRow,
+          user: user as unknown as Record<string, unknown>,
+        });
+        if (locked) {
+          throw new PermissionDeniedError(
+            user.email,
+            entityName,
+            `change the locked cell "${tableField.fieldname}.${child.fieldname}" of`,
+          );
+        }
+      }
+    }
   }
 
   /**

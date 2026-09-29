@@ -1139,6 +1139,70 @@ describe("Child-row defaults on the UPDATE path (parity with insert)", () => {
   });
 });
 
+describe("A Table cell's read_only_depends_on locks the cell on update", () => {
+  const clerk: UserContext = { _id: "loan-clerk", email: "loan-clerk@test.local", roles: ["LoanClerk"], full_name: "Clerk" };
+
+  beforeAll(async () => {
+    registry.register(
+      makeEntity({
+        name: "LoanDoc",
+        fields: [
+          { fieldname: "title", fieldtype: "Data" as const, label: "Title" },
+          {
+            fieldname: "lines",
+            fieldtype: "Table" as const,
+            label: "Lines",
+            child_fields: [
+              { fieldname: "state", fieldtype: "Data" as const, label: "State" },
+              {
+                fieldname: "note",
+                fieldtype: "Data" as const,
+                label: "Note",
+                read_only_depends_on: "eval:doc.state=='returned'",
+              },
+            ],
+          },
+        ],
+        permissions: [
+          { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
+          { role: "LoanClerk", level: 0, select: 1, read: 1, write: 1, create: 1 },
+        ],
+      }),
+    );
+    await db.ensureCollection("LoanDoc", "app");
+  });
+
+  async function storedLines(id: string): Promise<Record<string, unknown>[]> {
+    const raw = (await db.findOne("LoanDoc", id, "app")) as Record<string, unknown>;
+    return raw["lines"] as Record<string, unknown>[];
+  }
+
+  it("refuses an update that changes a locked cell and keeps the stored value", async () => {
+    const doc = await docService.insert(
+      "LoanDoc",
+      { title: "L", lines: [{ state: "returned", note: "scratch on frame" }] },
+      clerk,
+    );
+    const [row] = await storedLines(doc._id);
+    await expect(
+      docService.update("LoanDoc", doc._id, { lines: [{ ...row, note: "no damage" }] }, clerk),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    expect((await storedLines(doc._id))[0]!["note"]).toBe("scratch on frame");
+  });
+
+  it("accepts the unchanged locked cell and a change to a cell whose row is not locked", async () => {
+    const doc = await docService.insert(
+      "LoanDoc",
+      { title: "L", lines: [{ state: "returned", note: "kept" }, { state: "out", note: "old" }] },
+      clerk,
+    );
+    const [locked, open] = await storedLines(doc._id);
+    await docService.update("LoanDoc", doc._id, { lines: [locked, { ...open, note: "new" }] }, clerk);
+    const rows = await storedLines(doc._id);
+    expect(rows.map((r) => r["note"])).toEqual(["kept", "new"]);
+  });
+});
+
 describe("runAction — a long_running action with no handler fails loud (A2)", () => {
   const actEntity = makeEntity({
     name: "ActDoc",
