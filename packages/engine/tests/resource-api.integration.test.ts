@@ -431,23 +431,6 @@ describe("Resource API Integration", () => {
       expect(dup.statusCode).toBeGreaterThanOrEqual(400);
     });
 
-    it("accepts a plain email ref for Permission.user (no link validation)", async () => {
-      const res = await app.inject({
-        method: "POST",
-        url: "/api/v1/resource/Permission",
-        headers: authHeaders(),
-        payload: {
-          user: "nobody@test.local", // no such user anywhere — must still insert
-          allow_entity: "File",
-          allow_field: "file_type",
-          allow_value: "application/pdf",
-        },
-      });
-
-      expect(res.statusCode).toBe(201);
-      expect(res.json().data.user).toBe("nobody@test.local");
-    });
-
     it("stamps user_name on activity log rows from the actor claim", async () => {
       const token = await signToken({
         sub: "admin@digita.local",

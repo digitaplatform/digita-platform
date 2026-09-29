@@ -19,6 +19,21 @@ export interface OrphanCollectionReport {
   dropped: boolean;
 }
 
+interface RetiredEntity {
+  name: string;
+  database: DatabaseTarget;
+}
+
+/**
+ * Entities the engine no longer defines. `loadFromDb` registers every row of the `Entity`
+ * meta-collection, so a stored definition would keep a retired entity live after its file is gone.
+ * Each boot removes what a tenant database still holds of these entities.
+ */
+const RETIRED_ENTITIES: readonly RetiredEntity[] = [
+  // Its rows restricted nothing; per-user narrowing is a permission `scope` on the role.
+  { name: "Permission", database: DIGITA.DATABASES.IDENTITY },
+];
+
 export class SchemaMigrator {
   private indexManager: IndexManager;
 
@@ -93,6 +108,10 @@ export class SchemaMigrator {
     // transactions, which cannot create a collection).
     await this.db.ensureCollection("_doc_guards", DIGITA.DATABASES.CORE);
 
+    for (const retired of RETIRED_ENTITIES) {
+      await this.removeRetiredEntity(retired);
+    }
+
     const results: MigrationResult[] = [];
     for (const entity of entities) {
       const result = await this.migrate(entity);
@@ -143,7 +162,7 @@ export class SchemaMigrator {
    *
    * The IDENTITY database is excluded entirely: digita-auth owns it (User,
    * Session, LoginAudit, …) and the engine only declares a subset of its
-   * collections (DocShare, Permission, Role). Since the User entity was
+   * collections (DocShare, Role). Since the User entity was
    * removed (ADR-12 P3), sweeping identity would flag — and with
    * PRUNE_ORPHAN_COLLECTIONS=true DROP — digita-auth's collections.
    */
@@ -199,6 +218,24 @@ export class SchemaMigrator {
       }
     }
     return reports;
+  }
+
+  /**
+   * Drop a retired entity's collection, its naming sequence and its stored definition. The rows
+   * are logged in full before the drop, so an operator can still recreate what they meant.
+   * Idempotent: a database that holds none of it is left as it is.
+   */
+  private async removeRetiredEntity(retired: RetiredEntity): Promise<void> {
+    const { name, database } = retired;
+    if ((await this.db.listCollections(database)).includes(name)) {
+      const rows = await this.db.find(name, {}, database);
+      if (rows.length) {
+        log.warn({ entity: name, database, rows }, `Dropping ${rows.length} rows of the retired entity ${name}`);
+      }
+      await this.db.dropCollection(name, database);
+    }
+    await this.db.deleteMany("_sequences", { _id: name }, database);
+    await this.db.deleteMany(DIGITA.COLLECTIONS.ENTITY, { _id: name }, DIGITA.DATABASES.CORE);
   }
 
   private async initializeSequence(entity: EntityDefinition): Promise<void> {
