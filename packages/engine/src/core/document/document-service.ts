@@ -580,13 +580,12 @@ export class DocumentService {
     user: UserContext = GUEST_USER,
   ): Promise<boolean> {
     const entity = this.registry.get(doctype);
-    // Apply scope filter so users with restricted scope cannot probe
-    // existence of out-of-scope documents (information leak).
-    const scopedFilter = applyScopeFilters(
+    // Apply scope filter and role visibility so users with restricted scope or
+    // roles cannot probe existence of documents they cannot see (information leak).
+    const scopedFilter = applyRoleVisibilityFilter(
       entity,
       user,
-      { _id: name },
-      env.PERMISSION_SCOPE_ENABLED,
+      applyScopeFilters(entity, user, { _id: name }, env.PERMISSION_SCOPE_ENABLED),
     );
     const hits = await this.db.count(entity.name, [scopedFilter], entity.database);
     if (hits === 0) return false;
@@ -631,8 +630,13 @@ export class DocumentService {
     }
     // Gate scope on PERMISSION_SCOPE_ENABLED exactly like getList/exists — otherwise
     // count() over-enforces: a scope-only reader lacking the scope claim would get
-    // count=0 while getList shows every row (fail-closed inconsistency).
-    const scopedFilter = applyScopeFilters(entity, user, merged, env.PERMISSION_SCOPE_ENABLED);
+    // count=0 while getList shows every row (fail-closed inconsistency). Role
+    // visibility narrows as in getList, or a count reveals a role-restricted row.
+    const scopedFilter = applyRoleVisibilityFilter(
+      entity,
+      user,
+      applyScopeFilters(entity, user, merged, env.PERMISSION_SCOPE_ENABLED),
+    );
     // C1: a `condition` read grant cannot be a Mongo filter, so count only the
     // condition-visible rows, as getList's total does.
     if (this.permissionChecker.hasConditionalRowRead(user, doctype)) {

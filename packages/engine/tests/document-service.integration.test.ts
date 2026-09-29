@@ -1191,3 +1191,42 @@ describe("An owner-only reader's list masks each row as stored, then projects it
     expect(listed.total).toBe(1);
   });
 });
+
+describe("count and exists see only the rows the reader's roles may see", () => {
+  const reader: UserContext = { _id: "rv-001", email: "rv@test.local", roles: ["RvReader"], full_name: "Reader" };
+
+  beforeAll(async () => {
+    registry.register(
+      makeEntity({
+        name: "RoleVisibleDoc",
+        role_visibility_field: "roles",
+        fields: [
+          { fieldname: "title", fieldtype: "Data" as const, label: "Title" },
+          { fieldname: "roles", fieldtype: "JSON" as const, label: "Roles" },
+        ],
+        permissions: [
+          { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+          { role: "RvReader", level: 0, select: 1, read: 1, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0 },
+        ],
+      } as Partial<EntityDefinition>),
+    );
+    await db.ensureCollection("RoleVisibleDoc", "app");
+    const row = { doctype: "RoleVisibleDoc", docstatus: 0, owner: "system", modified_by: "system", creation: new Date(), modified: new Date() };
+    await db.insertOne("RoleVisibleDoc", { ...row, _id: "RV-open", title: "open" }, "app");
+    await db.insertOne("RoleVisibleDoc", { ...row, _id: "RV-hidden", title: "hidden", roles: ["Nobody"] }, "app");
+  });
+
+  it("counts only the rows the list answers", async () => {
+    const listed = await docService.getList("RoleVisibleDoc", {}, reader);
+    expect(listed.data.map((r) => r["_id"])).toEqual(["RV-open"]);
+    expect(await docService.count("RoleVisibleDoc", [], reader)).toBe(listed.total);
+    expect(await docService.count("RoleVisibleDoc", [{ title: "hidden" }], reader)).toBe(0);
+    expect(await docService.count("RoleVisibleDoc", [], adminUser)).toBe(2);
+  });
+
+  it("finds only a row the reader's roles may see", async () => {
+    expect(await docService.exists("RoleVisibleDoc", "RV-hidden", reader)).toBe(false);
+    expect(await docService.exists("RoleVisibleDoc", "RV-open", reader)).toBe(true);
+    expect(await docService.exists("RoleVisibleDoc", "RV-hidden", adminUser)).toBe(true);
+  });
+});
