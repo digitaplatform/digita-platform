@@ -302,6 +302,24 @@ export class DocumentService {
   }
 
   /**
+   * Share access: a reader through RBAC may share the document; a reader only through a
+   * DocShare may share it on only when that share has `can_share`. A caller who may not read
+   * the document gets the 403 or 404 that `getDoc` answers.
+   */
+  async assertShareAccess(doctype: string, name: string, user: UserContext): Promise<void> {
+    await this.getDoc(doctype, name, user);
+    // getDoc admits a share reader too, so RBAC is asked again, on the stored row.
+    const doc = await this.loadDocInternal(doctype, name);
+    try {
+      await this.permissionChecker.check(user, doctype, "read", doc._data);
+    } catch (err) {
+      if (!(err instanceof PermissionDeniedError)) throw err;
+      if (user.email && (await this.documentShareService.hasShare(doctype, name, user.email, "share"))) return;
+      throw new PermissionDeniedError(user.email, doctype, "share");
+    }
+  }
+
+  /**
    * Overlay per-document data translations onto a single document's data for the
    * given locale. Generic: only the entity's `translatable` fields that are
    * present are looked up; a missing translation keeps the stored value. No-op

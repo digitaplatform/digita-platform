@@ -27,10 +27,10 @@ export async function beforeSave(
   const actor = services?.user;
 
   // A share grants read that RBAC may deny (DocumentService.assertReadAccess), so the
-  // sharer must pass the read getDoc applies, or a user could share a document with
-  // itself to read it. getDoc throws the 403 or 404 a direct read would get.
+  // sharer must read the document through RBAC, or through a share that has can_share;
+  // otherwise a user could share a document with itself, or pass a share on, to read it.
   if (actor && services) {
-    await (services.documentService as DocumentService).getDoc(
+    await (services.documentService as DocumentService).assertShareAccess(
       doc.get("entity") as string,
       doc.get("document_name") as string,
       actor,

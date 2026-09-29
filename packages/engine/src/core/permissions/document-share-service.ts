@@ -82,7 +82,7 @@ export class DocumentShareService {
     entity: string,
     documentName: string,
     userEmail: string,
-    action: "read" | "write",
+    action: "read" | "write" | "share",
   ): Promise<boolean> {
     const _id = `${entity}:${documentName}:${userEmail}`;
     const share = await this.db.findOne(DIGITA.COLLECTIONS.DOC_SHARE, _id, DIGITA.DATABASES.IDENTITY);
@@ -98,7 +98,7 @@ export class DocumentShareService {
 
     if (action === "read") return shareData.can_read;
     if (action === "write") return shareData.can_write;
-    return false;
+    return shareData.can_share;
   }
 
   /**
