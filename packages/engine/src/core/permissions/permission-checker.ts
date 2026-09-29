@@ -383,6 +383,29 @@ export class PermissionChecker {
     return fields;
   }
 
+  /**
+   * Whether `user` may see `displayField` of the stored `row` of `entityName`, the
+   * title a Link to that row shows: the user may select or read the row, and may
+   * read the field when it sits above level 0. A picker shows a level-0 title to
+   * whoever may select, so a link title does too.
+   */
+  async isTitleVisible(
+    user: UserContext,
+    entityName: string,
+    row: Record<string, unknown>,
+    displayField: string,
+  ): Promise<boolean> {
+    if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return true;
+    const admitted =
+      (await this.hasPermission(user, entityName, "select", row)).allowed ||
+      (await this.hasPermission(user, entityName, "read", row)).allowed;
+    if (!admitted) return false;
+    const level = this.registry.get(entityName).fields.find((f) => f.fieldname === displayField)?.perm_level ?? 0;
+    if (level === 0) return true;
+    const readable = this.getReadableFields(user, entityName, row);
+    return readable === null || readable.has(displayField);
+  }
+
   /** The set of field names a list, count or search query of `user` may filter,
    *  search and sort `entityName` on: the entity's declared fields + Table child
    *  fields for a reader of every level, otherwise getFilterableFields; + the

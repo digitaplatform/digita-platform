@@ -399,7 +399,7 @@ export class DocumentService {
     await this.applyDataTranslations(entity, name, doc._data, locale);
 
     // Resolve link titles (title is translated too when the target field is translatable)
-    const linkTitles = await this.linkTitleResolver.resolve(entity, doc._data, locale);
+    const linkTitles = await this.linkTitleResolver.resolve(entity, doc._data, user, locale);
     doc._link_titles = linkTitles;
 
     // Resolve status indicator
@@ -554,7 +554,7 @@ export class DocumentService {
     await this.applyListDataTranslations(entity, docs, locale);
 
     // Resolve link titles (batch; titles translated when the target field is translatable)
-    const titleMap = await this.linkTitleResolver.resolveForList(entity, docs, locale);
+    const titleMap = await this.linkTitleResolver.resolveForList(entity, docs, user, locale);
     for (const doc of docs) {
       const titles = titleMap.get(String(doc["_id"]));
       if (titles) {
@@ -805,7 +805,7 @@ export class DocumentService {
 
     // Live-preview merges replace parts of the form doc — they need the same
     // link titles as the read paths or a recompute wipes the visible labels.
-    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data);
+    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user);
 
     return doc;
   }
@@ -1021,7 +1021,7 @@ export class DocumentService {
     // The response is what the form resets to — without titles every Link
     // field would regress to its raw id until a full reload (getDoc/getList
     // resolve them; the write paths must too).
-    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data);
+    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user);
     doc._data = readStoredRow(entity, doc._data);
 
     return doc;
@@ -1312,7 +1312,7 @@ export class DocumentService {
 
     // Same contract as insert: the save response carries the link titles the
     // form needs to keep displaying labels instead of raw ids.
-    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data);
+    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user);
     doc._data = readStoredRow(entity, doc._data);
 
     return doc;
@@ -1741,7 +1741,7 @@ export class DocumentService {
       { doctype, name, user: user.email, post_submit: true, cause: options.cause },
       "Submitted document patched",
     );
-    resultDoc._link_titles = await this.linkTitleResolver.resolve(entity, resultDoc._data);
+    resultDoc._link_titles = await this.linkTitleResolver.resolve(entity, resultDoc._data, user);
     return resultDoc;
   }
 

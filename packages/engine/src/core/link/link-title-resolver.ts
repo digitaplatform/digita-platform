@@ -2,6 +2,8 @@ import type { EntityDefinition } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { TranslationService } from "../i18n/translation-service.js";
+import type { PermissionChecker } from "../permissions/permission-checker.js";
+import type { UserContext } from "../permissions/types.js";
 
 /**
  * Resolve display titles for all Link fields in a document.
@@ -11,12 +13,15 @@ import type { TranslationService } from "../i18n/translation-service.js";
  * `translatable`, the title is replaced with its per-document data translation
  * (falling back to the stored value) — so a SELECTED link (e.g. the chosen
  * account in a form) shows in the viewer's language, matching the list/dropdown.
+ * A title appears only where the viewer may see it on the target row
+ * (PermissionChecker.isTitleVisible); otherwise the Link shows its bare id.
  */
 export class LinkTitleResolver {
   constructor(
     private registry: EntityRegistry,
     private db: MongoDBService,
     private translationService: TranslationService,
+    private permissionChecker: PermissionChecker,
   ) {}
 
   /** Whether the target entity's display field carries data translations. */
@@ -27,6 +32,7 @@ export class LinkTitleResolver {
   async resolve(
     entity: EntityDefinition,
     data: Record<string, unknown>,
+    user: UserContext,
     locale?: string,
   ): Promise<Record<string, string>> {
     const titles: Record<string, string> = {};
@@ -49,6 +55,7 @@ export class LinkTitleResolver {
         (async () => {
           const doc = await this.db.findOne(target, String(value), targetDb);
           if (!doc) return;
+          if (!(await this.permissionChecker.isTitleVisible(user, target, doc as Record<string, unknown>, displayField))) return;
           let title = String((doc as Record<string, unknown>)[displayField] ?? value);
           if (translate) {
             const tr = await this.translationService.resolveDocumentTranslations(
@@ -76,6 +83,7 @@ export class LinkTitleResolver {
   async resolveForList(
     entity: EntityDefinition,
     docs: Record<string, unknown>[],
+    user: UserContext,
     locale?: string,
   ): Promise<Map<string, Record<string, string>>> {
     const result = new Map<string, Record<string, string>>();
@@ -121,18 +129,18 @@ export class LinkTitleResolver {
 
       const targetDb = this.registry.get(target).database;
       const ids = Array.from(group.ids);
+      // The whole target row: whether the viewer may see its title can rest on
+      // any field of it (its owner, a condition, a scope).
       const linkedDocs = await this.db.find(
         target,
-        {
-          filters: [{ _id: { $in: ids } } as Record<string, unknown>],
-          fields: ["_id", group.displayField],
-        },
+        { filters: [{ _id: { $in: ids } } as Record<string, unknown>] },
         targetDb,
       );
 
       const cache = new Map<string, string>();
       for (const linked of linkedDocs) {
         const linkedData = linked as Record<string, unknown>;
+        if (!(await this.permissionChecker.isTitleVisible(user, target, linkedData, group.displayField))) continue;
         cache.set(
           String(linkedData["_id"]),
           String(linkedData[group.displayField] ?? linkedData["_id"]),

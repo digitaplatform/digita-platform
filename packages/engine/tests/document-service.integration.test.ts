@@ -87,7 +87,7 @@ beforeAll(async () => {
   const permissionChecker = new PermissionChecker(registry);
   const hookRunner = new HookRunner();
   const linkValidator = new LinkValidator(registry, db);
-  const linkTitleResolver = new LinkTitleResolver(registry, db, new TranslationService(db));
+  const linkTitleResolver = new LinkTitleResolver(registry, db, new TranslationService(db), permissionChecker);
   const fetchFromResolver = new FetchFromResolver(registry, db);
   const deleteProtection = new DeleteProtection(registry, db);
   cancelProtection = new CancelProtection(registry, db);
@@ -575,6 +575,10 @@ describe("Read-field-level permissions: a link title or status color shows only 
         naming: { strategy: "user_set" },
         title_field: "company_name",
         fields: [{ fieldname: "company_name", fieldtype: "Data" as const, label: "Company" }],
+        permissions: [
+          { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+          { role: "Clerk", level: 0, select: 1, read: 0, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0 },
+        ],
       }),
     );
     registry.register(
@@ -1228,5 +1232,58 @@ describe("count and exists see only the rows the reader's roles may see", () => 
     expect(await docService.exists("RoleVisibleDoc", "RV-hidden", reader)).toBe(false);
     expect(await docService.exists("RoleVisibleDoc", "RV-open", reader)).toBe(true);
     expect(await docService.exists("RoleVisibleDoc", "RV-hidden", adminUser)).toBe(true);
+  });
+});
+
+describe("A link title shows only where the reader may see it on the target", () => {
+  const clerk: UserContext = { _id: "clerk-004", email: "clerk4@test.local", roles: ["TitleClerk"], full_name: "Clerk" };
+  const adminRow = { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 };
+  let sourceId: string;
+
+  beforeAll(async () => {
+    registry.register(makeEntity({
+      name: "TitleTarget",
+      naming: { strategy: "user_set" },
+      title_field: "name",
+      fields: [
+        { fieldname: "name", fieldtype: "Data" as const, label: "Name" },
+        { fieldname: "secret_name", fieldtype: "Data" as const, label: "Secret name", perm_level: 1 },
+      ],
+      permissions: [adminRow, { role: "TitleClerk", level: 0, select: 1, read: 0, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0 }],
+    } as Partial<EntityDefinition>));
+    registry.register(makeEntity({
+      name: "TitleHidden",
+      naming: { strategy: "user_set" },
+      title_field: "name",
+      fields: [{ fieldname: "name", fieldtype: "Data" as const, label: "Name" }],
+      permissions: [adminRow],
+    } as Partial<EntityDefinition>));
+    registry.register(makeEntity({
+      name: "TitleSource",
+      fields: [
+        { fieldname: "title", fieldtype: "Data" as const, label: "Title" },
+        { fieldname: "visible", fieldtype: "Link" as const, label: "Visible", target: "TitleTarget" },
+        { fieldname: "deep", fieldtype: "Link" as const, label: "Deep", target: "TitleTarget", target_display: "secret_name" },
+        { fieldname: "hidden", fieldtype: "Link" as const, label: "Hidden", target: "TitleHidden" },
+      ],
+      permissions: [adminRow, { role: "TitleClerk", level: 0, select: 1, read: 1, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0 }],
+    } as Partial<EntityDefinition>));
+    for (const name of ["TitleTarget", "TitleHidden", "TitleSource"]) await db.ensureCollection(name, "app");
+    await docService.insert("TitleTarget", { _id: "TT-1", name: "Visible name", secret_name: "Secret name" }, adminUser);
+    await docService.insert("TitleHidden", { _id: "TH-1", name: "Hidden name" }, adminUser);
+    const source = await docService.insert("TitleSource", { title: "S", visible: "TT-1", deep: "TT-1", hidden: "TH-1" }, adminUser);
+    sourceId = source._id;
+  });
+
+  it("answers the reader the titles of targets they may select, from fields they may read", async () => {
+    const doc = (await docService.getDoc("TitleSource", sourceId, clerk)).toJSON() as Record<string, unknown>;
+    expect(doc["_link_titles"]).toEqual({ visible: "Visible name" });
+    const listed = await docService.getList("TitleSource", {}, clerk);
+    expect(listed.data.find((r) => r["_id"] === sourceId)?.["_link_titles"]).toEqual({ visible: "Visible name" });
+  });
+
+  it("answers an Administrator every title", async () => {
+    const doc = (await docService.getDoc("TitleSource", sourceId, adminUser)).toJSON() as Record<string, unknown>;
+    expect(doc["_link_titles"]).toEqual({ visible: "Visible name", deep: "Secret name", hidden: "Hidden name" });
   });
 });

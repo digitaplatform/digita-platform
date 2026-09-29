@@ -91,7 +91,7 @@ beforeAll(async () => {
     permissionChecker,
     hookRunner,
     linkValidator: new LinkValidator(registry, db),
-    linkTitleResolver: new LinkTitleResolver(registry, db, new TranslationService(db)),
+    linkTitleResolver: new LinkTitleResolver(registry, db, new TranslationService(db), permissionChecker),
     fetchFromResolver: new FetchFromResolver(registry, db),
     deleteProtection: new DeleteProtection(registry, db),
     cancelProtection: new CancelProtection(registry, db),

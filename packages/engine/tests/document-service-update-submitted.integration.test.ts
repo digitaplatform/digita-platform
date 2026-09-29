@@ -114,7 +114,7 @@ beforeAll(async () => {
   hookRunner = new HookRunner();
   hookRunner.setServices({ db, registry });
   const linkValidator = new LinkValidator(registry, db);
-  const linkTitleResolver = new LinkTitleResolver(registry, db, new TranslationService(db));
+  const linkTitleResolver = new LinkTitleResolver(registry, db, new TranslationService(db), permissionChecker);
   const fetchFromResolver = new FetchFromResolver(registry, db);
   const deleteProtection = new DeleteProtection(registry, db);
   const cancelProtection = new CancelProtection(registry, db);

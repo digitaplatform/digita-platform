@@ -126,7 +126,7 @@ export async function createApp(
   const roleRegistry = new RoleRegistry(db);
   setRoleRegistry(roleRegistry);
   const linkValidator = new LinkValidator(registry, db);
-  const linkTitleResolver = new LinkTitleResolver(registry, db, translationService);
+  const linkTitleResolver = new LinkTitleResolver(registry, db, translationService, permissionChecker);
   const realtimeService = new RealtimeService(permissionChecker);
   const fetchFromResolver = new FetchFromResolver(registry, db);
   const snapshotResolver = new SnapshotResolver(registry, db);
