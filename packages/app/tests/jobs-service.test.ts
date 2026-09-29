@@ -65,6 +65,8 @@ describe('jobs service', () => {
       const headers = fetchMock.mock.calls.map(([, init]) => new Headers((init as RequestInit).headers));
       expect(headers.slice(0, 5).map((h) => h.get(CSRF_HEADER))).toEqual(Array(5).fill('tenant-csrf'));
       expect(headers[5]!.get(CSRF_HEADER)).toBeNull();
+      // digita-jobs answers 400 FST_ERR_CTP_EMPTY_JSON_BODY to a JSON content type without a body.
+      expect(headers[2]!.get('content-type')).toBeNull();
     });
   });
 });
