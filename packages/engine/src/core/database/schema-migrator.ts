@@ -117,21 +117,40 @@ export class SchemaMigrator {
         return row && typeof row === "object" && isClear(row[field]) ? { ...row, [field]: forward(row[field]) } : r;
       });
 
-    const clearRows = await this.db.findManyByFilter(
-      entity.name,
-      {
-        $or: [
-          ...header.map((f) => ({ [f]: { $type: "string" } })),
-          ...cells.map(([table, f]) => ({ [table]: { $elemMatch: { [f]: { $type: "string" } } } })),
-        ],
-      },
-      entity.database,
-    );
-    for (const row of clearRows) {
-      const set: Record<string, unknown> = {};
-      for (const f of header) if (isClear(row[f])) set[f] = forward(row[f]);
-      for (const [table, f] of cells) if (Array.isArray(row[table])) set[table] = forwardRows(row[table], f);
-      await this.db.updateOne(entity.name, row["_id"] as string, set, entity.database);
+    // Each write is pinned to the values it read: a row saved in between (an
+    // old pod still serving writes during a rolling update, or a user saving
+    // while meta-router migrates at runtime) no longer matches and is read
+    // again in the next pass, so the save is never overwritten.
+    const clearFilter = {
+      $or: [
+        ...header.map((f) => ({ [f]: { $type: "string" } })),
+        ...cells.map(([table, f]) => ({ [table]: { $elemMatch: { [f]: { $type: "string" } } } })),
+      ],
+    };
+    let encrypted = 0;
+    for (let pass = 1; ; pass++) {
+      const clearRows = await this.db.findManyByFilter(entity.name, clearFilter, entity.database);
+      if (clearRows.length === 0) break;
+      if (pass > 3) {
+        log.warn({ entity: entity.name, rows: clearRows.length }, "Password values still clear after 3 passes; the next boot moves them");
+        break;
+      }
+      for (const row of clearRows) {
+        const set: Record<string, unknown> = {};
+        const expected: Record<string, unknown> = {};
+        for (const f of header) {
+          if (!isClear(row[f])) continue;
+          set[f] = forward(row[f]);
+          expected[f] = row[f];
+        }
+        for (const [table, f] of cells) {
+          if (!Array.isArray(row[table])) continue;
+          set[table] = forwardRows(row[table], f);
+          expected[table] = row[table];
+        }
+        await this.db.updateOne(entity.name, row["_id"] as string, set, entity.database, undefined, expected);
+      }
+      encrypted += clearRows.length;
     }
 
     // A change of a Table cell is recorded under `<table>[<row_id>].<field>`.
@@ -152,8 +171,8 @@ export class SchemaMigrator {
       });
       await this.db.updateOne("_versions", version["_id"] as string, { changes }, DIGITA.DATABASES.AUDITS);
     }
-    if (clearRows.length || versions.length) {
-      log.info({ entity: entity.name, rows: clearRows.length, versions: versions.length }, "Password values encrypted");
+    if (encrypted || versions.length) {
+      log.info({ entity: entity.name, rows: encrypted, versions: versions.length }, "Password values encrypted");
     }
   }
 

@@ -432,16 +432,21 @@ export class MongoDBService {
     );
   }
 
+  /**
+   * `expected` pins stored values the write builds on: a row that no longer
+   * holds them, because a save landed in between, is left as it is.
+   */
   async updateOne(
     collectionName: string,
     id: string,
     changes: Record<string, unknown>,
     target: DatabaseTarget,
     session?: ClientSession,
+    expected: Record<string, unknown> = {},
   ): Promise<void> {
     const updateDoc: UpdateFilter<Document> = { $set: changes };
     await this.collection(collectionName, target).updateOne(
-      { _id: toIdStorage(id) } as unknown as Filter<Document>,
+      { _id: toIdStorage(id), ...expected } as unknown as Filter<Document>,
       updateDoc,
       { session },
     );
