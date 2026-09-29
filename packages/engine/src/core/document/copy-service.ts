@@ -1,5 +1,6 @@
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { LAYOUT_FIELD_TYPES } from "@digitaplatform/shared";
+import { decryptPassword, isEncryptedPassword } from "../entity/password-cipher.js";
 
 /**
  * Create a copy of document data, respecting no_copy flags.
@@ -26,7 +27,11 @@ export function copyDocumentData(
           for (const childField of field.child_fields) {
             if (childField.no_copy) continue;
             if (LAYOUT_FIELD_TYPES.includes(childField.fieldtype)) continue;
-            rowCopy[childField.fieldname] = row[childField.fieldname];
+            const cell = row[childField.fieldname];
+            // A Password cell arrives as stored, and insert refuses a stored-form value
+            // the new document never held; as clear text, insert encrypts it anew.
+            rowCopy[childField.fieldname] =
+              childField.fieldtype === "Password" && isEncryptedPassword(cell) ? decryptPassword(cell) : cell;
           }
         } else {
           // No declared child_fields: pass the row through verbatim instead of
