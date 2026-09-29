@@ -139,3 +139,45 @@ describe("a DocShare grants only what the sharer may read", () => {
     expect(share.statusCode).toBe(404);
   });
 });
+
+// A reader through RBAC may share a document; a reader only through a share may share it on
+// only when that share has can_share.
+describe("a share reader shares on only with can_share", () => {
+  const shareAs = (tok: string, sharedWith: string, extra: Record<string, unknown> = {}) =>
+    app.inject({
+      method: "POST",
+      url: "/api/v1/resource/DocShare",
+      headers: bearer(tok),
+      payload: { entity: "File", document_name: fileId, shared_with: sharedWith, can_read: true, notify: false, ...extra },
+    });
+  const readAs = async (email: string) => {
+    const tok = await sign({ sub: email, email, roles: ["System User"] });
+    return app.inject({ method: "GET", url: `/api/v1/resource/File/${fileId}`, headers: bearer(tok) });
+  };
+
+  it("refuses the share of a reader whose share lacks can_share, and the File stays closed", async () => {
+    expect((await shareAs(adminTok, "carol2@d", { can_share: false })).statusCode).toBe(201);
+    const carolTok = await sign({ sub: "carol2@d", email: "carol2@d", roles: ["System User"] });
+    expect((await readAs("carol2@d")).statusCode).toBe(200);
+
+    const share = await shareAs(carolTok, "dave@d");
+    const read = await readAs("dave@d");
+    expect({ share: share.statusCode, read: read.statusCode }).toEqual({ share: 403, read: 403 });
+  });
+
+  it("writes the share of a reader whose share has can_share, and it grants read", async () => {
+    expect((await shareAs(adminTok, "erin@d", { can_share: true })).statusCode).toBe(201);
+    const erinTok = await sign({ sub: "erin@d", email: "erin@d", roles: ["System User"] });
+
+    const share = await shareAs(erinTok, "frank@d");
+    const read = await readAs("frank@d");
+    expect({ share: share.statusCode, read: read.statusCode }).toEqual({ share: 201, read: 200 });
+  });
+
+  it("refuses the share of a reader whose share with can_share has expired", async () => {
+    expect((await shareAs(adminTok, "gina@d", { can_share: true, expires_at: "2020-01-01T00:00:00.000Z" })).statusCode).toBe(201);
+    const ginaTok = await sign({ sub: "gina@d", email: "gina@d", roles: ["System User"] });
+
+    expect((await shareAs(ginaTok, "hank@d")).statusCode).toBe(403);
+  });
+});
