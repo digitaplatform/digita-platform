@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "free": {
-    "minimal": "0.3.4"
+    "minimal": "0.3.5"
   },
   "premium": {
-    "editorial": "0.3.4",
-    "fluent": "0.3.4",
-    "ios": "0.3.4",
-    "material": "0.3.4"
+    "editorial": "0.3.5",
+    "fluent": "0.3.5",
+    "ios": "0.3.5",
+    "material": "0.3.5"
   }
 }
