@@ -181,6 +181,24 @@ describe("data-value translation on read", () => {
   });
 });
 
+describe("GET /resource/:entity/:name/translations is read-gated", () => {
+  it("403s a caller with no read grant on the document's entity", async () => {
+    const strangerTok = await ta.sign({ sub: "stranger@d", email: "stranger@d", roles: ["System User"] });
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/resource/GlAcct/1200/translations",
+      headers: { authorization: `Bearer ${strangerTok}` },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("answers a caller who may read the document with its data translations", async () => {
+    const res = await get("/api/v1/resource/GlAcct/1200/translations");
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.translations.de.name).toBe("Forderungen aus Lieferungen und Leistungen");
+  });
+});
+
 describe("seedDataTranslations (co-located *.translations.json)", () => {
   it("seeds data translations from a file so the read path applies them", async () => {
     const dir = await mkdtemp(join(tmpdir(), "digita-dt-seed-"));
