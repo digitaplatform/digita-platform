@@ -80,4 +80,11 @@ describe("encryptPassword and decryptPassword", () => {
     expect(() => decryptPassword({ ...stored, data: stored.data.replace(/^./, (c) => (c === "A" ? "B" : "A")) })).toThrow();
     expect(() => decryptPassword("hunter2")).toThrow("not an encrypted Password value");
   });
+
+  it("refuse a value whose authentication tag was cut to 12 bytes", () => {
+    configurePasswordFieldKeys(settings);
+    const stored = encryptPassword("hunter2");
+    const cut = Buffer.from(stored.tag, "base64").subarray(0, 12).toString("base64");
+    expect(() => decryptPassword({ ...stored, tag: cut })).toThrow();
+  });
 });

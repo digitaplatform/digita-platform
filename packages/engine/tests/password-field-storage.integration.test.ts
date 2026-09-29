@@ -203,8 +203,48 @@ describe("a Password value at rest", () => {
   });
 });
 
+describe("a Password value in the stored form sent by a client", () => {
+  const forged = { key_id: "k1", iv: "AAAA", tag: "AAAA", data: "AAAA" };
+
+  it("is refused when the engine never encrypted it", async () => {
+    const res = await app.inject({ method: "POST", url: "/api/v1/resource/Vault", headers: authHeaders(), payload: { title: "Forged", secret: forged } });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.json())).toContain("field_password_not_as_stored");
+    expect(await db.findManyByFilter("Vault", { title: "Forged" }, "app")).toEqual([]);
+  });
+
+  it("is refused when it is another record's stored value", async () => {
+    const a = await app.inject({ method: "POST", url: "/api/v1/resource/Vault", headers: authHeaders(), payload: { title: "A", accounts: [{ host: "smtp", password: "victim-pw" }] } });
+    expect(a.statusCode).toBe(201);
+    const readA = await app.inject({ method: "GET", url: `/api/v1/resource/Vault/${a.json().data._id}`, headers: authHeaders() });
+    const moved = readA.json().data.accounts[0].password;
+    expect(isEncryptedPassword(moved)).toBe(true);
+    const b = await app.inject({ method: "POST", url: "/api/v1/resource/Vault", headers: authHeaders(), payload: { title: "B", secret: moved } });
+    expect(b.statusCode).toBe(400);
+    const cell = await app.inject({ method: "POST", url: "/api/v1/resource/Vault", headers: authHeaders(), payload: { title: "B", accounts: [{ host: "x", password: moved }] } });
+    expect(cell.statusCode).toBe(400);
+    const put = await app.inject({ method: "PUT", url: `/api/v1/resource/Vault/${vaultId}`, headers: authHeaders(), payload: { secret: moved } });
+    expect(put.statusCode).toBe(400);
+    expect(await db.findManyByFilter("Vault", { title: "B" }, "app")).toEqual([]);
+  });
+});
+
 describe("a clear Password value stored before this change", () => {
   const migrator = () => new SchemaMigrator(db);
+
+  it("is not overwritten by the migration when a user saves it in between", async () => {
+    await db.insertOne("Vault", { _id: "V-7001", title: "Racing", secret: "old-clear" }, "app");
+    const read = db.findManyByFilter.bind(db);
+    vi.spyOn(db, "findManyByFilter").mockImplementationOnce(async (...args) => {
+      const rows = await read(...args);
+      const res = await app.inject({ method: "PUT", url: "/api/v1/resource/Vault/V-7001", headers: authHeaders(), payload: { secret: "new-by-user" } });
+      expect(res.statusCode).toBe(200);
+      return rows;
+    });
+    await migrator().migrate(vault);
+    const raw = (await db.findOne("Vault", "V-7001", "app")) as Record<string, unknown>;
+    expect(clear(raw["secret"])).toBe("new-by-user");
+  });
 
   it("moves forward to its encrypted form by the migration, in rows, Table cells and _versions", async () => {
     await db.insertOne("Vault", {

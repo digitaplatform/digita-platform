@@ -28,6 +28,7 @@ import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { seedAppData } from "../src/core/setup/seed-app-data.js";
+import { configurePasswordFieldKeys, decryptPassword } from "../src/core/entity/password-cipher.js";
 import type { NamingService } from "../src/core/document/naming-service.js";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { env } from "../src/core/config/env.js";
@@ -54,6 +55,7 @@ const docEntity = (): EntityDefinition =>
     is_submittable: true,
     fields: [
       { fieldname: "title", fieldtype: "Data", label: "Title" },
+      { fieldname: "secret", fieldtype: "Password", label: "Secret" },
       {
         fieldname: "target",
         fieldtype: "Link",
@@ -102,6 +104,7 @@ beforeAll(async () => {
   (env as unknown as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
   db = new MongoDBService();
   await db.connect();
+  configurePasswordFieldKeys({ PASSWORD_FIELD_KEYS: "k1=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=", PASSWORD_FIELD_ACTIVE_KEY_ID: "k1" });
 }, 60000);
 
 afterAll(async () => {
@@ -129,7 +132,7 @@ describe("seedAppData — Pass 5 seals snapshot/freeze on seeded submitted docs 
     await writeFile(
       join(dir, "SnapDoc.seed.json"),
       JSON.stringify([
-        { _id: "D1", docstatus: 1, title: "submitted", target: "T1" },
+        { _id: "D1", docstatus: 1, title: "submitted", target: "T1", secret: "seed-clear" },
         { _id: "D2", docstatus: 0, title: "draft", target: "T1" },
       ]),
       "utf-8",
@@ -140,6 +143,10 @@ describe("seedAppData — Pass 5 seals snapshot/freeze on seeded submitted docs 
     const submitted = await db.findOne("SnapDoc", "D1", "app");
     expect(submitted?.["target_name_at_doc"]).toBe("Acme GmbH"); // sealed by Pass 5
     expect(submitted?.["target_snapshot"]).toBeTruthy(); // the freeze sub-object
+    // Pass 5 writes the sealed row back through the same serialization as Pass 4:
+    // the Password value stays encrypted.
+    expect(submitted?.["secret"]).not.toBe("seed-clear");
+    expect(decryptPassword(submitted?.["secret"])).toBe("seed-clear");
 
     const draft = await db.findOne("SnapDoc", "D2", "app");
     expect(draft?.["target_name_at_doc"]).toBeUndefined(); // drafts seal at their real submit
