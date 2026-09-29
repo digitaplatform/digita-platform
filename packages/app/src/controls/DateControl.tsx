@@ -1,5 +1,6 @@
 import { DatePicker } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
+import { useChrome } from '@/lib/chrome-i18n';
 import type { FieldControlProps } from '@/controls/types';
 import { describedBy } from '@/controls/control-styles';
 
@@ -20,6 +21,7 @@ export default function DateControl({
   errorId,
 }: FieldControlProps) {
   const formatLocale = useSessionStore((s) => s.locale?.format_locale);
+  const tc = useChrome();
   return (
     <DatePicker
       id={controlId}
@@ -30,6 +32,7 @@ export default function DateControl({
       invalid={state.invalid}
       disabled={state.readOnly}
       placeholder={field.placeholder}
+      clearLabel={tc('ui.action.clear')}
       value={value == null ? undefined : String(value).slice(0, 10)}
       // Every pick commits (like LinkControl): the DatePicker is a button, not an
       // Enter-commit input, and 'Date' was removed from ENTER_EXIT_TYPES — so the

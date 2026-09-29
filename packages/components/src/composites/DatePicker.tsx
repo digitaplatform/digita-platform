@@ -30,6 +30,8 @@ export interface DatePickerProps {
   /** BCP-47 format locale from the boot session (e.g. 'de-CH'). */
   locale?: string;
   placeholder?: string;
+  /** Text of the panel's action that empties a set date (emits `undefined`). */
+  clearLabel?: string;
   disabled?: boolean;
   invalid?: boolean;
   id?: string;
@@ -75,6 +77,7 @@ export function DatePicker({
   onChange,
   locale,
   placeholder,
+  clearLabel = 'Clear',
   disabled,
   invalid,
   id,
@@ -211,6 +214,18 @@ export function DatePicker({
               })}
             </div>
           </>
+        )}
+
+        {selected && (
+          <div className="mt-2 flex justify-end border-t border-border pt-2">
+            <button
+              type="button"
+              onClick={() => { onChange(undefined); setOpen(false); }}
+              className="rounded-btn px-2 py-1 text-sm text-textMuted hover:bg-bgHover hover:text-textMain"
+            >
+              {clearLabel}
+            </button>
+          </div>
         )}
       </Popover>
     </div>
