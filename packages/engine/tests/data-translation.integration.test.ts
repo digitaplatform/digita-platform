@@ -274,6 +274,24 @@ describe("GET /translations/:locale keeps data rows from a caller who may not re
     const res = await get("/api/v1/translations/de?namespace=data&entity=GlAcct");
     expect(res.json().data["GlAcct.1200.name"]).toBe("Forderungen aus Lieferungen und Leistungen");
   });
+
+  it("refuses that caller the Translation rows on the resource and search routes (#74)", async () => {
+    const urls = [
+      `/api/v1/resource/Translation?filters=${encodeURIComponent(JSON.stringify([["namespace", "=", "data"]]))}`,
+      "/api/v1/resource/Translation/data:de:GlAcct.1200.name",
+      "/api/v1/search/Translation?q=Forderungen",
+    ];
+    const answers: Record<string, { status: number; leaks: boolean }> = {};
+    for (const url of urls) {
+      const res = await strangerGet(url);
+      answers[url] = { status: res.statusCode, leaks: res.body.includes("GlAcct.1200.name") };
+    }
+    expect(answers).toEqual(Object.fromEntries(urls.map((url) => [url, { status: 403, leaks: false }])));
+    expect((await strangerGet("/api/v1/resource/GlAcct/1200")).statusCode).toBe(403);
+    expect((await get("/api/v1/resource/Translation/data:de:GlAcct.1200.name")).json().data.value).toBe(
+      "Forderungen aus Lieferungen und Leistungen",
+    );
+  });
 });
 
 describe("seedDataTranslations (co-located *.translations.json)", () => {
