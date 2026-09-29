@@ -16,7 +16,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-primary-600 text-onPrimary hover:bg-primaryHover hover:shadow-xs disabled:bg-primary-300',
+  // Disabled keeps the fill and label and dims to half, the same signal for every tint.
+  primary: 'bg-primary-600 text-onPrimary hover:bg-primaryHover hover:shadow-xs disabled:bg-primary-600 disabled:opacity-50',
   secondary: 'bg-subtle text-textMain hover:bg-bgHover',
   ghost: 'text-textMain hover:bg-bgHover',
   danger: 'bg-error text-onError hover:opacity-90',
