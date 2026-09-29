@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-// The label on a primary fill is the tint-derived text-onPrimary (#89): a literal white is 2.41:1 on
-// the digita cyan and 4.02:1 on the default blue. The components package keeps the same rule.
+// A label takes a theme token (text-onPrimary on a primary fill, #89): a literal white is 2.41:1 on the
+// digita cyan and 4.02:1 on the default blue, and a literal black fails on a dark fill. The scan is per
+// file, not per string, so a fill and its label split across cn() arguments, a concatenation or a
+// template literal cannot slip through. The components package keeps the same rule.
 const ROOTS = [join(__dirname, '../src'), join(__dirname, '../../components/src')];
 
 function sources(dir: string): string[] {
@@ -14,23 +16,35 @@ function sources(dir: string): string[] {
   });
 }
 
-/** Class strings that fill with the primary ramp and label with a literal white. */
-function literalWhiteOnPrimary(text: string): string[] {
-  return [...text.matchAll(/["'`][^"'`]*\bbg-primary-\d+[^"'`]*["'`]/g)]
-    .map((match) => match[0])
-    .filter((classes) => /(^|[\s"'`:])text-white\b/.test(classes));
+/** Tailwind text-colour classes with a literal white or black, with any variant or important prefix. */
+function literalLabels(text: string): string[] {
+  return [...text.matchAll(/(?<![\w-])!?(?:[\w[\]&:-]+:)*text-(?:white|black|\[(?:#(?:fff|ffffff|000|000000)|white|black)\])(?:\/\d+)?(?![\w-])/gi)].map(
+    (match) => match[0],
+  );
 }
 
-describe('the label on a primary fill', () => {
-  it('finds a planted literal white label, so the scan can go red', () => {
-    expect(literalWhiteOnPrimary(`className="bg-primary-600 text-white"`)).toHaveLength(1);
-    expect(literalWhiteOnPrimary(`className="focus:bg-primary-600 focus:text-white"`)).toHaveLength(1);
-    expect(literalWhiteOnPrimary(`className="bg-primary-600 text-onPrimary"`)).toHaveLength(0);
+describe('the label colours of the app and the kit', () => {
+  it('finds a planted literal label however it is written, so the scan can go red', () => {
+    for (const planted of [
+      `className="bg-primary-600 text-white"`,
+      `cn('rounded bg-primary-600', 'text-white shadow-sm', className)`,
+      `'bg-primary-600 ' + 'text-white'`,
+      "`bg-primary-600 ${open ? 'ring-2' : ''} text-white`",
+      `className="focus:bg-primary-600 focus:text-white"`,
+      `className="bg-primary-600 !text-white"`,
+      `className="bg-primary-600 text-[#fff]"`,
+      `className="bg-primary-600 text-black/90"`,
+    ]) {
+      expect(literalLabels(planted), planted).toHaveLength(1);
+    }
+    for (const innocent of [`className="bg-primary-600 text-onPrimary"`, `className="bg-white"`, `const whiteList = 1`, `className="text-whitespace"`]) {
+      expect(literalLabels(innocent), innocent).toHaveLength(0);
+    }
   });
 
-  it('is text-onPrimary everywhere in the app and the kit, never a literal white', () => {
+  it('never label with a literal white or black; a label takes a theme token', () => {
     const offenders = ROOTS.flatMap(sources).flatMap((file) =>
-      literalWhiteOnPrimary(readFileSync(file, 'utf8')).map((classes) => `${file}: ${classes}`),
+      literalLabels(readFileSync(file, 'utf8')).map((label) => `${file}: ${label}`),
     );
     expect(offenders).toEqual([]);
   });
