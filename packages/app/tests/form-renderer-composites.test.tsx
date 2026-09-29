@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The form draws its tabs, sections, rows and read-only fields through the kit composites;
 // switching a tab, collapsing a section and the error text under a field keep working.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -43,6 +43,24 @@ function form(errors: Record<string, string> = {}) {
 }
 
 describe('FormRenderer through the kit composites', () => {
+  it('hands the page the tab strip element through tabsRef', () => {
+    const strip = vi.fn();
+    render(
+      <MemoryRouter>
+        <FormRenderer
+          entity="SalesOrder"
+          fields={FIELDS}
+          doc={{}}
+          fieldState={STATE}
+          errors={{}}
+          onFieldChange={() => {}}
+          tabsRef={strip}
+        />
+      </MemoryRouter>,
+    );
+    expect(strip).toHaveBeenCalledWith(screen.getByRole('tablist'));
+  });
+
   it('switches tabs and collapses a section', async () => {
     render(form());
     const [order, history] = screen.getAllByRole('tab');

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useForm, type Resolver } from 'react-hook-form';
@@ -6,7 +6,7 @@ import { Lock } from 'lucide-react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { EntityDefinition } from '@digitaplatform/shared';
 import { LAYOUT_FIELD_TYPES } from '@digitaplatform/shared';
-import { Badge, Button, PageHeader } from '@digitaplatform/components';
+import { Badge, Button, PageHeader, findScrollContainer } from '@digitaplatform/components';
 import { useMeta } from '@/hooks/useMeta';
 import { useDocument, useSingle, useCreate, useUpdate, useDeleteDoc } from '@/hooks/useDocument';
 import { usePreview } from '@/hooks/usePreview';
@@ -547,6 +547,22 @@ function RecordForm({
     return () => clearTitle();
   }, [entity, name, title, isNew, publishTitle, clearTitle]);
 
+  // The strip pins under the bar, so the scroll container's scroll padding must include
+  // its height as it includes the bar's; a ref callback, because the strip exists only
+  // while the form has more than one tab. Inline property, not state, like the header.
+  const publishTabsHeight = useCallback((strip: HTMLDivElement | null) => {
+    if (!strip) return;
+    const target = findScrollContainer(strip) ?? document.documentElement;
+    const measure = () => target.style.setProperty('--form-tabs-h', `${strip.offsetHeight}px`);
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
+    observer?.observe(strip);
+    return () => {
+      observer?.disconnect();
+      target.style.removeProperty('--form-tabs-h');
+    };
+  }, []);
+
   return (
     <form
       onSubmit={submit}
@@ -633,6 +649,7 @@ function RecordForm({
           // Under the header's bar, which stays pinned below the topbar and publishes its
           // height on the scroll container.
           tabsClassName="sticky top-[calc(var(--topbar-h,0px)_+_var(--page-header-bar-h,0px))] z-10"
+          tabsRef={publishTabsHeight}
         />
         {hasContext && <ContextPanel entity={entity} meta={meta} doc={watched} />}
       </div>

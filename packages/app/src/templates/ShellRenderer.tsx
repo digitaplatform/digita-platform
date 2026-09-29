@@ -185,13 +185,13 @@ export function ShellRenderer() {
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* scroll-padding keeps a field that receives focus while scrolling up out from
-              under the pinned top bar and page header bar. A record form's tab strip pins
-              under them too; its height is not published, so it can still cover the field. */}
+              under everything pinned at the top: the top bar, the page header's bar and a
+              record form's tab strip, each by the height it publishes. */}
           <main
             id="main-content"
             tabIndex={-1}
             {...tid.region('main')}
-            className="flex-1 overflow-y-auto [scroll-padding-top:calc(var(--topbar-h,0px)_+_var(--page-header-bar-h,0px))]"
+            className="flex-1 overflow-y-auto [scroll-padding-top:calc(var(--topbar-h,0px)_+_var(--page-header-bar-h,0px)_+_var(--form-tabs-h,0px))]"
           >
             {/* Topbar lives INSIDE the scroll container (sticky) so content scrolls
                 UNDER it — required for the iOS translucent-blur bar. Opaque bg-surface

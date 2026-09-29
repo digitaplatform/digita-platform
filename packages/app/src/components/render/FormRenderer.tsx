@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type Ref } from 'react';
 import DOMPurify from 'dompurify';
 import { Info, Snowflake, TriangleAlert } from 'lucide-react';
 import { Badge, Button, FormRow, FormSection, TabPanel, Tabs, Tooltip, cn } from '@digitaplatform/components';
@@ -33,6 +33,8 @@ interface FormRendererProps {
   /** Classes for the tab strip: the page that draws the form owns where the strip pins
    *  (`sticky` and its offset), because only the page knows what stands above the form. */
   tabsClassName?: string;
+  /** The tab strip element, for the page that pins it to measure. */
+  tabsRef?: Ref<HTMLDivElement>;
 }
 
 const DEFAULT_STATE: FieldControlState = {
@@ -61,6 +63,7 @@ export function FormRenderer({
   onFieldChange,
   onButtonAction,
   tabsClassName,
+  tabsRef,
 }: FormRendererProps) {
   const formId = useId();
   const tField = useI18nStore((s) => s.tField);
@@ -147,6 +150,7 @@ export function FormRenderer({
   return (
     <div className="space-y-4">
       <Tabs
+        ref={tabsRef}
         id={`${formId}-tabs`}
         // -mx-1/px-1 lets the focus ring of the first tab show.
         className={cn('-mx-1 px-1', tabsClassName)}

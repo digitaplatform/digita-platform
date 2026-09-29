@@ -5,6 +5,7 @@
  */
 export { cn } from './lib/cn.js';
 export { useFocusTrap } from './lib/use-focus-trap.js';
+export { findScrollContainer } from './lib/find-scroll-container.js';
 export { tableSkin } from './lib/table-skin.js';
 export { CATEGORICAL_SOFT, CATEGORICAL_OUTLINE } from './lib/categorical.js';
 export type { CategoricalColor } from './lib/categorical.js';

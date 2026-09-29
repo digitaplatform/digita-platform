@@ -4,6 +4,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { Ref } from 'react';
 import type { EntityDefinition } from '@digitaplatform/shared';
 
 const navigate = vi.fn();
@@ -27,7 +28,9 @@ vi.mock('@/hooks/usePreview', () => ({
 }));
 vi.mock('@/services/resource', () => ({ getDoc: vi.fn(), getSingle: vi.fn() }));
 vi.mock('@/components/render/FormRenderer', () => ({
-  FormRenderer: ({ tabsClassName }: { tabsClassName?: string }) => <div role="tablist" className={tabsClassName} />,
+  FormRenderer: ({ tabsClassName, tabsRef }: { tabsClassName?: string; tabsRef?: Ref<HTMLDivElement> }) => (
+    <div role="tablist" ref={tabsRef} className={tabsClassName} />
+  ),
 }));
 vi.mock('@/components/workflow/PrintMenu', () => ({
   PrintMenu: () => <button type="button">Print</button>,
@@ -66,7 +69,9 @@ function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <RecordPage />
+      <div data-testid="scroller" style={{ overflowY: 'auto', height: '200px' }}>
+        <RecordPage />
+      </div>
     </QueryClientProvider>,
   );
 }
@@ -77,6 +82,27 @@ describe('RecordPage header', () => {
     expect(screen.getByRole('tablist').className).toContain(
       'sticky top-[calc(var(--topbar-h,0px)_+_var(--page-header-bar-h,0px))]',
     );
+  });
+
+  it('publishes the pinned strip\'s height on the scroll container, so the scroll padding reads it', () => {
+    // jsdom lays nothing out: the height comes from the stub. This proves the variable, not
+    // that a focused field lands below the strip; the built CSS is measured in a browser.
+    const offsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')!;
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.getAttribute('role') === 'tablist' ? 39 : 0;
+      },
+    });
+    try {
+      const { unmount } = renderPage();
+      const scroller = screen.getByTestId('scroller');
+      expect(scroller.style.getPropertyValue('--form-tabs-h')).toBe('39px');
+      unmount();
+      expect(scroller.style.getPropertyValue('--form-tabs-h')).toBe('');
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', offsetHeight);
+    }
   });
 
   it('leads back to the list, named as the list names itself', () => {

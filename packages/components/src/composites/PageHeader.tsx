@@ -11,6 +11,7 @@ import {
   type RefObject,
 } from 'react';
 import { cn } from '../lib/cn.js';
+import { findScrollContainer } from '../lib/find-scroll-container.js';
 
 /**
  * P1.1 — page header with large title (ROADMAP 1.1, policy §2 "Title & back").
@@ -101,15 +102,6 @@ function isBackAction(back: PageHeaderProps['back']): back is PageHeaderBackActi
     'label' in back &&
     'onClick' in back
   );
-}
-
-/** Nearest ancestor that actually scrolls vertically (the default collapse source). */
-function findScrollContainer(el: HTMLElement): HTMLElement | null {
-  for (let p = el.parentElement; p; p = p.parentElement) {
-    const { overflowY } = getComputedStyle(p);
-    if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') return p;
-  }
-  return null;
 }
 
 /** iOS back chevron — shown by default; the Material layer hides it. */
