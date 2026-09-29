@@ -321,7 +321,8 @@ export async function seedAppData(
       try {
         const resolved = (await snapshotResolver.resolve(entity, row)) as Record<string, unknown>;
         const { _id: _ignore, ...delta } = resolved;
-        await db.updateOne(entity.name, id, delta, entity.database);
+        // Through the same serialization as Pass 4, so a Password value is written back encrypted.
+        await db.updateOne(entity.name, id, serializeRowForStorage(entity, delta), entity.database);
         sealed++;
       } catch (err) {
         // Seed backfill must not abort the entire reseed because ONE demo row has a
