@@ -29,8 +29,10 @@ vi.mock("pino", async (importOriginal) => {
 
 const token = "eyJhbGciOiJFUzI1NiJ9.query-jwt.sig";
 
-/** Sends a plain GET and a websocket handshake, both with ?token=, through the
- *  request logger of a logger built at `level`, and returns the lines written. */
+/** Sends a plain GET, a GET to a route that does not exist and a websocket
+ *  handshake, each with ?token=, through the request logger of a logger built
+ *  at `level`, and returns the lines written. Fastify's answer to the unknown
+ *  route names the whole url, query and all. */
 async function logRequests(level: "debug" | "info"): Promise<string[]> {
   settings.LOG_LEVEL = level;
   lines.length = 0;
@@ -49,6 +51,7 @@ async function logRequests(level: "debug" | "info"): Promise<string[]> {
   app.get("/api/v1/boot", async () => ({ ok: true }));
   await app.ready();
   await app.inject({ method: "GET", url: `/api/v1/boot?token=${token}` });
+  await app.inject({ method: "GET", url: `/no-such-route?token=${token}` });
   const socket = await app.injectWS(`/ws?token=${token}`);
   await new Promise((resolve) => socket.once("close", resolve));
   await app.close();
@@ -59,6 +62,8 @@ describe.each(["debug", "info"] as const)("the request log at %s", (level) => {
   it("logs the requests, so the check below reads real lines", async () => {
     const log = await logRequests(level);
     expect(log.some((line) => line.includes('"level":30') && line.includes('"msg":"GET /api/v1/boot'))).toBe(true);
+    expect(log.some((line) => line.includes('"msg":"GET /no-such-route → 404'))).toBe(true);
+    if (level === "debug") expect(log.some((line) => line.includes('"msg":"RESPONSE GET /no-such-route"'))).toBe(true);
     // The upgrade writes only the debug request line: onResponse does not fire for it.
     if (level === "debug") expect(log.some((line) => line.includes('"msg":"GET /ws'))).toBe(true);
   });
