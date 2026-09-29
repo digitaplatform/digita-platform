@@ -153,7 +153,10 @@ export function CommandPalette({
     if (item.group && item.group !== lastGroup) {
       rows.push(
         <li key={`group:${item.group}:${i}`} role="presentation">
-          <div className="px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-textMuted">
+          <div
+            data-ui="command-group"
+            className="px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-textMuted"
+          >
             {item.group}
           </div>
         </li>,
@@ -233,6 +236,7 @@ export function CommandPalette({
           </svg>
           <input
             ref={inputRef}
+            data-ui="command-input"
             type="text"
             role="combobox"
             aria-expanded="true"

@@ -25,6 +25,8 @@ describe('CommandPalette', () => {
     expect(document.activeElement).toBe(screen.getByRole('combobox'));
     expect(screen.getByText('Navigate')).toBeTruthy(); // group headings
     expect(screen.getByText('Actions')).toBeTruthy();
+    expect(screen.getByText('Navigate')).toHaveAttribute('data-ui', 'command-group');
+    expect(screen.getByRole('combobox')).toHaveAttribute('data-ui', 'command-input');
     expect(screen.getByText('Ctrl+O')).toBeTruthy(); // kbd shortcut hint
     expect(screen.getAllByRole('option')).toHaveLength(4);
   });

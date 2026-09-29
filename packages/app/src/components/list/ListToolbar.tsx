@@ -479,7 +479,7 @@ function SheetOrPopover({ title, onClose, children }: SheetOrPopoverProps) {
     <>
       {/* Mobile scrim */}
       <div
-        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm md:hidden"
+        className="fixed inset-0 z-40 bg-scrim backdrop-blur-sm md:hidden"
         aria-hidden="true"
         onClick={onClose}
       />

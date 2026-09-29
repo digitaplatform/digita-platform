@@ -107,7 +107,8 @@ export function CommandPaletteView({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-stretch justify-center bg-black/30 backdrop-blur-sm sm:items-start sm:pt-[12vh]"
+      data-ui="command-overlay"
+      className="fixed inset-0 z-[60] flex items-stretch justify-center bg-scrim backdrop-blur-sm sm:items-start sm:pt-[12vh]"
       onMouseDown={(e) => {
         // Backdrop click closes; clicks inside the panel don't bubble here.
         if (e.target === e.currentTarget) onClose();
@@ -115,6 +116,7 @@ export function CommandPaletteView({
     >
       <div
         ref={panelRef}
+        data-ui="command-palette"
         role="dialog"
         aria-modal="true"
         aria-label={tc('ui.cmd.title')}
@@ -129,6 +131,7 @@ export function CommandPaletteView({
           <Search className="h-5 w-5 shrink-0 text-textMuted" aria-hidden="true" />
           <input
             ref={inputRef}
+            data-ui="command-input"
             type="text"
             role="combobox"
             aria-expanded="true"
@@ -270,7 +273,10 @@ export function CommandPaletteView({
 
 function GroupHeading({ text }: { text: string }) {
   return (
-    <div className="px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-textMuted">
+    <div
+      data-ui="command-group"
+      className="px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-textMuted"
+    >
       {text}
     </div>
   );
@@ -296,6 +302,7 @@ function Row({
   return (
     <li
       id={id}
+      data-ui="command-item"
       role="option"
       aria-selected={active}
       onMouseMove={onActivate}

@@ -28,12 +28,15 @@ describe('input-frame and textfield mirror the state of the control they frame',
     expect(frame()).toHaveAttribute('data-readonly', 'true');
   });
 
-  it('textfield carries aria-invalid, data-disabled and data-readonly', () => {
+  it('textfield carries aria-invalid, data-invalid, data-disabled and data-readonly', () => {
     const { container, rerender } = render(<TextField label="Name" error />);
     const field = () => container.querySelector('[data-ui="textfield"]')!;
     expect(field()).toHaveAttribute('aria-invalid', 'true');
+    // The released designs key their textfield rules on data-invalid.
+    expect(field()).toHaveAttribute('data-invalid', 'true');
     rerender(<TextField label="Name" disabled readOnly />);
     expect(field()).not.toHaveAttribute('aria-invalid');
+    expect(field()).not.toHaveAttribute('data-invalid');
     expect(field()).toHaveAttribute('data-disabled', 'true');
     expect(field()).toHaveAttribute('data-readonly', 'true');
   });
@@ -100,7 +103,7 @@ describe('DataGrid row', () => {
   const COLS: DataGridColumn[] = [{ key: 'name', label: 'Name', kind: 'text' }];
   const ROWS = [{ id: 'r1', name: 'Apple' }, { id: 'r2', name: 'Pear' }];
 
-  it('carries aria-selected on the row of the focused cell and no inline height', async () => {
+  it('carries data-active on the row of the focused cell and no inline height', async () => {
     const user = userEvent.setup();
     render(
       <DataGrid rows={ROWS} columns={COLS} getRowId={(r) => r.id} editable={false} aria-label="lines" />,
@@ -108,12 +111,14 @@ describe('DataGrid row', () => {
     const rows = () => document.querySelectorAll<HTMLElement>('[data-ui="table-row"]');
     expect(rows()).toHaveLength(2);
     for (const row of rows()) {
-      expect(row).not.toHaveAttribute('aria-selected');
+      expect(row).not.toHaveAttribute('data-active');
       expect(row.style.height).toBe('');
       expect(row.className).toContain('min-h-[calc(var(--density-row)*1px)]');
     }
     await user.click(rows()[1]!.querySelector('[role="gridcell"]')!);
-    expect(rows()[1]).toHaveAttribute('aria-selected', 'true');
-    expect(rows()[0]).not.toHaveAttribute('aria-selected');
+    expect(rows()[1]).toHaveAttribute('data-active', 'true');
+    expect(rows()[0]).not.toHaveAttribute('data-active');
+    // The grid has no selection model, so focus is never reported as selection.
+    expect(rows()[1]).not.toHaveAttribute('aria-selected');
   });
 });

@@ -549,7 +549,7 @@ export function DataGrid<T = Record<string, unknown>>({
                   ref={virtualizer.measureElement}
                   data-index={vi.index}
                   aria-rowindex={vi.index + 2}
-                  aria-selected={focused?.row === vi.index || undefined}
+                  data-active={focused?.row === vi.index || undefined}
                   className={cn('grid min-h-[calc(var(--density-row)*1px)]', tableSkin.row)}
                   style={{
                     position: 'absolute',

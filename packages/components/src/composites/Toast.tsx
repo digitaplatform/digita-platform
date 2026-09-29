@@ -149,6 +149,7 @@ export function ToastHost({ children, closeLabel = 'Dismiss' }: ToastHostProps) 
                   )}
                   <button
                     type="button"
+                    data-ui="toast-dismiss"
                     aria-label={closeLabel}
                     onClick={() => dismiss(t.id)}
                     className="shrink-0 rounded p-0.5 opacity-60 hover:opacity-100 focus-visible:shadow-focus focus-visible:outline-none"

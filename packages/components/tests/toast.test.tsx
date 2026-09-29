@@ -71,6 +71,7 @@ describe('ToastHost / useToast', () => {
       vi.advanceTimersByTime(60_000);
     });
     expect(screen.getByRole('status')).toBeTruthy(); // sticky — never auto-dismissed
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveAttribute('data-ui', 'toast-dismiss');
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByRole('status')).toBeNull();
   });

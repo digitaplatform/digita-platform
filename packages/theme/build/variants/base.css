@@ -139,9 +139,9 @@
 
 /* ── Invalid state — one rule for every design, so no design has to repeat it
    and no design can lose it. A design's resting border rule sits at
-   :root[data-design-variant="x"] [data-ui="input"] (0,2,1) and loads after this
+   :root[data-design-variant="x"] [data-ui="input"] (0,3,0) and loads after this
    file; the state rule carries the same root scope plus the state attribute
-   (0,3,1), so it wins on specificity, not on order. The bare pair (0,2,1)
+   (0,4,0), so it wins on specificity, not on order. The bare pair (0,3,0)
    serves a page that carries no design variant attribute, where it still
    outranks the kit's Tailwind focus border (.focus\:border-x:focus, 0,2,0). ── */
 :root [data-ui="input"][aria-invalid="true"],

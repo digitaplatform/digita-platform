@@ -30,6 +30,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
       <div
         data-ui="textfield"
         aria-invalid={invalid || undefined}
+        data-invalid={invalid || undefined}
         data-disabled={disabled || undefined}
         data-readonly={props.readOnly || undefined}
         className={cn(
