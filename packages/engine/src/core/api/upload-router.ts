@@ -8,6 +8,7 @@ import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
 import { env } from "../config/env.js";
+import { readStoredRow } from "../entity/field-types.js";
 import { successResponse, errorResponse } from "./response-model.js";
 import { createLogger } from "../logging/logger.js";
 import { FileNotFoundInStorageError, type StoragePort } from "../storage/storage-port.js";
@@ -658,17 +659,15 @@ export function registerUploadRoutes(
         parentName &&
         registry.has(parentEntity)
       ) {
-        const parentDoc = await db.findOne(
-          parentEntity,
-          parentName,
-          registry.get(parentEntity).database,
-        );
+        const parentDefinition = registry.get(parentEntity);
+        const parentDoc = await db.findOne(parentEntity, parentName, parentDefinition.database);
         if (parentDoc) {
+          // Judged on the row getDoc reads, so a condition sees the same values there and here.
           const parentRead = await permissionChecker.hasPermission(
             actor,
             parentEntity,
             "read",
-            parentDoc as Record<string, unknown>,
+            readStoredRow(parentDefinition, parentDoc as Record<string, unknown>),
           );
           parentGrants = parentRead.allowed;
         }
