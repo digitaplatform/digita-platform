@@ -220,7 +220,11 @@ describe('ListRenderer (generic meta-driven render)', () => {
     // A cool hue the kit gives no meaning of its own shares the informational tone.
     expect(gridRows[1]!.querySelector('[data-ui="badge"]')).toHaveAttribute('data-color', 'info');
     // The phone cards: the kit list, the current record's card marked.
-    const cards = container.querySelectorAll('[data-ui="list-group"] [data-ui="list-row"]');
+    // The card list carries the name the desktop grid carries.
+    const cardList = container.querySelector('[data-ui="list-group"]')!;
+    expect(table.querySelector('[role="grid"]')).toHaveAttribute('aria-label', 'Widgets');
+    expect(cardList).toHaveAttribute('aria-label', 'Widgets');
+    const cards = cardList.querySelectorAll('[data-ui="list-row"]');
     expect(cards).toHaveLength(2);
     expect(cards[0]).toHaveAttribute('aria-selected', 'false');
     expect(cards[1]).toHaveAttribute('aria-selected', 'true');

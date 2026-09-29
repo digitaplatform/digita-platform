@@ -132,10 +132,10 @@ function isPrintableKey(e: KeyboardEvent): boolean {
 // Nordstern F14 — per-kind minima/flex + the ONE colMin used by BOTH the
 // fluid template and the F14c priority collapse (header labels never truncate).
 const KIND_MIN: Record<string, number> = {
-  text: 140, link: 140, select: 110, date: 100, currency: 96, number: 88, check: 64,
+  text: 140, link: 140, select: 110, date: 100, currency: 96, number: 88, check: 64, actions: 48,
 };
 const KIND_FLEX: Record<string, number> = {
-  text: 2, link: 1.5, select: 1, date: 0.9, currency: 0.8, number: 0.7, check: 0.5,
+  text: 2, link: 1.5, select: 1, date: 0.9, currency: 0.8, number: 0.7, check: 0.5, actions: 0,
 };
 function colMin(c: DataGridColumn): number {
   const headerMin = c.label.length * 7 + 24 + (c.required ? 12 : 0);

@@ -11,7 +11,9 @@ export type DataGridCellKind =
   | 'link'
   | 'date'
   | 'check'
-  | 'select';
+  | 'select'
+  /** A column of per-row controls the consumer renders; it takes its minimum and never grows. */
+  | 'actions';
 
 export type DataGridAlign = 'start' | 'center' | 'end';
 

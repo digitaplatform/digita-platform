@@ -17,6 +17,7 @@ import { useChrome } from '@/lib/chrome-i18n';
 import { resolveWorkflowField } from '@/lib/workflow-field';
 import { parseSort } from '@/lib/sort';
 import { tid } from '@/lib/testid';
+import { useViewportHeight } from '@/hooks/useViewportHeight';
 import { EmptyState } from '@/components/status';
 import { CellValue, workflowBadge } from './cells';
 
@@ -172,7 +173,7 @@ export function ListRenderer({
       defs.push({ key: STATUS_COLUMN, label: tc('ui.list.status'), kind: 'select' });
     }
     if (rowActions) {
-      defs.push({ key: ACTIONS_COLUMN, label: '', kind: 'check', width: 48, align: 'end' });
+      defs.push({ key: ACTIONS_COLUMN, label: '', kind: 'actions', align: 'end' });
     }
     return defs;
   }, [meta, entity, primaryKey, dataFields, wfInColumns, hasStates, rowActions, tField, tc]);
@@ -181,6 +182,9 @@ export function ListRenderer({
     () => parseSort(orderBy).map((s) => ({ key: s.field, dir: s.dir })),
     [orderBy],
   );
+
+  const viewportHeight = useViewportHeight();
+  const listLabel = meta.label_plural ?? meta.label ?? entity;
 
   const rowId = (r: Row) => String(r['_id']);
   const primaryLabel = (r: Row) =>
@@ -244,7 +248,7 @@ export function ListRenderer({
     <div className="space-y-4">
       <div {...tid.component('list-table', entity)} className={cn('hidden md:block', isFetching && 'opacity-60')}>
         <DataGrid<Row>
-          aria-label={meta.label_plural ?? meta.label ?? entity}
+          aria-label={listLabel}
           rows={rows}
           columns={columns}
           getRowId={rowId}
@@ -254,12 +258,13 @@ export function ListRenderer({
           selectedRowId={selectedRowId}
           // The operator chose these columns; none may vanish behind a "+n" chip.
           columnOverflow="scroll"
-          maxBodyHeight={Math.round(window.innerHeight * GRID_VIEWPORT_SHARE)}
+          maxBodyHeight={Math.round(viewportHeight * GRID_VIEWPORT_SHARE)}
           renderDisplay={renderCell}
         />
       </div>
 
       <CardList<Row>
+        aria-label={listLabel}
         className={cn('md:hidden', isFetching && 'opacity-60')}
         rows={rows}
         getRowId={rowId}

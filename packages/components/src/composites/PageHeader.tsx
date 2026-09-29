@@ -217,7 +217,9 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
         </span>
         <span className="flex-1" aria-hidden="true" />
         {actions && (
-          <div data-ui="page-header-actions" className="flex shrink-0 items-center gap-1">
+          // The slot wraps, so a page with many actions keeps every one reachable on a
+          // phone instead of pushing the last ones past the edge of the bar.
+          <div data-ui="page-header-actions" className="flex flex-wrap items-center justify-end gap-1">
             {actions}
           </div>
         )}

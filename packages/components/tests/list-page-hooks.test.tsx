@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { DataGrid, type DataGridColumn } from '../src/composites/DataGrid.js';
 import { CardList } from '../src/composites/CardList.js';
 import { PageHeader } from '../src/composites/PageHeader.js';
@@ -149,6 +149,33 @@ describe('CardList', () => {
     fireEvent.keyDown(cards[1]!, { key: 'Enter' });
     expect(onRowClick).toHaveBeenCalledWith('SO-0042');
   });
+
+  it('is one tab stop: the arrow keys, Home and End move it, Space opens the card', () => {
+    const onRowClick = vi.fn();
+    const rows = [...ROWS, { id: 'SO-0041', customer: 'Globex' }];
+    render(<CardList rows={rows} getRowId={(r) => r.id} onRowClick={onRowClick} renderCard={(r) => r.customer} />);
+    const cards = screen.getAllByRole('option');
+    const tabStops = () => cards.map((c) => c.getAttribute('tabindex'));
+    expect(tabStops()).toEqual(['0', '-1', '-1']);
+    cards[0]!.focus();
+    fireEvent.keyDown(cards[0]!, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(cards[1]);
+    expect(tabStops()).toEqual(['-1', '0', '-1']);
+    fireEvent.keyDown(cards[1]!, { key: 'End' });
+    expect(document.activeElement).toBe(cards[2]);
+    fireEvent.keyDown(cards[2]!, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(cards[2]);
+    fireEvent.keyDown(cards[2]!, { key: 'Home' });
+    expect(document.activeElement).toBe(cards[0]);
+    fireEvent.keyDown(cards[0]!, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(cards[0]);
+    expect(tabStops()).toEqual(['0', '-1', '-1']);
+    fireEvent.keyDown(cards[0]!, { key: ' ' });
+    expect(onRowClick).toHaveBeenCalledWith('SO-0043');
+    // Focus that lands on a card by a click makes it the stop.
+    act(() => cards[2]!.focus());
+    expect(tabStops()).toEqual(['-1', '-1', '0']);
+  });
 });
 
 describe('the status pill and the filter chips', () => {
@@ -210,6 +237,8 @@ describe('PageHeader of a list', () => {
       expectHooked(header.querySelector(`[data-ui="${hook}"]`), hook);
     }
     expect(header.querySelector('[data-ui="page-header-bar"]')!.className).toContain('top-[var(--topbar-h,0px)]');
+    // The actions wrap on a phone, so every page keeps its actions reachable.
+    expect(header.querySelector('[data-ui="page-header-actions"]')!.className).toContain('flex-wrap');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Sales Orders');
   });
 });
