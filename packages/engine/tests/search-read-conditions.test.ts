@@ -178,3 +178,49 @@ describe("A search decides an owner-only reader's fields on the stored row", () 
     expect(out).toEqual([{ _id: "O-1", display: "Own order", fields: { note: "n-own" } }]);
   });
 });
+
+// A read condition sees the row as getDoc reads it: a stored Datetime is a Date,
+// the row a reader gets carries it as an ISO string.
+describe("Search evaluates a read condition on the row getDoc reads", () => {
+  const task = {
+    ...ticket,
+    name: "task",
+    fields: [
+      { fieldname: "title", fieldtype: "Data", label: "Title", idx: 1 },
+      { fieldname: "due", fieldtype: "Datetime", label: "Due", idx: 2 },
+      { fieldname: "lines", fieldtype: "Table", label: "Lines", idx: 3, child_fields: [{ fieldname: "label", fieldtype: "Data", label: "Label" }] },
+    ],
+    search_fields: ["title"],
+    permissions: [{ role: "Sales", level: 0, select: 1, read: 1, condition: "eval:doc.due >= '2026-01-01'" }],
+  } as unknown as EntityDefinition;
+  const taskRegistry = {
+    has: (n: string) => n === "task",
+    get: (n: string) => {
+      if (n !== "task") throw new Error(`unknown entity ${n}`);
+      return task;
+    },
+    getAll: () => [task],
+  } as never;
+  const stored = [
+    { _id: "K-2026", title: "Task 2026", due: new Date("2026-06-01T00:00:00Z"), lines: [{ _row_id: "r1", label: "L1" }] },
+    { _id: "K-2025", title: "Task 2025", due: new Date("2025-06-01T00:00:00Z"), lines: [{ _row_id: "r2", label: "L2" }] },
+  ];
+  const taskServices = () => {
+    const db = { find: vi.fn().mockResolvedValue(stored) };
+    const checker = new PermissionChecker(taskRegistry);
+    return { link: new LinkSearchService(taskRegistry, db as never, checker), global: new GlobalSearchService(taskRegistry, db as never, checker) };
+  };
+
+  it("global search answers the row a condition on a Datetime field admits", async () => {
+    expect((await taskServices().global.search("Task", sales)).map((r) => r._id)).toEqual(["K-2026"]);
+  });
+
+  it("child link search expands the rows of the parent a condition on a Datetime field admits", async () => {
+    const out = await taskServices().link.search("task", "L", sales, undefined, 20, "lines");
+    expect(out.map((r) => r._id)).toEqual(["K-2026::r1"]);
+  });
+
+  it("link search, which reads the row first, answers the same row", async () => {
+    expect((await taskServices().link.search("task", "Task", sales)).map((r) => r._id)).toEqual(["K-2026"]);
+  });
+});

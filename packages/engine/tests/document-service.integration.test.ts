@@ -797,6 +797,37 @@ describe("C1 — condition enforced on list/count/exists", () => {
   });
 });
 
+// A read condition sees the row as getDoc reads it: a stored Datetime is a Date,
+// the row a reader gets carries it as an ISO string.
+describe("exists evaluates a read condition on the row getDoc reads", () => {
+  const reader: UserContext = { _id: "due-reader", email: "due-reader@test.local", roles: ["DueReader"] };
+
+  beforeAll(async () => {
+    registry.register(makeEntity({
+      name: "DueDoc",
+      fields: [
+        { fieldname: "title", fieldtype: "Data" as const, label: "Title" },
+        { fieldname: "due", fieldtype: "Datetime" as const, label: "Due" },
+      ],
+      permissions: [
+        { role: "DueReader", level: 0, select: 1, read: 1, condition: "eval:doc.due >= '2026-01-01'" },
+      ],
+    } as Partial<EntityDefinition>));
+    await db.ensureCollection("DueDoc", "app");
+    const now = new Date();
+    const base = { doctype: "DueDoc", docstatus: 0, owner: "system", modified_by: "system", creation: now, modified: now };
+    await db.insertOne("DueDoc", { ...base, _id: "DD-2026", title: "A", due: new Date("2026-06-01T00:00:00Z") }, "app");
+    await db.insertOne("DueDoc", { ...base, _id: "DD-2025", title: "B", due: new Date("2025-06-01T00:00:00Z") }, "app");
+  });
+
+  it("answers as getDoc does for a condition on a Datetime field", async () => {
+    await expect(docService.getDoc("DueDoc", "DD-2026", reader)).resolves.toBeDefined();
+    expect(await docService.exists("DueDoc", "DD-2026", reader)).toBe(true);
+    await expect(docService.getDoc("DueDoc", "DD-2025", reader)).rejects.toThrow();
+    expect(await docService.exists("DueDoc", "DD-2025", reader)).toBe(false);
+  });
+});
+
 // #41: the read gate evaluates a `condition` on the stored row, so the caller's
 // `fields` decide only what the answer carries. Gated on a projected row, a
 // condition over a field the caller did not ask for denied every row (a sitemap
