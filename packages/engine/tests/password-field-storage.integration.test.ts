@@ -82,6 +82,17 @@ const vault = {
   ],
 } as unknown as EntityDefinition;
 
+// The same fields on a submittable entity, so a document can be cancelled and amended.
+const sealedVault = {
+  ...vault,
+  name: "SealedVault",
+  naming: { strategy: "auto_increment", prefix: "SV-", pad_length: 4 },
+  is_submittable: true,
+  permissions: [
+    { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+  ],
+} as unknown as EntityDefinition;
+
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
 let db: MongoDBService;
@@ -101,6 +112,8 @@ beforeAll(async () => {
   await app.ready();
   result.registry.register(vault);
   await db.ensureCollection("Vault", "app");
+  result.registry.register(sealedVault);
+  await db.ensureCollection("SealedVault", "app");
 
   authToken = await ta.sign({
     sub: "admin@digita.local",
@@ -226,6 +239,47 @@ describe("a Password value in the stored form sent by a client", () => {
     const put = await app.inject({ method: "PUT", url: `/api/v1/resource/Vault/${vaultId}`, headers: authHeaders(), payload: { secret: moved } });
     expect(put.statusCode).toBe(400);
     expect(await db.findManyByFilter("Vault", { title: "B" }, "app")).toEqual([]);
+  });
+});
+
+describe("a Table Password cell of a copied or amended document", () => {
+  const post = (url: string, payload?: Record<string, unknown>) =>
+    app.inject({ method: "POST", url: `/api/v1/resource/${url}`, headers: authHeaders(), ...(payload ? { payload } : {}) });
+  const storedCell = async (entity: string, id: string): Promise<unknown> =>
+    ((await db.findOne(entity, id, "app")) as { accounts: Record<string, unknown>[] }).accounts[0]!["password"];
+  const expectCarried = (cell: unknown) => {
+    expect(isEncryptedPassword(cell)).toBe(true);
+    expect((cell as { key_id: string }).key_id).toBeTruthy();
+    expect(clear(cell)).toBe("row-secret");
+  };
+
+  it("is carried into the copy in its encrypted form", async () => {
+    const source = await post("Vault", { title: "To copy", accounts: [{ host: "smtp", password: "row-secret" }] });
+    expect(source.statusCode).toBe(201);
+    const copy = await post(`Vault/${source.json().data._id}/copy`);
+    expect(copy.json()).toEqual(expect.objectContaining({ success: true }));
+    expect(copy.statusCode).toBe(201);
+    expectCarried(await storedCell("Vault", copy.json().data._id));
+  });
+
+  it("is carried into the amendment of a cancelled document in its encrypted form", async () => {
+    const source = await post("SealedVault", { title: "To amend", accounts: [{ host: "smtp", password: "row-secret" }] });
+    expect(source.statusCode).toBe(201);
+    const id = source.json().data._id;
+    expect((await post(`SealedVault/${id}/submit`)).statusCode).toBe(200);
+    expect((await post(`SealedVault/${id}/cancel`)).statusCode).toBe(200);
+    const amended = await post(`SealedVault/${id}/amend`);
+    expect(amended.json()).toEqual(expect.objectContaining({ success: true }));
+    expect(amended.statusCode).toBe(201);
+    expectCarried(await storedCell("SealedVault", amended.json().data._id));
+  });
+
+  it("is still refused when a client sends the source's stored cell in a new document", async () => {
+    const source = await post("Vault", { title: "Copied by hand", accounts: [{ host: "smtp", password: "row-secret" }] });
+    const read = await app.inject({ method: "GET", url: `/api/v1/resource/Vault/${source.json().data._id}`, headers: authHeaders() });
+    const res = await post("Vault", { title: "Copied by hand", accounts: read.json().data.accounts });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.stringify(res.json())).toContain("field_password_not_as_stored");
   });
 });
 
