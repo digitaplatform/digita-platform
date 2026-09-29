@@ -395,7 +395,7 @@ function FilterPanel({ meta, filters, orFilters, onChange, onClose }: FilterPane
               aria-checked={group === 'and'}
               onClick={() => setGroup('and')}
               className={
-                'px-3 py-1 ' + (group === 'and' ? 'bg-primary-600 text-white' : 'bg-surface text-textMain')
+                'px-3 py-1 ' + (group === 'and' ? 'bg-primary-600 text-onPrimary' : 'bg-surface text-textMain')
               }
             >
               {tc('ui.filter.all')}
@@ -406,7 +406,7 @@ function FilterPanel({ meta, filters, orFilters, onChange, onClose }: FilterPane
               aria-checked={group === 'or'}
               onClick={() => setGroup('or')}
               className={
-                'px-3 py-1 ' + (group === 'or' ? 'bg-primary-600 text-white' : 'bg-surface text-textMain')
+                'px-3 py-1 ' + (group === 'or' ? 'bg-primary-600 text-onPrimary' : 'bg-surface text-textMain')
               }
             >
               {tc('ui.filter.any')}

@@ -59,8 +59,8 @@ export function Switch({
         data-ui="switch-thumb"
         aria-hidden="true"
         className={cn(
-          // onPrimary (not bg-white): the token designed for "sits ON a primary
-          // fill" — white in the default design, overridable per design.
+          // onPrimary (not bg-white): the tint-derived label of a primary fill, so
+          // the checked thumb reads on the track; a light tint makes it a dark ink.
           'pointer-events-none flex h-4 w-4 items-center justify-center rounded-full bg-onPrimary shadow-sm',
           'transition-transform duration-base ease-smooth',
           checked ? 'translate-x-[18px]' : 'translate-x-0.5',
