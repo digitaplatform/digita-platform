@@ -953,6 +953,104 @@ describe("Upload API Integration", () => {
     });
   });
 
+  describe("a save attaches the app's uploads to the document (#139)", () => {
+    let bookId: string;
+
+    beforeAll(() => {
+      // The uploader (owner) and the colleague (sales) are both plain System Users
+      // who may read every book; the File grant alone lets only the uploader read.
+      registry.register({
+        name: "TestBook",
+        module: "test",
+        database: "core",
+        naming: { strategy: "uuid" },
+        storage_path: "books",
+        fields: [
+          { fieldname: "title", fieldtype: "Data", label: "Title" },
+          { fieldname: "letter", fieldtype: "Attach", label: "Letter" },
+          { fieldname: "pages", fieldtype: "Table", label: "Pages", child_fields: [{ fieldname: "scan", fieldtype: "Attach", label: "Scan" }] },
+        ],
+        permissions: [{ role: "System User", level: 0, select: 1, read: 1, write: 1, create: 1 }],
+      } as unknown as EntityDefinition);
+    });
+
+    /** The call shape of the app's uploadFile: the entity and the field, never the document. */
+    async function uploadAsApp(token: string, field: string, body: string) {
+      const { payload, contentType } = multipartPayload(`${field}.pdf`, "application/pdf", Buffer.from(body), {
+        attached_to_entity: "TestBook",
+        attached_to_field: field,
+      });
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/v1/upload",
+        headers: { ...authHeaders(token), "content-type": contentType },
+        payload,
+      });
+      expect(res.statusCode).toBe(201);
+      return res.json().data as { _id: string; file_url: string };
+    }
+
+    function downloadAs(token: string, fileId: string) {
+      return app.inject({ method: "GET", url: `/api/v1/file/${fileId}/download`, headers: authHeaders(token) });
+    }
+
+    it("lets a reader of a new book open the files uploaded before its first save", async () => {
+      const letter = await uploadAsApp(ownerToken, "letter", "%PDF new-book letter");
+      const scan = await uploadAsApp(ownerToken, "scan", "%PDF new-book scan");
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/v1/resource/TestBook",
+        headers: authHeaders(ownerToken),
+        payload: { title: "Dune", letter: letter.file_url, pages: [{ scan: scan.file_url }] },
+      });
+      expect(created.statusCode).toBe(201);
+      bookId = created.json().data._id;
+
+      expect((await downloadAs(salesToken, letter._id)).statusCode).toBe(200);
+      expect((await downloadAs(salesToken, scan._id)).statusCode).toBe(200);
+    });
+
+    it("lets a reader of a saved book open a letter added in a later save", async () => {
+      const letter = await uploadAsApp(ownerToken, "letter", "%PDF saved-book letter");
+      const saved = await app.inject({
+        method: "PUT",
+        url: `/api/v1/resource/TestBook/${bookId}`,
+        headers: authHeaders(ownerToken),
+        payload: { letter: letter.file_url },
+      });
+      expect(saved.statusCode).toBe(200);
+
+      expect((await downloadAs(salesToken, letter._id)).statusCode).toBe(200);
+    });
+
+    it("lets a reader of a copied book open the copy's own letter", async () => {
+      const copied = await app.inject({
+        method: "POST",
+        url: `/api/v1/resource/TestBook/${bookId}/copy`,
+        headers: authHeaders(ownerToken),
+      });
+      expect(copied.statusCode).toBe(201);
+      const copyLetterId = /\/file\/([^/]+)\/download/.exec(copied.json().data.letter as string)![1]!;
+
+      expect((await downloadAs(salesToken, copyLetterId)).statusCode).toBe(200);
+    });
+
+    it("leaves another user's upload unattached, so its readers stay the File grant's", async () => {
+      const foreign = await uploadAsApp(salesToken, "letter", "%PDF sales-owned letter");
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/v1/resource/TestBook",
+        headers: authHeaders(ownerToken),
+        payload: { title: "Emma", letter: foreign.file_url },
+      });
+      expect(created.statusCode).toBe(201);
+
+      const row = (await db.findOne(DIGITA.COLLECTIONS.FILE, foreign._id, "core")) as Record<string, unknown>;
+      expect(row["attached_to_name"]).toBeUndefined();
+      expect((await downloadAs(ownerToken, foreign._id)).statusCode).toBe(403);
+    });
+  });
+
   describe("public attachment fields (field.public opt-in)", () => {
     const bannerContent = Buffer.from("89504e47-public-banner-png-bytes", "utf8");
     let publicId: string;

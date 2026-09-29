@@ -1033,6 +1033,7 @@ export class DocumentService {
 
       // Store in DB
       await this.db.insertOne(entity.name, doc.toMongo(), entity.database, session);
+      await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
 
       await this.hookRunner.run(doctype, "after_insert", doc, ctx, session, user);
       await this.hookRunner.run(doctype, "on_change", doc, ctx, session, user);
@@ -1313,6 +1314,7 @@ export class DocumentService {
         entity.database,
         session,
       );
+      await this.attachFilesToDocument(entity, name, doc._data, user, session);
 
       await this.hookRunner.run(doctype, "on_update", doc, ctx, session, user);
       if (this.ruleEngine) {
@@ -2493,8 +2495,7 @@ export class DocumentService {
         creation: now,
         modified: now,
       };
-      // The clone is not yet linked to the new document — drop the source's
-      // specific attach target (a save hook re-links if the app wires one).
+      // The clone belongs to the new document, which insert attaches it to.
       delete clone["attached_to_name"];
       if (s["thumbnail_key"]) clone["thumbnail_url"] = `${fileUrl}?thumb=1`;
       await this.db.insertOne(DIGITA.COLLECTIONS.FILE, clone, DIGITA.DATABASES.CORE);
@@ -2522,6 +2523,42 @@ export class DocumentService {
           }
         }
       }
+    }
+  }
+
+  /**
+   * The download route lets a reader of the document named by a File row's
+   * `attached_to_name` read the file. An upload for a document that is not saved
+   * yet cannot name it, so the save does: each file the document's attach fields
+   * reference that was uploaded for this entity and names no document yet is
+   * attached to this one, when the user may write that File row, which is the
+   * grant that lets a user set `attached_to_name` through the resource API.
+   */
+  private async attachFilesToDocument(
+    entity: EntityDefinition,
+    name: string,
+    data: Record<string, unknown>,
+    user: UserContext,
+    session: import("mongodb").ClientSession,
+  ): Promise<void> {
+    const fileIds = collectAttachFileIds(entity.fields, data);
+    if (fileIds.length === 0) return;
+    const unattached = await this.db.find(
+      DIGITA.COLLECTIONS.FILE,
+      { filters: [{ _id: { $in: fileIds }, attached_to_entity: entity.name, attached_to_name: null }] },
+      DIGITA.DATABASES.CORE,
+      session,
+    );
+    for (const file of unattached) {
+      if (!(await this.permissionChecker.hasPermission(user, DIGITA.COLLECTIONS.FILE, "write", file)).allowed) continue;
+      await this.db.updateOne(
+        DIGITA.COLLECTIONS.FILE,
+        String(file["_id"]),
+        { attached_to_name: name },
+        DIGITA.DATABASES.CORE,
+        session,
+        { attached_to_name: null },
+      );
     }
   }
 
