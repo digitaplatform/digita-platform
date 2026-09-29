@@ -91,8 +91,10 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
     case "TextEditor":
       return z.string();
     case "Password":
-      // The value as sent, or a stored value coming back: the schema also runs
-      // on the serialized document, and a Table row is written whole.
+      // The value as sent, or the stored form: the schema also runs on the
+      // serialized document, and a Table row is written whole. A stored form in
+      // input that is not the value stored at its path is refused before
+      // serialization (DocumentService.refuseForeignPasswordValues).
       return z.union([z.string(), encryptedPasswordSchema]);
     case "Color":
       // Single source of truth for the hex rule: validators/color.ts

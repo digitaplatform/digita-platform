@@ -1,5 +1,6 @@
 import type { EntityDefinition } from "@digitaplatform/shared";
-import { getFieldTypeHandler, isStoredFieldType } from "../entity/field-types.js";
+import { FieldValueError, getFieldTypeHandler, isStoredFieldType } from "../entity/field-types.js";
+import { foreignPasswordValue } from "../entity/password-cipher.js";
 
 /**
  * Serialize a row through the field-type handlers exactly like the write path
@@ -16,6 +17,9 @@ export function serializeRowForStorage(
   entity: EntityDefinition,
   row: Record<string, unknown>,
 ): Record<string, unknown> {
+  // A seed or import row carries a Password value as text, never in the stored form.
+  const foreign = foreignPasswordValue(entity, row);
+  if (foreign) throw new FieldValueError(foreign, "field_password_not_as_stored", { field: foreign });
   const result: Record<string, unknown> = {};
   for (const field of entity.fields) {
     if (!isStoredFieldType(field.fieldtype)) continue;

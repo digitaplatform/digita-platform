@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import type { EntityDefinition, FieldDefinition } from "@digitaplatform/shared";
+import { ROW_ID_FIELD } from "@digitaplatform/shared";
 
 /**
  * A Password field's value at rest: AES-256-GCM under the key `key_id` names.
@@ -47,6 +48,42 @@ export function passwordFieldPaths(entity: EntityDefinition): string[] {
 
 export function childPasswordFields(field: FieldDefinition): FieldDefinition[] {
   return field.fieldtype === "Table" ? (field.child_fields ?? []).filter((f) => f.fieldtype === "Password") : [];
+}
+
+/**
+ * The path of a Password value in `input` that is in the stored form but is not
+ * the value `stored` holds at that path: a value the engine never encrypted, or
+ * one moved from another record or field. A Password value is sent as text; the
+ * stored form comes back only as read, as a Table row does on a whole-table save.
+ */
+export function foreignPasswordValue(
+  entity: EntityDefinition,
+  input: Record<string, unknown>,
+  stored: Record<string, unknown> = {},
+): string | undefined {
+  const same = (value: unknown, storedValue: unknown): boolean =>
+    isEncryptedPassword(storedValue) &&
+    (["key_id", "iv", "tag", "data"] as const).every((k) => (value as EncryptedPassword)[k] === storedValue[k]);
+  for (const field of entity.fields) {
+    const value = input[field.fieldname];
+    if (field.fieldtype === "Password" && isEncryptedPassword(value) && !same(value, stored[field.fieldname])) {
+      return field.fieldname;
+    }
+    const secrets = childPasswordFields(field);
+    if (secrets.length === 0 || !Array.isArray(value)) continue;
+    const storedRows = (Array.isArray(stored[field.fieldname]) ? stored[field.fieldname] : []) as Record<string, unknown>[];
+    for (const row of value as Record<string, unknown>[]) {
+      if (!row || typeof row !== "object") continue;
+      const rowId = row[ROW_ID_FIELD];
+      const storedRow = typeof rowId === "string" ? storedRows.find((r) => r && typeof r === "object" && r[ROW_ID_FIELD] === rowId) : undefined;
+      for (const f of secrets) {
+        if (isEncryptedPassword(row[f.fieldname]) && !same(row[f.fieldname], storedRow?.[f.fieldname])) {
+          return `${field.fieldname}.${f.fieldname}`;
+        }
+      }
+    }
+  }
+  return undefined;
 }
 
 let settings: PasswordFieldKeySettings | null = null;
@@ -118,7 +155,7 @@ export function decryptPassword(stored: unknown): string {
   if (!isEncryptedPassword(stored)) throw new Error("decryptPassword: the value is not an encrypted Password value");
   const key = passwordKeySet().keys.get(stored.key_id);
   if (!key) throw new Error(`PASSWORD_FIELD_KEYS: key id "${stored.key_id}" of a stored Password value is not listed`);
-  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(stored.iv, "base64"));
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(stored.iv, "base64"), { authTagLength: 16 });
   decipher.setAuthTag(Buffer.from(stored.tag, "base64"));
   return Buffer.concat([decipher.update(Buffer.from(stored.data, "base64")), decipher.final()]).toString("utf8");
 }

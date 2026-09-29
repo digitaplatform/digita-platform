@@ -13,6 +13,7 @@ import { validateEntityDataZod } from "../entity/entity-validator-zod.js";
 import { ZodSchemaBuilder } from "../entity/zod-schema-builder.js";
 import { IllegalTransitionError } from "../workflow/workflow-engine.js";
 import { getFieldTypeHandler, isStoredFieldType, FieldValueError, readStoredRow } from "../entity/field-types.js";
+import { foreignPasswordValue } from "../entity/password-cipher.js";
 import { copyDocumentData } from "./copy-service.js";
 import { projectFields } from "./project-fields.js";
 import { resolveDefaults, applyNewChildRowDefaults } from "../defaults/default-resolver.js";
@@ -900,6 +901,7 @@ export class DocumentService {
     // (perm_level / read_only) from the raw input BEFORE defaults / fetch_from /
     // computed fill in — those are system-set and must not be filtered.
     const writeData = this.permissionChecker.filterFieldsForWrite(user, doctype, data);
+    this.refuseForeignPasswordValues(entity, writeData);
 
     // Resolve defaults
     let processed = resolveDefaults(entity, writeData, user.email, user.full_name);
@@ -1173,6 +1175,7 @@ export class DocumentService {
     // rows and header fields are left untouched. Runs before serialize so
     // Date/Datetime child defaults serialize correctly.
     applyNewChildRowDefaults(entity, writeData, doc._original, user.email, user.full_name);
+    this.refuseForeignPasswordValues(entity, writeData, doc._original);
 
     // Serialize and merge changes (writeData = permission-filtered input)
     const serialized = this.serializeFields(entity, writeData);
@@ -1508,6 +1511,13 @@ export class DocumentService {
 
       const childChanges: FieldChange[] = [];
       const touchedTables = new Set<string>();
+
+      this.refuseForeignPasswordValues(entity, patch.set ?? {}, doc._original);
+      for (const entry of patch.children ?? []) {
+        if (entry.set) {
+          this.refuseForeignPasswordValues(entity, { [entry.table]: [{ ...entry.set, _row_id: entry.row_id }] }, doc._original);
+        }
+      }
 
       // Top-level increments — read-modify-write under the tx.
       for (const [f, delta] of Object.entries(patch.increment ?? {})) {
@@ -2498,6 +2508,25 @@ export class DocumentService {
     const doc = new BaseDocument(doctype, raw as Record<string, unknown>);
     doc._data = readStoredRow(entity, doc._data);
     return doc;
+  }
+
+  /**
+   * A Password value in input is text; its stored form is accepted only as the
+   * value already stored at that path (a Table row coming back as read), so no
+   * caller stores a value the engine never encrypted or one moved from another
+   * record or field.
+   */
+  private refuseForeignPasswordValues(
+    entity: EntityDefinition,
+    input: Record<string, unknown>,
+    stored?: Record<string, unknown>,
+  ): void {
+    const path = foreignPasswordValue(entity, input, stored);
+    if (path) {
+      throw new ValidationFailedError(entity.name, [
+        { field: path, message_key: "field_password_not_as_stored", params: { field: path } },
+      ]);
+    }
   }
 
   private serializeFields(
