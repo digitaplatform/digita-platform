@@ -1,5 +1,6 @@
 import { brandingStyle, resetBranding, writeIdentityStyle, type IdentityStyle } from '../runtime/runtime.js';
 import { cssVarName } from '../tokens/index.js';
+import { composeSurfaceContainerRamp, SURFACE_CONTAINER_ROLES } from '../tokens/surface-containers.js';
 import { getRuntimeSignature } from './runtime-registry.js';
 
 /**
@@ -15,8 +16,10 @@ import { getRuntimeSignature } from './runtime-registry.js';
  * ramp + --font-* vars. A FULL signature (e.g. digita) additionally stamps
  * `data-signature=<id>` and writes:
  *   - the brand colour world as inline `--color-*` vars (per-mode via light-dark()),
- *     so canvas/surface/text/border become the brand's — the design's control
- *     skin still wins on buttons/inputs because those aren't touched here;
+ *     so canvas/surface/text/border become the brand's, plus the surface-container
+ *     ramp composed from surface and subtle, so a design that fills a control from
+ *     those roles (the Material input frame, the minimal secondary hover) takes the
+ *     brand's tones while the design keeps the control's shape and states;
  *   - decorative background layers as `--sig-<key>-l` / `--sig-<key>-d` CSS values
  *     (grid, glow, band, card, panel) the shell backdrop paints. url()/gradients
  *     can't use light-dark(), so each ships an explicit light + dark value the
@@ -51,7 +54,9 @@ export interface Signature {
   wordmark?: string;
   /** The brand COLOUR WORLD: semantic token → {light,dark}. Written inline as
    *  `--color-<token>: light-dark(light, dark)`, so canvas/surface/text/border
-   *  flip with the mode. Keys are theme token names (bg, surface, textMain, …). */
+   *  flip with the mode. Keys are theme token names (bg, surface, textMain, …).
+ *  `surface` and `subtle` are six-digit hex per mode (`#RRGGBB`): the
+ *  surface-container ramp composes from them and refuses any other form. */
   colors?: Record<string, SignatureValue>;
   /** Decorative BACKGROUND layers: key → {light,dark} CSS value (gradient/colour).
    *  Written as `--sig-<key>-l` / `--sig-<key>-d`; the shell backdrop composes
@@ -94,6 +99,7 @@ const SIGNATURE_COLOR_TOKENS = [
   'textMuted',
   'border',
   'borderStrong',
+  ...SURFACE_CONTAINER_ROLES,
 ] as const;
 const SIGNATURE_GRAPHIC_KEYS = ['grid', 'glow', 'band', 'card', 'panel'] as const;
 
@@ -126,6 +132,17 @@ export function signatureStyle(s: Signature): IdentityStyle {
   if (!s.colors && !s.graphics) return style;
   style.attributes['data-signature'] = s.id;
   if (s.colors) {
+    // The container roles are surfaces too, so the signature owns them: composed
+    // from surface and subtle first, then any role the signature names replaces
+    // the composed value in the loop below.
+    const { surface, subtle } = s.colors;
+    if (surface && subtle) {
+      const light = composeSurfaceContainerRamp(s.id, surface.light, subtle.light);
+      const dark = composeSurfaceContainerRamp(s.id, surface.dark, subtle.dark);
+      for (const role of SURFACE_CONTAINER_ROLES) {
+        style.properties[cssVarName(role)] = `light-dark(${light[role]}, ${dark[role]})`;
+      }
+    }
     for (const [token, value] of Object.entries(s.colors)) {
       style.properties[cssVarName(token)] = `light-dark(${value.light}, ${value.dark})`;
     }

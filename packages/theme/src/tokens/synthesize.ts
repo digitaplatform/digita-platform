@@ -15,10 +15,10 @@ import { PRIMARY } from './colors.js';
  * Self-contained sRGB↔OKLCH (Björn Ottosson's OKLab) — no dependency.
  */
 
-type Rgb = { r: number; g: number; b: number };
+export type Rgb = { r: number; g: number; b: number };
 type Oklch = { L: number; C: number; H: number };
 
-function hexToRgb(hex: string): Rgb | null {
+export function hexToRgb(hex: string): Rgb | null {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return null;
   const n = parseInt(m[1]!, 16);
@@ -63,7 +63,7 @@ function oklchToRgb({ L, C, H }: Oklch): Rgb {
   };
 }
 
-const toHex = ({ r, g, b }: Rgb) =>
+export const toHex = ({ r, g, b }: Rgb) =>
   `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 
 /** In-gamut check BEFORE clamping (a clamped channel means the color was outside). */
