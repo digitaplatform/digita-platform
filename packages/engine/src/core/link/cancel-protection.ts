@@ -16,7 +16,7 @@ export interface CancelBlocker {
  *
  * Mirror of `DeleteProtection`, but with two differences:
  * 1. Only counts incoming references from `is_submittable: true` entities.
- *    Non-submittable references (e.g. an audit Log row, a Permission scope)
+ *    Non-submittable references (e.g. an audit Log row, a DocShare)
  *    do not constitute "the document was forwarded".
  * 2. Filters by `docstatus: 1` — only currently-submitted downstream docs
  *    block cancel. Drafts can be cleaned up by the operator first; cancelled
