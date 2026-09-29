@@ -360,6 +360,25 @@ export class PermissionChecker {
     return fields;
   }
 
+  /** The set of field names a list, count or search query of `user` may filter,
+   *  search and sort `entityName` on: the entity's declared fields + Table child
+   *  fields for a reader of every level, otherwise getFilterableFields; + the
+   *  standard system fields (P-SEC/R7). */
+  getFilterAllowlist(user: UserContext, entityName: string): Set<string> {
+    const entity = this.registry.get(entityName);
+    const filterable = this.getFilterableFields(user, entityName);
+    return new Set<string>([
+      ...(filterable ?? [
+        ...entity.fields.map((f) => f.fieldname),
+        ...entity.fields
+          .filter((f) => f.fieldtype === "Table")
+          .flatMap((f) => f.child_fields?.map((c) => c.fieldname) ?? []),
+      ]),
+      "_id", "doctype", "docstatus", "owner", "modified_by", "creation", "modified",
+      "idx", "parent", "parenttype", "parentfield",
+    ]);
+  }
+
   /**
    * Get all fields the user can write (based on perm_level).
    */

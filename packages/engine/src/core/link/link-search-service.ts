@@ -4,6 +4,7 @@ import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
 import { applyScopeFilters } from "../permissions/scope-filter.js";
+import { assertFieldAllowed, isFieldAllowed } from "../database/filter-builder.js";
 import { env } from "../config/env.js";
 
 export interface LinkSearchResult {
@@ -58,7 +59,8 @@ export class LinkSearchService {
 
     const entity = this.registry.get(targetEntity);
     const displayField = entity.title_field ?? "_id";
-    const searchFields = entity.search_fields ?? [displayField];
+    const { allowed, gatesRows, masksStoredRows } = this.readScope(user, targetEntity, filters);
+    const searchFields = this.searchableFields(entity.search_fields ?? [displayField], displayField, allowed);
     // Extra column values requested by the search-dialog picker. Returned ONLY
     // when explicitly asked for, so the plain dropdown stays {_id, display}.
     // Matching itself always uses search_fields, regardless of columns.
@@ -92,28 +94,58 @@ export class LinkSearchService {
       targetEntity,
       {
         filters: Object.keys(mongoFilter).length > 0 ? [mongoFilter] : [],
-        fields: fetchFields,
+        fields: masksStoredRows ? undefined : fetchFields,
         limit,
         order_by: `${displayField} asc`,
       },
       entity.database,
     );
 
-    return (docs as Record<string, unknown>[]).map((doc) => {
+    // ponytail: rows a read condition hides are dropped after the query, so the
+    // page is short by them; fetch past them if a picker ever needs its full limit.
+    const out: LinkSearchResult[] = [];
+    for (const doc of docs as Record<string, unknown>[]) {
+      if (gatesRows && !(await this.permissionChecker.hasPermission(user, targetEntity, "read", doc)).allowed) continue;
       const result: LinkSearchResult = {
         _id: String(doc["_id"]),
         display: String(doc[displayField] ?? doc["_id"]),
       };
       if (cols) {
-        // Field-level read permissions (perm_level) apply to picker columns too.
-        result.fields = this.permissionChecker.filterFieldsForRead(
-          user,
-          targetEntity,
-          Object.fromEntries(cols.map((c) => [c, doc[c] ?? null])),
-        );
+        // Field-level read permissions (perm_level) apply to picker columns too,
+        // decided on the stored row: a condition reads fields the columns lack.
+        const readable = this.permissionChecker.filterFieldsForRead(user, targetEntity, {
+          ...Object.fromEntries(cols.map((c) => [c, null])),
+          ...doc,
+        });
+        result.fields = Object.fromEntries(cols.filter((c) => c in readable).map((c) => [c, readable[c]]));
       }
-      return result;
-    });
+      out.push(result);
+    }
+    return out;
+  }
+
+  /**
+   * What a search of `user` on `entityName` may name and must re-check, as getList
+   * does: `filters` keys only from the fields the user may filter on (else
+   * FilterFieldNotAllowedError), rows a read condition hides dropped per stored row,
+   * and fields masked on the stored row whenever a condition decides them.
+   */
+  private readScope(
+    user: UserContext,
+    entityName: string,
+    filters: Record<string, unknown> | undefined,
+  ): { allowed: Set<string>; gatesRows: boolean; masksStoredRows: boolean } {
+    const allowed = this.permissionChecker.getFilterAllowlist(user, entityName);
+    for (const key of Object.keys(filters ?? {})) assertFieldAllowed(key, allowed);
+    const gatesRows = this.permissionChecker.hasConditionalRowRead(user, entityName);
+    const masksStoredRows = gatesRows || this.permissionChecker.hasConditionalFieldRead(user, entityName);
+    return { allowed, gatesRows, masksStoredRows };
+  }
+
+  /** The search fields a query may match on: those the user may filter on, and the
+   *  display field, which the result shows anyway. */
+  private searchableFields(searchFields: string[], displayField: string, allowed: Set<string>): string[] {
+    return searchFields.filter((field) => field === displayField || isFieldAllowed(field, allowed));
   }
 
   /**
@@ -145,12 +177,14 @@ export class LinkSearchService {
       return [];
     }
 
+    const { allowed, gatesRows, masksStoredRows } = this.readScope(user, targetEntity, filters);
     const escaped = this.escapeRegex(query);
-    const parentSearch = (entity.search_fields ?? [displayField]).map((f) => ({
+    const parentSearch = this.searchableFields(entity.search_fields ?? [displayField], displayField, allowed).map((f) => ({
       [f]: { $regex: escaped, $options: "i" },
     }));
     const childTextFields = tableField.child_fields
       .filter((c) => c.fieldtype === "Data" || c.fieldtype === "Text")
+      .filter((c) => isFieldAllowed(`${targetPath}.${c.fieldname}`, allowed))
       .map((c) => ({
         [`${targetPath}.${c.fieldname}`]: { $regex: escaped, $options: "i" },
       }));
@@ -167,7 +201,7 @@ export class LinkSearchService {
         filters: Object.keys(mongoFilter).length > 0 ? [mongoFilter] : [],
         // Pull the parent's display + the entire table — we need every row to
         // expand. The result row count caps at `limit` anyway.
-        fields: ["_id", displayField, targetPath],
+        fields: masksStoredRows ? undefined : ["_id", displayField, targetPath],
         limit, // parents fetched
         order_by: `${displayField} asc`,
       },
@@ -181,7 +215,11 @@ export class LinkSearchService {
 
     const out: LinkSearchResult[] = [];
     for (const doc of docs as Record<string, unknown>[]) {
-      const rows = doc[targetPath] as Array<Record<string, unknown>> | undefined;
+      if (gatesRows && !(await this.permissionChecker.hasPermission(user, targetEntity, "read", doc)).allowed) continue;
+      // The rows are the parent's content: masked on the stored parent like a
+      // read of it, so a row label is never a child field the user may not read.
+      const readable = this.permissionChecker.filterFieldsForRead(user, targetEntity, doc);
+      const rows = readable[targetPath] as Array<Record<string, unknown>> | undefined;
       if (!Array.isArray(rows)) continue;
       const parentDisplay = String(doc[displayField] ?? doc["_id"]);
       for (const row of rows) {

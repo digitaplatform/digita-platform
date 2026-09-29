@@ -3,6 +3,7 @@ import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
 import { applyScopeFilters } from "../permissions/scope-filter.js";
+import { isFieldAllowed } from "../database/filter-builder.js";
 import { env } from "../config/env.js";
 
 export interface SearchResult {
@@ -35,9 +36,6 @@ export class GlobalSearchService {
 
     await Promise.all(
       entities.map(async (entity) => {
-        const searchFields = entity.search_fields ?? [];
-        if (searchFields.length === 0) return;
-
         // Same gate as getList / link search: no select grant on this collection
         // → the user must not enumerate it through global search. Skip (don't
         // throw) so one denied collection doesn't fail the whole cross-entity search.
@@ -47,6 +45,16 @@ export class GlobalSearchService {
           "select",
         );
         if (!allowed) return;
+
+        // As in link search: match only on fields the user may filter on and on
+        // the title the result shows anyway, or which rows answer would reveal a
+        // masked value.
+        const titleField = entity.title_field ?? "_id";
+        const filterable = this.permissionChecker.getFilterAllowlist(user, entity.name);
+        const searchFields = (entity.search_fields ?? []).filter(
+          (field) => field === titleField || isFieldAllowed(field, filterable),
+        );
+        if (searchFields.length === 0) return;
 
         const orConditions = searchFields.map((field) => ({
           [field]: { $regex: escaped, $options: "i" },
@@ -60,12 +68,15 @@ export class GlobalSearchService {
           env.PERMISSION_SCOPE_ENABLED,
         );
 
-        const titleField = entity.title_field ?? "_id";
+        // A read condition cannot be a Mongo filter: rows it hides are dropped per
+        // stored row, as getList does. ponytail: the page is then short by the rows
+        // dropped; fetch past them if a search ever needs its full limit.
+        const gatesRows = this.permissionChecker.hasConditionalRowRead(user, entity.name);
         const docs = await this.db.find(
           entity.name,
           {
             filters: [mongoFilter as Record<string, unknown>],
-            fields: ["_id", titleField],
+            fields: gatesRows ? undefined : ["_id", titleField],
             limit: Math.ceil(safeLimit / entities.length) || 5,
           },
           entity.database,
@@ -73,6 +84,7 @@ export class GlobalSearchService {
 
         for (const doc of docs) {
           const d = doc as Record<string, unknown>;
+          if (gatesRows && !(await this.permissionChecker.hasPermission(user, entity.name, "read", d)).allowed) continue;
           results.push({
             entity: entity.name,
             _id: String(d["_id"]),

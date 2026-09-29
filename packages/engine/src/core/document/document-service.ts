@@ -442,7 +442,7 @@ export class DocumentService {
     // ($where/$expr) reachable via the public + resource list endpoints, and a
     // filter whose answer would reveal a masked value. A search reads the same
     // fields only.
-    const allowed = this.buildFilterAllowlist(entity, user);
+    const allowed = this.permissionChecker.getFilterAllowlist(user, entity.name);
     const searchFields = (entity.search_fields ?? []).filter((field) => isFieldAllowed(field, allowed));
     // Coerce date/datetime filter VALUES to their stored form before building the
     // Mongo filter, so relative ($now ± duration → Date) and absolute (string) date
@@ -606,24 +606,6 @@ export class DocumentService {
     return true;
   }
 
-  /** The set of field names a list/count query of `user` may filter, search and
-   *  sort on: the entity's declared fields + Table child fields for a reader of
-   *  every level, otherwise the fields the user may read on every row
-   *  (getFilterableFields); + the standard system fields (P-SEC/R7). */
-  private buildFilterAllowlist(entity: EntityDefinition, user: UserContext): Set<string> {
-    const filterable = this.permissionChecker.getFilterableFields(user, entity.name);
-    return new Set<string>([
-      ...(filterable ?? [
-        ...entity.fields.map((f) => f.fieldname),
-        ...entity.fields
-          .filter((f) => f.fieldtype === "Table")
-          .flatMap((f) => f.child_fields?.map((c) => c.fieldname) ?? []),
-      ]),
-      "_id", "doctype", "docstatus", "owner", "modified_by", "creation", "modified",
-      "idx", "parent", "parenttype", "parentfield",
-    ]);
-  }
-
   async count(
     doctype: string,
     filters?: Record<string, unknown>[],
@@ -638,7 +620,7 @@ export class DocumentService {
     // takes object-form filters (merged verbatim), so the getList allow-list —
     // wired into buildMongoFilter for tuple-form — must be applied here explicitly.
     await this.permissionChecker.check(user, doctype, "select");
-    const allowed = this.buildFilterAllowlist(entity, user);
+    const allowed = this.permissionChecker.getFilterAllowlist(user, entity.name);
     // Apply scope filter so users with restricted scope only count
     // their own visible rows, not the global total.
     const merged: Record<string, unknown> = {};
