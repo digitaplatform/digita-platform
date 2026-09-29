@@ -1,25 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AlertTriangle } from 'lucide-react';
+import { CommandPalette as KitCommandPalette, Spinner } from '@digitaplatform/components';
 import { useUiStore } from '@/stores/ui';
 import { useSessionStore } from '@/stores/session';
 import { useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useNavigableCatalog } from '@/hooks/useNavigableCatalog';
 import { useGlobalSearch } from '@/hooks/useGlobalSearch';
-import { CommandPaletteView } from './CommandPaletteView';
-import {
-  buildCommandItems,
-  filterCommandItems,
-  type CommandItem,
-} from './use-command-items';
+import { buildCommandItems, filterCommandItems, type CommandItem } from './use-command-items';
 import type { GlobalSearchResult } from '@/services/search';
 
 /**
- * The CommandPalette HOST (the one stateful exception to the pure-component
- * rule for this group). Owns every hook — ui store open/close, the navigable
- * catalog, debounced global search, session roles, the router, and the local
- * query + activeIndex + keyboard machine — builds the items via the pure
- * use-command-items helpers, and renders the pure CommandPaletteView.
+ * The command palette HOST: owns the ui store's open flag, the navigable
+ * catalog, the debounced global search, the session roles and the router, and
+ * hands the kit `CommandPalette` its rows. Nav items come first, then the record
+ * hits of the search; the kit owns the keyboard, the focus trap and the
+ * highlight. The query is controlled here because the record hits are searched
+ * on the server, so the kit must not re-filter them by substring.
  *
  * Mounted ONCE by ShellRenderer (universal chrome). The Cmd/Ctrl-K hotkey is
  * registered by the shell; this component reacts to the ui store's
@@ -28,12 +26,18 @@ import type { GlobalSearchResult } from '@/services/search';
 
 const SEARCH_DEBOUNCE_MS = 180;
 
-/** Resolvable record hit → router path (mirrors the View's filter). */
-function hitTo(hit: GlobalSearchResult): string | null {
+/** A hit becomes a row only when it resolves to a route. */
+function hitToItem(hit: GlobalSearchResult, group: string): CommandItem | null {
   const entity = (hit.entity || hit.doctype) as string | undefined;
   const name = (hit.name || hit._id) as string | undefined;
   if (!entity || !name) return null;
-  return `/${entity}/${name}`;
+  return {
+    id: `record:${entity}:${name}`,
+    group,
+    label: (hit.title || hit.display || name) as string,
+    sublabel: entity,
+    to: `/${entity}/${name}`,
+  };
 }
 
 export function CommandPalette() {
@@ -51,26 +55,15 @@ export function CommandPalette() {
   // typing doesn't fire a request per keystroke.
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
-  const [activeIndex, setActiveIndex] = useState(0);
-
   useEffect(() => {
     const id = window.setTimeout(() => setDebounced(query), SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(id);
   }, [query]);
 
-  const search = useGlobalSearch(open ? debounced : '');
+  const searchActive = query.trim().length >= 2;
+  const search = useGlobalSearch(open && searchActive ? debounced : '');
 
-  // Reset query + selection each time the palette opens (fresh start).
-  useEffect(() => {
-    if (open) {
-      setQuery('');
-      setDebounced('');
-      setActiveIndex(0);
-    }
-  }, [open]);
-
-  // Build nav items (memoized on catalog + roles + locale), then client-filter.
-  const allItems = useMemo<CommandItem[]>(
+  const navItems = useMemo<CommandItem[]>(
     () =>
       buildCommandItems({
         navigable,
@@ -81,101 +74,48 @@ export function CommandPalette() {
     [navigable, tEntity, tc, hasRole],
   );
 
-  const items = useMemo(() => filterCommandItems(allItems, query), [allItems, query]);
+  const records = useMemo<CommandItem[]>(() => {
+    if (!searchActive || search.isError) return [];
+    const group = tc('ui.cmd.recordsGroup');
+    return (search.data ?? []).flatMap((hit) => hitToItem(hit, group) ?? []);
+  }, [searchActive, search.isError, search.data, tc]);
 
-  // The record hits that resolve to a route (must match the View's records list).
-  const records = useMemo<GlobalSearchResult[]>(
-    () => (search.data ?? []).filter((h) => hitTo(h) !== null),
-    [search.data],
+  const items = useMemo(
+    () => [...filterCommandItems(navItems, query), ...records],
+    [navItems, query, records],
   );
 
-  const searchActive = query.trim().length >= 2;
-  // Memoized so the empty-case `[]` keeps a stable identity across renders
-  // (else selectAt's useCallback deps churn every render).
-  const visibleRecords = useMemo(() => (searchActive ? records : []), [searchActive, records]);
-  const flatCount = items.length + visibleRecords.length;
+  const loading = searchActive && (search.isFetching || search.isLoading);
+  const status = !searchActive ? null : search.isError ? (
+    <span className="flex items-center gap-2 text-error">
+      <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+      {tc('ui.cmd.searchError')}
+    </span>
+  ) : loading ? (
+    <Spinner className="h-4 w-4" />
+  ) : records.length === 0 ? (
+    tc('ui.cmd.noRecords')
+  ) : null;
 
-  // Clamp the active index whenever the flat list shrinks (e.g. query narrows).
-  useEffect(() => {
-    setActiveIndex((i) => {
-      if (flatCount === 0) return 0;
-      return Math.min(i, flatCount - 1);
-    });
-  }, [flatCount]);
-
-  const close = useCallback(() => setOpen(false), [setOpen]);
-
-  const selectAt = useCallback(
-    (index: number) => {
-      let to: string | null;
-      if (index < items.length) {
-        to = items[index]?.to ?? null;
-      } else {
-        const hit = visibleRecords[index - items.length];
-        to = hit ? hitTo(hit) : null;
-      }
-      if (!to) return;
-      close();
-      navigate(to);
-    },
-    [items, visibleRecords, navigate, close],
-  );
-
-  // Keyboard machine (Arrow/Enter/Escape). Bound at the window so it works
-  // regardless of which inner element holds focus while the palette is open.
-  const stateRef = useRef({ flatCount, activeIndex });
-  stateRef.current = { flatCount, activeIndex };
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      const { flatCount: count } = stateRef.current;
-      switch (e.key) {
-        case 'ArrowDown':
-          e.preventDefault();
-          setActiveIndex((i) => (count === 0 ? 0 : (i + 1) % count));
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          setActiveIndex((i) => (count === 0 ? 0 : (i - 1 + count) % count));
-          break;
-        case 'Home':
-          e.preventDefault();
-          setActiveIndex(0);
-          break;
-        case 'End':
-          e.preventDefault();
-          setActiveIndex(count === 0 ? 0 : count - 1);
-          break;
-        case 'Enter':
-          e.preventDefault();
-          selectAt(stateRef.current.activeIndex);
-          break;
-        case 'Escape':
-          e.preventDefault();
-          close();
-          break;
-        default:
-          break;
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, selectAt, close]);
+  const navCatalogEmpty = !catalogLoading && navigable.length === 0;
 
   return (
-    <CommandPaletteView
+    <KitCommandPalette
       open={open}
-      query={query}
-      onQuery={setQuery}
+      onClose={() => setOpen(false)}
       items={items}
-      searchResults={search.data ?? []}
-      loading={searchActive && (search.isFetching || search.isLoading)}
-      error={searchActive && search.isError}
-      activeIndex={activeIndex}
-      onActiveIndex={setActiveIndex}
-      onSelect={selectAt}
-      onClose={close}
-      navCatalogEmpty={!catalogLoading && navigable.length === 0}
+      onSelect={(item) => {
+        setOpen(false);
+        navigate(item.to);
+      }}
+      query={query}
+      onQueryChange={setQuery}
+      status={status}
+      hints={{ navigate: tc('ui.cmd.hintNavigate'), select: tc('ui.cmd.hintSelect'), close: tc('ui.cmd.hintClose') }}
+      placeholder={tc('ui.cmd.placeholder')}
+      aria-label={tc('ui.cmd.title')}
+      emptyText={tc(navCatalogEmpty ? 'ui.cmd.noNavConfigured' : 'ui.cmd.noMatches')}
+      closeLabel={tc('ui.action.close')}
     />
   );
 }

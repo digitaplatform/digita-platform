@@ -302,12 +302,18 @@ function OverlayGroup() {
         />
       </ShowcaseGroup>
       <ShowcaseGroup title="CommandPalette" exports={['CommandPalette']}>
-        <ShowcaseState state="open · active, disabled and grouped rows">
+        <ShowcaseState state="open · active, disabled and grouped rows, a status row">
           <ShowcaseOpener open={open === 'palette'} onToggle={() => toggle('palette')}>
             Open command palette
           </ShowcaseOpener>
         </ShowcaseState>
-        <CommandPalette open={open === 'palette'} onClose={close} items={PALETTE_ITEMS} onSelect={close} />
+        <CommandPalette
+          open={open === 'palette'}
+          onClose={close}
+          items={PALETTE_ITEMS}
+          onSelect={close}
+          status="Searching records…"
+        />
       </ShowcaseGroup>
     </>
   );

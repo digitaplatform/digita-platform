@@ -81,6 +81,49 @@ describe('CommandPalette', () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
+  it('emits every palette hook, and a row that lost its hook is caught', () => {
+    renderPalette({ status: 'Searching…' });
+    const hook = (name: string) => Array.from(document.body.querySelectorAll(`[data-ui="${name}"]`));
+    expect(hook('command-overlay')).toHaveLength(1);
+    expect(hook('command-palette')[0]).toHaveAttribute('role', 'dialog');
+    expect(hook('command-input')[0]).toHaveAttribute('role', 'combobox');
+    expect(hook('command-group').map((g) => g.textContent)).toEqual(['Navigate', 'Actions']);
+    expect(hook('command-kbd').map((k) => k.textContent)).toEqual(['Ctrl+O', '↑↓', '↵', 'esc']);
+    expect(hook('command-status')[0]).toHaveTextContent('Searching…');
+    expect(hook('command-footer')[0]).toHaveTextContent('↑↓navigate↵selectescclose');
+    expect(hook('command-item')[0]).toHaveAttribute('data-active');
+    expect(hook('command-item')[1]).not.toHaveAttribute('data-active');
+
+    // Every option row is a hooked command-item; the planted defect is one row stripped of
+    // its hook, which this check must report.
+    const unhooked = () => screen.getAllByRole('option').filter((row) => row.getAttribute('data-ui') !== 'command-item');
+    expect(unhooked()).toEqual([]);
+    screen.getAllByRole('option')[2]!.removeAttribute('data-ui');
+    expect(unhooked().map((row) => row.textContent)).toEqual(['Reset demoDestructive']);
+  });
+
+  it('a controlled query is not re-filtered and a controlled active index is reported', () => {
+    const onQueryChange = vi.fn();
+    const onActiveIndexChange = vi.fn();
+    const { input } = renderPalette({ query: 'zzz', onQueryChange, activeIndex: 1, onActiveIndexChange });
+    expect(screen.getAllByRole('option')).toHaveLength(4);
+    expect(screen.getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
+    fireEvent.change(input, { target: { value: 'wipe' } });
+    expect(onQueryChange).toHaveBeenCalledWith('wipe');
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(onActiveIndexChange).toHaveBeenLastCalledWith(2);
+  });
+
+  it('Home and End jump to the first and the last enabled row', () => {
+    const { input, onSelect } = renderPalette();
+    fireEvent.keyDown(input, { key: 'End' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'reset' }));
+    fireEvent.keyDown(input, { key: 'Home' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'home' }));
+  });
+
   it('renders nothing while closed', () => {
     render(<CommandPalette open={false} items={items} onSelect={() => {}} onClose={() => {}} />);
     expect(screen.queryByRole('dialog')).toBeNull();

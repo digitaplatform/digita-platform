@@ -80,7 +80,7 @@ export type { NavigationBarProps, NavigationBarItem } from './composites/Navigat
 export { ToastHost, useToast } from './composites/Toast.js';
 export type { ToastHostProps, ToastApi, ToastOptions, ToastAction, ToastType } from './composites/Toast.js';
 export { CommandPalette } from './composites/CommandPalette.js';
-export type { CommandPaletteProps, CommandPaletteItem } from './composites/CommandPalette.js';
+export type { CommandPaletteProps, CommandPaletteItem, CommandPaletteHints } from './composites/CommandPalette.js';
 export { Watermark } from './composites/Watermark.js';
 export type { WatermarkProps, WatermarkTone, WatermarkDensity } from './composites/Watermark.js';
 export { SignatureBackdrop } from './composites/SignatureBackdrop.js';

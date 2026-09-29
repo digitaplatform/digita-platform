@@ -1,3 +1,4 @@
+import type { CommandPaletteItem } from '@digitaplatform/components';
 import type { EntitySummary } from '@/types';
 
 /**
@@ -9,26 +10,15 @@ import type { EntitySummary } from '@/types';
  * every app.
  */
 
-export type CommandItemKind = 'nav-list' | 'nav-new' | 'settings' | 'account';
-
-export interface CommandItem {
-  /** Stable id, unique within the list (also the DOM id seed for aria). */
-  id: string;
-  kind: CommandItemKind;
-  label: string;
-  sublabel?: string;
-  /** Extra match tokens (entity name, action verb) not shown but searchable. */
-  keywords?: string;
-  /** Router path to navigate to on select. */
+/** A kit palette row that navigates: `to` is the router path selecting it opens. */
+export interface CommandItem extends CommandPaletteItem {
   to: string;
-  /** lucide icon name hint (the View resolves it; absent → generic). */
-  icon?: string;
 }
 
 /** Curated engine-core settings entries — gated to admins by the host. */
-const SETTINGS_ENTITIES: ReadonlyArray<{ name: string; label: string; icon: string }> = [
-  { name: 'Setting', label: 'ui.menu.settings', icon: 'settings' },
-  { name: 'BrandingSetting', label: 'ui.menu.branding', icon: 'palette' },
+const SETTINGS_ENTITIES: ReadonlyArray<{ name: string; label: string }> = [
+  { name: 'Setting', label: 'ui.menu.settings' },
+  { name: 'BrandingSetting', label: 'ui.menu.branding' },
 ];
 
 export interface BuildCommandItemsArgs {
@@ -54,27 +44,26 @@ export function buildCommandItems({
   hasRole,
 }: BuildCommandItemsArgs): CommandItem[] {
   const items: CommandItem[] = [];
+  const group = tc('ui.cmd.navGroup');
 
   for (const e of navigable) {
     // label_plural is localized at the meta seam; entityLabel resolves only the singular key.
     const plural = e.label_plural ?? e.label ?? e.name;
     items.push({
       id: `nav-list:${e.name}`,
-      kind: 'nav-list',
+      group,
       label: plural,
       sublabel: tc('ui.cmd.openList'),
       keywords: `${e.name} ${e.module ?? ''} list`,
       to: `/${e.name}`,
-      icon: e.icon,
     });
     items.push({
       id: `nav-new:${e.name}`,
-      kind: 'nav-new',
+      group,
       label: tc('ui.cmd.newRecord').replace('{entity}', entityLabel(e.name, e.label ?? e.name)),
       sublabel: plural,
       keywords: `${e.name} new create add`,
       to: `/${e.name}/new`,
-      icon: e.icon,
     });
   }
 
@@ -82,24 +71,22 @@ export function buildCommandItems({
     for (const s of SETTINGS_ENTITIES) {
       items.push({
         id: `settings:${s.name}`,
-        kind: 'settings',
+        group,
         label: tc(s.label),
         sublabel: tc('ui.cmd.settingsGroup'),
         keywords: `${s.name} settings configuration admin`,
         to: `/${s.name}`,
-        icon: s.icon,
       });
     }
   }
 
   items.push({
     id: 'account',
-    kind: 'account',
+    group,
     label: tc('ui.menu.account'),
     sublabel: tc('ui.cmd.accountSub'),
     keywords: 'account profile password sessions me',
     to: '/account',
-    icon: 'user',
   });
 
   return items;

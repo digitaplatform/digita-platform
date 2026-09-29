@@ -26,12 +26,30 @@ export interface CommandPaletteItem {
   disabled?: boolean;
 }
 
-export interface CommandPaletteProps {
+export interface CommandPaletteHints {
+  navigate: string;
+  select: string;
+  close: string;
+}
+
+export interface CommandPaletteProps<T extends CommandPaletteItem = CommandPaletteItem> {
   open: boolean;
   onClose: () => void;
-  items: CommandPaletteItem[];
+  items: T[];
   /** Fires on Enter / click; the HOST decides what to do (navigate, close, …). */
-  onSelect: (item: CommandPaletteItem) => void;
+  onSelect: (item: T) => void;
+  /** Controlled query. When set, the host owns the filter too: the items arrive
+   *  already narrowed (an async search cannot be re-filtered by substring). */
+  query?: string;
+  onQueryChange?: (query: string) => void;
+  /** Controlled highlight (index into `items`); uncontrolled when absent. */
+  activeIndex?: number;
+  onActiveIndexChange?: (index: number) => void;
+  /** Row under the items for what is not an item: a search in flight, a failed
+   *  search, an async group that came back empty. It replaces the empty row. */
+  status?: ReactNode;
+  /** Labels of the footer's key hints. */
+  hints?: CommandPaletteHints;
   placeholder?: string;
   /** Accessible dialog name. */
   'aria-label'?: string;
@@ -47,21 +65,29 @@ export interface CommandPaletteProps {
  * the BaseDialog idiom: portal to <body>, tokenized scrim, anim-pop-in panel,
  * self-contained focus trap (kit-internal useFocusTrap), focus restored to the
  * opener on close. Keyboard: type-to-filter, ArrowUp/Down move (disabled rows
- * skipped), Enter selects, Escape closes (respecting `defaultPrevented`, so a
- * capture-phase consumer like an open Popover wins). Mobile <sm is a full-screen
- * sheet with a pinned input; >=sm a centered floating panel.
+ * skipped), Home/End jump, Enter selects, Escape closes (respecting
+ * `defaultPrevented`, so a capture-phase consumer like an open Popover wins).
+ * Mobile <sm is a full-screen sheet with a pinned input; >=sm a centered
+ * floating panel. The query and the highlight are controlled when the host
+ * passes them, so an async host can own the filter and read the active row.
  */
-export function CommandPalette({
+export function CommandPalette<T extends CommandPaletteItem>({
   open,
   onClose,
   items,
   onSelect,
+  query: queryProp,
+  onQueryChange,
+  activeIndex: activeProp,
+  onActiveIndexChange,
+  status,
+  hints = { navigate: 'navigate', select: 'select', close: 'close' },
   placeholder = 'Type a command or search…',
   'aria-label': ariaLabel = 'Command palette',
   emptyText = 'No results',
   closeLabel = 'Close',
   className,
-}: CommandPaletteProps) {
+}: CommandPaletteProps<T>) {
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -69,8 +95,13 @@ export function CommandPalette({
   const listboxId = `${baseId}-listbox`;
   const optionId = (i: number) => `${baseId}-option-${i}`;
 
-  const [query, setQuery] = useState('');
-  const q = query.trim().toLowerCase();
+  const [queryState, setQueryState] = useState('');
+  const query = queryProp ?? queryState;
+  const setQuery = (value: string) => {
+    setQueryState(value);
+    onQueryChange?.(value);
+  };
+  const q = queryProp === undefined ? query.trim().toLowerCase() : '';
   const filtered = useMemo(
     () =>
       q.length === 0
@@ -81,7 +112,12 @@ export function CommandPalette({
     [items, q],
   );
 
-  const [active, setActive] = useState(-1);
+  const [activeState, setActiveState] = useState(-1);
+  const active = activeProp ?? activeState;
+  const setActive = (index: number) => {
+    setActiveState(index);
+    onActiveIndexChange?.(index);
+  };
 
   useFocusTrap(panelRef, open);
 
@@ -109,9 +145,9 @@ export function CommandPalette({
       ?.scrollIntoView({ block: 'nearest' });
   }, [active, open]);
 
-  const move = (dir: 1 | -1) => {
+  const move = (dir: 1 | -1, from = active) => {
     if (filtered.length === 0) return;
-    let i = active < 0 ? (dir === 1 ? -1 : 0) : active;
+    let i = from < 0 ? (dir === 1 ? -1 : 0) : from;
     for (let step = 0; step < filtered.length; step++) {
       i = (i + dir + filtered.length) % filtered.length;
       if (!filtered[i]!.disabled) {
@@ -135,6 +171,12 @@ export function CommandPalette({
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       move(-1);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      move(1, -1);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      move(-1, 0);
     } else if (e.key === 'Enter') {
       const it = active >= 0 ? filtered[active] : undefined;
       if (it && !it.disabled) {
@@ -170,6 +212,7 @@ export function CommandPalette({
         id={optionId(i)}
         data-index={i}
         data-ui="command-item"
+        data-active={isActive || undefined}
         role="option"
         aria-selected={isActive}
         aria-disabled={item.disabled || undefined}
@@ -196,11 +239,7 @@ export function CommandPalette({
           <span className="truncate">{item.label}</span>
           {item.sublabel && <span className="truncate text-xs text-textMuted">{item.sublabel}</span>}
         </span>
-        {item.shortcut && (
-          <kbd className="shrink-0 rounded border border-border bg-subtle px-1 font-sans text-micro text-textMuted">
-            {item.shortcut}
-          </kbd>
-        )}
+        {item.shortcut && <Kbd className="shrink-0">{item.shortcut}</Kbd>}
       </li>,
     );
   });
@@ -269,7 +308,12 @@ export function CommandPalette({
           className="min-h-0 flex-1 overflow-y-auto py-1"
         >
           {rows}
-          {filtered.length === 0 && (
+          {status != null && (
+            <li role="presentation" data-ui="command-status" className="px-4 py-2.5 text-sm text-textMuted">
+              {status}
+            </li>
+          )}
+          {filtered.length === 0 && status == null && (
             <li
               role="option"
               aria-selected={false}
@@ -280,8 +324,38 @@ export function CommandPalette({
             </li>
           )}
         </ul>
+
+        {/* Key hints: desktop only, a phone has no keyboard to hint at. */}
+        <div
+          data-ui="command-footer"
+          className="hidden shrink-0 items-center gap-3 border-t border-border px-3 py-1.5 text-[11px] text-textMuted sm:flex"
+        >
+          <span className="flex items-center gap-1">
+            <Kbd>↑↓</Kbd>
+            <span>{hints.navigate}</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <Kbd>↵</Kbd>
+            <span>{hints.select}</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <Kbd>esc</Kbd>
+            <span>{hints.close}</span>
+          </span>
+        </div>
       </div>
     </div>,
     document.body,
+  );
+}
+
+function Kbd({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <kbd
+      data-ui="command-kbd"
+      className={cn('rounded border border-border bg-subtle px-1 font-sans text-micro text-textMuted', className)}
+    >
+      {children}
+    </kbd>
   );
 }
