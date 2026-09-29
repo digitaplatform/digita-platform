@@ -1,4 +1,5 @@
 import type { EntityDefinition } from "@digitaplatform/shared";
+import type { z } from "zod";
 import type { ValidationError, ValidationResult } from "./types.js";
 import { ZodSchemaBuilder } from "./zod-schema-builder.js";
 import { validateRowUniqueness } from "./row-uniqueness-validator.js";
@@ -14,6 +15,11 @@ import { validateRowUniqueness } from "./row-uniqueness-validator.js";
  * rows the path becomes `lines[2].product` to match the legacy validator's
  * shape (and existing UI translation keys).
  *
+ * Message keys: every rule `field-to-zod.ts` builds names its key as its Zod
+ * message, and that key is the issue's `message_key`. A Zod check that names
+ * none, such as a value of the wrong type, gets `field_invalid_type` through the
+ * parse's error map, which ranks below a message the schema names.
+ *
  * The entity validator-zod is stateful only via its singleton schema builder,
  * which caches per-entity. Pass a builder for explicit control in tests.
  */
@@ -26,19 +32,16 @@ export function validateEntityDataZod(
   const errors: ValidationError[] = [];
 
   const schema = builder.get(entity);
-  const result = schema.safeParse(data);
+  const result = schema.safeParse(data, { error: () => "field_invalid_type", reportInput: true });
 
   if (!result.success) {
     for (const issue of result.error.issues) {
       const fieldPath = pathToString(issue.path);
-      // The "required" message key comes from Zod's own "Required" / undefined
-      // detection; map to the platform's `field_required` for parity.
-      const messageKey = mapZodIssue(issue.code, issue.message);
       errors.push({
         field: fieldPath,
-        message_key: messageKey,
+        message_key: issue.message,
         message: issue.message,
-        params: { field: fieldPath },
+        params: issueParams(fieldPath, issue),
       });
     }
   }
@@ -65,25 +68,11 @@ function pathToString(path: ReadonlyArray<PropertyKey>): string {
   return out;
 }
 
-function mapZodIssue(code: string, message: string): string {
-  // Custom refinements carry their own message key (e.g. the per-row
-  // mandatory_depends_on check) — preserve it instead of flattening to a generic.
-  if (message === "field_mandatory_depends_on" || message === "field_required") return message;
-  switch (code) {
-    case "invalid_type":
-      // Zod uses invalid_type for missing required fields too — distinguish
-      // here is awkward without inspecting the issue further. Use the most
-      // common platform key; downstream UI already handles both.
-      return "field_required";
-    case "too_small":
-      return "field_min_length";
-    case "too_big":
-      return "field_max_length";
-    case "invalid_string":
-      return "field_invalid_regex";
-    case "invalid_enum_value":
-      return "field_invalid_select";
-    default:
-      return "field_invalid_type";
-  }
+/** The bound a length, range or row-count text names, or the option a Select refused. */
+function issueParams(fieldPath: string, issue: z.core.$ZodIssue): Record<string, string> {
+  const params: Record<string, string> = { field: fieldPath };
+  if (issue.code === "too_small") params.min = String(issue.minimum);
+  if (issue.code === "too_big") params.max = String(issue.maximum);
+  if (issue.code === "invalid_value") params.value = String(issue.input);
+  return params;
 }

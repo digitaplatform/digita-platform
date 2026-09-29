@@ -88,7 +88,7 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
       // values, http(s), and inline data:image are allowed.
       return dataLikeSchema(field).refine(
         (v) => typeof v !== "string" || isSafeAttachValue(v),
-        "field_unsafe_url",
+        "field_invalid_url",
       );
     case "Code":
     case "Markdown":
@@ -112,7 +112,7 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
     case "Percent":
       return z.coerce.number();
     case "Rating":
-      return z.coerce.number().min(0).max(1);
+      return z.coerce.number().min(0, "field_invalid_rating").max(1, "field_invalid_rating");
     case "Check":
       // Accept boolean OR 0/1 (matches the existing handler's tolerance).
       return z.union([z.boolean(), z.literal(0), z.literal(1)]);
@@ -149,10 +149,10 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
       // Non-negative integer count of seconds — no free strings (was silently
       // truncated/NaN'd). Child-table Duration cells bypass serializeFields, so
       // gate them here too.
-      return z.coerce.number().int().min(0);
+      return z.coerce.number().int("field_invalid_duration").min(0, "field_invalid_duration");
     case "Select":
       if (Array.isArray(field.options) && field.options.length > 0) {
-        return z.enum(field.options as [string, ...string[]]);
+        return z.enum(field.options as [string, ...string[]], "field_invalid_select");
       }
       return z.string();
     case "Link":

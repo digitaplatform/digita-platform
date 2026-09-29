@@ -530,3 +530,61 @@ describe("validateEntityDataZod — a blank value is no value", () => {
     expect(r.errors.map((x) => [x.field, x.message_key])).toEqual([["reason", "field_mandatory_depends_on"]]);
   });
 });
+
+describe("validateEntityDataZod — a failed rule answers the key it names", () => {
+  const cases: Array<[string, Record<string, unknown>, unknown, string, Record<string, string>?]> = [
+    ["regex with regex_message", { fieldtype: "Data", regex: "^[0-9-]{10,17}$", regex_message: "isbn_invalid" }, "abc", "isbn_invalid"],
+    ["regex", { fieldtype: "Data", regex: "^[0-9-]{10,17}$" }, "abc", "field_invalid_regex"],
+    ["Select option", { fieldtype: "Select", options: ["draft", "done"] }, "gone", "field_invalid_select", { value: "gone" }],
+    ["Email", { fieldtype: "Data", options: "Email" }, "no-at-sign", "field_invalid_email"],
+    ["URL", { fieldtype: "Data", options: "URL" }, "not a url", "field_invalid_url"],
+    ["Phone", { fieldtype: "Data", options: "Phone" }, "call me", "field_invalid_phone"],
+    ["IP", { fieldtype: "Data", options: "IP" }, "localhost", "field_invalid_ip"],
+    ["min_length", { fieldtype: "Data", min_length: 3 }, "ab", "field_min_length", { min: "3" }],
+    ["max_length", { fieldtype: "Data", max_length: 3 }, "abcd", "field_max_length", { max: "3" }],
+    ["min_value", { fieldtype: "Int", min_value: 3 }, 1, "field_min_value", { min: "3" }],
+    ["max_value", { fieldtype: "Float", max_value: 3 }, 5, "field_max_value", { max: "3" }],
+    ["non_negative", { fieldtype: "Float", non_negative: true }, -1, "field_non_negative", { min: "0" }],
+    ["Rating", { fieldtype: "Rating" }, 5, "field_invalid_rating", { max: "1" }],
+    ["Duration", { fieldtype: "Duration" }, 1.5, "field_invalid_duration"],
+    ["Color", { fieldtype: "Color" }, "red", "field_invalid_color"],
+    ["Time", { fieldtype: "Time" }, "25:00", "field_invalid_time"],
+    ["Date", { fieldtype: "Date" }, "30.09.2026", "field_invalid_date"],
+    ["Datetime", { fieldtype: "Datetime" }, "not a time", "field_invalid_date"],
+    ["Attach with a script URL", { fieldtype: "Attach" }, "javascript:alert(1)", "field_invalid_url"],
+    ["Int given text", { fieldtype: "Int" }, "abc", "field_invalid_type"],
+  ];
+  for (const [rule, field, value, key, params] of cases) {
+    it(`${rule} answers ${key}`, () => {
+      builder.invalidate("TestDoc");
+      const r = validateEntityDataZod(entity([{ fieldname: "f", label: "F", ...field }]), { f: value }, builder);
+      expect(r.errors.map((e) => [e.field, e.message_key])).toEqual([["f", key]]);
+      expect(r.errors[0]?.params).toEqual({ field: "f", ...params });
+    });
+  }
+
+  it("a Table row count answers table_min_rows and table_max_rows with the bound", () => {
+    const e = entity([
+      { fieldname: "lines", fieldtype: "Table", label: "Lines", min_rows: 2, max_rows: 3, child_fields: [] },
+    ]);
+    builder.invalidate("TestDoc");
+    const few = validateEntityDataZod(e, { lines: [{}] }, builder).errors;
+    expect(few.map((x) => [x.field, x.message_key, x.params])).toEqual([["lines", "table_min_rows", { field: "lines", min: "2" }]]);
+    const many = validateEntityDataZod(e, { lines: [{}, {}, {}, {}] }, builder).errors;
+    expect(many.map((x) => [x.field, x.message_key, x.params])).toEqual([["lines", "table_max_rows", { field: "lines", max: "3" }]]);
+  });
+
+  it("a Table cell answers the key of its own rule on the cell's path", () => {
+    const e = entity([
+      {
+        fieldname: "lines",
+        fieldtype: "Table",
+        label: "Lines",
+        child_fields: [{ fieldname: "qty", fieldtype: "Int", label: "Qty", min_value: 1 }],
+      },
+    ]);
+    builder.invalidate("TestDoc");
+    const r = validateEntityDataZod(e, { lines: [{ qty: 0 }] }, builder);
+    expect(r.errors.map((x) => [x.field, x.message_key])).toEqual([["lines[0].qty", "field_min_value"]]);
+  });
+});
