@@ -4,6 +4,7 @@ import type { MongoDBService } from "./mongodb-service.js";
 import { IndexManager } from "./index-manager.js";
 import { env } from "../config/env.js";
 import { createLogger } from "../logging/logger.js";
+import { encryptPassword, passwordFieldPaths } from "../entity/password-cipher.js";
 
 const log = createLogger("schema-migrator");
 
@@ -92,7 +93,68 @@ export class SchemaMigrator {
     // Initialize sequence if needed
     await this.initializeSequence(entity);
 
+    await this.encryptStoredPasswords(entity);
+
     return result;
+  }
+
+  /**
+   * Move a Password value stored as sent forward to its encrypted form: the
+   * entity's rows, the cells of its Table rows, and the old and new value of its
+   * `_versions` changes. A value that already carries a key id is left alone, so
+   * the step runs on every boot and changes nothing once every value has moved.
+   */
+  private async encryptStoredPasswords(entity: EntityDefinition): Promise<void> {
+    const paths = passwordFieldPaths(entity);
+    if (paths.length === 0) return;
+    const header = paths.filter((p) => !p.includes("."));
+    const cells = paths.filter((p) => p.includes(".")).map((p) => p.split(".") as [string, string]);
+    const isClear = (v: unknown): v is string => typeof v === "string";
+    const forward = (v: string): unknown => (v === "" ? null : encryptPassword(v));
+    const forwardRows = (rows: unknown[], field: string): unknown[] =>
+      rows.map((r) => {
+        const row = r as Record<string, unknown> | null;
+        return row && typeof row === "object" && isClear(row[field]) ? { ...row, [field]: forward(row[field]) } : r;
+      });
+
+    const clearRows = await this.db.findManyByFilter(
+      entity.name,
+      {
+        $or: [
+          ...header.map((f) => ({ [f]: { $type: "string" } })),
+          ...cells.map(([table, f]) => ({ [table]: { $elemMatch: { [f]: { $type: "string" } } } })),
+        ],
+      },
+      entity.database,
+    );
+    for (const row of clearRows) {
+      const set: Record<string, unknown> = {};
+      for (const f of header) if (isClear(row[f])) set[f] = forward(row[f]);
+      for (const [table, f] of cells) if (Array.isArray(row[table])) set[table] = forwardRows(row[table], f);
+      await this.db.updateOne(entity.name, row["_id"] as string, set, entity.database);
+    }
+
+    // A change of a Table cell is recorded under `<table>[<row_id>].<field>`.
+    const changePaths = [...header, ...cells.map(([table, f]) => new RegExp(`^${table}\\[[^\\]]*\\]\\.${f}$`))];
+    const versions = await this.db.findManyByFilter(
+      "_versions",
+      { entity: entity.name, changes: { $elemMatch: { field: { $in: changePaths }, $or: [{ old: { $type: "string" } }, { new: { $type: "string" } }] } } },
+      DIGITA.DATABASES.AUDITS,
+    );
+    for (const version of versions) {
+      const changes = (version["changes"] as Array<Record<string, unknown>>).map((c) => {
+        if (!changePaths.some((p) => (typeof p === "string" ? p === c["field"] : p.test(String(c["field"]))))) return c;
+        return {
+          ...c,
+          old: isClear(c["old"]) ? forward(c["old"]) : c["old"],
+          new: isClear(c["new"]) ? forward(c["new"]) : c["new"],
+        };
+      });
+      await this.db.updateOne("_versions", version["_id"] as string, { changes }, DIGITA.DATABASES.AUDITS);
+    }
+    if (clearRows.length || versions.length) {
+      log.info({ entity: entity.name, rows: clearRows.length, versions: versions.length }, "Password values encrypted");
+    }
   }
 
   /**

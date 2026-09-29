@@ -29,6 +29,7 @@ vi.mock("../src/core/config/env.js", () => {
     IMPORT_MAX_ROWS: 100, EXPORT_MAX_ROWS: 100,
     APP_DIRS: [], ENTITIES_DIR: "./src/entities", MODULES_DIR: "./src/modules", TRANSLATIONS_DIR: process.env.TRANSLATIONS_DIR,
     AUTO_MIGRATE: true, TRACK_CHANGES_DEFAULT: false,
+    PASSWORD_FIELD_KEYS: "k1=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=", PASSWORD_FIELD_ACTIVE_KEY_ID: "k1",
   } };
 });
 vi.mock("../src/core/logging/logger.js", () => ({
@@ -51,7 +52,10 @@ import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
+import type { HookRunner } from "../src/core/hooks/hook-runner.js";
 import type { EntityDefinition } from "@digitaplatform/shared";
+import { SchemaMigrator } from "../src/core/database/schema-migrator.js";
+import { decryptPassword, isEncryptedPassword } from "../src/core/entity/password-cipher.js";
 
 // A Password value must not rest in MongoDB as it was sent: whoever reads the
 // database, a backup or a dump would read it.
@@ -61,9 +65,17 @@ const vault = {
   database: "app",
   naming: { strategy: "auto_increment", prefix: "V-", pad_length: 4 },
   is_submittable: false,
+  track_changes: true,
   fields: [
     { fieldname: "title", fieldtype: "Data", label: "Title", idx: 1 },
     { fieldname: "secret", fieldtype: "Password", label: "Secret", idx: 2 },
+    {
+      fieldname: "accounts", fieldtype: "Table", label: "Accounts", idx: 3,
+      child_fields: [
+        { fieldname: "host", fieldtype: "Data", label: "Host", idx: 1 },
+        { fieldname: "password", fieldtype: "Password", label: "Password", idx: 2 },
+      ],
+    },
   ],
   permissions: [
     { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
@@ -73,6 +85,7 @@ const vault = {
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
 let db: MongoDBService;
+let hookRunner: HookRunner;
 let authToken: string;
 
 beforeAll(async () => {
@@ -83,6 +96,7 @@ beforeAll(async () => {
   const result = await createApp({ authn: ta.authn });
   app = result.app;
   db = result.db;
+  hookRunner = result.hookRunner;
   await result.startup();
   await app.ready();
   result.registry.register(vault);
@@ -105,18 +119,125 @@ function authHeaders() {
   return { authorization: `Bearer ${authToken}` };
 }
 
+const clear = decryptPassword;
+let vaultId: string;
+
 describe("a Password value at rest", () => {
   it("is not the value as sent", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/v1/resource/Vault",
       headers: authHeaders(),
-      payload: { title: "Mail server", secret: "s3cret-value" },
+      payload: { title: "Mail server", secret: "s3cret-value", accounts: [{ host: "smtp", password: "row-secret" }] },
     });
     expect(res.statusCode).toBe(201);
-    const raw = (await db.findOne("Vault", res.json().data._id, "app")) as Record<string, unknown>;
+    vaultId = res.json().data._id;
+    const raw = (await db.findOne("Vault", vaultId, "app")) as Record<string, unknown>;
     expect(raw["title"]).toBe("Mail server");
     expect(raw["secret"]).toBeTruthy();
     expect(raw["secret"]).not.toBe("s3cret-value");
+  });
+
+  it("is AES-256-GCM under the active key id and decrypts through the hook runtime", async () => {
+    const raw = (await db.findOne("Vault", vaultId, "app")) as Record<string, unknown>;
+    expect(isEncryptedPassword(raw["secret"])).toBe(true);
+    expect((raw["secret"] as { key_id: string }).key_id).toBe("k1");
+    expect(hookRunner.getServices()!.decryptPassword(raw["secret"])).toBe("s3cret-value");
+  });
+
+  it("is encrypted inside a Table row too", async () => {
+    const raw = (await db.findOne("Vault", vaultId, "app")) as Record<string, unknown>;
+    const row = (raw["accounts"] as Record<string, unknown>[])[0]!;
+    expect(row["host"]).toBe("smtp");
+    expect(row["password"]).not.toBe("row-secret");
+    expect(clear(row["password"])).toBe("row-secret");
+  });
+
+  it("stays when a save omits it and when a Table row comes back as read", async () => {
+    const before = (await db.findOne("Vault", vaultId, "app")) as Record<string, unknown>;
+    const read = await app.inject({ method: "GET", url: `/api/v1/resource/Vault/${vaultId}`, headers: authHeaders() });
+    expect(read.json().data.secret).toBeUndefined();
+    const res = await app.inject({
+      method: "PUT",
+      url: `/api/v1/resource/Vault/${vaultId}`,
+      headers: authHeaders(),
+      payload: { title: "Mail server 2", accounts: read.json().data.accounts },
+    });
+    expect(res.statusCode).toBe(200);
+    const after = (await db.findOne("Vault", vaultId, "app")) as Record<string, unknown>;
+    expect(after["title"]).toBe("Mail server 2");
+    expect(after["secret"]).toEqual(before["secret"]);
+    expect(after["accounts"]).toEqual(before["accounts"]);
+  });
+
+  it("leaves no clear value in _versions", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: `/api/v1/resource/Vault/${vaultId}`,
+      headers: authHeaders(),
+      payload: { secret: "s3cret-second" },
+    });
+    expect(res.statusCode).toBe(200);
+    const versions = await db.findManyByFilter("_versions", { entity: "Vault", document_name: vaultId }, "audits");
+    const secretChanges = versions.flatMap((v) => (v["changes"] as { field: string; old: unknown; new: unknown }[]).filter((c) => c.field === "secret"));
+    expect(secretChanges.length).toBeGreaterThan(0);
+    expect(JSON.stringify(versions)).not.toContain("s3cret");
+    expect(clear(secretChanges[secretChanges.length - 1]!.new)).toBe("s3cret-second");
+  });
+
+  it("encrypts new values with a new active key while an old key stays readable", async () => {
+    const before = (await db.findOne("Vault", vaultId, "app")) as Record<string, unknown>;
+    (env as { PASSWORD_FIELD_KEYS: string }).PASSWORD_FIELD_KEYS += ",k2=YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODk=";
+    (env as { PASSWORD_FIELD_ACTIVE_KEY_ID: string }).PASSWORD_FIELD_ACTIVE_KEY_ID = "k2";
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/resource/Vault",
+      headers: authHeaders(),
+      payload: { title: "Rotated", secret: "s3cret-rotated" },
+    });
+    expect(res.statusCode).toBe(201);
+    const raw = (await db.findOne("Vault", res.json().data._id, "app")) as Record<string, unknown>;
+    expect((raw["secret"] as { key_id: string }).key_id).toBe("k2");
+    expect(clear(raw["secret"])).toBe("s3cret-rotated");
+    expect(clear(before["secret"])).toBe("s3cret-second");
+  });
+});
+
+describe("a clear Password value stored before this change", () => {
+  const migrator = () => new SchemaMigrator(db);
+
+  it("moves forward to its encrypted form by the migration, in rows, Table cells and _versions", async () => {
+    await db.insertOne("Vault", {
+      _id: "V-9001", title: "Old", secret: "old-clear", accounts: [{ _row_id: "r1", host: "imap", password: "old-row-clear" }, { _row_id: "r2", host: "pop", password: null }],
+    }, "app");
+    await db.insertOne("_versions", {
+      _id: "old-version", entity: "Vault", document_name: "V-9001", changed_by: "admin@digita.local", timestamp: new Date(),
+      changes: [{ field: "secret", old: null, new: "old-clear" }, { field: "accounts[r1].password", old: "older", new: "old-row-clear" }, { field: "title", old: "a", new: "Old" }],
+    }, "audits");
+
+    await migrator().migrate(vault);
+
+    const raw = (await db.findOne("Vault", "V-9001", "app")) as Record<string, unknown>;
+    expect(raw["secret"]).not.toBe("old-clear");
+    expect(clear(raw["secret"])).toBe("old-clear");
+    const rows = raw["accounts"] as Record<string, unknown>[];
+    expect(clear(rows[0]!["password"])).toBe("old-row-clear");
+    expect(rows[1]!["password"]).toBeNull();
+    const version = (await db.findOne("_versions", "old-version", "audits")) as Record<string, unknown>;
+    expect(JSON.stringify(version)).not.toContain("old-clear");
+    expect(JSON.stringify(version)).not.toContain("older");
+    const changes = version["changes"] as { field: string; old: unknown; new: unknown }[];
+    expect(changes[0]!.old).toBeNull();
+    expect(clear(changes[0]!.new)).toBe("old-clear");
+    expect(clear(changes[1]!.old)).toBe("older");
+    expect(changes[2]).toEqual({ field: "title", old: "a", new: "Old" });
+  });
+
+  it("is left alone by a second run once it carries a key id", async () => {
+    const before = await db.findOne("Vault", "V-9001", "app");
+    const versionBefore = await db.findOne("_versions", "old-version", "audits");
+    await migrator().migrate(vault);
+    expect(await db.findOne("Vault", "V-9001", "app")).toEqual(before);
+    expect(await db.findOne("_versions", "old-version", "audits")).toEqual(versionBefore);
   });
 });

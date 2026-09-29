@@ -4,6 +4,8 @@ import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from "@digitaplatform/shared";
 import { isValidColor } from "../validation/validators/color.js";
 import { evaluateExpression } from "../expression/expression-evaluator.js";
 
+const encryptedPasswordSchema = z.object({ key_id: z.string(), iv: z.string(), tag: z.string(), data: z.string() });
+
 /**
  * Build a Zod schema from an `EntityDefinition` for runtime data
  * validation. Validates required, length, regex, range, enum options,
@@ -89,7 +91,9 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
     case "TextEditor":
       return z.string();
     case "Password":
-      return z.string();
+      // The value as sent, or a stored value coming back: the schema also runs
+      // on the serialized document, and a Table row is written whole.
+      return z.union([z.string(), encryptedPasswordSchema]);
     case "Color":
       // Single source of truth for the hex rule: validators/color.ts
       return z.string().refine(isValidColor, "field_invalid_color");

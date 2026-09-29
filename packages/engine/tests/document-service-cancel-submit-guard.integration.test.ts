@@ -13,6 +13,7 @@ import { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { PermissionChecker } from "../src/core/permissions/permission-checker.js";
 import { HookRunner } from "../src/core/hooks/hook-runner.js";
+import { decryptPassword } from "../src/core/entity/password-cipher.js";
 import { LinkValidator } from "../src/core/link/link-validator.js";
 import { LinkTitleResolver } from "../src/core/link/link-title-resolver.js";
 import { FetchFromResolver } from "../src/core/fetch/fetch-from-resolver.js";
@@ -118,7 +119,7 @@ beforeAll(async () => {
   registry = new EntityRegistry();
   const permissionChecker = new PermissionChecker(registry);
   hookRunner = new HookRunner();
-  hookRunner.setServices({ db, registry });
+  hookRunner.setServices({ db, registry, decryptPassword });
   const linkValidator = new LinkValidator(registry, db);
   const linkTitleResolver = new LinkTitleResolver(registry, db, new TranslationService(db), permissionChecker);
   const fetchFromResolver = new FetchFromResolver(registry, db);

@@ -29,6 +29,7 @@ vi.mock("../src/core/config/env.js", () => {
     IMPORT_MAX_ROWS: 100, EXPORT_MAX_ROWS: 100,
     APP_DIRS: [], ENTITIES_DIR: "./src/entities", MODULES_DIR: "./src/modules", TRANSLATIONS_DIR: process.env.TRANSLATIONS_DIR,
     AUTO_MIGRATE: true, TRACK_CHANGES_DEFAULT: false,
+    PASSWORD_FIELD_KEYS: "k1=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=", PASSWORD_FIELD_ACTIVE_KEY_ID: "k1",
   } };
 });
 vi.mock("../src/core/logging/logger.js", () => ({

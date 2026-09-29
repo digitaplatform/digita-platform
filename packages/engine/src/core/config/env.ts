@@ -428,6 +428,14 @@ export const env = {
   PRUNE_ORPHAN_VIEWS: getEnvBool("PRUNE_ORPHAN_VIEWS", false),
   TRACK_CHANGES_DEFAULT: getEnvBool("TRACK_CHANGES_DEFAULT", true),
 
+  // The key set a Password field's value is encrypted with at rest (AES-256-GCM):
+  // `<id>=<base64 of 32 bytes>` pairs, comma separated, and the id of the key that
+  // encrypts new values. A stored value carries its key id, so an old key stays listed
+  // until no value names it. Required as soon as a registered entity stores a Password
+  // field: start-up fails and names the setting (password-cipher.ts).
+  PASSWORD_FIELD_KEYS: getEnv("PASSWORD_FIELD_KEYS", ""),
+  PASSWORD_FIELD_ACTIVE_KEY_ID: getEnv("PASSWORD_FIELD_ACTIVE_KEY_ID", ""),
+
   // Dev convenience (opt-in): seed app data at boot, auto/non-destructive (skip
   // rows whose _id already exists). Two INDEPENDENT tiers, both OFF by default —
   // production seeds ONLY via POST /api/v1/admin/reseed (destructive reset path).

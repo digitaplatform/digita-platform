@@ -1,5 +1,6 @@
 import type { EntityDefinition, FieldType, FieldDefinition } from "@digitaplatform/shared";
 import { LAYOUT_FIELD_TYPES } from "@digitaplatform/shared";
+import { childPasswordFields, encryptPassword, isEncryptedPassword } from "./password-cipher.js";
 
 /**
  * Field-type handlers cover (de)serialization for MongoDB storage. Validation
@@ -178,14 +179,18 @@ const jsonHandler: FieldTypeHandler = {
   },
 };
 
+// A value that already carries a key id is a stored value coming back, as a
+// Table row does on a whole-table save, and stays as it is.
 const passwordHandler: FieldTypeHandler = {
   isStored: true,
   toStorage(value) {
-    return value;
-  }, // Hashing done in document-service
+    if (value === null || value === undefined || value === "") return null;
+    if (isEncryptedPassword(value)) return value;
+    return encryptPassword(String(value));
+  },
   fromStorage() {
     return undefined;
-  }, // Never return password
+  },
 };
 
 const tagHandler: FieldTypeHandler = {
@@ -246,8 +251,16 @@ const linkHandler: FieldTypeHandler = {
 
 const tableHandler: FieldTypeHandler = {
   isStored: true,
-  toStorage(value) {
-    return value || [];
+  toStorage(value, field) {
+    const rows = (value || []) as unknown[];
+    const secrets = childPasswordFields(field);
+    if (secrets.length === 0) return rows;
+    return rows.map((row) => {
+      if (!row || typeof row !== "object") return row;
+      const stored = { ...(row as Record<string, unknown>) };
+      for (const f of secrets) if (f.fieldname in stored) stored[f.fieldname] = passwordHandler.toStorage(stored[f.fieldname], f);
+      return stored;
+    });
   },
   fromStorage(value) {
     return value || [];

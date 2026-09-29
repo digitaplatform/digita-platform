@@ -107,6 +107,12 @@ export interface HookServices {
    *  JWT there). Throws loudly if AUTH_URL is unconfigured or no user token is
    *  available — no silent fallback. Keeps the raw JWT inside the engine. */
   mintDelegation?: (scope: DelegationScope) => Promise<string>;
+  /** The clear value of a stored Password field value, header or Table cell. The
+   *  read paths hide it, so a hook that sends a credential somewhere reads the raw
+   *  row (`db.findOne`, or `doc._original` of the document in hand) and decrypts
+   *  here. Throws when the value is not an encrypted Password value or its key id
+   *  is not listed in PASSWORD_FIELD_KEYS. */
+  decryptPassword: (stored: unknown) => string;
 }
 
 // All hooks run SYNCHRONOUSLY and block the response: fire-and-forget / queued

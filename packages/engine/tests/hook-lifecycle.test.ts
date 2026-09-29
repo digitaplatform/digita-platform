@@ -24,6 +24,7 @@ import { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { PermissionChecker } from "../src/core/permissions/permission-checker.js";
 import { HookRunner } from "../src/core/hooks/hook-runner.js";
+import { decryptPassword } from "../src/core/entity/password-cipher.js";
 import { LinkValidator } from "../src/core/link/link-validator.js";
 import { LinkTitleResolver } from "../src/core/link/link-title-resolver.js";
 import { FetchFromResolver } from "../src/core/fetch/fetch-from-resolver.js";
@@ -152,7 +153,7 @@ beforeAll(async () => {
     snapshotResolver,
   });
 
-  hookRunner.setServices({ db, registry });
+  hookRunner.setServices({ db, registry, decryptPassword });
   hookRunner.setDocumentService(docService);
 
   registry.register(makeEntity());

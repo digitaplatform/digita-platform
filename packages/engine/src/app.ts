@@ -13,6 +13,7 @@ import { createLogger } from "./core/logging/logger.js";
 import { MongoDBService } from "./core/database/mongodb-service.js";
 import { registerAppDatabases } from "./core/database/app-db-discovery.js";
 import { EntityRegistry } from "./core/entity/entity-registry.js";
+import { assertPasswordFieldKeys, configurePasswordFieldKeys, decryptPassword } from "./core/entity/password-cipher.js";
 import { DocumentService } from "./core/document/document-service.js";
 import {
   createAuthMiddleware,
@@ -119,7 +120,8 @@ export async function createApp(
   // ─── Document Engine Services ──────────────────────────
 
   const hookRunner = new HookRunner();
-  hookRunner.setServices({ db, registry });
+  configurePasswordFieldKeys(env);
+  hookRunner.setServices({ db, registry, decryptPassword });
   const versionService = new VersionService(db);
   const viewLogService = new ViewLogService(db);
   const permissionChecker = new PermissionChecker(registry);
@@ -576,6 +578,10 @@ export async function createApp(
       moduleDirs.push(join(d.root, "modules"));
       localeDirs.push(join(d.root, "locales"));
     }
+
+    // 3c. An entity that stores a Password field needs the key set before the
+    //     migration below encrypts and before the first save.
+    assertPasswordFieldKeys(registry.getAll());
 
     // 4. Run first-time setup (seed data, migrate schemas)
     await firstRun(db, registry, translationService);
