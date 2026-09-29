@@ -168,7 +168,8 @@ export async function runAggregateSection(
   // A Password value never enters the pipeline: it is dropped right after the
   // security $match, and at the head of every $lookup sub-pipeline from an
   // entity that stores one, so no later stage can output it under any name. A
-  // $lookup without a sub-pipeline joins whole rows; those are read below.
+  // $lookup without a sub-pipeline gets one of the $unset alone, because it
+  // joins whole rows that any later stage may copy or move.
   const finalPipeline = [
     ...securityMatch,
     ...unsetPasswords(entity),
@@ -179,9 +180,9 @@ export async function runAggregateSection(
   const rows = await deps.db.aggregate(section.entity, finalPipeline, entity.database);
 
   // 5. A row that keeps the entity's row shape is read as every path reads a
-  //    stored row (readStoredRow); the rows a bare $lookup joins whole are read
-  //    the same way through the joined entity. Then defence in depth, two
-  //    per-row strips:
+  //    stored row (readStoredRow); the rows a bare $lookup joins whole, in the
+  //    joined entity's row shape, are read the same way through that entity.
+  //    Then defence in depth, two per-row strips:
   //   (a) section-entity output keys that shadow a protected source field.
   //   (b) H4: nested foreign docs emitted by a bare $lookup — mask each through
   //       the JOINED entity's readable field set, so perm_level-protected fields
@@ -225,12 +226,18 @@ function unsetPasswords(def: EntityDefinition): Document[] {
 }
 
 /** The stage with the Password fields of every joined entity dropped at the head
- *  of its `$lookup` sub-pipeline, `$facet` branches included. */
+ *  of its `$lookup` sub-pipeline, `$facet` branches included. A `$lookup` with
+ *  `localField`/`foreignField` and no sub-pipeline gets one of the $unset alone
+ *  (MongoDB 5.0 and later take both together). */
 function unsetPasswordsInLookups(stage: Document, registry: EntityRegistry): Document {
   const lookup = stage["$lookup"];
-  if (lookup && typeof lookup === "object" && Array.isArray(lookup["pipeline"]) && registry.has(lookup["from"])) {
-    const pipeline = (lookup["pipeline"] as Document[]).map((s) => unsetPasswordsInLookups(s, registry));
-    return { ...stage, $lookup: { ...lookup, pipeline: [...unsetPasswords(registry.get(lookup["from"])), ...pipeline] } };
+  if (lookup && typeof lookup === "object" && registry.has(lookup["from"])) {
+    const unset = unsetPasswords(registry.get(lookup["from"]));
+    const pipeline = Array.isArray(lookup["pipeline"])
+      ? (lookup["pipeline"] as Document[]).map((s) => unsetPasswordsInLookups(s, registry))
+      : undefined;
+    if (!pipeline && unset.length === 0) return stage;
+    return { ...stage, $lookup: { ...lookup, pipeline: [...unset, ...(pipeline ?? [])] } };
   }
   const facet = stage["$facet"];
   if (facet && typeof facet === "object") {
