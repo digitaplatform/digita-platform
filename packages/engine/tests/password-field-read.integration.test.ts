@@ -165,6 +165,13 @@ describe("a stored Password value never leaves the engine", () => {
     expect(res.body).not.toContain("hunter2");
   });
 
+  it("the audit log omits its old and new value", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/v1/audit?entity=Vault", headers: authHeaders() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data[0].changes.map((c: { field: string }) => c.field)).toContain("secret");
+    expect(res.body).not.toContain("hunter2");
+  });
+
   it("the link search omits it when the picker asks for it as a column", async () => {
     const res = await app.inject({ method: "GET", url: "/api/v1/search/Vault?q=Mail&fields=title,secret", headers: authHeaders() });
     expect(res.statusCode).toBe(200);
