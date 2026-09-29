@@ -44,15 +44,17 @@ export function registerSidebarRoutes(
     `${basePath}/:doctype/:name/versions`,
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { doctype, name } = request.params as { doctype: string; name: string };
-      await assertCanRead(request, doctype, name);
+      const doc = await assertCanRead(request, doctype, name);
       const query = request.query as Record<string, string>;
       const limit = parseInt(query["limit"] ?? "20", 10);
       const versions = await versionService.getVersions(doctype, name, limit);
       // Mask field-level changes the user may not read (perm_level), mirroring
       // getDoc's field filtering — a version row must not leak a gated field's
-      // old/new values. `null` = all fields readable (admin / unrestricted).
+      // old/new values. The document is passed so an if_owner / condition / scope
+      // level grant counts only where it holds on it; without it every such grant
+      // counts. `null` = all fields readable (admin / unrestricted).
       const user = request.user as UserContext | undefined;
-      const readable = user ? permissionChecker.getReadableFields(user, doctype) : null;
+      const readable = user ? permissionChecker.getReadableFields(user, doctype, doc._data) : null;
       const result = readable ? versions.map((v) => maskVersionChanges(v, readable)) : versions;
       return reply.send(successResponse(result));
     },
