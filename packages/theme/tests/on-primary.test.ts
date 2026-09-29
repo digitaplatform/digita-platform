@@ -47,6 +47,23 @@ describe('the label on a primary fill', () => {
     }
   });
 
+  it('keeps AA on the hover fill, which moves away from the label, for every tint and branding', () => {
+    // The kit's old hover darkened to step 700: a dark label sinks to about 2:1 there.
+    const blue = tintRamp('blue');
+    expect(contrast(varsForTint(blue, 'light')['--color-on-primary']!, blue['700'])).toBeLessThan(AA);
+    for (const key of Object.keys(TINT_PALETTES) as TintKey[]) {
+      const vars = varsForTint(tintRamp(key), 'light');
+      const hover = vars['--color-primary-hover'];
+      expect(hover, key).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(contrast(vars['--color-on-primary']!, hover!), `${key} hover ${hover}`).toBeGreaterThanOrEqual(AA);
+      expect(hover!.toLowerCase(), key).not.toBe(tintRamp(key)['600'].toLowerCase());
+    }
+    for (const colour of BRAND_COLOURS) {
+      const props = brandingStyle({ primary_color: colour }).properties;
+      expect(contrast(props['--color-on-primary']!, props['--color-primary-hover']!), colour).toBeGreaterThanOrEqual(AA);
+    }
+  });
+
   it('stays white where white reaches AA, so a dark fill keeps its white label', () => {
     expect(brandingStyle({ primary_color: '#312e81' }).properties['--color-on-primary']?.toUpperCase()).toBe('#FFFFFF');
   });

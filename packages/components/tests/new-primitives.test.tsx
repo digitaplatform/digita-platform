@@ -6,6 +6,8 @@ import { SegmentedControl } from '../src/primitives/SegmentedControl.js';
 import { Badge } from '../src/primitives/Badge.js';
 import { Chip } from '../src/primitives/Chip.js';
 import { Fab } from '../src/primitives/Fab.js';
+import { Button } from '../src/primitives/Button.js';
+import { IconButton } from '../src/primitives/IconButton.js';
 import { TextField } from '../src/primitives/TextField.js';
 import { Sheet } from '../src/composites/Sheet.js';
 
@@ -176,6 +178,14 @@ describe('legacy literal → token cleanup (B5, no behavior change)', () => {
     const thumb = container.querySelector('[data-ui="switch-thumb"]')!;
     expect(thumb.className).toContain('bg-onPrimary');
     expect(thumb.className).not.toContain('bg-white');
+  });
+  it('a primary Button and IconButton hover to the tint-derived hover fill, not a ramp step', () => {
+    const button = render(<Button variant="primary">Save</Button>).container.querySelector('[data-ui="button"]')!;
+    expect(button.className).toContain('hover:bg-primaryHover');
+    expect(button.className).not.toContain('hover:bg-primary-700');
+    const icon = render(<IconButton variant="primary" aria-label="Add" icon={<span />} />).container.querySelector('[data-ui="icon-button"]')!;
+    expect(icon.className).toContain('hover:bg-primaryHover');
+    expect(icon.className).not.toContain('hover:bg-primary-700');
   });
   it('BaseDialog scrim rides the theme scrim token, not a literal', () => {
     render(
