@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Badge } from "@digitaplatform/components";
 import type { Locale } from "@/i18n/config";
 import { t } from "@/i18n/messages";
@@ -323,12 +323,13 @@ function DataRain() {
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 -z-10 overflow-hidden opacity-[.12] [mask-image:linear-gradient(to_bottom,transparent,black_18%,black_70%,transparent)]"
     >
-      {/* Reduced motion stops the fall; the columns stay as a still texture. */}
+      {/* The fall runs under reduced motion too: the important animation outranks the theme rule
+          that cuts every animation to 0.01ms there, and it reads each column's own timing. */}
       {RAIN.map((column) => (
         <div
           key={column.left}
-          className="absolute top-0 animate-[rain-fall_40s_linear_infinite] motion-reduce:animate-none whitespace-pre font-mono text-xs leading-10 text-primary-600"
-          style={{ left: column.left, animationDuration: column.duration, animationDelay: column.delay }}
+          className="absolute top-0 !animate-[rain-fall_var(--rain-duration)_linear_var(--rain-delay)_infinite] whitespace-pre font-mono text-xs leading-10 text-primary-600"
+          style={{ left: column.left, "--rain-duration": column.duration, "--rain-delay": column.delay } as CSSProperties}
         >
           {/* Twice, so a column is taller than the hero and never shows its end mid-fall. */}
           {[...column.tokens, ...column.tokens].join("\n")}

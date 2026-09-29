@@ -177,9 +177,11 @@ describe("the marketing blocks", () => {
     expect(hero({ reveal: true })).toContain('type="checkbox"');
     expect(hero({ reveal: true })).toContain("the code behind");
     expect(hero({})).not.toContain("rain-fall");
-    // Reduced motion stops the fall and keeps the columns on screen (#90).
+    // The columns stay on screen and keep falling under reduced motion.
     expect(hero({ atmosphere: "data-rain" })).not.toContain("motion-reduce:hidden");
-    expect(hero({ atmosphere: "data-rain" })).toContain("motion-reduce:animate-none");
+    expect(hero({ atmosphere: "data-rain" })).not.toContain("motion-reduce:animate-none");
+    expect(hero({ atmosphere: "data-rain" })).toContain("!animate-[rain-fall_var(--rain-duration)_linear_var(--rain-delay)_infinite]");
+    expect(hero({ atmosphere: "data-rain" })).toContain("--rain-duration:34s;--rain-delay:0s");
     expect(hero({ visual: "none" })).not.toContain("<svg");
   });
 
