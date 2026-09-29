@@ -181,6 +181,56 @@ describe("data-value translation on read", () => {
   });
 });
 
+describe("a save in another language keeps the stored value of a translatable field (#160)", () => {
+  beforeAll(async () => {
+    const now = new Date();
+    const meta = { doctype: "gl", docstatus: 0, owner: "system", modified_by: "system", creation: now, modified: now };
+    await db.insertOne("GlAcct", { _id: "1300", code: "1300", name: "Mystery", ...meta }, DIGITA.DATABASES.CORE);
+    await db.insertOne(
+      DIGITA.COLLECTIONS.TRANSLATION,
+      {
+        _id: "data:de:GlAcct.1300.name", namespace: "data", locale: "de", key: "GlAcct.1300.name", value: "Krimi",
+        entity: "GlAcct", document_name: "1300", fieldname: "name", source: "file", overridden: false, ...meta,
+      },
+      DIGITA.DATABASES.CORE,
+    );
+  });
+
+  function put(url: string, payload: Record<string, unknown>, locale: string) {
+    return app.inject({
+      method: "PUT",
+      url,
+      headers: { authorization: `Bearer ${token}`, "accept-language": locale },
+      payload,
+    });
+  }
+
+  it("sends back the German name it read and finds the stored name unchanged", async () => {
+    const read = (await get("/api/v1/resource/GlAcct/1300", "de")).json().data;
+    expect(read.name).toBe("Krimi");
+
+    const res = await put("/api/v1/resource/GlAcct/1300", { code: "1300-A", name: read.name }, "de");
+    expect(res.statusCode).toBe(200);
+
+    const stored = (await db.findOne("GlAcct", "1300", DIGITA.DATABASES.CORE)) as Record<string, unknown>;
+    expect(stored["name"]).toBe("Mystery");
+    expect(stored["code"]).toBe("1300-A");
+    // The form resets to the answer, so it shows the name a German read shows.
+    expect(res.json().data.name).toBe("Krimi");
+  });
+
+  it("writes a name the user changed", async () => {
+    const read = (await get("/api/v1/resource/GlAcct/1300", "en")).json().data;
+    expect(read.name).toBe("Mystery");
+
+    const res = await put("/api/v1/resource/GlAcct/1300", { code: read.code, name: "Crime" }, "en");
+    expect(res.statusCode).toBe(200);
+
+    const stored = (await db.findOne("GlAcct", "1300", DIGITA.DATABASES.CORE)) as Record<string, unknown>;
+    expect(stored["name"]).toBe("Crime");
+  });
+});
+
 describe("GET /resource/:entity/:name/translations is read-gated", () => {
   it("403s a caller with no read grant on the document's entity", async () => {
     const strangerTok = await ta.sign({ sub: "stranger@d", email: "stranger@d", roles: ["System User"] });

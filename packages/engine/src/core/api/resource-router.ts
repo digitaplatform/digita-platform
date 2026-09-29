@@ -170,6 +170,7 @@ export function registerResourceRoutes(
 
     const doc = await documentService.update(doctype, name, data, getUser(request), ctx, {
       expectedModified,
+      locale: await localeOf(request),
     });
     emitChange("update", doctype, name);
     if (localeResolver.affects(doctype)) await localeResolver.refresh();

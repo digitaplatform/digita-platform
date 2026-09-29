@@ -1091,7 +1091,12 @@ export class DocumentService {
      * the workflow state. Other callers should NOT pass this — the
      * transition path is the only legitimate use.
      */
-    options: { skipWritePermCheck?: boolean; expectedModified?: string } = {},
+    options: {
+      skipWritePermCheck?: boolean;
+      expectedModified?: string;
+      /** The locale the caller read the document in; its data translations are kept out of the write. */
+      locale?: string;
+    } = {},
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
 
@@ -1122,9 +1127,10 @@ export class DocumentService {
     // Write-field-level permissions: drop fields the user may not write
     // (perm_level / read_only). Skipped on the transition path, which is gated
     // separately by allowed_roles — filtering there would strip the status flip.
-    const writeData = options.skipWritePermCheck
+    const permittedData = options.skipWritePermCheck
       ? data
       : this.permissionChecker.filterFieldsForWrite(user, doctype, data, doc._data);
+    const writeData = await this.dropEchoedTranslations(entity, name, permittedData, doc._data, options.locale);
 
     // Check if editable
     this.docStatusEngine.validateEdit(entity, doc);
@@ -1363,8 +1369,35 @@ export class DocumentService {
     // form needs to keep displaying labels instead of raw ids.
     doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user);
     doc._data = readStoredRow(entity, doc._data);
+    // The form resets to this response, so it shows the values a read in the caller's locale shows.
+    await this.applyDataTranslations(entity, name, doc._data, options.locale);
 
     return doc;
+  }
+
+  /**
+   * A form saved in `locale` sends back every field as a read in that locale
+   * showed it, so a translatable field comes back as its data translation.
+   * Written, that text would replace the stored value every other locale reads.
+   * A value equal to the translation a read puts in place of the stored value is
+   * left out of the write; any other value is an edit and is written.
+   */
+  private async dropEchoedTranslations(
+    entity: EntityDefinition,
+    name: string,
+    input: Record<string, unknown>,
+    stored: Record<string, unknown>,
+    locale: string | undefined,
+  ): Promise<Record<string, unknown>> {
+    const fields = this.registry.getTranslatableFields(entity.name).filter((f) => Object.hasOwn(input, f));
+    if (!locale || fields.length === 0) return input;
+    const shown: Record<string, unknown> = Object.fromEntries(fields.map((f) => [f, stored[f]]));
+    await this.applyDataTranslations(entity, name, shown, locale);
+    const kept = { ...input };
+    for (const f of fields) {
+      if (shown[f] !== stored[f] && kept[f] === shown[f]) delete kept[f];
+    }
+    return kept;
   }
 
   // ─── UPDATE (POST-SUBMIT) ──────────────────────────────
