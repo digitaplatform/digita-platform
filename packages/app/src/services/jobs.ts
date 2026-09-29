@@ -1,12 +1,13 @@
 import type { ActionDefinition, ApiResponse, EntityDefinition } from '@digitaplatform/shared';
 import type { EntitySummary } from '@/types';
-import { api } from '@/services/api';
+import { api, buildHeaders } from '@/services/api';
 import { APP_BASE_PATH } from '@/lib/appBase';
 
 /**
  * Client for the per-tenant digita-jobs satellite. The UI probes /health once
  * per session — no service, no jobs UI (menu entry and route stay hidden). Auth
- * rides the tenant session cookie (verified by the satellite via JWKS).
+ * rides the tenant session cookie (verified by the satellite via JWKS), and a
+ * mutation carries the CSRF header the satellite checks, as an engine call does.
  */
 
 export interface JobDef {
@@ -88,11 +89,11 @@ export const JOBS_URL: string = (
   'http://localhost:3500'
 ).replace(/\/+$/, '');
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
+async function req<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${JOBS_URL}${path}`, {
-    credentials: 'include',
-    headers: { 'content-type': 'application/json' },
     ...init,
+    credentials: 'include',
+    headers: buildHeaders(init.method ?? 'GET', init.body !== undefined),
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -153,10 +154,10 @@ export const appEngine = {
     api.get<ApiResponse<{ _id?: string }>>(engineUrl(app, `/resource/${encodeURIComponent(entity)}/single`)),
 };
 
-/** Role gate mirroring the satellite's RBAC (jobs:Admin / jobs:Viewer). */
+/** Role gate mirroring the satellite's RBAC (digita-jobs src/auth/roles.ts hasRole): only
+ *  Administrator, jobs:Admin and jobs:Viewer pass; System User, every member's role, does not. */
 export function jobsRole(roles: readonly string[]): 'admin' | 'viewer' | null {
-  if (roles.includes('Administrator') || roles.includes('System User') || roles.includes('jobs:Admin'))
-    return 'admin';
+  if (roles.includes('Administrator') || roles.includes('jobs:Admin')) return 'admin';
   if (roles.includes('jobs:Viewer')) return 'viewer';
   return null;
 }

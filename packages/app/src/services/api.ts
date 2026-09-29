@@ -40,7 +40,7 @@ function readCookie(name: string): string | null {
   return findCookie(document.cookie, name);
 }
 
-function buildHeaders(method: string, hasBody: boolean): HeadersInit {
+export function buildHeaders(method: string, hasBody: boolean): HeadersInit {
   const headers: Record<string, string> = {};
   // Only declare a JSON body when one is actually sent. A bodyless request
   // (e.g. DELETE, or a GET) that still advertised Content-Type: application/json
