@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { TranslationService } from "../i18n/translation-service.js";
+import type { DocumentService } from "../document/document-service.js";
+import type { UserContext } from "../permissions/types.js";
 import { requireAdministrator } from "../auth/require-admin.js";
 import { successResponse } from "./response-model.js";
 import { ResponseContext } from "./response-context.js";
@@ -11,6 +13,7 @@ export function registerTranslationRoutes(
   app: FastifyInstance,
   prefix: string,
   translationService: TranslationService,
+  documentService: DocumentService,
 ): void {
   const base = `${prefix}/translations`;
 
@@ -192,6 +195,9 @@ export function registerTranslationRoutes(
     `${prefix}/resource/:entity/:name/translations`,
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { entity, name } = request.params as { entity: string; name: string };
+      // A translation is the document's data in another language: the caller must pass
+      // the read getDoc applies (403 or 404), as the sidebar routes do.
+      await documentService.getDoc(entity, name, request.user as UserContext | undefined);
       const docs = await translationService.findDataTranslations(entity, name);
       // Reshape from rows into { [locale]: { [fieldname]: value } } for the FE.
       const grouped: Record<string, Record<string, string>> = {};

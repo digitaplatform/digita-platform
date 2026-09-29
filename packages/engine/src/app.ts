@@ -420,7 +420,7 @@ export async function createApp(
 
     registerMetaRoutes(scope, env.API_PREFIX, registry, db, permissionChecker);
     registerResourceRoutes(scope, env.API_PREFIX, registry, documentService, localeResolver, realtimeService);
-    registerTranslationRoutes(scope, env.API_PREFIX, translationService);
+    registerTranslationRoutes(scope, env.API_PREFIX, translationService, documentService);
     registerSearchRoutes(scope, env.API_PREFIX, globalSearchService, linkSearchService);
     registerSchemaDriftRoutes(scope, env.API_PREFIX, registry, db);
     registerAdminReseedRoutes(scope, env.API_PREFIX, {
