@@ -55,7 +55,7 @@ import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import type { HookRunner } from "../src/core/hooks/hook-runner.js";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { SchemaMigrator } from "../src/core/database/schema-migrator.js";
-import { decryptPassword, isEncryptedPassword } from "../src/core/entity/password-cipher.js";
+import { encryptPassword, decryptPassword, isEncryptedPassword } from "../src/core/entity/password-cipher.js";
 
 // A Password value must not rest in MongoDB as it was sent: whoever reads the
 // database, a backup or a dump would read it.
@@ -293,6 +293,69 @@ describe("a Table Password cell of a copied or amended document", () => {
     const amended = await post(`SealedVault/${id}/amend`);
     expect(amended.statusCode).toBe(201);
     expect(clear(await storedSecret("SealedVault", amended.json().data._id))).toBe("top-secret");
+  });
+
+  it("encrypts the carried values under the active key, not the source's", async () => {
+    const keys = env as { PASSWORD_FIELD_KEYS: string; PASSWORD_FIELD_ACTIVE_KEY_ID: string };
+    const before = { list: keys.PASSWORD_FIELD_KEYS, active: keys.PASSWORD_FIELD_ACTIVE_KEY_ID };
+    try {
+      keys.PASSWORD_FIELD_KEYS = "k1=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=,k2=YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODk=";
+      keys.PASSWORD_FIELD_ACTIVE_KEY_ID = "k1";
+      const source = await post("Vault", { title: "Rotating copy", secret: "top-secret", accounts: [{ host: "smtp", password: "row-secret" }] });
+      keys.PASSWORD_FIELD_ACTIVE_KEY_ID = "k2";
+      const copy = await post(`Vault/${source.json().data._id}/copy`);
+      expect(copy.statusCode).toBe(201);
+      const stored = (await db.findOne("Vault", copy.json().data._id, "app")) as { secret: { key_id: string }; accounts: { password: { key_id: string } }[] };
+      expect(stored.secret.key_id).toBe("k2");
+      expect(stored.accounts[0]!.password.key_id).toBe("k2");
+      expect(clear(stored.secret)).toBe("top-secret");
+    } finally {
+      keys.PASSWORD_FIELD_KEYS = before.list;
+      keys.PASSWORD_FIELD_ACTIVE_KEY_ID = before.active;
+    }
+  });
+
+  it("judges and carries the same stored row, read once", async () => {
+    const source = await post("Vault", { title: "Read once", secret: "first-state" });
+    const id = source.json().data._id;
+    // A second read of the source during the copy would see a changed secret.
+    const original = db.findOne.bind(db);
+    let reads = 0;
+    const findOne = vi.spyOn(db, "findOne").mockImplementation(async (...args: Parameters<typeof db.findOne>) => {
+      const row = await original(...args);
+      if (args[0] === "Vault" && args[1] === id && row) {
+        reads += 1;
+        if (reads > 1) return { ...row, secret: encryptPassword("second-state") };
+      }
+      return row;
+    });
+    try {
+      const copy = await post(`Vault/${id}/copy`);
+      expect(copy.statusCode).toBe(201);
+      expect(reads).toBe(1);
+      expect(clear(((await original("Vault", copy.json().data._id, "app")) as Record<string, unknown>)["secret"])).toBe("first-state");
+    } finally {
+      findOne.mockRestore();
+    }
+  });
+
+  it("answers 409 PASSWORD_KEY_NOT_LISTED when a carried value's key is no longer listed", async () => {
+    const keys = env as { PASSWORD_FIELD_KEYS: string; PASSWORD_FIELD_ACTIVE_KEY_ID: string };
+    const before = { list: keys.PASSWORD_FIELD_KEYS, active: keys.PASSWORD_FIELD_ACTIVE_KEY_ID };
+    try {
+      keys.PASSWORD_FIELD_KEYS = "k1=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=,k2=YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODk=";
+      keys.PASSWORD_FIELD_ACTIVE_KEY_ID = "k1";
+      const source = await post("Vault", { title: "Orphaned key", secret: "top-secret" });
+      keys.PASSWORD_FIELD_KEYS = "k2=YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODk=";
+      keys.PASSWORD_FIELD_ACTIVE_KEY_ID = "k2";
+      const copy = await post(`Vault/${source.json().data._id}/copy`);
+      expect(copy.statusCode).toBe(409);
+      expect(copy.json().error.code).toBe("PASSWORD_KEY_NOT_LISTED");
+      expect(JSON.stringify(copy.json())).not.toContain("top-secret");
+    } finally {
+      keys.PASSWORD_FIELD_KEYS = before.list;
+      keys.PASSWORD_FIELD_ACTIVE_KEY_ID = before.active;
+    }
   });
 
   it("is still refused when a client sends the source's stored cell in a new document", async () => {

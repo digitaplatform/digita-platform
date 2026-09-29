@@ -6,6 +6,7 @@ import {
   decryptPassword,
   encryptPassword,
   isEncryptedPassword,
+  PasswordKeyNotListedError,
 } from "../src/core/entity/password-cipher.js";
 
 const k1 = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
@@ -70,8 +71,8 @@ describe("encryptPassword and decryptPassword", () => {
     expect(encryptPassword("new").key_id).toBe("k2");
     expect(decryptPassword(old)).toBe("hunter2");
     configurePasswordFieldKeys({ PASSWORD_FIELD_KEYS: `k2=${k2}`, PASSWORD_FIELD_ACTIVE_KEY_ID: "k2" });
-    expect(() => decryptPassword(old))
-      .toThrow('PASSWORD_FIELD_KEYS: key id "k1" of a stored Password value is not listed');
+    expect(() => decryptPassword(old)).toThrow(PasswordKeyNotListedError);
+    expect(() => decryptPassword(old)).toThrow('uses key "k1", which PASSWORD_FIELD_KEYS no longer lists');
   });
 
   it("refuse a tampered value and a value that is no encrypted Password value", () => {

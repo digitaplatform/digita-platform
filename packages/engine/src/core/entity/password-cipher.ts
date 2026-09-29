@@ -151,10 +151,19 @@ export function encryptPassword(clear: string): EncryptedPassword {
   };
 }
 
+/** A stored Password value names a key id PASSWORD_FIELD_KEYS no longer lists, so
+ *  it cannot be read back; a copy or an amendment that must carry it stops here. */
+export class PasswordKeyNotListedError extends Error {
+  constructor(public readonly keyId: string) {
+    super(`A stored Password value uses key "${keyId}", which PASSWORD_FIELD_KEYS no longer lists; list it again to copy or amend this document`);
+    this.name = "PasswordKeyNotListedError";
+  }
+}
+
 export function decryptPassword(stored: unknown): string {
   if (!isEncryptedPassword(stored)) throw new Error("decryptPassword: the value is not an encrypted Password value");
   const key = passwordKeySet().keys.get(stored.key_id);
-  if (!key) throw new Error(`PASSWORD_FIELD_KEYS: key id "${stored.key_id}" of a stored Password value is not listed`);
+  if (!key) throw new PasswordKeyNotListedError(stored.key_id);
   const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(stored.iv, "base64"), { authTagLength: 16 });
   decipher.setAuthTag(Buffer.from(stored.tag, "base64"));
   return Buffer.concat([decipher.update(Buffer.from(stored.data, "base64")), decipher.final()]).toString("utf8");

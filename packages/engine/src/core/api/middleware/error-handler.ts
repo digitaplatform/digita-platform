@@ -30,6 +30,7 @@ import { ViewNotFoundError, BadRequestError } from "../../view/view-engine.js";
 import { UnknownDoctypeError } from "../../entity/entity-registry.js";
 import { FilterFieldNotAllowedError, MalformedFieldsError } from "../../database/filter-builder.js";
 import { FieldValueError } from "../../entity/field-types.js";
+import { PasswordKeyNotListedError } from "../../entity/password-cipher.js";
 import { createLogger } from "../../logging/logger.js";
 import { urlPath } from "../../logging/url-path.js";
 
@@ -315,6 +316,18 @@ export function globalErrorHandler(
       },
     };
     reply.code(400).send(response);
+    return;
+  }
+
+  if (error instanceof PasswordKeyNotListedError) {
+    const response: ApiResponse<null> = {
+      success: false,
+      status_code: 409,
+      data: null,
+      messages: [{ text: error.message, type: "error", show: true }],
+      error: { code: "PASSWORD_KEY_NOT_LISTED", detail: error.message, trace_id: traceId },
+    };
+    reply.code(409).send(response);
     return;
   }
 
