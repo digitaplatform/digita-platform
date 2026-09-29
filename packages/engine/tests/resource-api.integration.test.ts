@@ -321,6 +321,13 @@ describe("Resource API Integration", () => {
       expect(res.json().error.code).toBe("UNKNOWN_DOCTYPE");
     });
 
+    // A DocShare is refused unless its sharer may read the target (#71), so the shared Files exist.
+    beforeAll(async () => {
+      for (const _id of ["F-SHARE-1", "F-SHARE-2", "F-SHARE-3"]) {
+        await db.insertOne("File", { _id, file_name: `${_id}.pdf`, owner: "admin@digita.local" }, "core");
+      }
+    });
+
     it("denormalizes DocShare names on insert (identity lookup + actor claims)", async () => {
       // A user row in the identity store (owned by digita-auth; the engine
       // only READS it for name denormalization).

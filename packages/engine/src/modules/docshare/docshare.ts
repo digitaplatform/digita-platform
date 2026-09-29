@@ -2,6 +2,7 @@ import { DIGITA } from "@digitaplatform/shared";
 import type { BaseDocument } from "../../core/document/base-document.js";
 import type { ResponseContext } from "../../core/api/response-context.js";
 import type { HookServices } from "../../core/hooks/hook-runner.js";
+import type { DocumentService } from "../../core/document/document-service.js";
 
 /**
  * DocShare — before_insert / before_save hook (ADR-12 P3).
@@ -24,6 +25,17 @@ export async function beforeSave(
   services?: HookServices,
 ): Promise<void> {
   const actor = services?.user;
+
+  // A share grants read that RBAC may deny (DocumentService.assertReadAccess), so the
+  // sharer must pass the read getDoc applies, or a user could share a document with
+  // itself to read it. getDoc throws the 403 or 404 a direct read would get.
+  if (actor && services) {
+    await (services.documentService as DocumentService).getDoc(
+      doc.get("entity") as string,
+      doc.get("document_name") as string,
+      actor,
+    );
+  }
 
   // Stamp the sharer once, at creation time (read_only fields are stripped
   // from client input, so this hook is the only writer).
