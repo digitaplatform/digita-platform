@@ -37,7 +37,7 @@ export const spacing = {
 export const controlHeight = '2.625rem';
 
 /** Height of the top bar (56px), emitted as `--topbar-h`: the bar takes it, and a
- *  page header sticks below it by the same value, so the two never overlap. */
+ *  page header's bar sticks below it by the same value while its header is in view. */
 export const topBarHeight = '3.5rem';
 
 /** Radius differentiated by element class — the contrast (crisp inputs vs softer

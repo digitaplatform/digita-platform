@@ -133,9 +133,9 @@ describe('DataGrid as a list', () => {
 });
 
 describe('CardList', () => {
-  it('draws every row as a list-row card in a list-group and marks the current one', () => {
+  it('draws every row as a list-row card in a list-group and marks the selected one', () => {
     const onRowClick = vi.fn();
-    render(
+    const { rerender } = render(
       <CardList rows={ROWS} getRowId={(r) => r.id} selectedRowId="SO-0042" onRowClick={onRowClick} renderCard={(r) => r.customer} />,
     );
     expectHooked(screen.getByRole('listbox'), 'list-group');
@@ -150,6 +150,9 @@ describe('CardList', () => {
     expect(onRowClick).toHaveBeenCalledWith('SO-0043');
     fireEvent.keyDown(cards[1]!, { key: 'Enter' });
     expect(onRowClick).toHaveBeenCalledWith('SO-0042');
+    // The stop follows the selection while the list stays mounted.
+    rerender(<CardList rows={ROWS} getRowId={(r) => r.id} selectedRowId="SO-0043" onRowClick={onRowClick} renderCard={(r) => r.customer} />);
+    expect(cards.map((c) => c.getAttribute('tabindex'))).toEqual(['0', '-1']);
   });
 
   it('is one tab stop: the arrow keys, Home and End move it, Space opens the card', () => {
@@ -238,7 +241,12 @@ describe('PageHeader of a list', () => {
     for (const hook of ['page-header-bar', 'page-header-title', 'page-header-heading', 'page-header-search', 'page-header-actions']) {
       expectHooked(header.querySelector(`[data-ui="${hook}"]`), hook);
     }
-    expect(header.querySelector('[data-ui="page-header-bar"]')!.className).toContain('top-[var(--topbar-h,0px)]');
+    const bar = header.querySelector('[data-ui="page-header-bar"]')!;
+    expect(bar.className).toContain('top-[var(--topbar-h,0px)]');
+    // Below the top bar (z-30) once the header scrolls out, above the grid's header (z-10).
+    expect(bar.className).toContain('z-20');
+    // The mirror title yields the bar to the actions on a phone.
+    expect(header.querySelector('[data-ui="page-header-bar-title"]')!.className).toMatch(/\bhidden\b.*\bsm:block\b/);
     // The actions wrap on a phone, so every page keeps its actions reachable.
     expect(header.querySelector('[data-ui="page-header-actions"]')!.className).toContain('flex-wrap');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Sales Orders');

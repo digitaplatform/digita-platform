@@ -202,16 +202,19 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
     >
       <div
         data-ui="page-header-bar"
-        // Below a TopBar in the same scroll container, so the two bars stack instead
-        // of painting over each other; the theme sets the var for every design, so
-        // the 0 fallback holds only where no theme is loaded.
-        className="sticky top-[var(--topbar-h,0px)] z-30 flex min-h-12 items-center gap-2 bg-surface px-3"
+        // Sticks below a TopBar in the same scroll container; the theme sets the var
+        // for every design, so the 0 fallback holds only where no theme is loaded.
+        // Once the header scrolls out, its bar slides under the TopBar (z-30), so
+        // the bar stays below it and above the grid's sticky header (z-10).
+        className="sticky top-[var(--topbar-h,0px)] z-20 flex min-h-12 items-center gap-2 bg-surface px-3"
       >
         {backNode}
+        {/* Hidden on a phone: centered over the bar it would paint over the actions,
+            which take most of the bar's width there. */}
         <span
           data-ui="page-header-bar-title"
           aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 max-w-[55%] -translate-x-1/2 truncate text-h2 text-textMain opacity-0 transition-opacity duration-base ease-smooth"
+          className="pointer-events-none absolute left-1/2 hidden max-w-[55%] -translate-x-1/2 truncate text-h2 text-textMain opacity-0 transition-opacity duration-base ease-smooth sm:block"
         >
           {title}
         </span>

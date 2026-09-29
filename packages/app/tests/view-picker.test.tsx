@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ListPreferenceDoc } from '@/services/listPreference';
 
@@ -61,6 +61,15 @@ describe('ViewPicker (saved views)', () => {
     await userEvent.click(getByTestId('view:menu'));
     await userEvent.click(getByTestId('view:apply:v1'));
     expect(cb.onApply).toHaveBeenCalledWith('v1');
+  });
+
+  it('closes on a pointer down outside, and stays open on one inside', async () => {
+    const { getByTestId, queryByTestId } = setup();
+    await userEvent.click(getByTestId('view:menu'));
+    fireEvent.pointerDown(getByTestId('view:all'));
+    expect(queryByTestId('view:all')).not.toBeNull();
+    fireEvent.pointerDown(document.body);
+    expect(queryByTestId('view:all')).toBeNull();
   });
 
   it('clears to all records', async () => {

@@ -1,4 +1,4 @@
-import { useState, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { cn } from '../lib/cn.js';
 
 export interface CardListProps<T> {
@@ -26,8 +26,12 @@ const OPTION = '[role="option"]';
  * a card keeps its own stop. Hooks: `list-group` on the list, `list-row` on every card.
  */
 export function CardList<T>({ rows, getRowId, selectedRowId, onRowClick, renderCard, className, 'aria-label': ariaLabel }: CardListProps<T>) {
-  // Focus enters on the selected card, so coming back to a list lands on the open record.
-  const [stop, setStop] = useState(() => Math.max(0, rows.findIndex((r) => getRowId(r) === selectedRowId)));
+  // The tab stop follows the selected card, so coming back to a list lands on the open record.
+  const selectedIndex = rows.findIndex((r) => getRowId(r) === selectedRowId);
+  const [stop, setStop] = useState(Math.max(0, selectedIndex));
+  useEffect(() => {
+    if (selectedIndex >= 0) setStop(selectedIndex);
+  }, [selectedIndex]);
   // The rows may shrink under the stop (a filter, a page change): the stop follows.
   const stopIndex = Math.min(stop, rows.length - 1);
 
