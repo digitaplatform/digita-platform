@@ -1,4 +1,7 @@
-import type { ActionDefinition } from '@digitaplatform/shared';
+import type { ActionDefinition, ApiResponse, EntityDefinition } from '@digitaplatform/shared';
+import type { EntitySummary } from '@/types';
+import { api } from '@/services/api';
+import { APP_BASE_PATH } from '@/lib/appBase';
 
 /**
  * Client for the per-tenant digita-jobs satellite. The UI probes /health once
@@ -12,6 +15,8 @@ export interface JobDef {
   entity: string;
   doc?: string;
   action: string;
+  /** The tenant app whose engine runs the job; absent = the jobs service's default app (JobApps.default). */
+  app?: string;
   params: Record<string, unknown>;
   schedule: { cron: string } | null;
   enabled: boolean;
@@ -42,10 +47,29 @@ export interface JobInput {
   entity: string;
   doc: string;
   action: string;
+  /**
+   * Sent whenever the page has an app to name: PUT replaces the job, so a body without `app` moves
+   * it to the default engine. Absent where the page has no app to name: the jobs service names
+   * none, or this app is served at the root (ownApp).
+   */
+  app?: string;
   params?: Record<string, unknown>;
   schedule?: { cron: string } | null;
   enabled?: boolean;
 }
+
+/** The apps of the tenant the jobs service drives (sorted), and the one a job without `app` runs on. */
+export interface JobApps {
+  apps: string[];
+  default: string | null;
+}
+
+/**
+ * This app's key in the jobs service's apps: its path on a tenant routed by path (lib/appBase.ts).
+ * null where the app is served at the root (dev, a host-routed render): there no other app's engine
+ * is reachable by path, so the page addresses its own engine only.
+ */
+export const ownApp: string | null = APP_BASE_PATH.slice(1) || null;
 
 /**
  * The jobs satellite's base URL. Resolution order, as for AUTH_URL (lib/authConfig.ts):
@@ -72,7 +96,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `jobs api: HTTP ${res.status}`);
+    throw Object.assign(new Error(body?.error ?? `jobs api: HTTP ${res.status}`), { status: res.status });
   }
   return (await res.json()) as T;
 }
@@ -88,6 +112,12 @@ export async function jobsAlive(): Promise<boolean> {
 }
 
 export const jobsApi = {
+  /** The route exists from digita-jobs 0.3.004 on; an older release answers 404 and names no app. */
+  apps: () =>
+    req<JobApps>('/api/v1/apps').catch((e: Error & { status?: number }): JobApps => {
+      if (e.status === 404) return { apps: [], default: null };
+      throw e;
+    }),
   list: () => req<{ jobs: JobDef[] }>('/api/v1/jobs'),
   create: (body: JobInput) => req<{ job: JobDef }>('/api/v1/jobs', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: string, body: JobInput) =>
@@ -99,6 +129,28 @@ export const jobsApi = {
   run: (id: string) => req<{ run: JobRun }>(`/api/v1/runs/${encodeURIComponent(id)}`),
   cancel: (id: string) =>
     req<{ run: JobRun }>(`/api/v1/runs/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: '{}' }),
+};
+
+/**
+ * `path` on the engine of `app`. This app's own engine, and the one engine of a page that has no
+ * app to name (`app` null), are read relative, so the client (services/api.ts) puts this app's
+ * base path in front. Another app's engine is addressed at /<app>/api/v1 on the tenant host, an
+ * absolute URL the client leaves alone. Whether that path reaches the engine is the deployment's
+ * doing: digita-deploy routes /<app>/api for a member with a digita-app front (charts/digita-app)
+ * and not for a website (charts/digita-web), where the read fails and the page shows the failure.
+ * Both carry the tenant session: the catalog follows the user's rights on that app.
+ */
+const engineUrl = (app: string | null, path: string) =>
+  app === null || app === ownApp
+    ? `/api/v1${path}`
+    : `${window.location.origin}/${encodeURIComponent(app)}/api/v1${path}`;
+
+export const appEngine = {
+  catalog: (app: string | null) => api.get<ApiResponse<EntitySummary[]>>(engineUrl(app, '/meta')),
+  entity: (app: string | null, entity: string) =>
+    api.get<ApiResponse<EntityDefinition>>(engineUrl(app, `/meta/${encodeURIComponent(entity)}`)),
+  single: (app: string | null, entity: string) =>
+    api.get<ApiResponse<{ _id?: string }>>(engineUrl(app, `/resource/${encodeURIComponent(entity)}/single`)),
 };
 
 /** Role gate mirroring the satellite's RBAC (jobs:Admin / jobs:Viewer). */

@@ -2,12 +2,9 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ActionParamDef } from '@digitaplatform/shared';
 import { Badge, BaseDialog, Button, Checkbox, Input, Select, cn, tableSkin, TableSkeleton, EmptyState } from '@digitaplatform/components';
-import { jobsApi, jobsRole, longRunningActions, type JobDef, type JobRun, type JobInput } from '@/services/jobs';
-import { getEntityMeta } from '@/services/meta';
-import { getSingle } from '@/services/resource';
+import { appEngine, jobsApi, jobsRole, longRunningActions, ownApp, type JobDef, type JobRun, type JobInput } from '@/services/jobs';
 import { unwrap } from '@/lib/api-result';
 import { localizeMeta } from '@/lib/localize-meta';
-import { useMetaCatalog } from '@/hooks/useMeta';
 import { useSessionStore } from '@/stores/session';
 import { useI18nStore } from '@/stores/i18n';
 import { useDialogHost } from '@/components/overlay/DialogHost';
@@ -22,6 +19,8 @@ import { tid } from '@/lib/testid';
  * them. Per task: "Run now" (ensures/reuses a manual job, then triggers it) and
  * "Schedule" (a cron job). Inputs are metadata-driven from the action's
  * `params` (no code, no magic values); single-entity docs resolve automatically.
+ * A tenant with several apps picks the app first: the catalog is the chosen app's
+ * engine's, and a job carries the app it was scheduled for.
  * Reachable only when the satellite is alive (menu gate) AND the user carries a
  * jobs role; jobs:Viewer reads, jobs:Admin (or Administrator) manages.
  */
@@ -44,21 +43,21 @@ const STATUS_TONE: Record<JobRun['status'], string> = {
   interrupted: 'bg-warning-light text-warning',
 };
 
-/** The job-capable task catalog: every `long_running` action across all
- *  entities, with labels/params localized reactively on the active locale. */
-function useJobTasks(): { tasks: JobTask[]; isLoading: boolean } {
-  const catalogQ = useMetaCatalog();
+/** The job-capable task catalog of one app's engine (appEngine; null = this app's own): every
+ *  `long_running` action across all entities, with labels/params localized reactively on the
+ *  active locale. Waits for the apps, so the page never lists another engine's tasks first. */
+function useJobTasks(app: string | null, enabled: boolean): { tasks: JobTask[]; isLoading: boolean; error: Error | null } {
   const translations = useI18nStore((s) => s.translations);
   const metasQ = useQuery({
-    queryKey: ['jobs-task-metas'],
-    enabled: !!catalogQ.data,
+    queryKey: ['jobs-task-metas', app],
+    enabled,
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const entities = catalogQ.data ?? [];
+      const entities = unwrap(await appEngine.catalog(app));
       const metas = await Promise.all(
         entities.map(async (e) => {
           try {
-            return unwrap(await getEntityMeta(e.name));
+            return unwrap(await appEngine.entity(app, e.name));
           } catch {
             return null;
           }
@@ -84,7 +83,7 @@ function useJobTasks(): { tasks: JobTask[]; isLoading: boolean } {
         .sort((a, b) => a.label.localeCompare(b.label)),
     [metasQ.data, translations],
   );
-  return { tasks, isLoading: catalogQ.isLoading || metasQ.isLoading };
+  return { tasks, isLoading: metasQ.isLoading, error: metasQ.error };
 }
 
 interface DialogState {
@@ -101,8 +100,19 @@ export default function JobsPage() {
   const qc = useQueryClient();
   const { toast, confirm } = useDialogHost();
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [chosenApp, setChosenApp] = useState<string | null>(null);
 
-  const { tasks, isLoading: tasksLoading } = useJobTasks();
+  const appsQ = useQuery({ queryKey: ['jobs-apps'], queryFn: () => jobsApi.apps(), staleTime: 5 * 60_000 });
+  // The apps the operator can pick. None where this app is served at the root (services/jobs.ts
+  // ownApp): another app's engine is reached only by its path on the tenant host.
+  const apps = ownApp === null ? [] : appsQ.data?.apps ?? [];
+  // The app a job without `app` runs on; null when the jobs service names no default.
+  const defaultApp = appsQ.data?.default ?? null;
+  // The app the page shows and every save names. null: the page has no app to name, and shows
+  // its own engine's tasks and every job, as it did before the jobs service named apps.
+  const selectedApp =
+    apps.length > 0 ? (chosenApp ?? defaultApp ?? (ownApp !== null && apps.includes(ownApp) ? ownApp : apps[0]!)) : null;
+  const { tasks, isLoading: tasksLoading, error: tasksError } = useJobTasks(selectedApp, appsQ.isSuccess);
   const jobsQ = useQuery({ queryKey: ['jobs'], queryFn: () => jobsApi.list(), refetchInterval: 15000 });
   const runsQ = useQuery({
     queryKey: ['jobs-runs'],
@@ -113,8 +123,14 @@ export default function JobsPage() {
   });
 
   if (!role) return <ErrorBlock title={tc('ui.jobs.noAccess')} />;
-  const jobs = jobsQ.data?.jobs ?? [];
-  const runs = runsQ.data?.runs ?? [];
+  const allJobs = jobsQ.data?.jobs ?? [];
+  // A job without `app` runs on the default app. A job the page cannot place under an app of the
+  // list (the service names no default, or the tenant no longer has the job's app) shows under every app.
+  const appOf = (j: JobDef) => j.app ?? defaultApp;
+  const jobs = selectedApp === null ? allJobs : allJobs.filter((j) => appOf(j) === selectedApp || !apps.includes(appOf(j) ?? ''));
+  // Runs of another app's jobs stay out; a run whose job is gone still shows.
+  const otherAppJobs = new Set(allJobs.filter((j) => !jobs.includes(j)).map((j) => j._id));
+  const runs = (runsQ.data?.runs ?? []).filter((r) => !otherAppJobs.has(r.job));
   const isAdmin = role === 'admin';
 
   const invalidate = () => {
@@ -188,10 +204,24 @@ export default function JobsPage() {
 
   return (
     <div className="space-y-6" {...tid.page('jobs')}>
-      <h1 className="text-h1 font-display text-textMain">{tc('ui.jobs.title')}</h1>
-
-      {tasksLoading ? (
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-h1 font-display text-textMain">{tc('ui.jobs.title')}</h1>
+        {apps.length > 1 && (
+          <div className="w-64" {...tid.component('jobs-app')}>
+            <Select
+              value={selectedApp ?? ''}
+              onChange={setChosenApp}
+              options={apps.map((a) => ({ value: a, label: a }))}
+            />
+          </div>
+        )}
+      </div>
+      {appsQ.error ? (
+        <ErrorBlock detail={appsQ.error.message} />
+      ) : appsQ.isPending || tasksLoading ? (
         <TableSkeleton columns={2} rows={3} />
+      ) : tasksError ? (
+        <ErrorBlock detail={tasksError.message} />
       ) : tasks.length === 0 && ungrouped.length === 0 ? (
         <EmptyState testId="jobs-empty" title={tc('ui.jobs.noTasks')} />
       ) : (
@@ -208,7 +238,11 @@ export default function JobsPage() {
                     <Button onClick={() => setDialog({ task: t, mode: 'run' })} {...tid.action(`task-run-${t.action}`)}>
                       {tc('ui.jobs.runNow')}
                     </Button>
-                    <Button variant="secondary" onClick={() => setDialog({ task: t, mode: 'schedule' })}>
+                    <Button
+                      variant="secondary"
+                      onClick={() => setDialog({ task: t, mode: 'schedule' })}
+                      {...tid.action(`task-schedule-${t.action}`)}
+                    >
                       {tc('ui.jobs.schedule')}
                     </Button>
                   </div>
@@ -289,11 +323,12 @@ export default function JobsPage() {
 
       {dialog && (
         <JobConfigDialog
-          key={`${dialog.task.entity}|${dialog.task.action}|${dialog.mode}|${dialog.job?._id ?? 'new'}`}
+          key={`${selectedApp}|${dialog.task.entity}|${dialog.task.action}|${dialog.mode}|${dialog.job?._id ?? 'new'}`}
+          app={selectedApp}
           task={dialog.task}
           mode={dialog.mode}
           job={dialog.job}
-          jobs={jobs}
+          jobs={selectedApp === null ? jobs : jobs.filter((j) => appOf(j) === selectedApp)}
           onClose={() => setDialog(null)}
           onDone={() => {
             setDialog(null);
@@ -393,6 +428,7 @@ function ParamFields({
 // ─── Run / Schedule dialog ───────────────────────────────────────────────────
 
 function JobConfigDialog({
+  app,
   task,
   mode,
   job,
@@ -400,9 +436,12 @@ function JobConfigDialog({
   onClose,
   onDone,
 }: {
+  /** The app whose engine runs the job; every save names it. null: the page has no app to name. */
+  app: string | null;
   task: JobTask;
   mode: 'run' | 'schedule';
   job?: JobDef;
+  /** The saved jobs that run on `app`: a run now reuses the manual one of its task, so a PUT never moves a job of another engine. */
   jobs: JobDef[];
   onClose: () => void;
   onDone: () => void;
@@ -419,10 +458,10 @@ function JobConfigDialog({
   // Singles carry exactly one document whose id is seed-defined — resolve it
   // instead of asking the user for a magic value like "MAIN".
   const singleDocQ = useQuery({
-    queryKey: ['jobs-single-doc', task.entity],
+    queryKey: ['jobs-single-doc', app, task.entity],
     enabled: task.isSingle,
     staleTime: 5 * 60_000,
-    queryFn: async () => String((unwrap(await getSingle(task.entity)) as { _id?: string })._id ?? ''),
+    queryFn: async () => String(unwrap(await appEngine.single(app, task.entity))._id ?? ''),
   });
   const effectiveDoc = task.isSingle ? (singleDocQ.data ?? '') : doc;
   const valid = !!effectiveDoc && (!isSchedule || (!!cron.trim() && !!name.trim()));
@@ -437,6 +476,7 @@ function JobConfigDialog({
           entity: task.entity,
           doc: effectiveDoc,
           action: task.action,
+          app: app ?? undefined,
           params,
           schedule: { cron: cron.trim() },
         };
@@ -456,6 +496,7 @@ function JobConfigDialog({
             entity: existing.entity,
             doc: existing.doc ?? effectiveDoc,
             action: existing.action,
+            app: app ?? undefined,
             params,
             schedule: null,
             enabled: existing.enabled,
@@ -467,6 +508,7 @@ function JobConfigDialog({
             entity: task.entity,
             doc: effectiveDoc,
             action: task.action,
+            app: app ?? undefined,
             params,
             schedule: null,
           });
