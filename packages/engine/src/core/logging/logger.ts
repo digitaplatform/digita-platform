@@ -3,6 +3,8 @@ import { env } from "../config/env.js";
 
 // The request line at debug carries the whole header set. These headers carry a
 // credential, so they are redacted whatever LOG_REDACT_FIELDS a deployment sets.
+// A `*` path matches one level deep only, so the `req` serializer's req.headers
+// needs its own path.
 const CREDENTIAL_HEADERS = ["authorization", "cookie", "x-engine-api-key", "x-delegation-token"];
 
 const redactPaths = [
@@ -13,7 +15,7 @@ const redactPaths = [
     `res.body.${field}`,
     `body.${field}`,
   ]),
-  ...CREDENTIAL_HEADERS.map((header) => `*["${header}"]`),
+  ...CREDENTIAL_HEADERS.flatMap((header) => [`*["${header}"]`, `req.headers["${header}"]`]),
 ];
 
 // Build transport targets
