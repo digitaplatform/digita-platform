@@ -128,6 +128,21 @@ beforeAll(async () => {
     fields: [{ fieldname: "profile_image", fieldtype: "AttachImage", label: "Profile image" }],
     permissions: [{ role: "System User", level: 0, read: 1 }],
   } as unknown as EntityDefinition);
+  // A parent whose read grant carries a condition on a Datetime field. The
+  // stored row holds a Date; the row a reader gets holds an ISO string, and the
+  // condition only holds on the latter.
+  registry.register({
+    name: "TestDue",
+    module: "test",
+    database: "core",
+    naming: { strategy: "user_set" },
+    storage_path: "due",
+    fields: [
+      { fieldname: "due", fieldtype: "Datetime", label: "Due" },
+      { fieldname: "profile_image", fieldtype: "AttachImage", label: "Profile image" },
+    ],
+    permissions: [{ role: "System User", level: 0, read: 1, condition: "eval:doc.due >= '2026-01-01'" }],
+  } as unknown as EntityDefinition);
   // A two-segment storage_path — a raster upload here used to 500 because the
   // thumbnail key exceeded the local backend's 3-segment cap.
   registry.register({
@@ -780,6 +795,35 @@ describe("Upload API Integration", () => {
         headers: authHeaders(salesToken),
       });
       expect(res.statusCode).toBe(200);
+    });
+
+    it("judges the parent's read condition on the row getDoc reads, not the stored row", async () => {
+      await db.insertOne("TestDue", { _id: "DUE-2026", due: new Date("2026-06-01T00:00:00.000Z") }, "core");
+      const { payload, contentType } = multipartPayload("due.pdf", "application/pdf", Buffer.from("%PDF due"), {
+        attached_to_entity: "TestDue",
+        attached_to_name: "DUE-2026",
+        attached_to_field: "profile_image",
+      });
+      const upload = await app.inject({
+        method: "POST",
+        url: "/api/v1/upload",
+        headers: { ...authHeaders(), "content-type": contentType },
+        payload,
+      });
+      expect(upload.statusCode).toBe(201);
+
+      const parent = await app.inject({
+        method: "GET",
+        url: "/api/v1/resource/TestDue/DUE-2026",
+        headers: authHeaders(salesToken),
+      });
+      expect(parent.statusCode).toBe(200);
+      const download = await app.inject({
+        method: "GET",
+        url: `/api/v1/file/${upload.json().data._id}/download`,
+        headers: authHeaders(salesToken),
+      });
+      expect(download.statusCode).toBe(200);
     });
 
     it("re-checks target-entity write when REPLACING a PUBLIC file (403, content untouched)", async () => {
