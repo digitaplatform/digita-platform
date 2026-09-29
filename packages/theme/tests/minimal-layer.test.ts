@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { stripPluginTokenBlocks } from '../build/plugin-tokens.mjs';
 
@@ -15,6 +16,17 @@ describe('theme.css bundles only the variant layer of the minimal plugin', () =>
     // The theme emits its own pair of these blocks for the baked design; the plugin's pair is dropped.
     expect(THEME_CSS.split(':root[data-design="minimal"] {')).toHaveLength(2);
     expect(THEME_CSS.split(':root[data-design="minimal"].dark {')).toHaveLength(2);
+  });
+
+  it('bakes the minimal release that plugins.lock.json delivers, so the baked default and the plugin agree', () => {
+    const lock = JSON.parse(readFileSync(join(process.cwd(), '../../plugins.lock.json'), 'utf8'));
+    const baked = createRequire(import.meta.url)('@digitaplatform/minimal/package.json').version;
+    expect(baked).toBe(lock.free.minimal);
+  });
+
+  it('fills the primary button with the tint', () => {
+    const rule = THEME_CSS.split(':root[data-design-variant="minimal"] [data-ui="button"][data-variant="primary"] {')[1];
+    expect(rule.slice(0, rule.indexOf('}'))).toContain('background: var(--color-primary-600)');
   });
 
   it('drops only the token blocks; a rule keyed on the same attribute stays (planted case)', () => {
