@@ -4,6 +4,21 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BaseDialog } from '../src/composites/BaseDialog.js';
 
+describe('BaseDialog hooks', () => {
+  it('stamps the hooks a design reaches: overlay, panel, header, body, footer', () => {
+    render(
+      <BaseDialog open onClose={() => {}} title="Submit SO-0042?" footer={<button type="button">Submit</button>}>
+        Submitting freezes the prices on this order.
+      </BaseDialog>,
+    );
+    for (const hook of ['dialog-overlay', 'dialog', 'dialog-header', 'dialog-body', 'dialog-footer']) {
+      expect(document.querySelectorAll(`[data-ui="${hook}"]`), hook).toHaveLength(1);
+    }
+    expect(document.querySelector('[data-ui="dialog-body"]')).toHaveTextContent('Submitting freezes');
+    expect(document.querySelector('[data-ui="dialog-footer"]')).toContainElement(screen.getByText('Submit'));
+  });
+});
+
 describe('BaseDialog focus management', () => {
   it('moves initial focus into the BODY, not onto the header close button', () => {
     render(

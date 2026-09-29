@@ -102,6 +102,19 @@ describe('ToastHost / useToast', () => {
     expect(viewport.className).toContain('z-toast');
   });
 
+  it('stamps the hooks a design reaches: viewport, toast, action, dismiss', () => {
+    render(
+      <ToastHost>
+        <Trigger text="Deleted" opts={{ type: 'warning', action: { label: 'Undo', onClick: () => {} } }} />
+      </ToastHost>,
+    );
+    fireEvent.click(screen.getByText('fire'));
+    for (const hook of ['toast-viewport', 'toast', 'toast-action', 'toast-dismiss']) {
+      expect(document.querySelectorAll(`[data-ui="${hook}"]`), hook).toHaveLength(1);
+    }
+    expect(document.querySelector('[data-ui="toast-viewport"] > [data-ui="toast"]')).toHaveTextContent('Deleted');
+  });
+
   it('useToast outside <ToastHost> throws (no silent no-op)', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => renderHook(() => useToast())).toThrow('useToast must be used within <ToastHost>');
