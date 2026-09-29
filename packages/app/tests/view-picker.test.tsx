@@ -72,6 +72,13 @@ describe('ViewPicker (saved views)', () => {
     expect(queryByTestId('view:all')).toBeNull();
   });
 
+  it('closes on Escape', async () => {
+    const { getByTestId, queryByTestId } = setup();
+    await userEvent.click(getByTestId('view:menu'));
+    fireEvent.keyDown(getByTestId('view:all'), { key: 'Escape' });
+    expect(queryByTestId('view:all')).toBeNull();
+  });
+
   it('clears to all records', async () => {
     const { getByTestId, cb } = setup();
     await userEvent.click(getByTestId('view:menu'));
@@ -100,5 +107,16 @@ describe('ViewPicker (saved views)', () => {
     await userEvent.type(getByTestId('view:save-as-name'), 'Q3 pipeline');
     await userEvent.click(getByTestId('view:save-as-confirm'));
     expect(cb.onSaveAs).toHaveBeenCalledWith('Q3 pipeline', 'private', [], []);
+  });
+
+  it('save-as: a visibility clicked in the portaled Select does not close the picker', async () => {
+    const { getByTestId, getByRole, cb } = setup();
+    await userEvent.click(getByTestId('view:menu'));
+    await userEvent.click(getByTestId('view:save-as'));
+    await userEvent.type(getByTestId('view:save-as-name'), 'Q3');
+    await userEvent.click(getByRole('combobox', { name: 'ui.view.visibility' }));
+    await userEvent.click(getByRole('option', { name: 'ui.view.visEveryone' }));
+    await userEvent.click(getByTestId('view:save-as-confirm'));
+    expect(cb.onSaveAs).toHaveBeenCalledWith('Q3', 'everyone', [], []);
   });
 });

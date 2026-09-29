@@ -245,8 +245,8 @@ describe('PageHeader of a list', () => {
     expect(bar.className).toContain('top-[var(--topbar-h,0px)]');
     // Below the top bar (z-30) once the header scrolls out, above the grid's header (z-10).
     expect(bar.className).toContain('z-20');
-    // The mirror title yields the bar to the actions on a phone.
-    expect(header.querySelector('[data-ui="page-header-bar-title"]')!.className).toMatch(/\bhidden\b.*\bsm:block\b/);
+    // The mirror title is a flex item in flow, so it can never paint over the actions.
+    expect(header.querySelector('[data-ui="page-header-bar-title"]')!.className).toMatch(/\bmin-w-0\b.*\bflex-1\b.*\btruncate\b/);
     // The actions wrap on a phone, so every page keeps its actions reachable.
     expect(header.querySelector('[data-ui="page-header-actions"]')!.className).toContain('flex-wrap');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Sales Orders');

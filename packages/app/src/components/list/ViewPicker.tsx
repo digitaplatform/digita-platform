@@ -63,8 +63,8 @@ export function ViewPicker({
   const [visibility, setVisibility] = useState<ViewVisibility>('private');
   const [rolesCsv, setRolesCsv] = useState('');
   const [usersCsv, setUsersCsv] = useState('');
-  const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const insidePointer = useRef<Event | null>(null);
   useFocusTrap(panelRef, open);
 
   const active = views.find((v) => v._id === activeId);
@@ -81,11 +81,13 @@ export function ViewPicker({
   // A pointer down outside the trigger and the panel dismisses the picker. A
   // document listener, not a fixed backdrop: the picker sits in the page header's
   // bar, and a design's backdrop-filter on that bar would confine a fixed
-  // backdrop to the bar.
+  // backdrop to the bar. Inside is judged by the React tree, not the DOM: the
+  // Select's options are portaled to document.body, and React events bubble
+  // through portals where DOM containment says outside.
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) close();
+      if (e !== insidePointer.current) close();
     };
     document.addEventListener('pointerdown', onPointer);
     return () => document.removeEventListener('pointerdown', onPointer);
@@ -99,7 +101,12 @@ export function ViewPicker({
   }
 
   return (
-    <div ref={rootRef} className="relative">
+    <div
+      className="relative"
+      onPointerDownCapture={(e) => {
+        insidePointer.current = e.nativeEvent;
+      }}
+    >
       <Button
         type="button"
         variant="secondary"
@@ -122,6 +129,12 @@ export function ViewPicker({
           ref={panelRef}
           role="menu"
           aria-label={tc('ui.view.menu')}
+          // The Select consumes its own Escape (preventDefault) while its options are open.
+          onKeyDown={(e) => {
+            if (e.key !== 'Escape' || e.defaultPrevented) return;
+            if (saving) setSaving(false);
+            else close();
+          }}
           className="anim-pop-in absolute right-0 z-40 mt-2 w-80 rounded-dialog border border-border bg-surfaceGlass p-2 shadow-lg backdrop-blur-md"
         >
           {/* Modified banner: discard edits back to the clean view. */}
@@ -293,7 +306,6 @@ export function ViewPicker({
                   onChange={(e) => setDraftName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && visibility !== 'shared') commitSaveAs();
-                    if (e.key === 'Escape') setSaving(false);
                   }}
                 />
                 <label className="text-xs font-medium text-textMuted">

@@ -209,20 +209,20 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
         className="sticky top-[var(--topbar-h,0px)] z-20 flex min-h-12 items-center gap-2 bg-surface px-3"
       >
         {backNode}
-        {/* Hidden on a phone: centered over the bar it would paint over the actions,
-            which take most of the bar's width there. */}
+        {/* A flex item in flow, not an absolute centered span: it shrinks and
+            truncates before the actions, so it can never paint over them. */}
         <span
           data-ui="page-header-bar-title"
           aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 hidden max-w-[55%] -translate-x-1/2 truncate text-h2 text-textMain opacity-0 transition-opacity duration-base ease-smooth sm:block"
+          className="pointer-events-none min-w-0 flex-1 truncate text-center text-h2 text-textMain opacity-0 transition-opacity duration-base ease-smooth"
         >
           {title}
         </span>
-        <span className="flex-1" aria-hidden="true" />
         {actions && (
           // The slot wraps, so a page with many actions keeps every one reachable on a
-          // phone instead of pushing the last ones past the edge of the bar.
-          <div data-ui="page-header-actions" className="flex flex-wrap items-center justify-end gap-1">
+          // phone instead of pushing the last ones past the edge of the bar. ml-auto
+          // keeps it at the end where a design lets the mirror shrink to its text.
+          <div data-ui="page-header-actions" className="ml-auto flex flex-wrap items-center justify-end gap-1">
             {actions}
           </div>
         )}
