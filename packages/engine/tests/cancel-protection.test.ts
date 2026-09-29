@@ -72,11 +72,11 @@ describe("CancelProtection", () => {
   });
 
   it("ignores incoming links from non-submittable entities", async () => {
-    // Permission references SalesOrder (e.g. for scope), but cancelling
-    // SalesOrder shouldn't be blocked by Permission rules.
+    // DocShare references SalesOrder by name, but cancelling SalesOrder
+    // shouldn't be blocked by a share.
     const registry = makeRegistry({
-      incomingLinks: [{ entity: "Permission", fieldname: "allow_value" }],
-      entities: { Permission: { is_submittable: false, database: "core" } },
+      incomingLinks: [{ entity: "DocShare", fieldname: "document_name" }],
+      entities: { DocShare: { is_submittable: false, database: "core" } },
     });
     const count = vi.fn();
     const db = { count } as never;

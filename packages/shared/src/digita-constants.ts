@@ -16,7 +16,6 @@ export const DIGITA = {
     USER: "User",
     ROLE: "Role",
     SESSION: "Session",
-    PERMISSION: "Permission",
     DOC_SHARE: "DocShare",
     // i18n
     LANGUAGE: "Language",

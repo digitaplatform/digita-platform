@@ -5,7 +5,7 @@ import { useMetaCatalog } from '@/hooks/useMeta';
  *  Mirrors the engine meta-router list (defense in depth — the client filter
  *  applies even if the engine `navigable` flag is absent). */
 const INTERNAL_CORE = new Set([
-  'Entity', 'Translation', 'Language', 'Role', 'Permission', 'Rule', 'View',
+  'Entity', 'Translation', 'Language', 'Role', 'Rule', 'View',
   'Workspace', 'ListPreference', 'File', 'DocShare', 'Log', 'Setting', 'BrandingSetting',
 ]);
 

@@ -1,7 +1,7 @@
 /**
  * ADR-12 P4 — identity-ref data migration (idempotent, re-runnable).
  *
- * Since P3 the engine has NO User entity; Permission.user / Log.user /
+ * Since P3 the engine has NO User entity; Log.user /
  * DocShare.shared_with / shared_by are plain identity refs (the user id IS
  * the email, keyed by digita-auth). Because User._id was already the email,
  * existing Link values stay valid as plain string refs — this migration only
@@ -16,7 +16,7 @@
  *      runtime source of truth (registry.loadFromDb), so the stale rows
  *      must be reconciled with the new file definitions:
  *        - deletes the `User` entity row (entity removed from the engine)
- *        - replaces Permission / Log / DocShare / Salesperson rows with
+ *        - replaces Log / DocShare / Salesperson rows with
  *          their current file definitions (Link → Data + name fields)
  *
  * Reads connection config from the engine env (root .env.development).
@@ -34,7 +34,7 @@ import { DIGITA } from "@digitaplatform/shared";
 import { env } from "../src/core/config/env.js";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 
-const REFRESH_ENTITIES = ["Permission", "Log", "DocShare", "Salesperson"];
+const REFRESH_ENTITIES = ["Log", "DocShare", "Salesperson"];
 
 async function main(): Promise<void> {
   const client = new MongoClient(env.MONGODB_URI);
@@ -119,7 +119,7 @@ async function main(): Promise<void> {
   // ─── 2. Entity meta-collection reconciliation (core db) ────────────
   // The registry boots file-first but then overwrites from the DB
   // (`loadFromDb` — DB wins), so stale rows would resurrect the User
-  // entity and the old Link fields. Delete User, refresh the four
+  // entity and the old Link fields. Delete User, refresh the three
   // converted definitions from their files.
   const entityCol = client.db(env.MONGODB_CORE_DB).collection(DIGITA.COLLECTIONS.ENTITY);
 

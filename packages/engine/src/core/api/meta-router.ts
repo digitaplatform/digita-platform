@@ -25,7 +25,6 @@ const INTERNAL_CORE = new Set([
   "Translation",
   "Language",
   "Role",
-  "Permission",
   "Rule",
   "View",
   "Workspace",

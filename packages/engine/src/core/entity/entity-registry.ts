@@ -116,11 +116,12 @@ export class EntityRegistry {
 
   /**
    * Register synthetic entries for system-managed meta-collections that are
-   * not file-defined but must be addressable by Link fields.
+   * not file-defined.
    *
-   * Currently only `entities` — the meta-collection holding every loaded
-   * entity definition. Permission.allow_entity is a Link to it so the
-   * platform can validate at insert that the referenced doctype exists.
+   * Currently only `Entity`, the meta-collection holding every loaded entity
+   * definition. Declaring it keeps the schema migrator's orphan-collection
+   * sweep from counting it as an orphan, and so from dropping it under
+   * PRUNE_ORPHAN_COLLECTIONS.
    */
   private registerSystemEntities(): void {
     if (this.entities.has(DIGITA.COLLECTIONS.ENTITY)) return;
