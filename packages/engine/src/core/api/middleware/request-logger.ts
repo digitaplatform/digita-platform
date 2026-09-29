@@ -73,7 +73,10 @@ export function requestLoggerOnSend(
   const MAX_BODY_LOG = 4096;
 
   let bodyForLog: unknown;
-  if (payload === null || payload === undefined) {
+  if (request.is404) {
+    // Fastify's answer to an unknown route names the whole url, query string and all.
+    bodyForLog = "<route not found>";
+  } else if (payload === null || payload === undefined) {
     bodyForLog = null;
   } else if (typeof payload === "string") {
     bodyForLog =
