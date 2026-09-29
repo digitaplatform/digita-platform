@@ -71,7 +71,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         data-disabled={disabled || undefined}
         data-readonly={props.readOnly || undefined}
         className={cn(
-          'flex items-center gap-2 rounded-input border border-border bg-surface px-3 transition duration-base ease-smooth focus-within:shadow-focus',
+          'flex min-h-[var(--control-h)] items-center gap-2 rounded-input border border-border bg-surface px-3 transition duration-base ease-smooth focus-within:shadow-focus',
           // C3 — locked frame gets the same "document" resting look as the bare input;
           // cn's tailwind-merge lets these override the bg-surface/border above.
           (disabled || props.readOnly) &&

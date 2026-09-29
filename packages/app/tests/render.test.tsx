@@ -50,6 +50,13 @@ describe('ListRenderer (generic meta-driven render)', () => {
     expect(text).toContain('City'); // a data-column header (label fallback)
     expect(text).toContain('Acme'); // primary cell
     expect(text).toContain('Berlin'); // data cell value
+    // Neither row has a selection model and a click navigates away, so no row claims one.
+    const rowHooks = container.querySelectorAll('[data-ui="table-row"], [data-ui="list-row"]');
+    expect(rowHooks).toHaveLength(4);
+    for (const row of rowHooks) {
+      expect(row).not.toHaveAttribute('aria-selected');
+      expect(row).not.toHaveAttribute('data-selected');
+    }
   });
 
   it('minimal-app invariant: an entity with no in_list_view fields still renders (primary column)', () => {

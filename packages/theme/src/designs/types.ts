@@ -58,10 +58,11 @@ export interface Design {
   /** Optional motion overrides (same keys as scales.motionValues). */
   motion?: Record<string, string>;
 
-  /** Optional single-line control height (input, select trigger, button row),
-   *  emitted as `--control-h`; the kit and the load skeletons read it so a
-   *  control and its placeholder settle at one height. Omitted → the platform
-   *  scale (scales.controlHeight). A design's own idiom goes here (44pt, 48dp). */
+  /** Optional single-line control height, emitted as `--control-h`. The kit's bare
+   *  input, input frame, select and date-picker triggers and `md` button, the app's
+   *  FIELD_CLASS and the load skeletons read it, so a control and its placeholder
+   *  settle at one height. Omitted → the platform scale (scales.controlHeight). A
+   *  design's own idiom goes here (44pt, 48dp). */
   controlHeight?: string;
 
   /** Optional density-scale overrides (the --density-* triples). */

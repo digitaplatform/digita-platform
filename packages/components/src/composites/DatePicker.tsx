@@ -137,7 +137,7 @@ export function DatePicker({
         aria-invalid={invalid || undefined}
         onClick={() => (open ? setOpen(false) : openPanel())}
         className={cn(
-          'flex w-full items-center justify-between gap-2 rounded-input border bg-surface px-3 py-2.5 text-left text-sm',
+          'flex w-full min-h-[var(--control-h)] items-center justify-between gap-2 rounded-input border bg-surface px-3 py-2.5 text-left text-sm',
           'transition duration-base ease-smooth focus:shadow-focus focus:outline-none disabled:cursor-not-allowed disabled:opacity-60',
           'border-border focus:border-primary-400',
         )}

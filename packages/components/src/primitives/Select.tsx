@@ -28,10 +28,11 @@ export interface SelectOption {
 
 type Size = 'sm' | 'md';
 
-/** Trigger chrome per size — the menu stays one density regardless. */
+/** Trigger chrome per size — the menu stays one density regardless. `md` reads the
+ *  design's --control-h like every single-line control; `sm` is its own compact height. */
 const SIZES: Record<Size, string> = {
   sm: 'h-8 px-2 text-xs',
-  md: 'px-3 py-2.5 text-sm',
+  md: 'min-h-[var(--control-h)] px-3 py-2.5 text-sm',
 };
 
 export interface SelectProps {

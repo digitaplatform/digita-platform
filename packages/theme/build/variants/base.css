@@ -138,12 +138,13 @@
 [data-ui="page-header"][data-collapsed="true"] [data-ui="page-header-bar-title"] { opacity: 1; }
 
 /* ── Invalid state — one rule for every design, so no design has to repeat it
-   and no design's resting rule can hide it. A design's resting border rule sits
-   at :root[data-design-variant="x"] [data-ui="input"] (0,3,0) and loads after
-   this file; the state rule carries the same root scope plus the state attribute
-   (0,4,0), so it wins on specificity, not on order. A design's own state rule at
-   (0,4,0) or higher, such as :hover or :focus on the same hook, still ties or
-   outranks it and loads later, so a design that sets border-color in a state
+   over its resting rule. A design's resting border rule sits at
+   :root[data-design-variant="x"] [data-ui="input"] (0,3,0) and loads after this
+   file; the state rule carries the same root scope plus the state attribute
+   (0,4,0), so it wins on specificity, not on order. A design rule at (0,4,0) or
+   higher on the same hook, a dark resting rule under
+   :root[data-design-variant="x"].dark or a :hover or :focus state, still ties
+   or outranks it and loads later, so a design that sets border-color in such a
    rule repeats the invalid override itself. The bare pair (0,3,0)
    serves a page that carries no design variant attribute, where it still
    outranks the kit's Tailwind focus border (.focus\:border-x:focus, 0,2,0). ── */

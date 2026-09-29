@@ -96,7 +96,9 @@ export interface DataGridProps<T = Record<string, unknown>> {
   autoAppendRow?: boolean;
   /** 0 or undefined means unbounded. */
   maxRows?: number;
-  /** Fixed row height in px (the virtualization estimate). */
+  /** Row height in px. Sets `--density-row` on the grid, the variable each row takes
+   *  as its min-height, so it overrides the design's row height for this grid; the
+   *  virtualizer's estimate reads the same value. Omitted → the theme's density row. */
   rowHeight?: number;
   /** Extra rows rendered beyond the viewport when virtualized. */
   overscan?: number;

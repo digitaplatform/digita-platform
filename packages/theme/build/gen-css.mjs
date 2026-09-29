@@ -12,6 +12,7 @@ import { dirname, join, resolve } from 'node:path';
 import { semantic, cssVarName, shadowVarsForMode, motionVars, borderRadius, fontFamily } from '../dist/index.js';
 import { synthesizeRamp, RAMPS, TINT_PALETTES, DEFAULT_TINT_KEY, tintRamp, varsForTint } from '../dist/tokens/index.js';
 import { varsForDesign, DESIGNS, getDesign, DEFAULT_DESIGN_ID } from '../dist/index.js';
+import { stripPluginTokenBlocks } from './plugin-tokens.mjs';
 
 // ── Build-time self-test for the brand-ramp synthesis ─────────────────────
 // Feeding the DEFAULT primary-600 back in must reproduce the primary ramp
@@ -363,12 +364,9 @@ for (const [key] of Object.entries(TINT_PALETTES)) {
 //    layers (ios/material/editorial/fluent) ship only inside their
 //    design-plugin CSS artifacts, never here. ──
 const BASE_VARIANT_CSS = readFileSync(join(here, 'variants', 'base.css'), 'utf8').trimEnd();
-const MINIMAL_VARIANT_CSS = readFileSync(
-  fileURLToPath(import.meta.resolve('@digitaplatform/minimal/dist/minimal.css')),
-  'utf8',
-)
-  .replace(/^:root\[data-design="minimal"\][^{]*\{[^}]*\}\s*/gm, '')
-  .trimEnd();
+const MINIMAL_VARIANT_CSS = stripPluginTokenBlocks(
+  readFileSync(fileURLToPath(import.meta.resolve('@digitaplatform/minimal/dist/minimal.css')), 'utf8'),
+).trimEnd();
 const VARIANT_CSS = [BASE_VARIANT_CSS, MINIMAL_VARIANT_CSS].join('\n\n');
 
 const css =

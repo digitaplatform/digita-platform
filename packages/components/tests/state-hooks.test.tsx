@@ -133,4 +133,14 @@ describe('DataGrid row', () => {
     // The grid has no selection model, so focus is never reported as selection.
     expect(rows()[1]).not.toHaveAttribute('aria-selected');
   });
+
+  it('rowHeight sets the --density-row variable the rows read on the grid', () => {
+    const { container, rerender } = render(
+      <DataGrid rows={ROWS} columns={COLS} getRowId={(r) => r.id} editable={false} aria-label="lines" rowHeight={40} />,
+    );
+    const grid = () => container.querySelector<HTMLElement>('[data-ui="table"]')!;
+    expect(grid().style.getPropertyValue('--density-row')).toBe('40');
+    rerender(<DataGrid rows={ROWS} columns={COLS} getRowId={(r) => r.id} editable={false} aria-label="lines" />);
+    expect(grid().style.getPropertyValue('--density-row')).toBe('');
+  });
 });

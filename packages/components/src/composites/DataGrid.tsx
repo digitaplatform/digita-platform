@@ -1,5 +1,6 @@
 import {
   type ClipboardEvent,
+  type CSSProperties,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -36,12 +37,12 @@ export type {
  * reported as a single `{ rowId, fieldname, value }` patch, never a whole-array
  * replacement.
  *
- * Rows are windowed at a fixed row height, so thousands of rows mount only the
- * visible slice plus an overscan margin. At most one cell editor is mounted at a
- * time: a cell shows `renderDisplay` until it is activated, then swaps to
- * `renderEditor`. Arrow keys move the selected cell (scrolling it into view when it
- * is off-window); Enter / F2 / typing open the editor on an editable cell; Escape
- * discards the edit.
+ * Rows are windowed at the theme's row height, or the `rowHeight` prop's, so
+ * thousands of rows mount only the visible slice plus an overscan margin. At most
+ * one cell editor is mounted at a time: a cell shows `renderDisplay` until it is
+ * activated, then swaps to `renderEditor`. Arrow keys move the selected cell
+ * (scrolling it into view when it is off-window); Enter / F2 / typing open the
+ * editor on an editable cell; Escape discards the edit.
  */
 
 const ALIGN: Record<NonNullable<DataGridColumn['align']>, string> = {
@@ -204,9 +205,10 @@ export function DataGrid<T = Record<string, unknown>>({
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Density-aware row height: no explicit `rowHeight` prop → read the theme's
-  // --density-row var (32/36/44 for compact/comfortable/spacious) and follow
-  // the density switch live via the [data-density] attribute.
+  // Density-aware row height: the rows read --density-row (32/36/44 for
+  // compact/comfortable/spacious, or the `rowHeight` prop, which the frame sets
+  // as that variable), so the estimate reads the same variable and follows the
+  // density switch live via the [data-density] attribute.
   const [densityRow, setDensityRow] = useState<number | null>(null);
   useLayoutEffect(() => {
     const read = () => {
@@ -311,7 +313,6 @@ export function DataGrid<T = Record<string, unknown>>({
     return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows.length, cols.length]);
-  const pageSize = Math.max(1, Math.floor(maxBodyHeight / effRowHeight));
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -325,6 +326,10 @@ export function DataGrid<T = Record<string, unknown>>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effRowHeight]);
   const virtualItems = virtualizer.getVirtualItems();
+  // PageUp/PageDown step by the rows that fit the body. A design's table-row rule
+  // may raise a row above the --density-row floor, so the step counts a measured
+  // row, and the estimate only until the first row has mounted.
+  const pageSize = Math.max(1, Math.floor(maxBodyHeight / (virtualItems[0]?.size ?? effRowHeight)));
 
   // Move focus into the editor when a cell becomes active. A just-appended row
   // (e.g. the entry-flow hand-off from `editCell`) may still be outside the
@@ -503,6 +508,9 @@ export function DataGrid<T = Record<string, unknown>>({
     <div
       data-ui="table"
       className={cn('relative w-full overflow-hidden', tableSkin.frame, className)}
+      // The prop overrides the design's row height for this grid through the
+      // variable the rows read, so the rows, the estimate and the page step agree.
+      style={rowHeight != null ? ({ '--density-row': rowHeight } as CSSProperties) : undefined}
       onPaste={onGridPaste}
       onCopy={onGridCopy}
     >
