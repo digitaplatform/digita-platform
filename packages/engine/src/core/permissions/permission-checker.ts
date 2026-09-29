@@ -203,7 +203,8 @@ export class PermissionChecker {
    * `condition`, so whether a row may be read at all depends on its stored values?
    * scope/if_owner are translated into the Mongo filter by applyScopeFilters, but a
    * `condition` is an arbitrary expression that cannot be — so enumeration paths
-   * (list/count/exists/aggregate) must re-check it per row. Returns false (no
+   * (list/count/exists) must re-check it per row, and a view aggregate, which
+   * cannot re-check a reshaped row, refuses the entity. Returns false (no
    * per-row cost) for Administrators and entities without such a grant.
    */
   hasConditionalRowRead(user: UserContext, entityName: string): boolean {

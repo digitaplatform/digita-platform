@@ -38,7 +38,8 @@ export interface AggregateRunnerDeps {
 /**
  * Resolve an aggregate section by:
  *   1. Checking the caller's `select` permission on the section entity AND on
- *      every `$lookup.from` collection referenced in the pipeline.
+ *      every `$lookup.from` collection referenced in the pipeline, and refusing
+ *      any of them whose level-0 read for the caller carries a `condition`.
  *   2. Prepending a security $match stage built from `applyScopeFilters`.
  *   3. Substituting reserved tokens via `resolveTokens` (deep-clone walk).
  *   4. Executing via `MongoDBService.aggregate`.
@@ -55,8 +56,12 @@ export async function runAggregateSection(
 ): Promise<Document[]> {
   const entity = deps.registry.get(section.entity);
 
-  // 1. RBAC on the source entity.
+  // 1. RBAC on the source entity. A level-0 read with a `condition` cannot become the
+  // security $match, and a row cannot be re-checked after a reshaping stage.
   await deps.permissionChecker.check(user, section.entity, "select");
+  if (deps.permissionChecker.hasConditionalRowRead(user, section.entity)) {
+    throw new PermissionDeniedError(user.email, section.entity, "aggregate_bypasses_read_condition");
+  }
 
   // 1b. RBAC on every $lookup.from in the pipeline (depth-first).
   const lookupTargets = collectLookupTargets(section.pipeline);
@@ -75,6 +80,9 @@ export async function runAggregateSection(
     const fromDef = deps.registry.get(fromEntity);
     if (Object.keys(applyScopeFilters(fromDef, user, {}, env.PERMISSION_SCOPE_ENABLED)).length > 0) {
       throw new PermissionDeniedError(user.email, fromEntity, "lookup_bypasses_row_scope");
+    }
+    if (deps.permissionChecker.hasConditionalRowRead(user, fromEntity)) {
+      throw new PermissionDeniedError(user.email, fromEntity, "lookup_bypasses_read_condition");
     }
   }
 

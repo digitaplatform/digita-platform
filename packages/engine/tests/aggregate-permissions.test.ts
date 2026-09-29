@@ -56,6 +56,7 @@ function makeDeps(opts: {
     registry: fakeRegistry,
     permissionChecker: {
       check: vi.fn().mockResolvedValue(undefined),
+      hasConditionalRowRead: vi.fn(() => false),
       getReadableFieldsOnEveryRow: vi.fn((_user: unknown, entity: string) => {
         if (entity === "Employee") return opts.readable;
         return opts.readableByLookup?.get(entity) ?? null;
@@ -214,6 +215,7 @@ describe("runAggregateSection — field-level perm_level enforcement", () => {
       registry: reg,
       permissionChecker: {
         check: vi.fn().mockResolvedValue(undefined),
+        hasConditionalRowRead: vi.fn(() => false),
         getReadableFieldsOnEveryRow: vi.fn(() => null),
       },
     } as never;

@@ -45,6 +45,7 @@ function makeDeps() {
     // so the new aggregation field-masking layer doesn't block these tests
     // which exercise other concerns.
     getReadableFieldsOnEveryRow: vi.fn().mockReturnValue(null),
+    hasConditionalRowRead: vi.fn().mockReturnValue(false),
   };
   return { documentService, db, registry, permissionChecker };
 }
