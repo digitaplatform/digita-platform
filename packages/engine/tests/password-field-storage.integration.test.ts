@@ -274,6 +274,27 @@ describe("a Table Password cell of a copied or amended document", () => {
     expectCarried(await storedCell("SealedVault", amended.json().data._id));
   });
 
+  it("carries a top-level Password value into the copy and the amendment, encrypted anew", async () => {
+    const storedSecret = async (entity: string, id: string): Promise<unknown> =>
+      ((await db.findOne(entity, id, "app")) as Record<string, unknown>)["secret"];
+    const source = await post("Vault", { title: "Top copy", secret: "top-secret" });
+    expect(source.statusCode).toBe(201);
+    const copy = await post(`Vault/${source.json().data._id}/copy`);
+    expect(copy.statusCode).toBe(201);
+    const copied = await storedSecret("Vault", copy.json().data._id);
+    expect(isEncryptedPassword(copied)).toBe(true);
+    expect(clear(copied)).toBe("top-secret");
+    expect(copied).not.toEqual(await storedSecret("Vault", source.json().data._id));
+
+    const sealed = await post("SealedVault", { title: "Top amend", secret: "top-secret" });
+    const id = sealed.json().data._id;
+    expect((await post(`SealedVault/${id}/submit`)).statusCode).toBe(200);
+    expect((await post(`SealedVault/${id}/cancel`)).statusCode).toBe(200);
+    const amended = await post(`SealedVault/${id}/amend`);
+    expect(amended.statusCode).toBe(201);
+    expect(clear(await storedSecret("SealedVault", amended.json().data._id))).toBe("top-secret");
+  });
+
   it("is still refused when a client sends the source's stored cell in a new document", async () => {
     const source = await post("Vault", { title: "Copied by hand", accounts: [{ host: "smtp", password: "row-secret" }] });
     const read = await app.inject({ method: "GET", url: `/api/v1/resource/Vault/${source.json().data._id}`, headers: authHeaders() });

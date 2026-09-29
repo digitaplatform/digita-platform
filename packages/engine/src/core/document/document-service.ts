@@ -707,6 +707,13 @@ export class DocumentService {
     return readable;
   }
 
+  /** The row of `name` as stored, before readStoredRow hides a Password value. */
+  private async loadStoredRow(entity: EntityDefinition, name: string): Promise<Record<string, unknown>> {
+    const row = await this.db.findOne(entity.name, name, entity.database);
+    if (!row) throw new NotFoundError(entity.name, name);
+    return row as Record<string, unknown>;
+  }
+
   /** The whole stored rows with these ids, read as getDoc reads, in the order given. */
   private async loadRowsInOrder(entity: EntityDefinition, ids: unknown[]): Promise<Record<string, unknown>[]> {
     if (ids.length === 0) return [];
@@ -2369,7 +2376,7 @@ export class DocumentService {
     await this.permissionChecker.check(user, doctype, "amend", doc._data);
 
     const amendData = this.docStatusEngine.prepareAmend(entity, doc);
-    const copyData = copyDocumentData(entity, doc._data);
+    const copyData = copyDocumentData(entity, doc._data, await this.loadStoredRow(entity, name));
     // Give the amendment its OWN File docs (sharing the same blob) so deleting or
     // replacing an attachment on either document never destroys the other's.
     await this.cloneAttachments(entity, copyData, user);
@@ -2412,7 +2419,7 @@ export class DocumentService {
     // Document-level read check (owner / condition / scope filters).
     await this.permissionChecker.check(user, doctype, "read", doc._data);
 
-    const copyData = copyDocumentData(entity, doc._data);
+    const copyData = copyDocumentData(entity, doc._data, await this.loadStoredRow(entity, name));
     // Give the copy its OWN File docs (sharing the same blob) so attachment
     // deletes/replaces on either document don't destroy the other's file.
     await this.cloneAttachments(entity, copyData, user);

@@ -30,7 +30,7 @@ describe("copyDocumentData", () => {
       ],
     });
     const source = { title: "Hello", description: "World", amount: 123 };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     expect(copy.title).toBe("Hello");
     expect(copy.description).toBe("World");
     expect(copy.amount).toBe(123);
@@ -40,7 +40,7 @@ describe("copyDocumentData", () => {
     const entity = makeEntity({
       fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
     });
-    const copy = copyDocumentData(entity, {});
+    const copy = copyDocumentData(entity, {}, {});
     expect("title" in copy).toBe(true);
     expect(copy.title).toBeUndefined();
   });
@@ -52,7 +52,7 @@ describe("copyDocumentData", () => {
       fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
     });
     const source = { _id: "original-id", title: "Test" };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     expect("_id" in copy).toBe(false);
   });
 
@@ -63,7 +63,7 @@ describe("copyDocumentData", () => {
       fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
     });
     const source = { title: "T", docstatus: 1 };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     expect(copy.docstatus).toBe(0);
   });
 
@@ -75,7 +75,7 @@ describe("copyDocumentData", () => {
       ],
     });
     const source = { title: "T", docstatus: 2 };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     expect(copy.docstatus).toBe(0);
   });
 
@@ -89,7 +89,7 @@ describe("copyDocumentData", () => {
       ],
     });
     const source = { title: "Hello", serial_no: "SN-001" };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     expect(copy.title).toBe("Hello");
     expect("serial_no" in copy).toBe(false);
   });
@@ -103,7 +103,7 @@ describe("copyDocumentData", () => {
       ],
     });
     const source = { name: "N-001", ref: "R-001", notes: "some notes" };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     expect("name" in copy).toBe(false);
     expect("ref" in copy).toBe(false);
     expect(copy.notes).toBe("some notes");
@@ -119,7 +119,7 @@ describe("copyDocumentData", () => {
       ],
     });
     const source = { section_details: "some value", title: "Hello" };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     expect("section_details" in copy).toBe(false);
     expect(copy.title).toBe("Hello");
   });
@@ -132,7 +132,7 @@ describe("copyDocumentData", () => {
       ],
     });
     const source = { col1: "x", amount: 500 };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     expect("col1" in copy).toBe(false);
     expect(copy.amount).toBe(500);
   });
@@ -145,7 +145,7 @@ describe("copyDocumentData", () => {
       ],
     });
     const source = { my_tab: "ignored", status: "Active" };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     expect("my_tab" in copy).toBe(false);
     expect(copy.status).toBe("Active");
   });
@@ -158,7 +158,7 @@ describe("copyDocumentData", () => {
       ],
     });
     const source = { heading1: "ignored", value: 7 };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     expect("heading1" in copy).toBe(false);
     expect(copy.value).toBe(7);
   });
@@ -172,7 +172,7 @@ describe("copyDocumentData", () => {
       ],
     });
     const source = { html_block: "<p>hi</p>", btn: "click", title: "OK" };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     expect("html_block" in copy).toBe(false);
     expect("btn" in copy).toBe(false);
     expect(copy.title).toBe("OK");
@@ -200,7 +200,7 @@ describe("copyDocumentData", () => {
         { item_code: "ITEM-002", qty: 10 },
       ],
     };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     expect(Array.isArray(copy.items)).toBe(true);
     const rows = copy.items as Record<string, unknown>[];
     expect(rows).toHaveLength(2);
@@ -230,7 +230,7 @@ describe("copyDocumentData", () => {
         { item_code: "C", idx: 7 },
       ],
     };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     const rows = copy.items as Record<string, unknown>[];
     expect(rows[0]!.idx).toBe(0);
     expect(rows[1]!.idx).toBe(1);
@@ -256,7 +256,7 @@ describe("copyDocumentData", () => {
         { description: "Widget", internal_ref: "INT-001" },
       ],
     };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     const rows = copy.lines as Record<string, unknown>[];
     expect(rows[0]!.description).toBe("Widget");
     expect("internal_ref" in rows[0]!).toBe(false);
@@ -279,7 +279,7 @@ describe("copyDocumentData", () => {
     const source = {
       items: [{ sec: "ignored", product: "Widget" }],
     };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     const rows = copy.items as Record<string, unknown>[];
     expect("sec" in rows[0]!).toBe(false);
     expect(rows[0]!.product).toBe("Widget");
@@ -300,7 +300,7 @@ describe("copyDocumentData", () => {
     });
     const sourceRows = [{ qty: 3 }];
     const source = { items: sourceRows };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     // Mutate the copy rows
     (copy.items as Record<string, unknown>[])[0]!.qty = 999;
     // Original should be unchanged
@@ -318,7 +318,7 @@ describe("copyDocumentData", () => {
         },
       ],
     });
-    const copy = copyDocumentData(entity, {});
+    const copy = copyDocumentData(entity, {}, {});
     // Undefined table value copied as-is (non-array path)
     expect(copy.items).toBeUndefined();
   });
@@ -334,7 +334,7 @@ describe("copyDocumentData", () => {
         },
       ],
     });
-    const copy = copyDocumentData(entity, { items: [] });
+    const copy = copyDocumentData(entity, { items: [] }, { items: [] });
     expect(copy.items).toEqual([]);
   });
 
@@ -366,7 +366,7 @@ describe("copyDocumentData", () => {
       docstatus: 1,
       items: [{ product: "Widget", batch: "BATCH-01", idx: 5 }],
     };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
 
     expect("_id" in copy).toBe(false);
     expect("sec" in copy).toBe(false);
@@ -392,7 +392,7 @@ describe("copyDocumentData", () => {
         { item_code: "B", qty: 7, _row_id: "rid2", idx: 3 },
       ],
     };
-    const copy = copyDocumentData(entity, source);
+    const copy = copyDocumentData(entity, source, source);
     const rows = copy.items as Record<string, unknown>[];
     expect(rows[0]!.item_code).toBe("A");
     expect(rows[0]!.qty).toBe(5);
@@ -413,7 +413,7 @@ describe("copyDocumentData", () => {
         { fieldname: "title", fieldtype: "Data", label: "Title" },
       ],
     } as Partial<EntityDefinition>);
-    const copy = copyDocumentData(entity, { doc_no: "DOC-00001", title: "Invoice" });
+    const copy = copyDocumentData(entity, { doc_no: "DOC-00001", title: "Invoice" }, { doc_no: "DOC-00001", title: "Invoice" });
     expect("doc_no" in copy).toBe(false);
     expect(copy.title).toBe("Invoice");
   });
@@ -427,7 +427,7 @@ describe("copyDocumentData", () => {
         { fieldname: "title", fieldtype: "Data", label: "Title" },
       ],
     } as Partial<EntityDefinition>);
-    const copy = copyDocumentData(entity, { series: "INV", year: "2026", title: "X" });
+    const copy = copyDocumentData(entity, { series: "INV", year: "2026", title: "X" }, { series: "INV", year: "2026", title: "X" });
     expect("series" in copy).toBe(false);
     expect("year" in copy).toBe(false);
     expect(copy.title).toBe("X");
@@ -444,7 +444,7 @@ describe("copyDocumentData", () => {
       ],
       fields: [{ fieldname: "status", fieldtype: "Select", label: "Status" }],
     } as Partial<EntityDefinition>);
-    const copy = copyDocumentData(entity, { status: "Approved" });
+    const copy = copyDocumentData(entity, { status: "Approved" }, { status: "Approved" });
     expect(copy.status).toBe("Draft");
   });
 
@@ -457,7 +457,7 @@ describe("copyDocumentData", () => {
       ],
       fields: [{ fieldname: "stage", fieldtype: "Select", label: "Stage" }],
     } as Partial<EntityDefinition>);
-    const copy = copyDocumentData(entity, { stage: "Done" });
+    const copy = copyDocumentData(entity, { stage: "Done" }, { stage: "Done" });
     expect(copy.stage).toBe("New");
   });
 
@@ -465,7 +465,7 @@ describe("copyDocumentData", () => {
     const entity = makeEntity({
       fields: [{ fieldname: "status", fieldtype: "Select", label: "Status" }],
     });
-    const copy = copyDocumentData(entity, { status: "Active" });
+    const copy = copyDocumentData(entity, { status: "Active" }, { status: "Active" });
     expect(copy.status).toBe("Active");
   });
 });

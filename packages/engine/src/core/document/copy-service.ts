@@ -3,11 +3,15 @@ import { LAYOUT_FIELD_TYPES } from "@digitaplatform/shared";
 import { decryptPassword, isEncryptedPassword } from "../entity/password-cipher.js";
 
 /**
- * Create a copy of document data, respecting no_copy flags.
+ * Create a copy of document data, respecting no_copy flags. `sourceData` is the
+ * row as a reader gets it, which hides a Password value; `storedRow` is the row as
+ * stored, from which a Password value is carried as clear text for insert to
+ * encrypt anew under the active key.
  */
 export function copyDocumentData(
   entity: EntityDefinition,
   sourceData: Record<string, unknown>,
+  storedRow: Record<string, unknown>,
 ): Record<string, unknown> {
   const copy: Record<string, unknown> = {};
 
@@ -17,6 +21,12 @@ export function copyDocumentData(
     if (field.fieldname === "docstatus") continue;
 
     const value = sourceData[field.fieldname];
+
+    if (field.fieldtype === "Password") {
+      const stored = storedRow[field.fieldname];
+      copy[field.fieldname] = isEncryptedPassword(stored) ? decryptPassword(stored) : stored;
+      continue;
+    }
 
     if (field.fieldtype === "Table" && Array.isArray(value)) {
       // Deep copy child rows, reset idx
