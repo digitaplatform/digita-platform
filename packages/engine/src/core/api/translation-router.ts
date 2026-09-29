@@ -197,7 +197,7 @@ export function registerTranslationRoutes(
       const { entity, name } = request.params as { entity: string; name: string };
       // A translation is the document's data in another language: the caller must pass
       // the read getDoc applies (403 or 404), as the sidebar routes do.
-      await documentService.getDoc(entity, name, request.user as UserContext | undefined);
+      const doc = await documentService.getDoc(entity, name, request.user as UserContext | undefined);
       const docs = await translationService.findDataTranslations(entity, name);
       // Reshape from rows into { [locale]: { [fieldname]: value } } for the FE.
       const grouped: Record<string, Record<string, string>> = {};
@@ -207,6 +207,7 @@ export function registerTranslationRoutes(
         const fld = r["fieldname"] as string;
         const val = r["value"] as string;
         if (!loc || !fld) continue;
+        if (!(fld in doc._data)) continue; // getDoc masked a field above the caller's read level
         if (!grouped[loc]) grouped[loc] = {};
         grouped[loc][fld] = val ?? "";
       }
