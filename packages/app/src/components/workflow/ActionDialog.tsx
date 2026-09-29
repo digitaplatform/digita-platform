@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ActionDefinition } from '@digitaplatform/shared';
 import { BaseDialog, Button } from '@digitaplatform/components';
 import { sweepFieldStates } from '@/lib/evaluate-field';
+import { buildDefaults } from '@/lib/default-tokens';
 import { useSessionStore } from '@/stores/session';
 import { useChrome } from '@/lib/chrome-i18n';
 import { FormRenderer } from '@/components/render/FormRenderer';
@@ -29,11 +30,7 @@ export function ActionDialog({
   const tc = useChrome();
   const fields = useMemo(() => action.dialog_fields ?? [], [action.dialog_fields]);
 
-  const [values, setValues] = useState<Doc>(() => {
-    const seed: Doc = {};
-    for (const f of fields) if (f.default !== undefined) seed[f.fieldname] = f.default;
-    return seed;
-  });
+  const [values, setValues] = useState<Doc>(() => buildDefaults(fields, user));
 
   const fieldState = useMemo(
     () =>

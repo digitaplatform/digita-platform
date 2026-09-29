@@ -13,6 +13,7 @@ import { usePreview } from '@/hooks/usePreview';
 import { getDoc, getSingle } from '@/services/resource';
 import { qk } from '@/lib/query-keys';
 import { buildZodSchema } from '@/lib/schema-from-meta';
+import { buildDefaults } from '@/lib/default-tokens';
 import { mergePreviewRows, RECOMPUTE_OVERRIDES_KEY } from '@/lib/merge-preview-rows';
 import { resolveFetchFromTargets } from '@/lib/resolve-fetch-from';
 import {
@@ -98,6 +99,7 @@ export default function RecordPage() {
   const singleQ = useSingle<Doc>(isSingle ? entity : undefined);
   const loaded = isSingle ? singleQ : docQ;
   const tc = useChrome();
+  const user = useSessionStore((s) => s.user);
 
   if (metaQ.isLoading) return <FormSkeleton fields={8} />;
   if (metaQ.isError || !metaQ.data) {
@@ -124,7 +126,9 @@ export default function RecordPage() {
     );
   }
 
-  const initial: Doc = isNew ? buildSeed(metaQ.data) : (loaded.data as Doc);
+  const initial: Doc = isNew
+    ? { docstatus: 0, ...buildDefaults(metaQ.data.fields, user) }
+    : (loaded.data as Doc);
   if (!initial) return <LoadingBlock />;
 
   return (
@@ -138,19 +142,6 @@ export default function RecordPage() {
       name={isSingle ? (initial['_id'] as string) : name}
     />
   );
-}
-
-function buildSeed(meta: EntityDefinition): Doc {
-  const seed: Doc = { docstatus: 0 };
-  for (const f of meta.fields) {
-    if (f.default === undefined) continue;
-    if (f.fieldtype === 'Date' && f.default === '__today__') {
-      seed[f.fieldname] = new Date().toISOString().slice(0, 10);
-    } else {
-      seed[f.fieldname] = f.default;
-    }
-  }
-  return seed;
 }
 
 const DISPLAY_ONLY_KEYS = new Set([

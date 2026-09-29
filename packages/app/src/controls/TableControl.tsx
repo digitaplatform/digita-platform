@@ -13,7 +13,7 @@ import type { FieldControlProps, FieldControlState } from '@/controls/types';
 import { useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useSessionStore } from '@/stores/session';
-import { resolveDefaultToken } from '@/lib/default-tokens';
+import { buildDefaults } from '@/lib/default-tokens';
 import { sweepRowStates, type FieldStateMap } from '@/lib/evaluate-field';
 import { evalFormula } from '@/lib/grid-formula';
 import { parseClipboardGrid, applyPaste, type PasteColumn } from '@/lib/grid-paste';
@@ -333,14 +333,7 @@ export default function TableControl(props: FieldControlProps) {
         return next;
       }),
     );
-  const makeRow = (): Row => {
-    const seed: Row = { [ROW_ID_FIELD]: newRowId() };
-    // Expand magic-token defaults (__today__/__now__/__user__/__username__) so the
-    // row carries the real value, not the literal token (H-P5).
-    for (const cf of cols)
-      if (cf.default !== undefined) seed[cf.fieldname] = resolveDefaultToken(cf.default, user);
-    return seed;
-  };
+  const makeRow = (): Row => ({ [ROW_ID_FIELD]: newRowId(), ...buildDefaults(cols, user) });
   const addRow = () => onChange([...rows, makeRow()]);
   const removeRowById = (rowId: string) => onChange(rows.filter((r) => stableRowId(r) !== rowId));
   const duplicateRow = (rowId: string) => {

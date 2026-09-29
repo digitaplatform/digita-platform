@@ -5,6 +5,7 @@ import type { EntityDefinition } from '@digitaplatform/shared';
 import { BaseDialog, Button, FormSkeleton } from '@digitaplatform/components';
 import { useDocument, useCreate, useUpdate } from '@/hooks/useDocument';
 import { buildZodSchema } from '@/lib/schema-from-meta';
+import { buildDefaults } from '@/lib/default-tokens';
 import {
   sweepFieldStates,
   deriveComputedSet,
@@ -23,21 +24,6 @@ import { toUiMessages, type UiMessage } from '@/lib/api-result';
 import { ApiClientError } from '@/lib/errors';
 
 type Doc = Record<string, unknown>;
-
-/** New-record seed: field defaults merged under caller pre-fills (e.g. a tree
- *  node's parent + group partition). Mirrors RecordPage.buildSeed + a seed. */
-function buildSeed(meta: EntityDefinition, seed?: Doc): Doc {
-  const out: Doc = { docstatus: 0 };
-  for (const f of meta.fields) {
-    if (f.default === undefined) continue;
-    if (f.fieldtype === 'Date' && f.default === '__today__') {
-      out[f.fieldname] = new Date().toISOString().slice(0, 10);
-    } else {
-      out[f.fieldname] = f.default;
-    }
-  }
-  return { ...out, ...(seed ?? {}) };
-}
 
 interface RecordDialogProps {
   open: boolean;
@@ -76,9 +62,13 @@ export function RecordDialog({
   const isNew = !name;
   const tc = useChrome();
   const tEntity = useI18nStore((s) => s.tEntity);
+  const user = useSessionStore((s) => s.user);
 
   const docQ = useDocument<Doc>(isNew ? undefined : entity, isNew ? undefined : name);
-  const initial: Doc | null = isNew ? buildSeed(meta, seed) : (docQ.data ?? null);
+  // A caller's pre-fills (e.g. a tree node's parent and group partition) win over defaults.
+  const initial: Doc | null = isNew
+    ? { docstatus: 0, ...buildDefaults(meta.fields, user), ...seed }
+    : (docQ.data ?? null);
 
   const title = isNew
     ? `${tEntity(entity, meta.label ?? entity)} · ${tc('ui.record.new')}`
