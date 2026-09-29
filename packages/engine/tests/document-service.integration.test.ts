@@ -1344,7 +1344,6 @@ describe("A document shared for reading shows what a level-0 read shows", () => 
       shared_with: reader.email,
       shared_by: adminUser.email,
       can_read: true,
-      can_write: false,
       can_share: false,
       notify: false,
     });
