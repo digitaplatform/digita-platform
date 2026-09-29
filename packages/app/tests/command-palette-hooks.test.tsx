@@ -109,6 +109,14 @@ describe('CommandPalette host renders the kit palette', () => {
     expect(hook('command-item').map((r) => r.getAttribute('aria-selected'))).toEqual(['false', 'true', 'false']);
   });
 
+  it('a reopen starts at the top row, not on the row of the last query', () => {
+    openPalette('create'); // only the "new record" nav row matches, plus the record hit
+    expect(hook('command-item').map((r) => r.textContent)).toEqual(['ui.cmd.newRecordOrders', 'Order 1Order']);
+    act(() => useUiStore.setState({ commandPaletteOpen: false }));
+    act(() => useUiStore.setState({ commandPaletteOpen: true }));
+    expect(hook('command-item').map((r) => r.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']);
+  });
+
   it('Enter opens the active row and closes; Escape closes', () => {
     openPalette('order');
     fireEvent.keyDown(screen.getByRole('combobox'), { key: 'ArrowDown' });

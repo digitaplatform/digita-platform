@@ -5,8 +5,8 @@ const FOCUSABLE =
 
 /**
  * Trap Tab focus within `ref` while `active`, focus the first focusable on open,
- * and restore focus to the previously-focused element on close. Shared by the
- * list toolbar's popovers (one copy, not two); the kit's overlays carry their own.
+ * and restore focus to the previously-focused element on close. Used by the list
+ * toolbar's popovers; the kit's overlays carry their own copy.
  */
 export function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean): void {
   useEffect(() => {

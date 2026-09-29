@@ -123,13 +123,18 @@ export function CommandPalette<T extends CommandPaletteItem>({
 
   const [activeState, setActiveState] = useState(-1);
   const active = activeProp ?? activeState;
-  // The highlighted row by id, so a list that changes under the same query (an async host
-  // handing over its hits) keeps the operator's arrow position instead of the index.
+  const seat = (index: number) => {
+    setActiveState(index);
+    onActiveIndexChange?.(index);
+  };
+  // The row the operator picked, by id, so a list that changes under the same query (an async
+  // host handing over its hits) keeps their arrow position instead of the index. Only the
+  // operator's pick is remembered: a row the seating effect chose is not, or the seating on the
+  // stale list of the open commit would carry last session's row into the fresh one.
   const activeIdRef = useRef<string | undefined>(undefined);
   const setActive = (index: number) => {
     activeIdRef.current = filtered[index]?.id;
-    setActiveState(index);
-    onActiveIndexChange?.(index);
+    seat(index);
   };
 
   useFocusTrap(panelRef, open);
@@ -145,11 +150,11 @@ export function CommandPalette<T extends CommandPaletteItem>({
     if (open) inputRef.current?.focus();
   }, [open]);
 
-  // Seat the highlight whenever the list changes: on the row highlighted before while it is
+  // Seat the highlight whenever the list changes: on the row the operator picked while it is
   // still there, else on the first enabled row.
   useEffect(() => {
     const kept = filtered.findIndex((it) => it.id === activeIdRef.current);
-    setActive(kept >= 0 ? kept : filtered.findIndex((it) => !it.disabled));
+    seat(kept >= 0 ? kept : filtered.findIndex((it) => !it.disabled));
   }, [filtered, open]);
 
   // Keep the active row scrolled into view.

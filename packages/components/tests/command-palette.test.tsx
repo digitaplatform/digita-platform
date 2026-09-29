@@ -85,6 +85,7 @@ describe('CommandPalette', () => {
     renderPalette({ status: 'Searching…', statusGroup: 'Records', listLabel: 'Results' });
     const hook = (name: string) => Array.from(document.body.querySelectorAll(`[data-ui="${name}"]`));
     expect(hook('command-overlay')).toHaveLength(1);
+    expect(hook('command-overlay')[0]!.className).toContain('bg-scrim');
     expect(hook('command-palette')[0]).toHaveAttribute('role', 'dialog');
     expect(hook('command-input')[0]).toHaveAttribute('role', 'combobox');
     expect(screen.getByRole('listbox', { name: 'Results' })).toBeTruthy();
@@ -137,6 +138,16 @@ describe('CommandPalette', () => {
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     rerender(controlled(items, 'ord'));
     expect(screen.getByRole('option', { name: /^Home$/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('a reopen starts at the top row, not on the row of the last query', () => {
+    const palette = (open: boolean) => <CommandPalette open={open} items={items} onSelect={() => {}} onClose={() => {}} />;
+    const { rerender } = render(palette(true));
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'reset' } });
+    expect(screen.getByRole('option', { name: /Reset demo/ })).toHaveAttribute('aria-selected', 'true');
+    rerender(palette(false));
+    rerender(palette(true));
+    expect(screen.getAllByRole('option').map((o) => o.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false', 'false']);
   });
 
   it('Home and End jump to the first and the last enabled row', () => {
