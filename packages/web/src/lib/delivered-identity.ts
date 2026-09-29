@@ -10,12 +10,9 @@ import {
   bootIdentity,
   DESIGNS,
   getRuntimeDesign,
-  getRuntimeSignature,
   IDENTITY_PREFERENCE_KEYS,
   loadDeliveredDesign,
   readPageIdentity,
-  registerDeliveredSignature,
-  registerSignature,
   resolveInitialDensity,
   resolveInitialDesign,
   resolveInitialMode,
@@ -37,12 +34,11 @@ export interface DeliveredIdentitySources {
 /**
  * Put a signed-in visitor's page into the identity the app shows them, the way the app does it:
  * the choices the server keeps for them (mode, density, design, signature) become this browser's
- * own, and a design or signature the page does not bundle is loaded from the composition of the
- * tenant's app, whose entitlement check decides. A page drawn in its site's signature keeps it:
- * the visitor's signature is stored for the app on the same origin, not applied here. Without a
- * session cookie nothing is asked and the default stays, as in the app before login. When
- * anything changed, every identity layer is applied again in its order. Returns whether anything
- * changed.
+ * own, and a design the page does not bundle is loaded from the composition of the tenant's app,
+ * whose entitlement check decides. A page drawn in its site's signature keeps it: the visitor's
+ * signature is stored for the app on the same origin, not applied here. Without a session cookie
+ * nothing is asked and the default stays, as in the app before login. When anything changed, every
+ * identity layer is applied again in its order. Returns whether anything changed.
  */
 export async function loadDeliveredIdentity(sources: DeliveredIdentitySources): Promise<boolean> {
   const [firstApp] = sources.apps;
@@ -54,35 +50,11 @@ export async function loadDeliveredIdentity(sources: DeliveredIdentitySources): 
   storeIdentityPreferences(preferences);
   let changed = currentChoices() !== before;
 
-  const page = readPageIdentity();
-  // The pre-paint boot registered the page's signatures in its own module instance; this chunk's
-  // registry starts empty, so the signature the page delivers would count as missing and be
-  // fetched as a plugin.
-  for (const delivered of page?.signatures ?? []) registerSignature(delivered);
   const design = resolveInitialDesign();
-  const signature = page?.signature ?? resolveInitialSignature();
-  let designMissing = !DESIGNS[design] && !getRuntimeDesign(design);
-  let signatureMissing = !getRuntimeSignature(signature);
-
-  for (const app of sources.apps) {
-    if (!designMissing && !signatureMissing) break;
-    const base = `/${app}`;
-    const plugins = await findDeliveredPlugins(base, sources);
-    if (!plugins) break;
-
-    if (designMissing && (await loadDesignFrom(base, plugins, design))) {
-      designMissing = false;
-      changed = true;
-    }
-    const signatureSource = signatureMissing ? plugins.find((p) => p.type === "signature" && p.id === signature) : undefined;
-    if (signatureSource) {
-      registerDeliveredSignature(signatureSource);
-      signatureMissing = false;
-      changed = true;
-    }
-  }
+  if (!DESIGNS[design] && !getRuntimeDesign(design) && (await loadDesignFromApps(design, sources))) changed = true;
 
   if (changed) {
+    const page = readPageIdentity();
     bootIdentity({ signature: page?.signature, signatures: page?.signatures, branding: page?.branding, followSystemMode: false });
   }
   return changed;
@@ -90,8 +62,8 @@ export async function loadDeliveredIdentity(sources: DeliveredIdentitySources): 
 
 /**
  * Load a design the page does not bundle from the first of the tenant's apps that delivers it to
- * this visitor, the way loadDeliveredIdentity does: the app's composition for the visitor decides,
- * so a visitor who is not signed in, or not entitled, gets nothing. Returns whether it loaded.
+ * this visitor: the app's composition for the visitor decides, so a visitor who is not signed in,
+ * or not entitled, gets nothing. Returns whether it loaded.
  */
 export async function loadDesignFromApps(design: string, sources: DeliveredIdentitySources): Promise<boolean> {
   for (const app of sources.apps) {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // A signed-in visitor sees on the website what the app shows them: the choices the server keeps
-// for them, and the design and signature plugins they chose, loaded the way the app loads them.
+// for them, and the design plugin they chose, loaded the way the app loads it.
 // Without a session nothing is asked and the default stays, as in the app before login.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { PluginInventory } from "@digitaplatform/plugins";
@@ -9,9 +9,8 @@ import {
   MODE_STORAGE_KEY,
   PAGE_IDENTITY_ELEMENT_ID,
   SIGNATURE_STORAGE_KEY,
-  getSignature,
 } from "@digitaplatform/theme";
-import { signature as bundledDefault } from "@digitaplatform/digita";
+import { signature as siteSignature } from "@digitaplatform/simetrix";
 import { loadDeliveredIdentity } from "../src/lib/delivered-identity";
 
 const root = () => document.documentElement;
@@ -20,12 +19,9 @@ const stylesheet = (designId: string) =>
     (link) => link.getAttribute("data-design-plugin") === designId,
   );
 
-const inventory = (designId: string, signatureId: string): PluginInventory => ({
+const inventory = (designId: string): PluginInventory => ({
   schemaVersion: 1,
-  plugins: [
-    { id: designId, type: "design", tier: "premium", version: "1.0.0", url: `/api/v1/plugin-assets/${designId}/1.0.0/${designId}.css` },
-    { id: signatureId, type: "signature", tier: "free", version: "1.0.0", accent: "#123456" },
-  ],
+  plugins: [{ id: designId, type: "design", tier: "premium", version: "1.0.0", url: `/api/v1/plugin-assets/${designId}/1.0.0/${designId}.css` }],
 });
 
 type Route = () => Response;
@@ -78,12 +74,12 @@ describe("loadDeliveredIdentity", () => {
     expect(calls).toEqual([]);
   });
 
-  it("takes the signed-in visitor's choices from the server, and loads their plugin design and signature", async () => {
+  it("takes the signed-in visitor's choices from the server, and loads their plugin design", async () => {
     signIn();
     const calls = serve({
       prefs: prefs({ "ui.theme_mode": "dark", "ui.design": "material", "ui.signature": "aurora" }),
-      "/erp/api/v1/plugins": composition(["material", "aurora"], ["material"]),
-      "/erp/plugins/index.json": json(200, inventory("material", "aurora")),
+      "/erp/api/v1/plugins": composition(["material"], ["material"]),
+      "/erp/plugins/index.json": json(200, inventory("material")),
     });
     const loading = loadDeliveredIdentity(sources);
     await whenStylesheetRequested("material");
@@ -98,17 +94,19 @@ describe("loadDeliveredIdentity", () => {
     expect(stylesheet("material")?.getAttribute("href")).toBe("/erp/api/v1/plugin-assets/material/1.0.0/material.css");
     expect(root().getAttribute("data-design")).toBe("material");
     expect(root().getAttribute("data-design-variant")).toBe("material");
-    expect(getSignature("aurora")).toMatchObject({ id: "aurora", accent: "#123456" });
   });
 
-  it("keeps the site's signature when the visitor's stored one differs, and asks for no signature plugin", async () => {
+  it("keeps the site's signature when the visitor's stored one differs", async () => {
     // As in production: the pre-paint boot registered the page's signature in its own module
     // instance, so this chunk's registry is empty and the page's signatures are all it has.
+    // The site's signature is not the default: were the page's signature dropped, the stored
+    // `aurora` would resolve through getSignature's default fallback, and data-signature would
+    // no longer be `simetrix`. A site drawn in the default `digita` could not show the difference.
     signIn();
     const page = document.createElement("script");
     page.type = "application/json";
     page.id = PAGE_IDENTITY_ELEMENT_ID;
-    page.textContent = JSON.stringify({ signature: "digita", signatures: [bundledDefault] });
+    page.textContent = JSON.stringify({ signature: "simetrix", signatures: [siteSignature] });
     document.head.appendChild(page);
     const calls = serve({ prefs: prefs({ "ui.theme_mode": "dark", "ui.signature": "aurora" }) });
 
@@ -117,7 +115,7 @@ describe("loadDeliveredIdentity", () => {
     expect(calls).toHaveLength(1);
     expect(localStorage.getItem(SIGNATURE_STORAGE_KEY)).toBe("aurora");
     expect(root().classList.contains("dark")).toBe(true);
-    expect(root().getAttribute("data-signature")).toBe("digita");
+    expect(root().getAttribute("data-signature")).toBe("simetrix");
   });
 
   it("refreshes an expired session once through the IdP, then continues", async () => {
@@ -126,7 +124,7 @@ describe("loadDeliveredIdentity", () => {
       prefs: [json(401, { success: false }), prefs({ "ui.design": "editorial" })],
       "https://acme.example/auth/api/v1/auth/refresh": json(200, { success: true }),
       "/erp/api/v1/plugins": composition(["editorial"], ["editorial"]),
-      "/erp/plugins/index.json": json(200, inventory("editorial", "none")),
+      "/erp/plugins/index.json": json(200, inventory("editorial")),
     });
     const loading = loadDeliveredIdentity(sources);
     await whenStylesheetRequested("editorial");
@@ -155,7 +153,7 @@ describe("loadDeliveredIdentity", () => {
     serve({
       prefs: prefs({ "ui.design": "ios" }),
       "/erp/api/v1/plugins": composition(["ios"], []),
-      "/erp/plugins/index.json": json(200, inventory("ios", "none")),
+      "/erp/plugins/index.json": json(200, inventory("ios")),
     });
     await loadDeliveredIdentity(sources);
     expect(stylesheet("ios")).toBeUndefined();
