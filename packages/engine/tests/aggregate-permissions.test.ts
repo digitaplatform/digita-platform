@@ -13,7 +13,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
 }));
 
 import { runAggregateSection } from "../src/core/view/section-runners/aggregate-section.js";
-import { PermissionDeniedError } from "../src/core/permissions/permission-checker.js";
+import { PermissionChecker, PermissionDeniedError } from "../src/core/permissions/permission-checker.js";
 import {
   collectFieldReferences,
 } from "../src/core/view/section-runners/pipeline-field-walker.js";
@@ -294,5 +294,58 @@ describe("collectFieldReferences — token / system-var skipping", () => {
     );
     const fromDept = refs.filter((r) => r.entity === "Department");
     expect(fromDept.some((r) => r.field === "budget")).toBe(true);
+  });
+});
+
+// A view's aggregate reads every row the level-0 read admits, so a field level
+// granted only on some rows (if_owner, condition, scope) must not count for it.
+describe("runAggregateSection — field levels granted only on some rows", () => {
+  function realDeps(level1: Record<string, unknown>): never {
+    const reg = {
+      has: (n: string) => n === "Employee",
+      get: () => ({
+        name: "Employee",
+        database: "app",
+        permissions: [
+          { role: "Clerk", level: 0, read: 1 },
+          { role: "Clerk", level: 1, read: 1, ...level1 },
+        ],
+        fields: [
+          { fieldname: "dept", fieldtype: "Data" },
+          { fieldname: "salary", fieldtype: "Currency", perm_level: 1 },
+        ],
+      }),
+    } as never;
+    const checker = Object.assign(new PermissionChecker(reg), { check: vi.fn() });
+    return {
+      db: { aggregate: vi.fn().mockResolvedValue([{ _id: null, total: 1 }]) },
+      registry: reg,
+      permissionChecker: checker,
+    } as never;
+  }
+  const clerk = { _id: "c1", email: "clerk@example.com", roles: ["Clerk"] } as never;
+  const sumSalaries = {
+    key: "k",
+    kind: "aggregate" as const,
+    entity: "Employee",
+    pipeline: [{ $group: { _id: null, total: { $sum: "$salary" } } }],
+  };
+
+  it("refuses to sum a field the user reads only on documents it owns", async () => {
+    await expect(
+      runAggregateSection(sumSalaries, rctx, clerk, realDeps({ if_owner: 1 })),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+
+  it("refuses to sum a field the user reads only under a condition", async () => {
+    await expect(
+      runAggregateSection(sumSalaries, rctx, clerk, realDeps({ condition: 'doc.status != "Closed"' })),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+
+  it("sums a field the user reads on every document", async () => {
+    await expect(runAggregateSection(sumSalaries, rctx, clerk, realDeps({}))).resolves.toEqual([
+      { _id: null, total: 1 },
+    ]);
   });
 });
