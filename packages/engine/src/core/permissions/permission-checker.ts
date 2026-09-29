@@ -330,6 +330,37 @@ export class PermissionChecker {
   }
 
   /**
+   * The fields a list may be filtered, searched or sorted on for `user`: those it
+   * may read on every row the list can answer, so whether a row answers, or where
+   * it sorts, reveals no masked value. `null`: every field (Administrator). A
+   * level-0 read counts with its scope, owner or condition, because the list keeps
+   * only the rows such a grant admits. A higher level counts only with a grant that
+   * holds on every row: the list does not narrow its rows to where it holds. A
+   * Table whose children are all readable is named whole; otherwise only its
+   * readable children are, as `table.child`.
+   */
+  getFilterableFields(user: UserContext, entityName: string): Set<string> | null {
+    if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return null;
+    const entity = this.registry.get(entityName);
+    const levels = new Set<number>();
+    for (const perm of entity.permissions) {
+      if (!perm.read || !user.roles.includes(perm.role)) continue;
+      const holdsOnEveryRow =
+        !perm.if_owner && !perm.condition && !(perm.scope && env.PERMISSION_SCOPE_ENABLED);
+      if (perm.level === 0 || holdsOnEveryRow) levels.add(perm.level);
+    }
+    const fields = new Set<string>();
+    for (const field of entity.fields) {
+      if (!levels.has(field.perm_level ?? 0)) continue;
+      const children = field.fieldtype === "Table" ? (field.child_fields ?? []) : [];
+      const readableChildren = children.filter((child) => levels.has(child.perm_level ?? 0));
+      if (readableChildren.length === children.length) fields.add(field.fieldname);
+      else for (const child of readableChildren) fields.add(`${field.fieldname}.${child.fieldname}`);
+    }
+    return fields;
+  }
+
+  /**
    * Get all fields the user can write (based on perm_level).
    */
   getWritableFields(

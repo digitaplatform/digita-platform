@@ -46,15 +46,22 @@ export function assertListFields(fields: unknown): asserts fields is string[] | 
   }
 }
 
-/** Reject an operator key ($…) or a field whose root segment the entity did not
- *  declare. No-op when no allow-list is supplied (internal callers / legacy).
- *  Exported so the count path (object-form filters) can validate its keys with
- *  the exact same rule as the list path (P-SEC/R7). */
+/** Whether a filter, search or sort may name `field`: not an operator key ($…),
+ *  and its root segment is allowed, or its `table.child` path where only some of
+ *  a Table's children are. Every field when no allow-list is supplied. */
+export function isFieldAllowed(field: string, allowedFields?: Set<string>): boolean {
+  if (!allowedFields) return true;
+  if (typeof field !== "string" || field.startsWith("$")) return false;
+  const [root, child] = field.split(".");
+  return allowedFields.has(root!) || (child !== undefined && allowedFields.has(`${root}.${child}`));
+}
+
+/** Reject a field isFieldAllowed refuses. No-op when no allow-list is supplied
+ *  (internal callers / legacy). Exported so the count path (object-form filters)
+ *  and the sort validate their keys with the exact same rule as the list path
+ *  (P-SEC/R7). */
 export function assertFieldAllowed(field: string, allowedFields?: Set<string>): void {
-  if (!allowedFields) return;
-  if (typeof field !== "string" || field.startsWith("$") || !allowedFields.has(field.split(".")[0]!)) {
-    throw new FilterFieldNotAllowedError(String(field));
-  }
+  if (!isFieldAllowed(field, allowedFields)) throw new FilterFieldNotAllowedError(String(field));
 }
 
 export interface ListQuery {

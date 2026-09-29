@@ -25,6 +25,7 @@ import { ActivityLogService } from "../src/core/logging/activity-log-service.js"
 import { TranslationService } from "../src/core/i18n/translation-service.js";
 import { DocumentService, NotFoundError, DeleteBlockedError, ValidationFailedError, ActionHandlerMissingError } from "../src/core/document/document-service.js";
 import { PermissionDeniedError } from "../src/core/permissions/permission-checker.js";
+import { FilterFieldNotAllowedError } from "../src/core/database/filter-builder.js";
 import { DocumentShareService } from "../src/core/permissions/document-share-service.js";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { SYSTEM_ROLES, DIGITA } from "@digitaplatform/shared";
@@ -634,6 +635,77 @@ describe("Read-field-level permissions: a link title or status color shows only 
       buyer: "Beta AG",
       customer: "Acme GmbH",
     });
+  });
+});
+
+describe("A list filters, searches and sorts only on fields the reader may read on every row", () => {
+  // Clerk reads level 0, and level 2 only where a condition holds: `note` (level 1)
+  // is masked everywhere, `review` (level 2) on some rows, `items.cost` (level 1) too.
+  const clerk: UserContext = { _id: "clerk-003", email: "clerk3@test.local", roles: ["Clerk"], full_name: "Clerk" };
+  const clerkOnly = [
+    { role: "Clerk", level: 0, select: 1, read: 1, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0 },
+    { role: "Clerk", level: 2, select: 0, read: 1, write: 0, create: 0, delete: 0, submit: 0, cancel: 0, amend: 0, condition: "eval:doc.title != 'Alpha'" },
+  ];
+
+  beforeAll(async () => {
+    registry.register(
+      makeEntity({
+        name: "FilterGatedDoc",
+        fields: [
+          { fieldname: "title", fieldtype: "Data" as const, label: "Title" },
+          { fieldname: "note", fieldtype: "Data" as const, label: "Note", perm_level: 1 },
+          { fieldname: "review", fieldtype: "Data" as const, label: "Review", perm_level: 2 },
+          {
+            fieldname: "items",
+            fieldtype: "Table" as const,
+            label: "Items",
+            child_fields: [
+              { fieldname: "item", fieldtype: "Data" as const, label: "Item" },
+              { fieldname: "cost", fieldtype: "Currency" as const, label: "Cost", perm_level: 1 },
+            ],
+          },
+        ],
+        search_fields: ["title", "note"],
+        default_sort: { field: "note", order: "asc" },
+        permissions: [
+          { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+          ...clerkOnly,
+        ],
+      } as Partial<EntityDefinition>),
+    );
+    await db.ensureCollection("FilterGatedDoc", "app");
+    const row = { doctype: "FilterGatedDoc", docstatus: 0, owner: "system", modified_by: "system", creation: new Date() };
+    await db.insertOne("FilterGatedDoc", { ...row, _id: "FG-1", title: "Alpha", note: "operator only", review: "r1", items: [{ item: "A", cost: 5 }], modified: new Date("2026-01-01") }, "app");
+    await db.insertOne("FilterGatedDoc", { ...row, _id: "FG-2", title: "Beta", note: "zeta", review: "r2", items: [{ item: "B", cost: 9 }], modified: new Date("2026-02-01") }, "app");
+  });
+
+  const ids = async (query: Parameters<DocumentService["getList"]>[1], user: UserContext = clerk) =>
+    (await docService.getList("FilterGatedDoc", query, user)).data.map((r) => r["_id"]);
+
+  it("refuses a filter, an or_filter or a sort on a field masked on any row", async () => {
+    for (const field of ["note", "review", "items.cost", "items"]) {
+      await expect(ids({ filters: [[field, "=", "x"]] }), field).rejects.toBeInstanceOf(FilterFieldNotAllowedError);
+      await expect(ids({ or_filters: [[field, "=", "x"]] }), field).rejects.toBeInstanceOf(FilterFieldNotAllowedError);
+      await expect(ids({ order_by: `title asc, ${field} desc` }), field).rejects.toBeInstanceOf(FilterFieldNotAllowedError);
+      await expect(docService.count("FilterGatedDoc", [{ [field]: "x" }], clerk), field).rejects.toBeInstanceOf(FilterFieldNotAllowedError);
+    }
+  });
+
+  it("filters and sorts on the fields the reader may read on every row", async () => {
+    expect(await ids({ filters: [["title", "=", "Alpha"]] })).toEqual(["FG-1"]);
+    expect(await ids({ filters: [["items.item", "=", "B"]] })).toEqual(["FG-2"]);
+    expect(await ids({ order_by: "title desc" })).toEqual(["FG-2", "FG-1"]);
+    expect(await docService.count("FilterGatedDoc", [{ title: "Beta" }], clerk)).toBe(1);
+    expect(await ids({ filters: [["note", "=", "operator only"]] }, adminUser)).toEqual(["FG-1"]);
+  });
+
+  it("searches only the readable search fields, and sorts by default on a readable field", async () => {
+    expect(await ids({ search: "operator" })).toEqual([]);
+    expect(await ids({ search: "alp" })).toEqual(["FG-1"]);
+    expect(await ids({ search: "operator" }, adminUser)).toEqual(["FG-1"]);
+    // The default sort names `note`: the clerk gets the engine's default, modified desc.
+    expect(await ids({})).toEqual(["FG-2", "FG-1"]);
+    expect(await ids({}, adminUser)).toEqual(["FG-1", "FG-2"]);
   });
 });
 

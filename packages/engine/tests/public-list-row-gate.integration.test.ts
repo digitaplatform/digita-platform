@@ -207,6 +207,23 @@ describe("Public list gates each stored row before it projects (#41)", () => {
   });
 });
 
+describe("Public list filters and sorts only on fields the Guest may read", () => {
+  it("refuses a filter, an or_filter or a sort on a field above the Guest's level with 400", async () => {
+    const onNote = encodeURIComponent(JSON.stringify([["note", "=", "operator only"]]));
+    for (const param of [`filters=${onNote}`, `or_filters=${onNote}`, `order_by=${encodeURIComponent("note asc")}`]) {
+      const res = await app.inject({ method: "GET", url: `/api/v1/public/resource/GatedPage?${param}` });
+      expect(res.statusCode, param).toBe(400);
+      expect(res.json().error.code).toBe("FILTER_FIELD_NOT_ALLOWED");
+    }
+    const byTitle = await app.inject({
+      method: "GET",
+      url: `/api/v1/public/resource/GatedPage?order_by=${encodeURIComponent("title desc")}&filters=${encodeURIComponent(JSON.stringify([["status", "=", "published"]]))}`,
+    });
+    expect(byTitle.statusCode).toBe(200);
+    expect((byTitle.json() as { data: Array<Record<string, unknown>> }).data.map((r) => r["_id"])).toEqual(["G-2", "G-1"]);
+  });
+});
+
 describe("projectFields answers what a MongoDB projection answers", () => {
   const cases: string[][] = [
     ["title"], ["meta"], ["meta.a"], ["meta.b.c"], ["meta.missing"], ["items.q"], ["items.q", "items.r"],

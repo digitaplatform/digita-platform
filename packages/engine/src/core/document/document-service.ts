@@ -27,6 +27,7 @@ import { collectAttachFileIds, deleteFileRefCounted, cleanupDocumentAttachments,
 import {
   buildMongoFilter,
   assertFieldAllowed,
+  isFieldAllowed,
   assertListFields,
   buildSort,
   parsePagination,
@@ -436,10 +437,13 @@ export class DocumentService {
     assertListFields(query.fields);
 
     // Build base filter. P-SEC/R7: constrain caller-supplied filter/or_filter
-    // field names to the entity's DECLARED surface (+ system fields + Table child
-    // fields) and reject `$`-prefixed operator keys — blocks NoSQL operator
-    // injection ($where/$expr) reachable via the public + resource list endpoints.
-    const searchFields = entity.search_fields ?? [];
+    // field names to the fields the user may filter on (+ system fields) and
+    // reject `$`-prefixed operator keys — blocks NoSQL operator injection
+    // ($where/$expr) reachable via the public + resource list endpoints, and a
+    // filter whose answer would reveal a masked value. A search reads the same
+    // fields only.
+    const allowed = this.buildFilterAllowlist(entity, user);
+    const searchFields = (entity.search_fields ?? []).filter((field) => isFieldAllowed(field, allowed));
     // Coerce date/datetime filter VALUES to their stored form before building the
     // Mongo filter, so relative ($now ± duration → Date) and absolute (string) date
     // filters actually compare against stored date fields instead of silently
@@ -449,7 +453,7 @@ export class DocumentService {
       filters: coerceDateFilterValues(entity, query.filters),
       or_filters: coerceDateFilterValues(entity, query.or_filters),
     };
-    const baseFilter = buildMongoFilter(coercedQuery, searchFields, this.buildFilterAllowlist(entity));
+    const baseFilter = buildMongoFilter(coercedQuery, searchFields, allowed);
 
     // Apply scope filters (user permissions, if_owner) + role-visibility (entities
     // that declare role_visibility_field, e.g. Workspace — enumerate only what your
@@ -465,9 +469,13 @@ export class DocumentService {
       ),
     );
 
-    const defaultSort = entity.default_sort
-      ? `${entity.default_sort.field} ${entity.default_sort.order}`
-      : "modified desc";
+    // A sort orders rows by a value, so it names only fields the user may filter
+    // on; a default sort on another one falls back to the engine's own default.
+    const defaultSort =
+      entity.default_sort && isFieldAllowed(entity.default_sort.field, allowed)
+        ? `${entity.default_sort.field} ${entity.default_sort.order}`
+        : "modified desc";
+    for (const field of Object.keys(buildSort(query.order_by) ?? {})) assertFieldAllowed(field, allowed);
 
     const sort = buildSort(query.order_by ?? defaultSort);
     const { limit, offset } = parsePagination(query);
@@ -598,14 +606,19 @@ export class DocumentService {
     return true;
   }
 
-  /** The set of filter field names a list/count query may reference: the entity's
-   *  declared fields + Table child fields + the standard system fields (P-SEC/R7). */
-  private buildFilterAllowlist(entity: EntityDefinition): Set<string> {
+  /** The set of field names a list/count query of `user` may filter, search and
+   *  sort on: the entity's declared fields + Table child fields for a reader of
+   *  every level, otherwise the fields the user may read on every row
+   *  (getFilterableFields); + the standard system fields (P-SEC/R7). */
+  private buildFilterAllowlist(entity: EntityDefinition, user: UserContext): Set<string> {
+    const filterable = this.permissionChecker.getFilterableFields(user, entity.name);
     return new Set<string>([
-      ...entity.fields.map((f) => f.fieldname),
-      ...entity.fields
-        .filter((f) => f.fieldtype === "Table")
-        .flatMap((f) => f.child_fields?.map((c) => c.fieldname) ?? []),
+      ...(filterable ?? [
+        ...entity.fields.map((f) => f.fieldname),
+        ...entity.fields
+          .filter((f) => f.fieldtype === "Table")
+          .flatMap((f) => f.child_fields?.map((c) => c.fieldname) ?? []),
+      ]),
       "_id", "doctype", "docstatus", "owner", "modified_by", "creation", "modified",
       "idx", "parent", "parenttype", "parentfield",
     ]);
@@ -619,13 +632,13 @@ export class DocumentService {
     const entity = this.registry.get(doctype);
     // P-SEC: count is a sibling of getList and must enforce the SAME gates — an
     // authenticated external user reaches this endpoint too. Require `select`, and
-    // validate every caller-supplied filter KEY against the entity's declared
-    // surface (rejecting `$`-prefixed operator keys), so count cannot become a
+    // validate every caller-supplied filter KEY against the fields the user may
+    // filter on (rejecting `$`-prefixed operator keys), so count cannot become a
     // NoSQL-operator-injection / blind-exfiltration oracle (R7). The count path
     // takes object-form filters (merged verbatim), so the getList allow-list —
     // wired into buildMongoFilter for tuple-form — must be applied here explicitly.
     await this.permissionChecker.check(user, doctype, "select");
-    const allowed = this.buildFilterAllowlist(entity);
+    const allowed = this.buildFilterAllowlist(entity, user);
     // Apply scope filter so users with restricted scope only count
     // their own visible rows, not the global total.
     const merged: Record<string, unknown> = {};
