@@ -81,6 +81,15 @@ describe("WorkflowEngine — validateTransition", () => {
     ).toThrow(IllegalTransitionError);
   });
 
+  // The app's workflow bar offers such a transition to every user; both sides read it alike.
+  it("allows a transition with empty allowed_roles for every user", () => {
+    const e = expenseEntity();
+    e.transitions![0]!.allowed_roles = [];
+    const w = new WorkflowEngine();
+    const t = w.validateTransition(e, { amount: 100 }, "Draft", "Approved", sales as never);
+    expect(t?.action).toBe("approve");
+  });
+
   it("rejects an undeclared transition (Approved → Draft)", () => {
     const w = new WorkflowEngine();
     // Approved is_terminal AND no declared Approved→Draft transition → from_terminal.

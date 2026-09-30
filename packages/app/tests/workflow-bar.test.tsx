@@ -179,6 +179,15 @@ describe('WorkflowBar (generic, meta-driven)', () => {
     expect(queryByText('Send')).not.toBeNull();
   });
 
+  it('a transition with empty allowed_roles is offered to every user, as the engine allows it', () => {
+    const m = meta({
+      transitions: [{ from: 'draft', to: 'confirmed', action: 'Confirm', allowed_roles: [] }],
+    });
+    user = { roles: ['Librarian'] };
+    const { queryByText } = renderBar(m, { status: 'draft', docstatus: 0 });
+    expect(queryByText('Confirm')).not.toBeNull();
+  });
+
   it('Administrator bypasses allowed_roles', () => {
     const m = meta({
       transitions: [{ from: 'draft', to: 'sent', action: 'Send', allowed_roles: ['Approver'] }],

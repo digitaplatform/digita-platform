@@ -58,7 +58,8 @@ export function WorkflowBar({
 
   const transitions = (meta.transitions ?? []).filter((tr) => {
     if (tr.from !== current && tr.from !== '*') return false;
-    if (!admin && !tr.allowed_roles.some((r) => roles.has(r))) return false;
+    // An empty allowed_roles lets every user take the transition, as the engine reads it.
+    if (!admin && tr.allowed_roles.length > 0 && !tr.allowed_roles.some((r) => roles.has(r))) return false;
     if (tr.condition) {
       const r = evaluateExpr(tr.condition, { doc, user: (user as unknown as Doc) ?? {} });
       if (r.error) return true; // fail-open for visibility; the engine still enforces
