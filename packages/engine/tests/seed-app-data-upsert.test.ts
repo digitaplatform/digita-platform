@@ -19,6 +19,8 @@ vi.mock("../src/core/config/env.js", () => ({
     MONGODB_URI: "", MONGODB_MIN_POOL: 1, MONGODB_MAX_POOL: 5, MONGODB_TIMEOUT_MS: 30000,
     MONGODB_RETRY_WRITES: true, MONGODB_IDENTITY_DB: "u", MONGODB_LOGS_DB: "l",
     MONGODB_AUDITS_DB: "a", MONGODB_CORE_DB: "c", MONGODB_APP_DB_PREFIX: "test",
+    // An app engine of a demo tenant, the only engine the reseed route runs on.
+    DEMO_TENANT: true, SITE_ID: "",
   },
 }));
 

@@ -1,8 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { reseedAppData, type ReseedDeps } from "../setup/reseed-app-data.js";
+import { isReseedAllowed, reseedAppData, type ReseedDeps } from "../setup/reseed-app-data.js";
 import { successResponse } from "./response-model.js";
 import { createLogger } from "../logging/logger.js";
-import { env } from "../config/env.js";
 
 const log = createLogger("admin-reseed-router");
 
@@ -27,11 +26,13 @@ export function registerAdminReseedRoutes(
         return reply.code(403).send({ success: false, error: { code: "FORBIDDEN" } });
       }
 
-      // Destructive — blocked in production except on a demo tenant.
-      if (env.NODE_ENV === "production" && !env.DEMO_TENANT) {
+      if (!isReseedAllowed()) {
         return reply.code(403).send({
           success: false,
-          error: { code: "RESEED_DISABLED", detail: "set DEMO_TENANT to enable in production" },
+          error: {
+            code: "RESEED_DISABLED",
+            detail: "the reseed runs only on an app engine of a demo tenant: DEMO_TENANT on and SITE_ID empty",
+          },
         });
       }
 

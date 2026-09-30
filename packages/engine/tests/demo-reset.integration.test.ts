@@ -156,6 +156,13 @@ async function expectNoDemoReset({ app, registry, admin }: Boot): Promise<void> 
   expect(reset.json().error?.code).toBe(unknown.json().error?.code);
 }
 
+/** The reseed route's refusal code, or none: a body without a mode is refused after the guards
+ *  with INVALID_MODE, so no reseed runs either way. */
+async function reseedRouteCode({ app, admin }: Boot): Promise<string | undefined> {
+  const res = await app.inject({ method: "POST", url: "/api/v1/admin/reseed", headers: admin, payload: {} });
+  return res.json().error?.code;
+}
+
 /** What an earlier boot of a demo app engine stored is gone. */
 async function expectStoredDemoResetRemoved({ db }: Boot): Promise<void> {
   expect(await db.findOne(DIGITA.COLLECTIONS.ENTITY, "DemoReset", DIGITA.DATABASES.CORE)).toBeNull();
@@ -216,6 +223,10 @@ describe("the demo reset on a demo tenant", () => {
     expect(order.json().data.customer).toBe("Kept");
   });
 
+  it("lets the reseed route past its guards", async () => {
+    expect(await reseedRouteCode(engine)).toBe("INVALID_MODE");
+  });
+
   it("refuses a caller its row is shared with, who may read it but not reset", async () => {
     const { app, admin, member } = engine;
     const share = await app.inject({
@@ -248,6 +259,10 @@ describe("the demo reset on a website engine of a demo tenant", () => {
 
   it("removes the definition and the row a demo app engine stored", async () => {
     await expectStoredDemoResetRemoved(engine);
+  });
+
+  it("refuses the reseed route too", async () => {
+    expect(await reseedRouteCode(engine)).toBe("RESEED_DISABLED");
   });
 });
 
@@ -287,5 +302,10 @@ describe("the demo reset on a tenant that is no demo", () => {
 
   it("removes the definition and the row the demo boot stored", async () => {
     await expectStoredDemoResetRemoved(engine);
+  });
+
+  // The test env runs outside production, where the route used to run on every engine.
+  it("refuses the reseed route", async () => {
+    expect(await reseedRouteCode(engine)).toBe("RESEED_DISABLED");
   });
 });

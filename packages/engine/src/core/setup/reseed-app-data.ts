@@ -8,8 +8,18 @@ import { NamingService } from "../document/naming-service.js";
 import { seedAppData } from "./seed-app-data.js";
 import { seedDataTranslations } from "./seed-data-translations.js";
 import { createLogger } from "../logging/logger.js";
+import { env } from "../config/env.js";
 
 const log = createLogger("reseed-app-data");
+
+/**
+ * Whether this engine may reseed its app data: only an app engine of a demo tenant, in production
+ * and outside it. A website engine takes its pages from its site folder at boot, which a reseed
+ * does not load, so a reseed would leave its site empty.
+ */
+export function isReseedAllowed(): boolean {
+  return env.DEMO_TENANT && !env.SITE_ID;
+}
 
 export type ReseedMode = "template" | "demo";
 

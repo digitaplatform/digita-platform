@@ -9,8 +9,8 @@ import { reseedAppData, type ReseedDeps } from "./reseed-app-data.js";
 /**
  * The demo reset: the single `DemoReset` with its `long_running` action `reset`. As an action it
  * is what the Jobs page lists per app, schedules nightly and keeps a run record of. It wipes the
- * app's data, so it exists only on a tenant marked as a demo (DEMO_TENANT), and there only on an
- * app engine, never on a website engine (see `enableDemoReset`).
+ * app's data, so it exists only where the engine may reseed (`isReseedAllowed`): on an app
+ * engine of a tenant marked as a demo, never on a website engine.
  */
 const DEMO_RESET = "DemoReset";
 /** The single's one row: the action route runs an action on a document. */

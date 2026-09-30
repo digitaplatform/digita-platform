@@ -87,7 +87,7 @@ import { DocumentShareService } from "./core/permissions/document-share-service.
 import { generateOpenAPISpec } from "./core/api/openapi-generator.js";
 import { firstRun } from "./core/setup/first-run.js";
 import { enableDemoReset, removeDemoReset } from "./core/setup/demo-reset.js";
-import type { ReseedDeps } from "./core/setup/reseed-app-data.js";
+import { isReseedAllowed, type ReseedDeps } from "./core/setup/reseed-app-data.js";
 import { successResponse } from "./core/api/response-model.js";
 import { RuleEngine } from "./core/rules/rule-engine.js";
 import { seedRulesFromFiles } from "./core/rules/rule-loader.js";
@@ -575,12 +575,10 @@ export async function createApp(
       await registry.loadAll(join(d.root, "entities"), { defaultDatabase: d.dbName });
     }
 
-    // 3a. The demo reset exists only on the app engines of a demo tenant. A website engine gets
-    //     its pages from its site folder at boot (6d), which a reset does not load, so a reset
-    //     would leave the site empty. The entity is registered before first-run stores and
-    //     migrates the definitions; everywhere else, a definition an earlier boot stored is
-    //     removed before 5 would register it again.
-    if (env.DEMO_TENANT && !env.SITE_ID) await enableDemoReset(db, registry, hookRunner, reseedDeps);
+    // 3a. The demo reset exists only where the engine may reseed its app data. It is registered
+    //     before first-run stores and migrates the definitions; everywhere else, a definition an
+    //     earlier boot stored is removed before 5 would register it again.
+    if (isReseedAllowed()) await enableDemoReset(db, registry, hookRunner, reseedDeps);
     else await removeDemoReset(db);
 
     // 3b. Domain folders contribute to the same module/locale/seed dir lists.

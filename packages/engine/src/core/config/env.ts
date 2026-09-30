@@ -196,10 +196,10 @@ export const env = {
   // Set only for a website engine: it seeds `<domainDir>/sites/<SITE_ID>/` at boot
   // and scopes the public read API to that site. Empty for every other app.
   SITE_ID: getEnv("SITE_ID", ""),
-  // Marks the tenant as a demo. Only there does the engine run /admin/reseed in production, and
-  // only there does an app engine, never a website engine, register the DemoReset action, which
-  // the Jobs page schedules nightly. Both wipe the app's data, so every other tenant keeps them
-  // off and cannot lose its data by accident.
+  // Marks the tenant as a demo. Only there does an app engine, never a website engine, run
+  // /admin/reseed and register the DemoReset action, which the Jobs page schedules nightly
+  // (isReseedAllowed). Both wipe the app's data, so every other engine keeps them off and cannot
+  // lose its data by accident.
   DEMO_TENANT: getEnvBool("DEMO_TENANT", false),
 
   // ─── MONGODB ──────────────────────────────────────────
