@@ -74,3 +74,33 @@ describe('buildZodSchema — conditional required (superRefine)', () => {
     if (!r.success) expect(r.error.issues[0]?.path).toEqual(['reason']);
   });
 });
+
+describe('buildZodSchema — a required Check must be ticked and a required Rating above 0', () => {
+  const issues = (schema: ReturnType<typeof buildZodSchema>, doc: Record<string, unknown>) => {
+    const r = schema.safeParse(doc);
+    return r.success ? [] : r.error.issues.map((i) => [i.path.join('.'), i.message]);
+  };
+  const fields = [
+    field({ fieldname: 'agreed', fieldtype: 'Check', required: true }),
+    field({ fieldname: 'score', fieldtype: 'Rating', required: true }),
+  ];
+  const schema = buildZodSchema(entity(fields), (fn) => fn === 'agreed' || fn === 'score');
+
+  it('refuses an unticked box and a Rating of 0 with field_required', () => {
+    expect(issues(schema, { agreed: 0, score: 0 })).toEqual([
+      ['agreed', 'field_required'],
+      ['score', 'field_required'],
+    ]);
+    expect(issues(schema, { agreed: false, score: 0 })[0]).toEqual(['agreed', 'field_required']);
+  });
+
+  it('accepts a ticked box and a Rating above 0', () => {
+    expect(issues(schema, { agreed: 1, score: 0.2 })).toEqual([]);
+    expect(issues(schema, { agreed: true, score: 1 })).toEqual([]);
+  });
+
+  it('accepts an unticked box and a Rating of 0 when the field is not required now', () => {
+    const optional = buildZodSchema(entity(fields.map((f) => ({ ...f, required: false }))), () => false);
+    expect(issues(optional, { agreed: 0, score: 0 })).toEqual([]);
+  });
+});

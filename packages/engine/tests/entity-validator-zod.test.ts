@@ -531,6 +531,80 @@ describe("validateEntityDataZod — a blank value is no value", () => {
   });
 });
 
+describe("validateEntityDataZod — a required Check must be ticked and a required Rating above 0", () => {
+  // The handler stores a missing Check as false and a missing Rating as 0, so the
+  // value the validator sees for "not given" is that stored form.
+  const validateStored = (field: Record<string, unknown>, value: unknown) => {
+    const stored = getFieldTypeHandler(field.fieldtype as never).toStorage(value, field as never);
+    builder.invalidate("TestDoc");
+    return validateEntityDataZod(entity([field]), { [field.fieldname as string]: stored }, builder);
+  };
+  const keys = (r: ReturnType<typeof validateStored>) => r.errors.map((e) => [e.field, e.message_key]);
+  const check = { fieldname: "f", fieldtype: "Check", label: "F" };
+  const rating = { fieldname: "f", fieldtype: "Rating", label: "F" };
+
+  it("a required Check refuses a missing value and an unticked box with field_required", () => {
+    for (const value of [null, undefined, false, 0]) {
+      expect(keys(validateStored({ ...check, required: true }, value))).toEqual([["f", "field_required"]]);
+    }
+  });
+
+  it("a required Check accepts a ticked box", () => {
+    for (const value of [true, 1]) expect(validateStored({ ...check, required: true }, value).errors).toEqual([]);
+  });
+
+  it("a required Rating refuses a missing value and 0 with field_required", () => {
+    for (const value of [null, undefined, 0, "0"]) {
+      expect(keys(validateStored({ ...rating, required: true }, value))).toEqual([["f", "field_required"]]);
+    }
+  });
+
+  it("a required Rating accepts a value above 0 and still refuses one above 1", () => {
+    expect(validateStored({ ...rating, required: true }, 0.2).errors).toEqual([]);
+    expect(keys(validateStored({ ...rating, required: true }, 5))).toEqual([["f", "field_invalid_rating"]]);
+  });
+
+  it("an optional Check accepts an unticked box and an optional Rating accepts 0", () => {
+    for (const value of [null, false]) expect(validateStored(check, value).errors).toEqual([]);
+    for (const value of [null, 0]) expect(validateStored(rating, value).errors).toEqual([]);
+  });
+
+  it("a required Check or Rating cell of a Table row refuses an unticked box and 0", () => {
+    const e = entity([
+      {
+        fieldname: "lines",
+        fieldtype: "Table",
+        label: "Lines",
+        child_fields: [
+          { fieldname: "agreed", fieldtype: "Check", label: "Agreed", required: true },
+          { fieldname: "score", fieldtype: "Rating", label: "Score", required: true },
+        ],
+      },
+    ]);
+    builder.invalidate("TestDoc");
+    const r = validateEntityDataZod(e, { lines: [{ agreed: 1, score: 0.4 }, { agreed: 0, score: 0 }] }, builder);
+    expect(keys(r)).toEqual([
+      ["lines[1].agreed", "field_required"],
+      ["lines[1].score", "field_required"],
+    ]);
+  });
+
+  it("a Check or Rating whose mandatory_depends_on holds refuses an unticked box and 0", () => {
+    const e = entity([
+      { fieldname: "type", fieldtype: "Data", label: "Type" },
+      { fieldname: "agreed", fieldtype: "Check", label: "Agreed", mandatory_depends_on: "eval:doc.type=='loan'" },
+      { fieldname: "score", fieldtype: "Rating", label: "Score", mandatory_depends_on: "eval:doc.type=='loan'" },
+    ]);
+    builder.invalidate("TestDoc");
+    expect(keys(validateEntityDataZod(e, { type: "loan", agreed: false, score: 0 }, builder))).toEqual([
+      ["agreed", "field_mandatory_depends_on"],
+      ["score", "field_mandatory_depends_on"],
+    ]);
+    builder.invalidate("TestDoc");
+    expect(validateEntityDataZod(e, { type: "sale", agreed: false, score: 0 }, builder).errors).toEqual([]);
+  });
+});
+
 describe("validateEntityDataZod — a failed rule answers the key it names", () => {
   const cases: Array<[string, Record<string, unknown>, unknown, string, Record<string, string>?]> = [
     ["regex with regex_message", { fieldtype: "Data", regex: "^[0-9-]{10,17}$", regex_message: "isbn_invalid" }, "abc", "isbn_invalid"],

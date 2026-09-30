@@ -163,7 +163,10 @@ function buildFieldSchema(field: FieldDefinition): ZodTypeAny {
   return s;
 }
 
-function isEmptyValue(v: unknown): boolean {
+/** Mirrors the engine: an unticked Check and a Rating of 0 are no value, so a required one refuses them. */
+function isEmptyValue(field: FieldDefinition, v: unknown): boolean {
+  if (field.fieldtype === 'Check' && (v === false || v === 0)) return true;
+  if (field.fieldtype === 'Rating' && Number(v) === 0) return true;
   return v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
 }
 
@@ -192,7 +195,7 @@ export function buildZodSchema(
   return base.superRefine((data, ctx) => {
     for (const f of entity.fields) {
       if (!isStored(f.fieldtype) || f.fieldtype === 'Table') continue;
-      if (requiredResolver(f.fieldname) && isEmptyValue((data as Record<string, unknown>)[f.fieldname])) {
+      if (requiredResolver(f.fieldname) && isEmptyValue(f, (data as Record<string, unknown>)[f.fieldname])) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: [f.fieldname], message: 'field_required' });
       }
     }

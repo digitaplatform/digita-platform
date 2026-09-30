@@ -40,7 +40,7 @@ export function buildEntitySchema(entity: EntityDefinition): ZodTypeAny {
     const d = data as Record<string, unknown>;
     for (const f of conditionalFields) {
       if (!evaluateExpression(f.mandatory_depends_on!, { doc: d })) continue;
-      if (isEmptyValue(d[f.fieldname])) {
+      if (isEmptyValue(f, d[f.fieldname])) {
         ctx.addIssue({ code: "custom", path: [f.fieldname], message: "field_mandatory_depends_on" });
       }
     }
@@ -59,7 +59,7 @@ export function buildFieldSchema(field: FieldDefinition): ZodTypeAny {
   if (field.required) {
     // The blank check runs before the type rules, so a blank value gets only
     // field_required, whatever the type schema would say about it.
-    return z.unknown().refine((v) => !isBlank(v), "field_required").pipe(s);
+    return z.unknown().refine((v) => !isMissing(field, v), "field_required").pipe(s);
   }
   // An optional text field left blank has no value for its format rules to check.
   // Other types are left to their own rules: a blank Tag is not a list.
@@ -67,9 +67,20 @@ export function buildFieldSchema(field: FieldDefinition): ZodTypeAny {
   return s.nullable().optional();
 }
 
+/**
+ * The value a required field refuses. The handlers store a missing Check as
+ * false and a missing Rating as 0, so an unticked box and a Rating of 0 are no value.
+ */
+function isMissing(field: FieldDefinition, v: unknown): boolean {
+  if (isBlank(v)) return true;
+  if (field.fieldtype === "Check") return v === false || v === 0;
+  if (field.fieldtype === "Rating") return Number(v) === 0;
+  return false;
+}
+
 /** The emptiness a mandatory_depends_on field is checked for. */
-function isEmptyValue(v: unknown): boolean {
-  return isBlank(v) || (Array.isArray(v) && v.length === 0);
+function isEmptyValue(field: FieldDefinition, v: unknown): boolean {
+  return isMissing(field, v) || (Array.isArray(v) && v.length === 0);
 }
 
 function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
@@ -289,7 +300,7 @@ function tableSchema(field: FieldDefinition): ZodTypeAny {
           const r = row as Record<string, unknown>;
           for (const cf of conditionalFields) {
             if (!evaluateExpression(cf.mandatory_depends_on!, { doc: r })) continue;
-            if (isEmptyValue(r[cf.fieldname])) {
+            if (isEmptyValue(cf, r[cf.fieldname])) {
               // "custom" string literal (not the deprecated z.ZodIssueCode enum).
               ctx.addIssue({
                 code: "custom",
