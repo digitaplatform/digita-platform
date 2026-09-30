@@ -637,6 +637,101 @@ describe("A save keeps the stored value of a child field the user may not write"
   });
 });
 
+describe("A Table write that repeats a _row_id is refused", () => {
+  // Technician writes level 0 only: `note` is on level 1, so a save keeps it from the stored row.
+  const technician: UserContext = { _id: "tech-002", email: "tech2@test.local", roles: ["Technician"], full_name: "Tech" };
+
+  beforeAll(async () => {
+    registry.register(
+      makeEntity({
+        name: "RowIdDoc",
+        fields: [
+          { fieldname: "title", fieldtype: "Data" as const, label: "Title" },
+          {
+            fieldname: "checklist",
+            fieldtype: "Table" as const,
+            label: "Checklist",
+            child_fields: [
+              { fieldname: "done", fieldtype: "Check" as const, label: "Done" },
+              { fieldname: "note", fieldtype: "Data" as const, label: "Note", perm_level: 1 },
+            ],
+          },
+        ],
+        permissions: [
+          { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
+          { role: "Technician", level: 0, select: 1, read: 1, write: 1 },
+        ],
+      }),
+    );
+    await db.ensureCollection("RowIdDoc", "app");
+  });
+
+  async function storedRows(name: string): Promise<Record<string, unknown>[]> {
+    const raw = (await db.findOne("RowIdDoc", name, "app")) as Record<string, unknown>;
+    return raw["checklist"] as Record<string, unknown>[];
+  }
+
+  async function refusal(write: Promise<unknown>): Promise<ValidationFailedError> {
+    const err = await write.then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(ValidationFailedError);
+    return err as ValidationFailedError;
+  }
+
+  it("refuses an update that repeats a stored row's _row_id and stores nothing", async () => {
+    const created = await docService.insert("RowIdDoc", { title: "WO", checklist: [{ note: "approved" }] }, adminUser);
+    const [stored] = await storedRows(created._id);
+    const rowId = stored!["_row_id"];
+
+    const err = await refusal(
+      docService.update(
+        "RowIdDoc",
+        created._id,
+        { checklist: [{ _row_id: rowId, done: true }, { _row_id: rowId, done: false }] },
+        technician,
+      ),
+    );
+    expect(err.errors).toEqual([
+      expect.objectContaining({ field: "checklist[1]", message_key: "table_row_unique_violation" }),
+    ]);
+    expect(await storedRows(created._id)).toEqual([stored]);
+  });
+
+  it("refuses the repeat from Administrator and on insert", async () => {
+    const created = await docService.insert("RowIdDoc", { title: "WO", checklist: [{ note: "one" }] }, adminUser);
+    const [stored] = await storedRows(created._id);
+    await refusal(
+      docService.update(
+        "RowIdDoc",
+        created._id,
+        { checklist: [{ ...stored }, { ...stored, note: "two" }] },
+        adminUser,
+      ),
+    );
+    await refusal(
+      docService.insert("RowIdDoc", { title: "WO", checklist: [{ _row_id: "R1" }, { _row_id: "R1" }] }, adminUser),
+    );
+  });
+
+  it("stores rows with distinct ids and new rows without one", async () => {
+    const created = await docService.insert("RowIdDoc", { title: "WO", checklist: [{ note: "one" }] }, adminUser);
+    const [stored] = await storedRows(created._id);
+
+    await docService.update(
+      "RowIdDoc",
+      created._id,
+      { checklist: [{ ...stored, done: true }, { done: false }, { done: false }] },
+      technician,
+    );
+
+    const rows = await storedRows(created._id);
+    expect(rows.map((r) => r["note"])).toEqual(["one", undefined, undefined]);
+    expect(new Set(rows.map((r) => r["_row_id"])).size).toBe(3);
+  });
+});
+
 describe("An update re-derives the fetch_from fields of a row whose Link changed", () => {
   // SalesOrder.lines in small: `product_code` is read_only, `uom` is writable,
   // both fetch_from the row's `product` with fetch_if_empty.

@@ -277,4 +277,39 @@ describe("Import modes — insert / upsert / validate", () => {
     expect(line.account).toBe(String(a1!._id));
     expect(line.amount).toBe(50);
   });
+
+  it("a child row's _row_id in the file is dropped, so a file cannot repeat one", async () => {
+    const res = await imp("Item", adminTok, { rows: [{
+      item_no: "RID1", name: "Repeat", group: "G1",
+      lines: [{ _row_id: "R1", account: "A1", amount: 1 }, { _row_id: "R1", account: "A1", amount: 2 }],
+    }], mode: "insert" });
+    expect(res.json().data.inserted).toBe(1);
+    const lines = (await findOne("Item", { item_no: "RID1" }))!.lines as Record<string, unknown>[];
+    expect(lines.map((l) => l.amount)).toEqual([1, 2]);
+    expect(lines.map((l) => l._row_id)).not.toContain("R1");
+    expect(new Set(lines.map((l) => l._row_id)).size).toBe(2);
+  });
+});
+
+describe("The resource API refuses a Table write that repeats a _row_id", () => {
+  it("answers 400 naming the repeated row and keeps the stored rows", async () => {
+    const created = await app.inject({
+      method: "POST", url: "/api/v1/resource/Item", headers: bearer(adminTok),
+      payload: { item_no: "RID2", name: "Repeat", lines: [{ amount: 1 }] },
+    });
+    expect(created.statusCode).toBe(201);
+    const item = created.json().data as { _id: string; lines: Array<Record<string, unknown>> };
+    const row = item.lines[0]!;
+
+    const res = await app.inject({
+      method: "PUT", url: `/api/v1/resource/Item/${item._id}`, headers: bearer(adminTok),
+      payload: { lines: [row, { ...row, amount: 2 }] },
+    });
+    expect(res.statusCode).toBe(400);
+    // The engine answers the key table_row_unique_violation, translated with its params.
+    expect(res.json().messages).toEqual([expect.objectContaining({ type: "error", path: "lines[1]" })]);
+    expect(res.json().messages[0].text).toContain("_row_id");
+    const stored = (await findOne("Item", { item_no: "RID2" }))!.lines as Record<string, unknown>[];
+    expect(stored.map((l) => l.amount)).toEqual([1]);
+  });
 });
