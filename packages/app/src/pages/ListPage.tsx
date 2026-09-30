@@ -201,14 +201,9 @@ export default function ListPage() {
   // Import is new + destructive → require the modeled `import` bit with NO
   // read-fallback (Administrator still bypasses inside hasEntityPermission).
   const canImport = hasEntityPermission(meta, user, 'import');
-  // Round-trip export hits the engine endpoint (enforces the `export` bit). Gate
-  // the button with the PrintMenu modeled-fallback idiom: require the bit only
-  // when some permission row models `export`, else fall back to `read` so
-  // never-modeled entities keep an ungated affordance.
-  const exportModelled = (meta.permissions ?? []).some((p) => p.export !== undefined);
-  const canExportRoundTrip = exportModelled
-    ? hasEntityPermission(meta, user, 'export')
-    : hasEntityPermission(meta, user, 'read');
+  // Round-trip export hits the engine endpoint, which requires the `export` bit with
+  // no fallback to `read`, whether or not a row models it.
+  const canExportRoundTrip = hasEntityPermission(meta, user, 'export');
   const treeMode = !!meta.tree && display === 'tree';
 
   // ── URL writers ────────────────────────────────────────────────────────────
