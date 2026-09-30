@@ -59,13 +59,6 @@ function FieldCell({
   if (ft === 'Heading') {
     return <Skeleton className={cn('h-4 w-1/3', cellClassName)} />;
   }
-  if (ft === 'Button') {
-    return (
-      <div className={cellClassName}>
-        <Skeleton className="h-[var(--control-h)] w-28 rounded-btn" />
-      </div>
-    );
-  }
   return (
     <div className={cn('space-y-1.5', cellClassName)}>
       <Skeleton className={cn('h-3', labelW(index))} />

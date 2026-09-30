@@ -81,8 +81,7 @@ export type FieldType =
   | "ColumnBreak"
   | "TabBreak"
   | "Heading"
-  | "HTML"
-  | "Button";
+  | "HTML";
 
 export const LAYOUT_FIELD_TYPES: readonly FieldType[] = [
   "SectionBreak",
@@ -90,7 +89,6 @@ export const LAYOUT_FIELD_TYPES: readonly FieldType[] = [
   "TabBreak",
   "Heading",
   "HTML",
-  "Button",
 ] as const;
 
 export const NON_STORED_FIELD_TYPES: readonly FieldType[] = [

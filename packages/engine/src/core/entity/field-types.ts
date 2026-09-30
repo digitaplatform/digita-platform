@@ -334,7 +334,6 @@ const FIELD_TYPE_MAP: Record<FieldType, FieldTypeHandler> = {
   TabBreak: layoutHandler,
   Heading: layoutHandler,
   HTML: layoutHandler,
-  Button: layoutHandler,
 };
 
 export function getFieldTypeHandler(fieldtype: FieldType): FieldTypeHandler {

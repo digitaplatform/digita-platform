@@ -163,18 +163,16 @@ describe("copyDocumentData", () => {
     expect(copy.value).toBe(7);
   });
 
-  it("skips HTML and Button layout fields", () => {
+  it("skips HTML layout fields", () => {
     const entity = makeEntity({
       fields: [
         { fieldname: "html_block", fieldtype: "HTML", label: "HTML" },
-        { fieldname: "btn", fieldtype: "Button", label: "Button" },
         { fieldname: "title", fieldtype: "Data", label: "Title" },
       ],
     });
-    const source = { html_block: "<p>hi</p>", btn: "click", title: "OK" };
+    const source = { html_block: "<p>hi</p>", title: "OK" };
     const copy = copyDocumentData(entity, source, source);
     expect("html_block" in copy).toBe(false);
-    expect("btn" in copy).toBe(false);
     expect(copy.title).toBe("OK");
   });
 

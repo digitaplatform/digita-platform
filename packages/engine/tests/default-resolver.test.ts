@@ -230,17 +230,15 @@ describe("resolveDefaults", () => {
     expect("hdr" in result).toBe(false);
   });
 
-  it("skips HTML and Button fields", () => {
+  it("skips HTML fields", () => {
     const entity = makeEntity({
       fields: [
         { fieldname: "html1", fieldtype: "HTML", label: "HTML", default: "<p></p>" },
-        { fieldname: "btn1", fieldtype: "Button", label: "Button", default: "click" },
         { fieldname: "amount", fieldtype: "Currency", label: "Amount", default: 0 },
       ],
     });
     const result = resolveDefaults(entity, {}, "admin@example.com");
     expect("html1" in result).toBe(false);
-    expect("btn1" in result).toBe(false);
     // amount default is 0 (non-string) — it still gets applied
     expect(result.amount).toBe(0);
   });

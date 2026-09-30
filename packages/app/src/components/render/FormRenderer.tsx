@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type Ref } from 'react';
 import DOMPurify from 'dompurify';
 import { Info, Snowflake, TriangleAlert } from 'lucide-react';
-import { Badge, Button, FormRow, FormSection, TabPanel, Tabs, Tooltip, cn } from '@digitaplatform/components';
+import { Badge, FormRow, FormSection, TabPanel, Tabs, Tooltip, cn } from '@digitaplatform/components';
 import type { FieldDefinition, FormLayoutConfig } from '@digitaplatform/shared';
 import { useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
@@ -29,7 +29,6 @@ interface FormRendererProps {
   fieldState: FieldStateMap;
   errors: Record<string, string>;
   onFieldChange: (fieldname: string, value: unknown) => void;
-  onButtonAction?: (fieldname: string) => void;
   /** Classes for the tab strip: the page that draws the form owns where the strip pins
    *  (`sticky` and its offset), because only the page knows what stands above the form. */
   tabsClassName?: string;
@@ -61,7 +60,6 @@ export function FormRenderer({
   fieldState,
   errors,
   onFieldChange,
-  onButtonAction,
   tabsClassName,
   tabsRef,
 }: FormRendererProps) {
@@ -139,7 +137,6 @@ export function FormRenderer({
           tField={tField}
           cellClassName={cellClassName}
           onChange={(v) => onFieldChange(field.fieldname, v)}
-          onButtonAction={onButtonAction}
         />
       )}
     />
@@ -230,7 +227,6 @@ function FieldSlot({
   tField,
   cellClassName,
   onChange,
-  onButtonAction,
 }: {
   entity: string;
   field: FieldDefinition;
@@ -242,7 +238,6 @@ function FieldSlot({
   tField: (entity: string, field: string, fallback?: string) => string;
   cellClassName?: string;
   onChange: (v: unknown) => void;
-  onButtonAction?: (fieldname: string) => void;
 }) {
   const tc = useChrome();
   // Grid-cell class (col-span) applied to this field's root in single-column sections;
@@ -269,15 +264,6 @@ function FieldSlot({
       />
     );
   }
-  if (field.fieldtype === 'Button') {
-    const btn = (
-      <Button type="button" variant="secondary" disabled={!onButtonAction} onClick={() => onButtonAction?.(field.fieldname)}>
-        {tField(entity, field.fieldname, field.label)}
-      </Button>
-    );
-    return cellClassName ? <div className={cellClassName}>{btn}</div> : btn;
-  }
-
   const controlId = `${formId}-${field.fieldname}`;
   const labelId = `${controlId}-label`;
   const describedById = field.description ? `${controlId}-desc` : undefined;

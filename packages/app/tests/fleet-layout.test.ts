@@ -17,8 +17,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ENGINE_DIR = join(HERE, '../../engine/src/entities');
 const ERP_DIR = join(HERE, '../../../../digita-catalog/erp');
 
-/** Only the layout BOUNDARY types are consumed by the layout tree; Heading/HTML/
- *  Button render as normal cells and must survive into the output. */
+/** Only the layout BOUNDARY types are consumed by the layout tree; Heading/HTML
+ *  render as normal cells and must survive into the output. */
 const BOUNDARY = new Set(['TabBreak', 'SectionBreak', 'ColumnBreak']);
 
 function* entityFiles(dir: string): Generator<string> {
@@ -47,7 +47,7 @@ function loadEntities(dir: string): EntityDefinition[] {
 
 /** Non-data decorations — not counted toward the auto-tab field threshold (mirrors
  *  the engine's own DECORATION set in layout.ts). */
-const DECORATION = new Set(['Heading', 'HTML', 'Button']);
+const DECORATION = new Set(['Heading', 'HTML']);
 
 const dataNames = (fields: FieldDefinition[]): string[] =>
   fields.filter((f) => !BOUNDARY.has(f.fieldtype)).map((f) => f.fieldname);

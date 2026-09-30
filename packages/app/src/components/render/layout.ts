@@ -4,7 +4,7 @@ import type { FieldDefinition, FormLayoutConfig } from '@digitaplatform/shared';
  * Parse a flat `fields[]` into the Tabs → Sections → Columns tree the FormRenderer
  * walks. Layout-break fields
  * (Tab/Section/Column) structure the tree; everything else (real fields +
- * Heading/HTML/Button) lands in the current column. Pure + locale-free —
+ * Heading/HTML) lands in the current column. Pure + locale-free —
  * localization happens at render. Empty tabs are dropped.
  */
 
@@ -115,7 +115,7 @@ const FULL_WIDTH: ReadonlySet<string> = new Set([
 ]);
 const NARROW: ReadonlySet<string> = new Set([
   'Int', 'Float', 'Currency', 'Percent', 'Check', 'Date', 'Datetime', 'Time',
-  'Duration', 'Rating', 'Color', 'Button',
+  'Duration', 'Rating', 'Color',
 ]);
 
 /**
@@ -157,7 +157,7 @@ export const SPAN_CLASS: Record<FieldSpan, string> = {
  *  aside entirely (protects hand-tabbed + column-authored entities). */
 const AUTHORING_BREAKS: ReadonlySet<string> = new Set(['TabBreak', 'ColumnBreak']);
 /** Non-data decorations — not counted toward the tab/merge thresholds. */
-const DECORATION: ReadonlySet<string> = new Set(['Heading', 'HTML', 'Button']);
+const DECORATION: ReadonlySet<string> = new Set(['Heading', 'HTML']);
 
 const DEFAULT_TABIFY = 12;
 const DEFAULT_MIN_TAB_FIELDS = 3;
