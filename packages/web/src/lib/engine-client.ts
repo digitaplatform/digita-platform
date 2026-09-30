@@ -20,7 +20,20 @@ type Tuple = [string, string, unknown];
 
 type QueryParams = { filters?: Tuple[]; fields?: string[]; page_size?: number; page?: number; order_by?: string };
 
-/** One page of a public list and the number of pages the engine counts for the whole list. */
+/** Logs why an engine read failed and returns the error that ends the request. A failed read must
+ *  not pass for a list without rows, which every caller would answer as a missing page. */
+function logFailedRead(doctype: string, what: string, cause?: unknown): Error {
+  const line = `[digita-web] ${doctype} read ${what}`;
+  if (cause === undefined) {
+    console.error(line);
+    return new Error(line);
+  }
+  console.error(line, cause);
+  return new Error(line, { cause });
+}
+
+/** One page of a public list and the number of pages the engine counts for the whole list. A read
+ *  the engine does not answer with a list throws: an outage is not an empty site. */
 async function queryPage<T>(doctype: string, params: QueryParams): Promise<{ rows: T[]; totalPages: number }> {
   const { engineUrl, revalidateSeconds } = getConfig();
   const qs = new URLSearchParams();
@@ -30,16 +43,22 @@ async function queryPage<T>(doctype: string, params: QueryParams): Promise<{ row
   if (params.page) qs.set("page", String(params.page));
   if (params.order_by) qs.set("order_by", params.order_by);
   const url = `${engineUrl}/api/v1/public/resource/${doctype}?${qs.toString()}`;
-  const none = { rows: [], totalPages: 0 };
+  let res: Response;
   try {
-    const res = await fetch(url, { next: { revalidate: revalidateSeconds, tags: [entityCacheTag(doctype)] } });
-    if (!res.ok) return none;
-    const json = (await res.json()) as { data?: T[]; meta?: { total_pages?: number } };
-    if (!Array.isArray(json.data)) return none;
-    return { rows: json.data, totalPages: json.meta?.total_pages ?? 0 };
-  } catch {
-    return none; // engine unreachable (e.g. transient) → render gracefully, no fake data
+    res = await fetch(url, { next: { revalidate: revalidateSeconds, tags: [entityCacheTag(doctype)] } });
+  } catch (err) {
+    throw logFailedRead(doctype, "could not reach the engine", err);
   }
+  if (!res.ok) throw logFailedRead(doctype, `answered HTTP ${res.status}`);
+  let json: { data?: T[]; meta?: { total_pages?: number } } | null;
+  try {
+    json = await res.json();
+  } catch (err) {
+    throw logFailedRead(doctype, "answered a body that is no JSON", err);
+  }
+  const rows = json?.data;
+  if (!Array.isArray(rows)) throw logFailedRead(doctype, "answered no list");
+  return { rows, totalPages: json?.meta?.total_pages ?? 0 };
 }
 
 async function query<T>(doctype: string, params: QueryParams): Promise<T[]> {
