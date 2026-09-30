@@ -18,6 +18,11 @@ function clientAddress(req: NextRequest): string {
 
 export const answer = (status: number, body: Record<string, unknown>) => NextResponse.json(body, { status });
 
+/** Whether the post declares a JSON body. A page of another site can make its visitors' browsers post
+ *  plain text or a form encoding without asking this server first; JSON needs this server's consent,
+ *  which it never gives, so a form that takes JSON alone takes no post such a page made. */
+const isJson = (req: NextRequest): boolean => req.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() === "application/json";
+
 /** A post the protections let through: who sent it, and the fields of its JSON body. */
 export interface FormPost {
   visitor: string;
@@ -26,12 +31,13 @@ export interface FormPost {
 
 /**
  * The protections every public form of the site shares, run before a route reads its own fields.
- * Answers the response that ends the post: 429 past the visitor's budget, 400 for a body that is
- * no JSON object or carries no render time, and a success that does nothing for a filled honeypot
- * field (`website`) or a form sent under 3 seconds after the server rendered its page, so a
- * program learns nothing from it.
+ * Answers the response that ends the post: 415 for a post that is no JSON, before the visitor's
+ * budget counts it, 429 past that budget, 400 for a body that is no JSON object or carries no render
+ * time, and a success that does nothing for a filled honeypot field (`website`) or a post that came
+ * under 3 seconds after the render time it carries, so a program learns nothing from it.
  */
 export async function admitFormPost(req: NextRequest): Promise<FormPost | NextResponse> {
+  if (!isJson(req)) return answer(415, { ok: false, message: "Unsupported media type" });
   const now = Date.now();
   const visitor = clientAddress(req);
   rateLimit.recordSend(visitor);

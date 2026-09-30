@@ -117,6 +117,30 @@ describe("POST /api/record", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("PLANTED DEFECT: refuses a post that is not JSON with 415 before it counts or reads it, so a page of another site cannot post through its visitors' browsers", async () => {
+    const route = await loadRoute();
+    // The types a page of another site can make a browser send without asking this server first.
+    for (const type of ["text/plain", "text/plain;charset=UTF-8", "application/x-www-form-urlencoded", "multipart/form-data; boundary=x"]) {
+      const req = new NextRequest("http://localhost/api/record", {
+        method: "POST",
+        headers: { "Content-Type": type, "x-forwarded-for": "198.51.100.30" },
+        body: JSON.stringify(booking()),
+      });
+      expect((await route.POST(req)).status, type).toBe(415);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+    // PLANTED INNOCENT: the four refusals spent none of the visitor's five sends, and JSON with a
+    // charset is JSON.
+    for (let i = 0; i < 5; i++) {
+      const req = new NextRequest("http://localhost/api/record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8", "x-forwarded-for": "198.51.100.30" },
+        body: JSON.stringify(booking()),
+      });
+      expect((await route.POST(req)).status).toBe(200);
+    }
+  });
+
   it("a form sent under 3 seconds after it rendered is answered like a success and creates nothing", async () => {
     const route = await loadRoute();
     expect(await send(route, { ...booking(), rendered_at: Date.now() - 1000 })).toEqual({ status: 200, body: { ok: true } });

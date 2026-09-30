@@ -101,6 +101,21 @@ describe("POST /api/contact", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("PLANTED DEFECT: refuses a post that is not JSON with 415 before it counts or reads it, so a page of another site cannot post through its visitors' browsers", async () => {
+    const route = await loadRoute();
+    for (const type of ["text/plain", "application/x-www-form-urlencoded", "multipart/form-data; boundary=x"]) {
+      const req = new NextRequest("http://localhost/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": type, "x-forwarded-for": "198.51.100.31" },
+        body: JSON.stringify(valid()),
+      });
+      expect((await route.POST(req)).status, type).toBe(415);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+    // PLANTED INNOCENT: the refusals spent none of the visitor's budget.
+    expect((await send(route, valid(), "198.51.100.31")).status).toBe(200);
+  });
+
   it("a form sent under 3 seconds after it rendered is answered like a success and reaches nothing", async () => {
     const route = await loadRoute();
     expect(await send(route, { ...valid(), rendered_at: Date.now() - 1000 })).toEqual({ status: 200, body: { ok: true } });
