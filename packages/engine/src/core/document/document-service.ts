@@ -473,6 +473,8 @@ export class DocumentService {
   /**
    * A page of `doctype` for `user`. `everyRowNeedsRead` keeps only the rows the user may read,
    * where the list itself needs only `select`: the public API answers readable rows alone.
+   * `scope` is a filter the engine adds, not the caller, so it may name a field the user
+   * cannot filter on; it narrows the shared rows too.
    */
   async getList(
     doctype: string,
@@ -480,7 +482,7 @@ export class DocumentService {
     user: UserContext = GUEST_USER,
     ctx?: ResponseContext,
     locale?: string,
-    options: { everyRowNeedsRead?: boolean } = {},
+    options: { everyRowNeedsRead?: boolean; scope?: Record<string, unknown> } = {},
   ): Promise<ListResult> {
     const entity = this.registry.get(doctype);
 
@@ -542,8 +544,7 @@ export class DocumentService {
       effectiveFilter = { $or: [scopedFilter as Record<string, unknown>, sharedBranch] };
     }
 
-    const filterArray =
-      Object.keys(effectiveFilter).length > 0 ? [effectiveFilter] : [];
+    const filterArray = [effectiveFilter, options.scope ?? {}].filter((filter) => Object.keys(filter).length > 0);
 
     // C1: applyScopeFilters translates scope/if_owner into the Mongo filter, but
     // a permission `condition` is an arbitrary expression that cannot be — so the

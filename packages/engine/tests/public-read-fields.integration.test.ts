@@ -112,6 +112,15 @@ beforeAll(async () => {
   ];
   await writeFile(join(entities, "brand.entity.json"), entity("Brand", named, { fields: ["slug"] }), "utf-8");
   await writeFile(join(entities, "category.entity.json"), entity("Category", named, { fields: ["name", "slug"] }), "utf-8");
+  // A website engine scopes a page by its `site` link, which the page's Guest row does not list.
+  await writeFile(join(entities, "website.entity.json"), entity("WebSite", [
+    { fieldname: "site_name", fieldtype: "Data", label: "Site Name" },
+  ], { fields: ["site_name"] }, { title_field: "site_name" }), "utf-8");
+  await writeFile(join(entities, "webpage.entity.json"), entity("WebPage", [
+    { fieldname: "site", fieldtype: "Link", label: "Site", target: "WebSite" },
+    { fieldname: "title", fieldtype: "Data", label: "Title" },
+    { fieldname: "status", fieldtype: "Data", label: "Status" },
+  ], { condition: PUBLISHED, fields: ["title"] }, { title_field: "title" }), "utf-8");
   (env as { APP_DIRS: string[] }).APP_DIRS = [fixtureRoot];
 
   const { authn } = await buildTestAuth();
@@ -135,6 +144,13 @@ beforeAll(async () => {
   await db.insertOne("Product", product("P-1", "City Bike", "published", 410), DB);
   await db.insertOne("Product", product("P-2", "Road Bike", "published", 980), DB);
   await db.insertOne("Product", product("P-3", "Prototype Bike", "draft", 1500), DB);
+  for (const [site, name] of [["S-1", "Site One"], ["S-2", "Site Two"]]) {
+    await db.insertOne("WebSite", { doctype: "WebSite", _id: site, site_name: name, ...stamp }, DB);
+  }
+  const page = (_id: string, site: string, status: string) => ({ doctype: "WebPage", _id, site, title: `Page ${_id}`, status, ...stamp });
+  await db.insertOne("WebPage", page("W-1", "S-1", "published"), DB);
+  await db.insertOne("WebPage", page("W-2", "S-2", "published"), DB);
+  await db.insertOne("WebPage", page("W-3", "S-1", "draft"), DB);
 }, 60000);
 
 afterAll(async () => {
@@ -213,5 +229,27 @@ describe("A Guest row with fields opens exactly those fields", () => {
     expect(titles).not.toHaveProperty("brand");
     const brand = (await get("/api/v1/public/resource/Brand/B-1")).json().data as Record<string, unknown>;
     expect(dataKeys(brand)).toEqual(["_id", "creation", "docstatus", "doctype", "modified", "slug"]);
+  });
+});
+
+describe("A website engine with a Guest row that does not list site", () => {
+  it("serves its own site's published rows, reads another site's as not found, and refuses a caller's site filter", async () => {
+    (env as { SITE_ID: string }).SITE_ID = "S-1";
+    try {
+      const list = await get("/api/v1/public/resource/WebPage");
+      expect(list.statusCode, list.body).toBe(200);
+      const rows = list.json().data as Array<Record<string, unknown>>;
+      expect(rows.map((r) => r["_id"])).toEqual(["W-1"]);
+      expect(rows[0]).not.toHaveProperty("site");
+      expect(list.json().meta.total).toBe(1);
+      expect((await get("/api/v1/public/resource/WebPage/W-1")).statusCode).toBe(200);
+      expect((await get("/api/v1/public/resource/WebPage/W-2")).statusCode).toBe(404);
+      expect((await get("/api/v1/public/resource/WebSite/S-1")).statusCode).toBe(200);
+      expect((await get("/api/v1/public/resource/WebSite/S-2")).statusCode).toBe(404);
+      const bySite = await get(`/api/v1/public/resource/WebPage?${new URLSearchParams({ filters: JSON.stringify([["site", "=", "S-2"]]) })}`);
+      expect(bySite.statusCode).toBe(400);
+    } finally {
+      (env as { SITE_ID: string }).SITE_ID = "";
+    }
   });
 });

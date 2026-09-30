@@ -7,7 +7,6 @@ import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { LocaleResolver } from "../i18n/locale-resolver.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
-import type { FilterTuple } from "../database/filter-builder.js";
 import { listQueryFrom } from "./list-query.js";
 import { FileNotFoundInStorageError, type StoragePort } from "../storage/storage-port.js";
 import { resolveStorageKey } from "../storage/file-cleanup.js";
@@ -124,12 +123,13 @@ export function registerPublicRoutes(
   // ─── SITE SCOPE ────────────────────────────────────────
   // Several domains of one tenant can each run a website engine; each serves
   // only its own site. WebSite is the site, keyed by `_id`; an entity with a
-  // `site` link to WebSite is scoped by that field. No SITE_ID, no scope.
-  const siteScope = (doctype: string): FilterTuple | null => {
+  // `site` link to WebSite is scoped by that field. No SITE_ID, no scope. The scope is the
+  // engine's, not the caller's, so it holds whether or not the Guest row opens the field.
+  const siteScope = (doctype: string): Record<string, string> | null => {
     if (!env.SITE_ID) return null;
-    if (doctype === "WebSite") return ["_id", "=", env.SITE_ID];
+    if (doctype === "WebSite") return { _id: env.SITE_ID };
     if (registry.has(doctype) && registry.getField(doctype, "site")?.target === "WebSite") {
-      return ["site", "=", env.SITE_ID];
+      return { site: env.SITE_ID };
     }
     return null;
   };
@@ -139,10 +139,6 @@ export function registerPublicRoutes(
     const { doctype } = request.params as { doctype: string };
     const query = request.query as Record<string, unknown>;
     const listQuery = listQueryFrom(query);
-    // buildMongoFilter ANDs every filter with or_filters and search, so the caller
-    // cannot widen the scope.
-    const scope = siteScope(doctype);
-    if (scope) listQuery.filters = [...(listQuery.filters ?? []), scope];
 
     // DoS guard: clamp any explicit page size into [1, MAX_PUBLIC_PAGE]. A
     // non-positive/non-finite value (0, negative, NaN) is forced to the ceiling —
@@ -158,6 +154,7 @@ export function registerPublicRoutes(
     // `total` and the pages count only the rows the caller may read.
     const result = await documentService.getList(doctype, listQuery, u, ctx, await localeOf(request), {
       everyRowNeedsRead: true,
+      scope: siteScope(doctype) ?? undefined,
     });
 
     return reply.send(
@@ -173,12 +170,15 @@ export function registerPublicRoutes(
   // ─── READ ONE (public; getDoc enforces the per-doc condition) ──
   app.get(`${base}/:doctype/:name`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { doctype, name } = request.params as { doctype: string; name: string };
+    // Another site's document reads as not found, so the read never reveals it. The stored row
+    // decides, since the answer masks `site` where the Guest row does not open it.
+    const scope = siteScope(doctype);
+    if (scope && (await db.count(doctype, [{ _id: name }, scope], registry.get(doctype).database)) === 0) {
+      throw new NotFoundError(doctype, name);
+    }
     const ctx = new ResponseContext();
     const doc = await documentService.getDoc(doctype, name, user(request), ctx, await localeOf(request));
     const data = doc.toJSON();
-    // Another site's document reads as not found, so the read never reveals it.
-    const scope = siteScope(doctype);
-    if (scope && data[scope[0]] !== scope[2]) throw new NotFoundError(doctype, name);
     return reply.send(successResponse(stripInternal(data), ctx.getMessages()));
   });
 
@@ -212,13 +212,13 @@ export function registerPublicRoutes(
       }
       const data: Record<string, unknown> = { ...values };
       const scope = siteScope(doctype);
-      if (scope && scope[0] === "site") {
+      if (scope?.["site"] !== undefined) {
         // The insert keeps only what Guest may write, so a site field Guest cannot write would
         // drop the stamp in silence; that is the entity's misconfiguration, not the visitor's.
         if (!writable?.has("site")) {
           throw new Error(`${doctype} is site-scoped, but its Guest row cannot write "site", so the public create cannot stamp it`);
         }
-        data["site"] = scope[2];
+        data["site"] = scope["site"];
       }
       const doc = await documentService.insert(doctype, data, GUEST_USER);
       return reply.code(201).send(successResponse({ _id: doc._id }));
