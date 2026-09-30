@@ -824,7 +824,8 @@ describe("PermissionChecker", () => {
         stored,
       );
       const rows = out["lines"] as Record<string, unknown>[];
-      expect(rows[0]!["grade"]).toBeUndefined();
+      // The write filter drops the user's "A" and keeps the stored value of the existing row (#235).
+      expect(rows[0]!["grade"]).toBe("B");
       expect(rows[1]!["note"]).toBe("n");
     });
   });
