@@ -256,6 +256,9 @@ export default function LinkControl({
             query={treeQuery}
             disabledIds={disabledIds}
             emptyLabel={treeList.isLoading ? tc('ui.link.searching') : tc('ui.select.noResults')}
+            // Groups open on a tap of their name and stay pickable: the tree's own parent field picks groups.
+            expandOnNameClick
+            selectLabel={tc('ui.tree.select')}
             onSelect={(id) => {
               const node = nodes.find((n) => n.id === id);
               setTreeOpen(false);

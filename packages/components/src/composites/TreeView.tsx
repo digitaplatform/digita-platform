@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { cn } from '../lib/cn.js';
+import { Button } from '../primitives/Button.js';
 
 export interface TreeViewNode {
   id: string;
@@ -29,6 +30,13 @@ export interface TreeViewProps {
    *  the row draggable (`effectAllowed` = 'copy'), or `null` for not draggable
    *  (e.g. group nodes). Omit the prop → no row is draggable (unchanged). */
   getNodeDragData?: (node: TreeViewNode) => { type: string; data: string } | null;
+  /** A click on the name of a node with children opens or closes it instead of
+   *  selecting it, and the row shows a Select button for that node: a picker
+   *  where a person opens groups to reach deeper nodes and may still pick a group.
+   *  Enter keeps selecting the active node. */
+  expandOnNameClick?: boolean;
+  /** Localized text of the Select button (consumer-provided). */
+  selectLabel?: string;
 }
 
 function buildChildren(nodes: TreeViewNode[]): {
@@ -70,6 +78,8 @@ export function TreeView({
   autoFocus,
   disabledIds,
   getNodeDragData,
+  expandOnNameClick,
+  selectLabel = 'Select',
 }: TreeViewProps) {
   const { childrenOf, roots } = useMemo(() => buildChildren(nodes), [nodes]);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(nodes.map((n) => n.id)));
@@ -197,6 +207,9 @@ export function TreeView({
         const selected = node.id === selectedId;
         const active = node.id === activeId;
         const disabled = disabledIds?.has(node.id) ?? false;
+        // A disabled group still opens on its name: its subtree stays navigable.
+        const opensOnName = expandOnNameClick === true && expandable;
+        const nameDisabled = disabled && !opensOnName;
         const dragData = getNodeDragData ? getNodeDragData(node) : null;
         return (
           <div
@@ -224,7 +237,8 @@ export function TreeView({
             <button
               type="button"
               tabIndex={-1}
-              aria-hidden={!expandable}
+              // Where the name opens the group, the name is its accessible toggle.
+              aria-hidden={!expandable || opensOnName}
               onClick={() => expandable && toggle(node.id)}
               style={{ marginLeft: depth * 16 }}
               className={cn(
@@ -241,22 +255,40 @@ export function TreeView({
             <button
               type="button"
               tabIndex={-1}
-              disabled={disabled}
-              aria-disabled={disabled || undefined}
+              disabled={nameDisabled}
+              aria-disabled={nameDisabled || undefined}
+              aria-expanded={opensOnName ? open : undefined}
               onClick={() => {
-                if (disabled) return;
+                if (nameDisabled) return;
                 setActiveId(node.id);
-                onSelect?.(node.id);
+                if (opensOnName) toggle(node.id);
+                else onSelect?.(node.id);
               }}
               className={cn(
                 'flex-1 truncate py-1.5 text-left',
-                disabled ? 'cursor-not-allowed text-textMuted' : 'text-textMain',
+                disabled ? 'text-textMuted' : 'text-textMain',
+                nameDisabled && 'cursor-not-allowed',
                 selected && 'font-semibold',
               )}
             >
               {node.label}
               {node.subtitle && <span className="ml-2 text-xs text-textMuted">{node.subtitle}</span>}
             </button>
+            {opensOnName && (
+              <Button
+                variant="outline"
+                size="xs"
+                tabIndex={-1}
+                disabled={disabled}
+                onClick={() => {
+                  setActiveId(node.id);
+                  onSelect?.(node.id);
+                }}
+                className="shrink-0 disabled:opacity-50"
+              >
+                {selectLabel}
+              </Button>
+            )}
             {renderActions && (
               <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                 {renderActions(node)}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent, screen } from '@testing-library/react';
+import { render, fireEvent, screen, within } from '@testing-library/react';
 import { TreeView, type TreeViewNode } from '../src/composites/TreeView.js';
 
 const nodes: TreeViewNode[] = [
@@ -75,5 +75,69 @@ describe('TreeView drag source (getNodeDragData)', () => {
     expect(row(container, 'f2')).toBeTruthy(); // the match
     expect(row(container, 'f1')).toBeNull(); // non-match filtered out
     expect(row(container, 'f2')).toHaveAttribute('draggable', 'true');
+  });
+});
+
+describe('TreeView with names that open groups (expandOnNameClick)', () => {
+  const groups: TreeViewNode[] = [
+    { id: 'main', label: 'Main group', parentId: null },
+    { id: 'sub', label: 'Sub group', parentId: 'main' },
+    { id: 'leaf', label: 'Leaf', parentId: 'sub' },
+  ];
+
+  it('opens and closes a group on its name and never selects it', () => {
+    const onSelect = vi.fn();
+    render(<TreeView nodes={groups} onSelect={onSelect} expandOnNameClick selectLabel="Select" />);
+    const name = screen.getByRole('button', { name: 'Main group' });
+    expect(name).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(name);
+    expect(name).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Sub group')).toBeNull();
+    fireEvent.click(name);
+    expect(name).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Sub group')).toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('selects a group through the Select button in its row, a leaf through its name', () => {
+    const onSelect = vi.fn();
+    const { container } = render(
+      <TreeView nodes={groups} onSelect={onSelect} expandOnNameClick selectLabel="Select" />,
+    );
+    fireEvent.click(within(row(container, 'sub')).getByRole('button', { name: 'Select' }));
+    expect(onSelect).toHaveBeenLastCalledWith('sub');
+    expect(within(row(container, 'leaf')).queryByRole('button', { name: 'Select' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Leaf' }));
+    expect(onSelect).toHaveBeenLastCalledWith('leaf');
+    expect(onSelect).toHaveBeenCalledTimes(2);
+  });
+
+  it('makes a group the active row on its name, so Enter selects it from the keyboard', () => {
+    const onSelect = vi.fn();
+    const { container } = render(
+      <TreeView nodes={groups} onSelect={onSelect} expandOnNameClick selectLabel="Select" />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Sub group' }));
+    fireEvent.keyDown(container.querySelector('[role="tree"]') as HTMLElement, { key: 'Enter' });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith('sub');
+  });
+
+  it('still opens a blocked group on its name, and disables its Select button', () => {
+    const onSelect = vi.fn();
+    const { container } = render(
+      <TreeView
+        nodes={groups}
+        onSelect={onSelect}
+        expandOnNameClick
+        selectLabel="Select"
+        disabledIds={new Set(['sub', 'leaf'])}
+      />,
+    );
+    const name = screen.getByRole('button', { name: 'Sub group' });
+    fireEvent.click(name);
+    expect(name).toHaveAttribute('aria-expanded', 'false');
+    expect(within(row(container, 'sub')).getByRole('button', { name: 'Select' })).toBeDisabled();
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

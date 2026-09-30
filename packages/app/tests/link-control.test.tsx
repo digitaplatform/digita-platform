@@ -5,7 +5,7 @@
 // defects from docs/superpowers/research/2026-07-02-deep-read/lookup-flow-trace.json.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useState } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FieldDefinition } from '@digitaplatform/shared';
 import type { FieldControlState } from '@/controls/types';
@@ -37,6 +37,7 @@ vi.mock('@/hooks/useList', () => ({
       rows: [
         { _id: 'N-1', name: 'Root', parent: null },
         { _id: 'N-2', name: 'Child', parent: 'N-1' },
+        { _id: 'N-3', name: 'Loose', parent: null },
       ],
     },
     isLoading: false,
@@ -226,14 +227,17 @@ describe('LinkControl — search_dialog mode', () => {
 });
 
 describe('LinkControl — tree mode', () => {
-  it('opens only on click, and stays CLOSED after Escape/pick (no reopen loop)', async () => {
-    const user = userEvent.setup();
+  beforeEach(() => {
     metaState.data = {
       name: 'Folder',
       title_field: 'name',
       tree: { parent_field: 'parent', label_field: 'name' },
       fields: [{ fieldname: 'name', fieldtype: 'Data', label: 'Name' }],
     };
+  });
+
+  it('opens only on click, and stays CLOSED after Escape/pick (no reopen loop)', async () => {
+    const user = userEvent.setup();
     const onChange = vi.fn();
     const onCommit = vi.fn();
     render(<Host field={makeField({ target: 'Folder' })} onChange={onChange} onCommit={onCommit} />);
@@ -253,10 +257,50 @@ describe('LinkControl — tree mode', () => {
 
     // Reopen, pick a node → closes, commits, STAYS closed.
     await user.click(input);
-    await user.click(await screen.findByText('Root'));
+    await user.click(await screen.findByRole('button', { name: 'ui.tree.select' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(onChange).toHaveBeenCalledWith('N-1');
     expect(onCommit).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('opens and closes a group on its name, keeps the dialog open and picks nothing', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Host field={makeField({ target: 'Folder' })} onChange={onChange} />);
+    await user.click(screen.getByRole('combobox'));
+    const dialog = await screen.findByRole('dialog');
+    const root = within(dialog).getByRole('button', { name: 'Root' });
+    await user.click(root);
+    expect(root).toHaveAttribute('aria-expanded', 'false');
+    expect(within(dialog).queryByText('Child')).toBeNull();
+    await user.click(root);
+    expect(root).toHaveAttribute('aria-expanded', 'true');
+    expect(within(dialog).getByText('Child')).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('picks a group through the Select button in its row and closes the dialog', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const onCommit = vi.fn();
+    render(<Host field={makeField({ target: 'Folder' })} onChange={onChange} onCommit={onCommit} />);
+    await user.click(screen.getByRole('combobox'));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'ui.tree.select' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(onChange).toHaveBeenCalledWith('N-1');
+    expect(onCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it('picks a leaf on its name and closes the dialog', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Host field={makeField({ target: 'Folder' })} onChange={onChange} />);
+    await user.click(screen.getByRole('combobox'));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Loose' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(onChange).toHaveBeenCalledWith('N-3');
   });
 });
