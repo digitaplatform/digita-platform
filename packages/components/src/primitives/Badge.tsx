@@ -12,7 +12,7 @@ type BadgeSize = 'sm' | 'md' | 'lg';
 
 const SOFT: Record<BadgeColor, string> = {
   neutral: 'bg-subtle text-textMuted',
-  primary: 'bg-primary-100 text-primary-700',
+  primary: 'bg-primaryContainer text-onPrimaryContainer',
   success: 'bg-success-light text-success',
   warning: 'bg-warning-light text-warning',
   error: 'bg-error-light text-error',
@@ -22,7 +22,7 @@ const SOFT: Record<BadgeColor, string> = {
 
 const OUTLINE: Record<BadgeColor, string> = {
   neutral: 'border border-borderStrong text-textMain',
-  primary: 'border border-primary-300 text-primary-700',
+  primary: 'border border-primary-300 text-onPrimaryContainer',
   success: 'border border-success text-success',
   warning: 'border border-warning text-warning',
   error: 'border border-error text-error',

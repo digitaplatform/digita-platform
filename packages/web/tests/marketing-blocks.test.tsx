@@ -158,7 +158,7 @@ describe("the marketing blocks", () => {
 
   it("gives every status its own pill and none to an unknown one", () => {
     const html = (status: string) => render("stack", { items: [{ title: "App", status }] });
-    expect(html("available")).toContain("bg-primary-100");
+    expect(html("available")).toContain("bg-primaryContainer");
     expect(html("early_access")).toContain(">early access<");
     expect(html("early_access")).toContain("border-primary-300");
     expect(html("coming")).toContain("text-textMuted");

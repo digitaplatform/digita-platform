@@ -76,3 +76,38 @@ describe('the label on a primary fill', () => {
     }
   });
 });
+
+// A soft primary badge sits on the tonal primary container. Its label must reach AA on it in
+// both modes, for every tint and every branding colour; step 700 on the dark card did not.
+describe('the tonal primary container', () => {
+  const pair = (value: string, mode: 'light' | 'dark') => {
+    const m = /^light-dark\((#[0-9a-f]{6}),\s*(#[0-9a-f]{6})\)$/i.exec(value);
+    return m ? (mode === 'light' ? m[1]! : m[2]!) : value;
+  };
+
+  it('the old label, step 700 of the digita cyan, fails on the dark card, so the check below can go red', () => {
+    expect(contrast(synthesizeRamp('#00b2f6')!['700'], '#070e19')).toBeLessThan(AA);
+  });
+
+  it('reaches AA for its label in both modes, for every tint preset', () => {
+    for (const key of Object.keys(TINT_PALETTES) as TintKey[]) {
+      for (const mode of ['light', 'dark'] as const) {
+        const vars = varsForTint(tintRamp(key), mode);
+        const fill = vars['--color-primary-container']!;
+        const label = vars['--color-on-primary-container']!;
+        expect(contrast(label, fill), `${key} ${mode} ${label} on ${fill}`).toBeGreaterThanOrEqual(AA);
+      }
+    }
+  });
+
+  it('reaches AA for its label in both modes, for every branding colour', () => {
+    for (const colour of BRAND_COLOURS) {
+      const properties = brandingStyle({ primary_color: colour }).properties;
+      for (const mode of ['light', 'dark'] as const) {
+        const fill = pair(properties['--color-primary-container']!, mode);
+        const label = pair(properties['--color-on-primary-container']!, mode);
+        expect(contrast(label, fill), `${colour} ${mode} ${label} on ${fill}`).toBeGreaterThanOrEqual(AA);
+      }
+    }
+  });
+});

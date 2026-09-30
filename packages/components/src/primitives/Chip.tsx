@@ -51,7 +51,7 @@ export function Chip({ children, selected, onClick, onRemove, removeLabel, icon,
     color
       ? cn(CATEGORICAL_SOFT[color], selected ? CATEGORICAL_OUTLINE[color] : 'border-transparent')
       : selected
-        ? 'border-transparent bg-primary-100 text-primary-700'
+        ? 'border-transparent bg-primaryContainer text-onPrimaryContainer'
         : 'border-border bg-surface text-textMain hover:bg-bgHover',
     disabled && 'cursor-not-allowed opacity-50',
     className,
