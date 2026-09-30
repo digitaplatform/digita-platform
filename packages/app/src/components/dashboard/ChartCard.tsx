@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ChartCard as ChartCardDef, ViewSectionData } from '@digitaplatform/shared';
 import { Spinner } from '@digitaplatform/components';
 import { PRIMARY, ACCENT, NEUTRAL } from '@digitaplatform/theme';
@@ -10,7 +10,7 @@ import { CardShell, type CardStatus } from './CardShell';
 /** recharts lives ONLY behind this lazy boundary (code-split off the dashboard). */
 const ChartCanvas = lazy(() => import('./ChartCanvas'));
 
-/** CSS variables read on mount → resolved hex passed to recharts (SVG fill/stroke
+/** CSS variables read off the chart host → resolved hex passed to recharts (SVG fill/stroke
  *  does not inherit CSS vars). Safe fallbacks if a variable is missing. */
 const PALETTE_VARS = [
   '--color-primary-600',
@@ -50,13 +50,15 @@ function resolvePalette(host: HTMLElement): string[] {
 
 /**
  * Pure chart card. Validates the chart contract loud (unknown chart_type / missing
- * x_field / empty y_fields → loud red), reads resolved theme hex on mount, and
- * lazy-loads the recharts canvas. Legitimate empty section rows render a calm note.
+ * x_field / empty y_fields → loud red), reads resolved theme hex once its chart host
+ * exists, and lazy-loads the recharts canvas. Legitimate empty section rows render a calm note.
  */
 export function ChartCard({ card, icon, status, error, data }: ChartCardProps) {
   const tc = useChrome();
   const mode = useThemeStore((s) => s.mode);
-  const hostRef = useRef<HTMLDivElement>(null);
+  // State, not a ref: the host mounts only once the card is ready, usually after the first
+  // render, and the measurements below have to run again when it does.
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
   const [colors, setColors] = useState<string[]>(PALETTE_FALLBACK);
   const [gridColor, setGridColor] = useState<string>(GRID_FALLBACK);
   const [compact, setCompact] = useState(false);
@@ -64,22 +66,20 @@ export function ChartCard({ card, icon, status, error, data }: ChartCardProps) {
   // Re-resolve the theme hex whenever the mode flips — recharts gets concrete
   // colors (SVG can't inherit CSS vars), so a live light/dark toggle must refresh.
   useEffect(() => {
-    const el = hostRef.current;
-    if (!el) return;
-    setColors(resolvePalette(el));
-    setGridColor(getComputedStyle(el).getPropertyValue('--color-border').trim() || GRID_FALLBACK);
-  }, [mode]);
+    if (!host) return;
+    setColors(resolvePalette(host));
+    setGridColor(getComputedStyle(host).getPropertyValue('--color-border').trim() || GRID_FALLBACK);
+  }, [host, mode]);
 
   useEffect(() => {
-    const el = hostRef.current;
-    if (!el) return;
+    if (!host) return;
     const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? el.clientWidth;
+      const w = entries[0]?.contentRect.width ?? host.clientWidth;
       setCompact(w < COMPACT_BELOW);
     });
-    ro.observe(el);
+    ro.observe(host);
     return () => ro.disconnect();
-  }, []);
+  }, [host]);
 
   const rows = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
@@ -101,7 +101,7 @@ export function ChartCard({ card, icon, status, error, data }: ChartCardProps) {
 
   return (
     <CardShell label={card.label} icon={icon} status="ready">
-      <div ref={hostRef} className="h-48 w-full">
+      <div ref={setHost} className="h-48 w-full">
         {rows.length === 0 ? (
           <p className="flex h-full items-center text-sm text-textMuted">{EMPTY}</p>
         ) : (
