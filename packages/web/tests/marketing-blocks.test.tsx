@@ -46,8 +46,9 @@ const link = { label: "See how we work", href: "/how-we-work" };
 const CASES: { type: BlockType; props: Record<string, unknown>; shows: string[]; required: string }[] = [
   {
     type: "hero_brand",
-    props: { eyebrow: "Company", heading: "Your business, as software.", lede: "Described once.", primary: sheet, secondary: link, visual: "simetrix-mark" },
-    shows: ["<h1", "Your business, as software.", "Described once.", "Book a call", 'href="/how-we-work"', "mark-aura"],
+    props: { eyebrow: "Company", heading: "Your business, as software.", lede: "Described once.", primary: sheet, secondary: link, visual: "brand-mark" },
+    // The figure is a code-split plugin, which a static render leaves to the client; the slot for it shows.
+    shows: ["<h1", "Your business, as software.", "Described once.", "Book a call", 'href="/how-we-work"', "md:grid-cols-2"],
     required: "heading",
   },
   {
@@ -172,26 +173,39 @@ describe("the marketing blocks", () => {
     expect(pillars(3)).not.toContain("grid-cols-4");
   });
 
-  it("hero_brand draws the code app, the reveal and the data rain on request", () => {
-    const hero = (extra: Record<string, unknown>) => render("hero_brand", { heading: "One file. A whole app.", visual: "code-app", ...extra });
-    expect(hero({})).toContain("POST /api/v1/resource/SalesOrder");
-    expect(hero({})).not.toContain('type="checkbox"');
-    expect(hero({ reveal: true })).toContain('type="checkbox"');
-    expect(hero({ reveal: true })).toContain("the code behind");
+  it("hero_brand keeps a figure slot only for a plugin it knows", () => {
+    const hero = (visual: string) => render("hero_brand", { heading: "One file. A whole app.", visual });
+    expect(hero("code-app")).toContain("md:grid-cols-2");
+    expect(hero("none")).not.toContain("md:grid-cols-2");
+    expect(hero("simetrix-mark")).not.toContain("md:grid-cols-2");
+    expect(hero("none")).toContain("max-w-3xl");
+  });
+
+  const rain = [["alpha", "beta"], ["gamma"], ["delta"], ["epsilon"], ["zeta"], ["omega"]].map((tokens) => ({ tokens }));
+
+  it("hero_brand lets the tokens of rain fall on request, under reduced motion too", () => {
+    const hero = (extra: Record<string, unknown>) => render("hero_brand", { heading: "One file. A whole app.", rain, ...extra });
     expect(hero({})).not.toContain("rain-fall");
+    const html = hero({ atmosphere: "data-rain" });
     // The columns stay on screen and keep falling under reduced motion.
-    expect(hero({ atmosphere: "data-rain" })).not.toContain("motion-reduce:hidden");
-    expect(hero({ atmosphere: "data-rain" })).not.toContain("motion-reduce:animate-none");
-    expect(hero({ atmosphere: "data-rain" })).toContain("!animate-[rain-fall_var(--rain-duration)_linear_var(--rain-delay)_infinite]");
-    expect(hero({ atmosphere: "data-rain" })).toContain("--rain-duration:17s;--rain-delay:0s");
-    expect(hero({ visual: "none" })).not.toContain("<svg");
+    expect(html).not.toContain("motion-reduce:hidden");
+    expect(html).not.toContain("motion-reduce:animate-none");
+    expect(html).toContain("!animate-[rain-fall_var(--rain-duration)_linear_var(--rain-delay)_infinite]");
+    expect(html).toContain("--rain-duration:17s;--rain-delay:0s");
+    expect(html).toContain("alpha\nbeta\nalpha");
+    // Five places exist; a sixth column has none.
+    expect(html).not.toContain("omega");
+    // Without tokens there is no rain, as a block draws nothing without its main prop.
+    expect(hero({ atmosphere: "data-rain", rain: undefined })).not.toContain("rain-fall");
+    expect(hero({ atmosphere: "data-rain", rain: [{ tokens: [] }, { tokens: 42 }] })).not.toContain("rain-fall");
   });
 
   it("hero_brand loops each rain column without a seam, and a half covers the hero", () => {
     // vitest runs a package's tests from its root.
     const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
     expect(css).toMatch(/@keyframes rain-fall \{\s*from \{ transform: translateY\(-50%\); \}\s*to \{ transform: translateY\(0\); \}\s*\}/);
-    const html = render("hero_brand", { heading: "One file.", atmosphere: "data-rain" });
+    const tokens = (n: number) => Array.from({ length: n }, (_, i) => `t${i}`);
+    const html = render("hero_brand", { heading: "One file.", atmosphere: "data-rain", rain: [1, 12, 16, 20, 21].map((n) => ({ tokens: tokens(n) })) });
     const columns = [...html.matchAll(/--rain-duration:[^"]*">([^<]*)<\/div>/g)].map((match) => (match[1] ?? "").split("\n"));
     expect(columns).toHaveLength(5);
     for (const lines of columns) {
@@ -201,6 +215,8 @@ describe("the marketing blocks", () => {
       // leading-10 is 40px a line: 20 lines keep the band the mask leaves opaque (18% to 70%) covered up to a 1142px hero.
       expect(half).toBeGreaterThanOrEqual(20);
     }
+    // Twelve and sixteen tokens repeat twice a half, as the rain of the two sites always did.
+    expect(columns.map((lines) => lines.length / 2)).toEqual([20, 24, 32, 20, 21]);
   });
 
   it("keeps the restyled stats and cta props working", () => {

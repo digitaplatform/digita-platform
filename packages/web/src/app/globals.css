@@ -14,10 +14,6 @@
   0%, 100% { opacity: 0.25; }
   50% { opacity: 1; }
 }
-@keyframes rise-in {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: none; }
-}
 @keyframes rain-fall {
   from { transform: translateY(-50%); }
   to { transform: translateY(0); }

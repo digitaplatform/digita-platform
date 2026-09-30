@@ -154,7 +154,7 @@ export const BLOCK_MANIFESTS: BlockManifest[] = [
   {
     type: "hero_brand",
     name: "Brand hero",
-    description: "The opening section of a brand site: headline, lede, calls to action and the site's visual.",
+    description: "The opening section of a site: headline, lede, calls to action and the figure a plugin draws.",
     category: "content",
     component: HeroBrand,
     props: [
@@ -163,9 +163,21 @@ export const BLOCK_MANIFESTS: BlockManifest[] = [
       LEDE,
       action("primary", "Primary action"),
       action("secondary", "Secondary action"),
-      { name: "visual", label: "Visual", type: "select", options: ["simetrix-mark", "code-app", "none"] },
+      {
+        name: "visual",
+        label: "Visual",
+        type: "select",
+        options: [...PLUGIN_MANIFESTS.map((plugin) => plugin.id), "none"],
+        help: "The plugin that draws the figure; it reads its own props from this block.",
+      },
       { name: "atmosphere", label: "Atmosphere", type: "select", options: ["data-rain", "none"] },
-      { name: "reveal", label: "Reveal the code behind the app", type: "boolean", help: "Only with the code-app visual." },
+      {
+        name: "rain",
+        label: "Rain columns",
+        type: "list",
+        help: "Up to five columns of tokens, falling behind the hero with the data-rain atmosphere.",
+        itemFields: [{ name: "tokens", label: "Tokens", type: "list", required: true }],
+      },
     ],
   },
   {

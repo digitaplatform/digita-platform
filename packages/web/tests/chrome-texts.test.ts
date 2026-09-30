@@ -31,6 +31,7 @@ const CHROME_FILES = [
   "blocks/components.tsx",
   "blocks/marketing/shared.tsx",
   "blocks/marketing/HeroBrand.tsx",
+  "plugins/code-app/index.tsx",
 ];
 
 /** The English literals removed, as they stood in the source. */

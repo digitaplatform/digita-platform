@@ -36,9 +36,8 @@ export interface PropField {
   help?: string;
 }
 
-/** A component that renders from a JSON `props` bag (block or plugin). */
-export type RenderComponent = ComponentType<{ props?: Record<string, unknown> }>;
-/** A block also knows the page's locale, for the chrome texts it carries, such as a status pill. */
+/** A component that renders from a JSON `props` bag and the page's locale, for the chrome texts it
+ *  carries, such as a status pill. Blocks and plugins share it. */
 export type BlockComponent = ComponentType<{ props?: Record<string, unknown>; locale: Locale }>;
 
 export interface BlockManifest {
@@ -55,9 +54,9 @@ export interface PluginManifest {
   id: string;
   name: string;
   description: string;
-  category: "interactive";
+  category: "interactive" | "media";
   props: PropField[];
-  component: RenderComponent;
+  component: BlockComponent;
 }
 
 /** Serializable catalog entry (no component) — what /api/catalog returns. */
