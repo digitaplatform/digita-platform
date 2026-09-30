@@ -67,8 +67,9 @@ export function WorkflowBar({
     return true;
   });
 
-  const canSubmit = !!meta.is_submittable && docstatus === 0;
-  const canCancel = !!meta.is_submittable && docstatus === 1;
+  // The engine refuses Submit and Cancel without the `submit` / `cancel` bit.
+  const canSubmit = !!meta.is_submittable && docstatus === 0 && hasEntityPermission(meta, user, 'submit');
+  const canCancel = !!meta.is_submittable && docstatus === 1 && hasEntityPermission(meta, user, 'cancel');
   // A cancelled (docstatus 2) submittable doc can be amended into a fresh draft —
   // gated by the `amend` permission (Administrator bypasses via hasEntityPermission).
   // The engine re-checks authoritatively; this is only for affordance visibility.

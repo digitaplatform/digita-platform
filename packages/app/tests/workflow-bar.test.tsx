@@ -50,15 +50,56 @@ describe('WorkflowBar (generic, meta-driven)', () => {
   });
 
   it('submittable draft (docstatus 0): shows Submit, not Cancel', () => {
-    const { queryByText } = renderBar(meta({ is_submittable: true }), { docstatus: 0 });
+    const m = meta({ is_submittable: true, permissions: [{ role: 'Editor', level: 0, submit: 1, cancel: 1 }] });
+    const { queryByText } = renderBar(m, { docstatus: 0 });
     expect(queryByText('ui.workflow.submit')).not.toBeNull();
     expect(queryByText('ui.workflow.cancel')).toBeNull();
   });
 
   it('submitted doc (docstatus 1): shows Cancel, not Submit', () => {
-    const { queryByText } = renderBar(meta({ is_submittable: true }), { docstatus: 1 });
+    const m = meta({ is_submittable: true, permissions: [{ role: 'Editor', level: 0, submit: 1, cancel: 1 }] });
+    const { queryByText } = renderBar(m, { docstatus: 1 });
     expect(queryByText('ui.workflow.cancel')).not.toBeNull();
     expect(queryByText('ui.workflow.submit')).toBeNull();
+  });
+
+  it('submittable draft for a role that may write but not submit: no Submit', () => {
+    const m = meta({
+      is_submittable: true,
+      permissions: [{ role: 'Editor', level: 0, read: 1, write: 1, create: 1 }],
+    });
+    const { container } = renderBar(m, { docstatus: 0 });
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('submitted doc for a role without cancel: no Cancel', () => {
+    const m = meta({
+      is_submittable: true,
+      permissions: [{ role: 'Editor', level: 0, read: 1, write: 1, create: 1, submit: 1 }],
+    });
+    const { container } = renderBar(m, { docstatus: 1 });
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('a submit or cancel bit on a level-1 row offers neither Submit nor Cancel', () => {
+    const m = meta({
+      is_submittable: true,
+      permissions: [
+        { role: 'Editor', level: 0, read: 1, write: 1 },
+        { role: 'Editor', level: 1, read: 1, submit: 1, cancel: 1 },
+      ],
+    });
+    expect(renderBar(m, { docstatus: 0 }).container.firstChild).toBeNull();
+    cleanup();
+    expect(renderBar(m, { docstatus: 1 }).container.firstChild).toBeNull();
+  });
+
+  it('Administrator is offered Submit and Cancel without a permission row', () => {
+    user = { roles: ['Administrator'] };
+    const m = meta({ is_submittable: true });
+    expect(renderBar(m, { docstatus: 0 }).queryByText('ui.workflow.submit')).not.toBeNull();
+    cleanup();
+    expect(renderBar(m, { docstatus: 1 }).queryByText('ui.workflow.cancel')).not.toBeNull();
   });
 
   it('cancelled doc (docstatus 2) with amend permission: shows Amend', () => {
