@@ -2,9 +2,10 @@
  * A dark band: one block of a website page that shows in dark mode while the page around it is
  * light. The website renderer stamps `data-block` on every block's wrapper and `data-variant` with
  * the block's `theme_variant`, so the pair never matches the kit's own `data-variant` on a button,
- * badge or card.
+ * badge or card. `:where()` adds nothing to the specificity, so the selector weighs one attribute,
+ * as much as the `.dark` class it stands in for.
  */
-export const DARK_BAND_SELECTOR = '[data-block][data-variant="dark"]';
+export const DARK_BAND_SELECTOR = '[data-variant="dark"]:where([data-block])';
 
 const DARK_CLASS = /\.dark(?![\w-])/y;
 
@@ -85,11 +86,12 @@ function withBandTwins(selectorList: string, indent: string): string {
 /**
  * Gives every rule whose selector is scoped by the `.dark` class the twin of that selector scoped
  * by a dark band, so everything that flips with dark mode flips inside a band on a light page too:
- * `.dark X` gains `[data-block][data-variant="dark"] X`, `:root[data-design="x"].dark` gains
- * `:root[data-design="x"] [data-block][data-variant="dark"]`. The twin joins the rule's own selector
- * list, so no declaration is copied and the rule keeps its place in the cascade; a twin is one
- * attribute more specific than its original, so it wins where the original wins. A twin the list
- * carries already is not added again, so the step can run over CSS that went through it before.
+ * `.dark X` gains `[data-variant="dark"]:where([data-block]) X`, `:root[data-design="x"].dark` gains
+ * `:root[data-design="x"] [data-variant="dark"]:where([data-block])`. The twin joins the rule's own
+ * selector list, so no declaration is copied and the twin keeps its original's place in the cascade;
+ * the band selector weighs as much as `.dark`, so a twin has its original's specificity and wins or
+ * loses every tie exactly where its original does. A twin the list carries already is not added
+ * again, so the step can run over CSS that went through it before.
  */
 export function addDarkBandSelectors(css: string): string {
   let out = '';

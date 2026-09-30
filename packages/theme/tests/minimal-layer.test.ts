@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { stripPluginTokenBlocks } from '../build/plugin-tokens.mjs';
+import { DARK_BAND_SELECTOR } from '../src/index.js';
 
 // vitest runs a package's tests from its root; theme.css is the artifact `pnpm build` writes.
 const THEME_CSS = readFileSync(join(process.cwd(), 'dist/theme.css'), 'utf8');
@@ -41,7 +42,7 @@ describe('theme.css bundles only the variant layer of the minimal plugin', () =>
   it('drops the dark token block of a plugin release that carries its dark band twin', () => {
     const tokens =
       ':root[data-design="minimal"] {\n  --a: 1;\n}\n' +
-      ':root[data-design="minimal"].dark,\n:root[data-design="minimal"] [data-block][data-variant="dark"] {\n  --a: 2;\n}\n';
+      `:root[data-design="minimal"].dark,\n:root[data-design="minimal"] ${DARK_BAND_SELECTOR} {\n  --a: 2;\n}\n`;
     const rules = ':root[data-design-variant="minimal"].dark [data-ui="card"] { color: blue; }\n';
     expect(stripPluginTokenBlocks(tokens + rules)).toBe(rules);
   });
