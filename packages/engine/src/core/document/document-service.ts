@@ -1313,6 +1313,11 @@ export class DocumentService {
         doc.merge(sideEffects);
       }
 
+      // Store a `_row_id` on every row the update wrote without one, as insert does.
+      // A row stored without one gets a new id on every load, so no later save can
+      // name it, and a save of its Table would count it as deleted.
+      doc.ensureRowIds();
+
       // Update metadata
       doc.modified = new Date();
       doc.modified_by = user.email;

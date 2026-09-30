@@ -1338,6 +1338,16 @@ describe("A Table cell's read_only_depends_on locks the cell on update", () => {
     expect((await storedLines(doc._id))[0]!["note"]).toBe("scratch on frame");
   });
 
+  it("keeps a row an update stored without _row_id, so a later save of the locked row passes (#245)", async () => {
+    const doc = await docService.insert("LoanDoc", { title: "L", lines: [{ state: "out", note: "a" }] }, clerk);
+    await docService.update("LoanDoc", doc._id, { lines: [{ state: "returned", note: "a" }] }, clerk);
+    const [row] = await storedLines(doc._id);
+    expect(typeof row!["_row_id"]).toBe("string");
+    const read = await docService.getDoc("LoanDoc", doc._id, clerk);
+    await docService.update("LoanDoc", doc._id, { title: "M", lines: read.get("lines") }, clerk);
+    expect((await storedLines(doc._id)).map((r) => r["note"])).toEqual(["a"]);
+  });
+
   it("lets an Administrator drop a locked row and resend it without its _row_id (#245)", async () => {
     const doc = await docService.insert(
       "LoanDoc",
