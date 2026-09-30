@@ -7,7 +7,9 @@ import {
   applyDesign,
   applySignature,
   bootIdentity,
+  getRuntimeSignature,
   storeIdentityPreferences,
+  DEFAULT_SIGNATURE_ID,
   IDENTITY_PREFERENCE_KEYS,
   MODE_STORAGE_KEY,
   DENSITY_STORAGE_KEY,
@@ -28,8 +30,9 @@ interface ThemeState {
   density: Density;
   /** Active design id (the token plugin selected via data-design). */
   design: string;
-  /** Active signature id (the identity overlay riding the branding layer — it
-   *  COMPOSES on top of the design, never replaces it). */
+  /** The signature drawn (the identity overlay riding the branding layer — it
+   *  COMPOSES on top of the design, never replaces it): always the answer of
+   *  drawnSignature, so the menus check the look the person sees. */
   signature: string;
   /** Per-user template override (else resolved from branding.default_template). */
   templateOverride: string | null;
@@ -39,9 +42,9 @@ interface ThemeState {
   setDensity: (density: Density) => void;
   setDesign: (design: string) => void;
   setSignature: (id: string) => void;
-  /** Re-apply the ACTIVE signature — call after the plugin composition loads so a
-   *  DELIVERED signature (registered by the host loader) replaces the boot-time
-   *  fallback and its full brand world lands. */
+  /** Draw the signature drawnSignature answers now — call after the plugin
+   *  composition loads, so a DELIVERED pick or tenant default (registered by the
+   *  host loader) replaces the boot-time fallback and its full brand world lands. */
   reapplySignature: () => void;
   setTemplateOverride: (key: string) => void;
   setBranding: (branding: BootBranding) => void;
@@ -57,13 +60,27 @@ interface ThemeState {
 // flash; localStorage is the fast device-local default until the server prefs roam
 // in. The branding follows when /boot answers (setBranding).
 //
-// digita is the platform's DEFAULT signature, shipped as a free plugin BUNDLED
-// into the host at build (like usermenu) — NOT network-delivered. It is registered
+// digita is the platform's own signature, shipped as a free plugin BUNDLED into
+// the host at build (like usermenu) — NOT network-delivered. It is registered
 // before the stored id is applied, so getSignature('digita') resolves its full
 // brand world on the very first paint, including the pre-login screen, with no
 // flash and no dependency on the authenticated plugin composition. Alternate /
 // premium signatures still arrive later via the composition.
 const initial = bootIdentity({ signatures: [digitaSignature] });
+
+// The signature a person sees, by one rule: their own pick, stored in this browser
+// (where a pick roamed from UserPreference is written too), if this app offers it;
+// else the tenant's BrandingSetting.default_signature if this app offers it; else
+// digita. An app offers a signature once it is registered: digita at start, a
+// delivered one when the composition loads. /boot, a roamed pick and the
+// composition arrive in any order and each re-runs the rule, so the last of them,
+// which sees every registered signature, decides.
+function drawnSignature(branding: BootBranding | null): string {
+  const offered = [localStorage.getItem(SIGNATURE_STORAGE_KEY), branding?.default_signature].find(
+    (id) => getRuntimeSignature(id) !== undefined,
+  );
+  return offered ?? DEFAULT_SIGNATURE_ID;
+}
 
 // Apply signature `id`, then re-assert the tenant's branding on top: a tenant's
 // configured primary colour / fonts WIN over the signature's defaults, and the
@@ -82,7 +99,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   mode: initial.mode,
   density: initial.density,
   design: initial.design,
-  signature: initial.signature,
+  signature: drawnSignature(null),
   templateOverride: localStorage.getItem(TEMPLATE_KEY),
   branding: null,
   setMode: (mode) => {
@@ -105,23 +122,28 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     void setUserPreference(IDENTITY_PREFERENCE_KEYS.design, design).catch(() => {});
   },
   setSignature: (id) => {
+    // Picking the signature already drawn stores nothing, so a person who never
+    // picked one keeps following the tenant's default when it changes.
+    if (id === get().signature) return;
     localStorage.setItem(SIGNATURE_STORAGE_KEY, id);
-    applySignatureLayered(id, get);
-    set({ signature: id });
+    get().reapplySignature();
     void setUserPreference(IDENTITY_PREFERENCE_KEYS.signature, id).catch(() => {});
   },
-  reapplySignature: () => applySignatureLayered(get().signature, get),
+  reapplySignature: () => {
+    const signature = drawnSignature(get().branding);
+    applySignatureLayered(signature, get);
+    set({ signature });
+  },
   setTemplateOverride: (key) => {
     localStorage.setItem(TEMPLATE_KEY, key);
     set({ templateOverride: key });
   },
-  // Apply branding overrides (secondary/accent palette, primary nearest-match)
-  // through the central runtime; the per-user density wins over any branding
-  // default, so re-assert it after.
+  // The branding may name another default signature, so the signature is drawn
+  // again, and applySignatureLayered puts the tenant's overrides and the per-user
+  // density back over it.
   setBranding: (branding) => {
-    applyBranding(branding);
-    applyDensity(get().density);
     set({ branding });
+    get().reapplySignature();
   },
   loadRemotePrefs: async () => {
     try {
@@ -144,10 +166,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         applyDesign(stored.design);
         set({ design: stored.design });
       }
-      if (stored.signature) {
-        applySignatureLayered(stored.signature, get);
-        set({ signature: stored.signature });
-      }
+      if (stored.signature) get().reapplySignature();
     } catch {
       /* offline or unset — keep the localStorage default */
     }

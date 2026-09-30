@@ -606,6 +606,33 @@ describe("Resource API Integration", () => {
     });
   });
 
+  // The default signature decides the first look of every user of the app, so only an
+  // Administrator may write it.
+  describe("BrandingSetting.default_signature", () => {
+    it("a System User's PUT of BrandingSetting.default_signature is refused with 403, an Administrator's is saved", async () => {
+      await db.deleteMany("BrandingSetting", {}, "core");
+      await db.insertOne("BrandingSetting", { _id: "branding", docstatus: 0 }, "core");
+      const systemUserToken = await signToken({
+        sub: "staff@digita.local",
+        email: "staff@digita.local",
+        roles: ["System User"],
+      });
+      const put = (token: string) =>
+        app.inject({
+          method: "PUT",
+          url: "/api/v1/resource/BrandingSetting/branding",
+          headers: { authorization: `Bearer ${token}` },
+          payload: { default_signature: "veloluck-workbench" },
+        });
+
+      expect((await put(systemUserToken)).statusCode).toBe(403);
+      expect((await db.findOne("BrandingSetting", "branding", "core"))?.["default_signature"]).toBeUndefined();
+
+      expect((await put(authToken)).statusCode).toBe(200);
+      expect((await db.findOne("BrandingSetting", "branding", "core"))?.["default_signature"]).toBe("veloluck-workbench");
+    });
+  });
+
   // ─── PHASE 3: default_workspace resolution + meta navigable ──────
   describe("default_workspace + meta navigable (Phase 3)", () => {
     it("/boot default_workspace is null when no workspace matches the user's roles", async () => {

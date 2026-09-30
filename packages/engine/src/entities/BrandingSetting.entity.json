@@ -21,13 +21,14 @@
     { "fieldname": "accent_palette", "fieldtype": "Select", "label": "Secondary / Accent Palette", "options": ["blue", "pink", "purple", "green", "orange", "teal", "indigo", "cyan"], "idx": 8 },
     { "fieldname": "density", "fieldtype": "Select", "label": "Density", "options": ["comfortable", "compact"], "default": "comfortable", "idx": 9 },
     { "fieldname": "default_template", "fieldtype": "Data", "label": "Default Template", "description": "Default shell template id (e.g. 'classic').", "idx": 10 },
+    { "fieldname": "default_signature", "fieldtype": "Select", "options_source": "signatures", "label": "Default Signature", "description": "The look (signature) every user of this app starts on until they pick their own in the Signature menu. Empty: Digita.", "idx": 11 },
 
-    { "fieldname": "sb_login", "fieldtype": "SectionBreak", "label": "Login", "idx": 11 },
-    { "fieldname": "login_background", "fieldtype": "AttachImage", "label": "Login Background", "public": true, "idx": 12 },
+    { "fieldname": "sb_login", "fieldtype": "SectionBreak", "label": "Login", "idx": 12 },
+    { "fieldname": "login_background", "fieldtype": "AttachImage", "label": "Login Background", "public": true, "idx": 13 },
 
-    { "fieldname": "sb_user_options", "fieldtype": "SectionBreak", "label": "User Options", "idx": 13 },
-    { "fieldname": "allow_user_template_override", "fieldtype": "Check", "label": "Allow user template override", "default": true, "idx": 14 },
-    { "fieldname": "allow_user_theme_mode", "fieldtype": "Check", "label": "Allow user light/dark choice", "default": true, "idx": 15 }
+    { "fieldname": "sb_user_options", "fieldtype": "SectionBreak", "label": "User Options", "idx": 14 },
+    { "fieldname": "allow_user_template_override", "fieldtype": "Check", "label": "Allow user template override", "default": true, "idx": 15 },
+    { "fieldname": "allow_user_theme_mode", "fieldtype": "Check", "label": "Allow user light/dark choice", "default": true, "idx": 16 }
   ],
   "permissions": [
     { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1 },

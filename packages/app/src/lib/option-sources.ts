@@ -1,9 +1,11 @@
 import type { SelectOption } from '@digitaplatform/components';
+import { getRuntimeSignatures } from '@digitaplatform/theme';
 
 /**
  * Built-in dynamic option sources for Select fields declaring `options_source`.
- * App-agnostic + offline — backed by browser Intl data, so no engine/app coupling
- * and no seeded lists. Add a case here to expose a new standard list to entity JSON.
+ * App-agnostic + offline — backed by browser Intl data and the theme's signature
+ * registry (the signatures this app holds), so no engine/app coupling and no
+ * seeded lists. Add a case here to expose a new standard list to entity JSON.
  */
 
 function supported(key: 'timeZone' | 'currency'): string[] {
@@ -33,6 +35,8 @@ export function resolveOptionSource(source: string): SelectOption[] {
       return supported('timeZone').map((tz) => ({ value: tz, label: tz }));
     case 'currencies':
       return supported('currency').map((c) => ({ value: c, label: currencyLabel(c) }));
+    case 'signatures':
+      return getRuntimeSignatures().map((s) => ({ value: s.id, label: s.name }));
     default:
       return [];
   }
