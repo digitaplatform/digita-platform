@@ -37,12 +37,16 @@ export interface PluginInventoryEntry {
   entry?: string;
   integrity?: string;
   url?: string;
+  /** signature only: the name its package carries. It names the signature in the
+   *  app unless the app's composition gives a `title` of its own. */
+  title?: string;
   /** signature only: identity config inlined in the inventory (a signature is
    *  pure config — no artifact beyond these fields). A thin signature carries
    *  accent + fonts (+ monogram); a FULL signature also carries the brand colour
    *  world + decorative graphics + wordmark. */
   accent?: string;
   fonts?: { display?: string; sans?: string; mono?: string };
+  family?: string;
   logoUrl?: string;
   monogram?: string;
   wordmark?: string;
@@ -85,6 +89,7 @@ export interface PluginSource {
    *  carries the brand colour world + decorative graphics + wordmark. */
   accent?: string;
   fonts?: { display?: string; sans?: string; mono?: string };
+  family?: string;
   logoUrl?: string;
   monogram?: string;
   wordmark?: string;
@@ -117,7 +122,7 @@ export function joinCompositionWithInventory(
       }
       sources.push({
         id: entry.id,
-        title: entry.title,
+        title: entry.title ?? staged.title,
         type: staged.type,
         url: staged.url,
         // signature only: identity config rides the inventory entry itself —
@@ -125,6 +130,7 @@ export function joinCompositionWithInventory(
         // colour world + graphics + wordmark for a full one (e.g. digita).
         accent: staged.accent,
         fonts: staged.fonts,
+        family: staged.family,
         logoUrl: staged.logoUrl,
         monogram: staged.monogram,
         wordmark: staged.wordmark,

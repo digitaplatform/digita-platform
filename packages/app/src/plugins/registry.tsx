@@ -127,6 +127,7 @@ async function resolvePlugin(source: PluginSource): Promise<DigitaPlugin | null>
       title: source.title,
       accent: source.accent,
       fonts: source.fonts,
+      family: source.family,
       logoUrl: source.logoUrl,
       monogram: source.monogram,
       wordmark: source.wordmark,

@@ -44,9 +44,10 @@ curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz
   || fail "download digita-translations master"
 translations="$tmp/translations"
 
-echo "check: 6/9 tests of shared, theme and components"
-pnpm --filter @digitaplatform/shared --filter @digitaplatform/theme --filter @digitaplatform/components test \
-  || fail "tests of shared, theme and components"
+echo "check: 6/9 tests of shared, theme, components and the plugin SDK"
+pnpm --filter @digitaplatform/shared --filter @digitaplatform/theme --filter @digitaplatform/components \
+  --filter @digitaplatform/plugins test \
+  || fail "tests of shared, theme, components and the plugin SDK"
 
 echo "check: 7/9 pnpm --filter @digitaplatform/app test (texts: translations/digita-app)"
 TRANSLATIONS_DIR="$translations/digita-app" pnpm --filter @digitaplatform/app test \

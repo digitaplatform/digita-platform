@@ -54,6 +54,7 @@ export interface DeliveredSignature {
   title?: string;
   accent?: string;
   fonts?: { display?: string; sans?: string; mono?: string };
+  family?: string;
   logoUrl?: string;
   monogram?: string;
   wordmark?: string;
@@ -63,9 +64,9 @@ export interface DeliveredSignature {
 
 /**
  * Register a delivered signature so getSignature(id) resolves its full identity:
- * accent, fonts, colour world, graphics, monogram and wordmark. A thin signature
- * carries no colours or graphics. Applying it (signature, then the tenant's
- * branding, then density) stays with the caller.
+ * accent, fonts, lockup family, colour world, graphics, monogram and wordmark. A
+ * thin signature carries no colours or graphics. Applying it (signature, then the
+ * tenant's branding, then density) stays with the caller.
  */
 export function registerDeliveredSignature(signature: DeliveredSignature): void {
   registerSignature({
@@ -73,6 +74,7 @@ export function registerDeliveredSignature(signature: DeliveredSignature): void 
     name: signature.title ?? signature.id,
     accent: signature.accent ?? '',
     fonts: signature.fonts,
+    family: signature.family,
     logoUrl: signature.logoUrl,
     monogram: signature.monogram,
     wordmark: signature.wordmark,

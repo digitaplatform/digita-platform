@@ -25,6 +25,34 @@ describe('joinCompositionWithInventory', () => {
     expect(sources[1]).toMatchObject({ title: 'Aurora', accent: '#123456', monogram: '<svg/>' });
   });
 
+  it("names a staged signature by the inventory's title when the composition gives none, and a composition title wins", () => {
+    const staged: PluginInventory = {
+      schemaVersion: 1,
+      plugins: [
+        { id: 'veloluck-workbench', type: 'signature', tier: 'free', version: '0.3.7', title: 'Veloluck Workbench', accent: '#B8541E' },
+        { id: 'veloluck-lakeside', type: 'signature', tier: 'free', version: '0.3.7', title: 'Veloluck Lakeside', accent: '#1F7A5C' },
+      ],
+    };
+    const { sources } = joinCompositionWithInventory(
+      [{ id: 'veloluck-workbench' }, { id: 'veloluck-lakeside', title: 'Lakeside' }],
+      staged,
+      [],
+    );
+    expect(sources.map((s) => [s.id, s.title])).toEqual([
+      ['veloluck-workbench', 'Veloluck Workbench'],
+      ['veloluck-lakeside', 'Lakeside'],
+    ]);
+  });
+
+  it("carries a staged signature's family onto its source", () => {
+    const staged: PluginInventory = {
+      schemaVersion: 1,
+      plugins: [{ id: 'lineage', type: 'signature', tier: 'free', version: '1.0.0', accent: '#654321', family: 'lineage' }],
+    };
+    const { sources } = joinCompositionWithInventory([{ id: 'lineage' }], staged, []);
+    expect(sources[0]).toMatchObject({ id: 'lineage', type: 'signature', family: 'lineage' });
+  });
+
   it('loads an entitled premium plugin, and falls back to a legacy inline url or a bare id', () => {
     const { sources, lockedIds } = joinCompositionWithInventory(
       [{ id: 'material' }, { id: 'legacy', url: '/legacy.js' }, { id: 'dev-only' }],
