@@ -57,6 +57,7 @@ import type { FastifyInstance } from "fastify";
 import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
+import Jimp from "jimp";
 import { DIGITA } from "@digitaplatform/shared";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { env } from "../src/core/config/env.js";
@@ -69,7 +70,8 @@ import { publishFilesOfPublicFields } from "../src/core/storage/public-field-fil
 // A field that becomes `public: true` after files were uploaded to it: a boot step moves those
 // files, and the URLs their rows hold, forward to public. A file of a private field, a file no row
 // holds, a file of a private field that shares its name with a public one, a file that another row
-// than its own copies into a public field, and a colleague's upload that names no row stay private.
+// than its own copies into a public field, a colleague's upload that names no row, and a file its
+// row holds in a Table value that is not a list stay private.
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
 let db: MongoDBService;
@@ -130,14 +132,21 @@ afterAll(async () => {
   await rm(appDir, { recursive: true, force: true });
 }, 30000);
 
-async function upload(field: string, name: string, bytes: string, row?: string, token = adminToken): Promise<{ _id: string; file_url: string }> {
+async function upload(
+  field: string,
+  name: string,
+  bytes: string | Buffer,
+  row?: string,
+  token = adminToken,
+  type = "application/pdf",
+): Promise<{ _id: string; file_url: string }> {
   const boundary = "----digitaPublicFieldFiles";
   const part = (header: string, body: string | Buffer) => [Buffer.from(`--${boundary}\r\n${header}\r\n\r\n`), Buffer.from(body), Buffer.from("\r\n")];
   const payload = Buffer.concat([
     ...part(`content-disposition: form-data; name="attached_to_entity"`, "TestShopItem"),
     ...part(`content-disposition: form-data; name="attached_to_field"`, field),
     ...(row ? part(`content-disposition: form-data; name="attached_to_name"`, row) : []),
-    ...part(`content-disposition: form-data; name="file"; filename="${name}"\r\ncontent-type: application/pdf`, bytes),
+    ...part(`content-disposition: form-data; name="file"; filename="${name}"\r\ncontent-type: ${type}`, bytes),
     Buffer.from(`--${boundary}--\r\n`),
   ]);
   const res = await app.inject({
@@ -243,6 +252,69 @@ describe("Files of a field that became public", () => {
     await publishFilesOfPublicFields(db, registry.getAll());
     expect(await db.findManyByFilter(DIGITA.COLLECTIONS.FILE, { attached_to_entity: "TestShopItem" }, DIGITA.DATABASES.CORE)).toEqual(before);
     expect(await db.findManyByFilter("TestShopItem", {}, DIGITA.DATABASES.CORE)).toEqual(itemsBefore);
+  });
+
+  it("gives a row it moves a new modified, so a form loaded before answers 409 and one loaded after saves", async () => {
+    registry.register(shop(false));
+    const main = await upload("image", "stale-main.pdf", "stale main picture");
+    const gallery = await upload("picture", "stale-gallery.pdf", "stale gallery picture");
+    const auth = { authorization: `Bearer ${adminToken}` };
+    const create = async (payload: Record<string, unknown>) => {
+      const res = await app.inject({ method: "POST", url: "/api/v1/resource/TestShopItem", headers: auth, payload });
+      expect(res.statusCode, res.body).toBe(201);
+      return res.json().data as Record<string, unknown>;
+    };
+    const save = (name: string, loaded: Record<string, unknown>, payload: Record<string, unknown>) =>
+      app.inject({ method: "PUT", url: `/api/v1/resource/TestShopItem/${name}`, headers: { ...auth, "if-match": String(loaded["modified"]) }, payload });
+    // Forms as the app holds them: every value, and the `modified` they were loaded with.
+    const header = await create({ _id: "ITEM-6", image: main.file_url });
+    const table = await create({ _id: "ITEM-7", images: [{ picture: gallery.file_url, caption: "side" }] });
+
+    registry.register(shop(true));
+    await publishFilesOfPublicFields(db, registry.getAll());
+
+    expect((await save("ITEM-6", header, { image: header["image"] })).statusCode).toBe(409);
+    expect((await save("ITEM-7", table, { images: table["images"] })).statusCode).toBe(409);
+    const fresh = (await app.inject({ method: "GET", url: "/api/v1/resource/TestShopItem/ITEM-6", headers: auth })).json().data as Record<string, unknown>;
+    const saved = await save("ITEM-6", fresh, { image: fresh["image"] });
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect(((await db.findOne("TestShopItem", "ITEM-6", DIGITA.DATABASES.CORE)) as Record<string, unknown>)["image"]).toBe(`/api/v1/public/file/${main._id}`);
+    const cells = ((await db.findOne("TestShopItem", "ITEM-7", DIGITA.DATABASES.CORE)) as Record<string, unknown>)["images"];
+    expect(cells).toMatchObject([{ picture: `/api/v1/public/file/${gallery._id}` }]);
+  });
+
+  it("moves a raster image's thumbnail to the public route with the image", async () => {
+    registry.register(shop(false));
+    const png = await new Promise<Jimp>((res, rej) => new Jimp(320, 240, 0x3366ffff, (e, im) => (e ? rej(e) : res(im))));
+    const photo = await upload("image", "photo.png", await png.getBufferAsync(Jimp.MIME_PNG), "ITEM-9", adminToken, "image/png");
+    expect((await fileRow(photo._id))["thumbnail_url"]).toBe(`/api/v1/file/${photo._id}/download?thumb=1`);
+    await db.insertOne("TestShopItem", { _id: "ITEM-9", doctype: "TestShopItem", docstatus: 0, image: photo.file_url }, DIGITA.DATABASES.CORE);
+
+    registry.register(shop(true));
+    await publishFilesOfPublicFields(db, registry.getAll());
+
+    expect((await fileRow(photo._id))["thumbnail_url"]).toBe(`/api/v1/public/file/${photo._id}?thumb=1`);
+    const thumb = await app.inject({ method: "GET", url: `/api/v1/public/file/${photo._id}?thumb=1` });
+    expect(thumb.statusCode).toBe(200);
+    expect(thumb.headers["content-type"]).toContain("image/png");
+    const shown = await Jimp.read(Buffer.from(thumb.rawPayload));
+    expect(Math.max(shown.getWidth(), shown.getHeight())).toBeLessThanOrEqual(256);
+  });
+
+  it("keeps a file private, and the start running, when its row's Table value is not a list", async () => {
+    registry.register(shop(false));
+    const held = await upload("picture", "not-a-list.pdf", "a Table value that is an object", "ITEM-10");
+    const moved = await upload("picture", "not-a-list-moved.pdf", "an object holding the public URL", "ITEM-11");
+    await db.insertOne("TestShopItem", { _id: "ITEM-10", doctype: "TestShopItem", docstatus: 0, images: { picture: held.file_url } }, DIGITA.DATABASES.CORE);
+    await db.insertOne("TestShopItem", {
+      _id: "ITEM-11", doctype: "TestShopItem", docstatus: 0, images: { picture: `/api/v1/public/file/${moved._id}` },
+    }, DIGITA.DATABASES.CORE);
+
+    registry.register(shop(true));
+    await publishFilesOfPublicFields(db, registry.getAll());
+
+    for (const file of [held, moved]) expect((await fileRow(file._id))["is_private"]).toBe(true);
+    expect(((await db.findOne("TestShopItem", "ITEM-10", DIGITA.DATABASES.CORE)) as Record<string, unknown>)["images"]).toEqual({ picture: held.file_url });
   });
 });
 

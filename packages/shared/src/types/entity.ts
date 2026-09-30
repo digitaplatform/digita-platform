@@ -444,6 +444,10 @@ export interface FieldDefinition {
    * (`/public/file/:id`), so it renders for unauthenticated visitors — e.g. the
    * login-screen logo/background, or public website media. Generic: any entity
    * field may opt in; the engine never special-cases a specific entity.
+   * Retroactive and one-way: every start with `AUTO_MIGRATE` on also makes public
+   * the files uploaded while the field was private, each one the document it is
+   * attached to holds in this field. A field that drops `true` again keeps the
+   * files it made public.
    */
   public?: boolean;
 

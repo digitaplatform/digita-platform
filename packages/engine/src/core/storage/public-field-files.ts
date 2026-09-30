@@ -12,15 +12,17 @@ const log = createLogger("public-field-files");
 /**
  * Move the files of an attach field declared `public: true` forward to public. A file uploaded
  * while the field was private is a private `File` with the private URL, and its row holds that
- * URL; afterwards the `File` is public with the public URL, and so is each field and Table cell
- * of that row that holds it. A file moves only when the row its `attached_to_name` names holds it
- * in a public field: the download route already lets a reader of that row read the file, while
- * any other row may hold a URL its writer copied from a file they may not read, and a field of
- * the same name elsewhere in the entity may be private. A file that names no row stays private.
+ * URL; afterwards the `File` is public with the public URL, and so is each public field and Table
+ * cell of that row that holds it. A file moves only when the row its `attached_to_name` names
+ * holds it in a public field: the download route already lets a reader of that row read the file,
+ * while another row may hold a URL copied from a file its writer may not read, which a save
+ * refuses (`assertAttachFilesReadable`) but a row written before that check may hold, and a field
+ * of the same name elsewhere in the entity may be private. A file that names no row stays private.
  * The URLs are derived from the id, never read from the `File`, whose `file_url` its owner may
- * rewrite. The row moves first, and a row holding the public URL counts, so a start stopped in
- * between completes the move. Every start reads again the private files that name a row, one
- * lookup of that row by id per path.
+ * rewrite. The row moves first and gets a new `modified`, so a form loaded before the move gets a
+ * conflict instead of saving the private URL back; a row holding the public URL counts, so a start
+ * stopped in between completes the move. Every start reads again the private files that name a
+ * row, up to two queries of that row by id per path.
  */
 export async function publishFilesOfPublicFields(db: MongoDBService, entities: ReadonlyArray<EntityDefinition>): Promise<void> {
   for (const entity of entities) {
@@ -52,7 +54,9 @@ async function publishFilesOfEntity(db: MongoDBService, entity: EntityDefinition
   for (const file of files) {
     const id = file["_id"] as string;
     const row = toIdStorage(file["attached_to_name"] as string);
-    const inRow = (path: string, url: string) => ({ _id: row, [path]: url }) as unknown as Filter<Document>;
+    // A Table value that is not a list holds no rows, and an update of its cells would throw.
+    const inRow = (path: string, url: string, table?: string) =>
+      ({ _id: row, [path]: url, ...(table ? { [table]: { $type: "array" } } : {}) }) as unknown as Filter<Document>;
     const privateUrl = `${env.API_PREFIX}/file/${id}/download`;
     const publicUrl = `${env.API_PREFIX}/public/file/${id}`;
     let isHeld = false;
@@ -60,12 +64,12 @@ async function publishFilesOfEntity(db: MongoDBService, entity: EntityDefinition
       const path = table ? `${table}.${fieldname}` : fieldname;
       const moved = table
         ? await rows.updateMany(
-            inRow(path, privateUrl),
-            { $set: { [`${table}.$[cell].${fieldname}`]: publicUrl } },
+            inRow(path, privateUrl, table),
+            { $set: { [`${table}.$[cell].${fieldname}`]: publicUrl, modified: new Date() } },
             { arrayFilters: [{ [`cell.${fieldname}`]: privateUrl }] },
           )
-        : await rows.updateMany(inRow(path, privateUrl), { $set: { [path]: publicUrl } });
-      isHeld ||= moved.matchedCount > 0 || (await rows.countDocuments(inRow(path, publicUrl), { limit: 1 })) > 0;
+        : await rows.updateMany(inRow(path, privateUrl), { $set: { [path]: publicUrl, modified: new Date() } });
+      isHeld ||= moved.matchedCount > 0 || (await rows.countDocuments(inRow(path, publicUrl, table), { limit: 1 })) > 0;
     }
     if (!isHeld) continue;
     await db.updateOne(
