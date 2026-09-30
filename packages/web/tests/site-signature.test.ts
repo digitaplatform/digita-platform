@@ -11,6 +11,15 @@ describe("siteSignature", () => {
     expect(signature.monogram).not.toBe(siteSignature("digita").monogram);
   });
 
+  it.each(["veloluck-workbench", "veloluck-lakeside", "veloluck-precise"])(
+    "PLANTED DEFECT: a site with theme %s is drawn in that Veloluck signature, not in digita",
+    (id) => {
+      const signature = siteSignature(id);
+      expect(signature.id).toBe(id);
+      expect(signature.monogram).not.toBe(siteSignature("digita").monogram);
+    },
+  );
+
   it("PLANTED INNOCENT: the digita family and an unknown id keep the default", () => {
     expect(siteSignature("digita").id).toBe("digita");
     expect(siteSignature(undefined).id).toBe("digita");

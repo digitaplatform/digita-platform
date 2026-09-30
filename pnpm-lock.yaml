@@ -356,6 +356,15 @@ importers:
       '@digitaplatform/theme':
         specifier: workspace:*
         version: link:../theme
+      '@digitaplatform/veloluck-lakeside':
+        specifier: ^0.3.7
+        version: 0.3.7
+      '@digitaplatform/veloluck-precise':
+        specifier: ^0.3.7
+        version: 0.3.7
+      '@digitaplatform/veloluck-workbench':
+        specifier: ^0.3.7
+        version: 0.3.7
       framer-motion:
         specifier: ^12.0.0
         version: 12.42.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -643,6 +652,15 @@ packages:
       react-dom: ^19.0.0
       react-router: ^7.0.0
       react-router-dom: ^7.0.0
+
+  '@digitaplatform/veloluck-lakeside@0.3.7':
+    resolution: {integrity: sha512-VKugmwMBM4K1m05A7VegwhVErygNKbcPeEEdgDRnCnZKbV1UvpjIk4sazwLDxNEcdtQCmtXpSTLYAgmVUZAtxQ==, tarball: https://npm.pkg.github.com/download/@digitaplatform/veloluck-lakeside/0.3.7/9b88c5cafba13ddeeefa8bdc4937fcc04b3b0068}
+
+  '@digitaplatform/veloluck-precise@0.3.7':
+    resolution: {integrity: sha512-nsuWrD4+y+0FgOnb+4rX9h/S3O2ViqnXMcceljvg+z/fOgcgOF+odBDTMAfClJ0qfywyU28jLiU0MVkWB7qVVg==, tarball: https://npm.pkg.github.com/download/@digitaplatform/veloluck-precise/0.3.7/72fd173224d47d0dd793962192a6fba392e72281}
+
+  '@digitaplatform/veloluck-workbench@0.3.7':
+    resolution: {integrity: sha512-2aqX9W418+EQwzt+N2SvKh37C1SEVlsDv/ecR/alJ9Rh5HKFiOrwyIh0sr6mnhBWu9XBHcZAQwt/LKfM1/ZeZQ==, tarball: https://npm.pkg.github.com/download/@digitaplatform/veloluck-workbench/0.3.7/a7360146f3e43137af7d26b53b35003a5f2cfd96}
 
   '@emnapi/core@1.11.1':
     resolution: {integrity: sha512-RSvbQmHzdKzNsLYa/wHrbc3KN4sYLKAdPZxqiM2HATqv/SBk2/ENSHpvXGaLOMcsAyz0poEGqkmmKYG3OWiJEQ==}
@@ -4313,6 +4331,12 @@ snapshots:
       react-dom: 19.2.7(react@19.2.7)
       react-router: 7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       react-router-dom: 7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+
+  '@digitaplatform/veloluck-lakeside@0.3.7': {}
+
+  '@digitaplatform/veloluck-precise@0.3.7': {}
+
+  '@digitaplatform/veloluck-workbench@0.3.7': {}
 
   '@emnapi/core@1.11.1':
     dependencies:
