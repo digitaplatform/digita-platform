@@ -8,6 +8,7 @@ import { useSearchLink } from '@/hooks/useSearchLink';
 import { useMeta } from '@/hooks/useMeta';
 import { resolveLinkFilters } from '@/lib/link-filters';
 import { useList } from '@/hooks/useList';
+import { useUiStore } from '@/stores/ui';
 
 /**
  * Link lookup control on the shared [[Combobox]] (inline mode) — one keyboard
@@ -46,6 +47,8 @@ export default function LinkControl({
   // tree mode (hierarchical picker) state.
   const [treeOpen, setTreeOpen] = useState(false);
   const [treeQuery, setTreeQuery] = useState('');
+  const keptTreeExpandedIds = useUiStore((s) => (field.target ? s.treeExpandedIds[field.target] : undefined));
+  const setTreeExpandedIds = useUiStore((s) => s.setTreeExpandedIds);
 
   // Debounce the query that drives the search (empty/short queries now fire too).
   useEffect(() => {
@@ -185,6 +188,16 @@ export default function LinkControl({
       }
       disabledIds = blocked;
     }
+    // Until a person opens or closes a group of this entity, the path to the current value is
+    // open, so the picked group shows. It is read from the rows of this render, never seeded at
+    // the dialog's mount, so rows from the network and rows from the cache open alike.
+    let expandedIds = keptTreeExpandedIds;
+    if (!expandedIds) {
+      const parentOf = new Map(nodes.map((n) => [n.id, n.parentId]));
+      expandedIds = new Set();
+      for (let id = hasValue ? parentOf.get(String(value)) : null; id && !expandedIds.has(id); id = parentOf.get(id))
+        expandedIds.add(id);
+    }
     return (
       <>
         <div className="relative">
@@ -259,6 +272,8 @@ export default function LinkControl({
             // Groups open on a tap of their name and stay pickable: the tree's own parent field picks groups.
             expandOnNameClick
             selectLabel={tc('ui.tree.select')}
+            expandedIds={expandedIds}
+            onExpandedIdsChange={(ids) => setTreeExpandedIds(field.target!, ids)}
             onSelect={(id) => {
               const node = nodes.find((n) => n.id === id);
               setTreeOpen(false);

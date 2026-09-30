@@ -1,4 +1,14 @@
-import { useEffect, useId, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { cn } from '../lib/cn.js';
 import { Button } from '../primitives/Button.js';
 
@@ -37,6 +47,11 @@ export interface TreeViewProps {
   expandOnNameClick?: boolean;
   /** Localized text of the Select button (consumer-provided); its accessible name adds the node's label. */
   selectLabel?: string;
+  /** The ids of the open nodes, for a consumer that keeps them beyond one mount;
+   *  a person's change arrives through `onExpandedIdsChange`. Without it every
+   *  node is open until a person closes it. */
+  expandedIds?: Set<string>;
+  onExpandedIdsChange?: (ids: Set<string>) => void;
 }
 
 function buildChildren(nodes: TreeViewNode[]): {
@@ -57,6 +72,13 @@ function buildChildren(nodes: TreeViewNode[]): {
 
 const escapeAttr = (v: string): string =>
   typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(v) : v;
+
+function toggled(ids: Set<string>, id: string): Set<string> {
+  const next = new Set(ids);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
+}
 
 /**
  * Generic hierarchical tree — builds the hierarchy from a FLAT node list
@@ -80,9 +102,13 @@ export function TreeView({
   getNodeDragData,
   expandOnNameClick,
   selectLabel = 'Select',
+  expandedIds,
+  onExpandedIdsChange,
 }: TreeViewProps) {
   const { childrenOf, roots } = useMemo(() => buildChildren(nodes), [nodes]);
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(nodes.map((n) => n.id)));
+  // Without `expandedIds` the tree keeps the nodes a person closed, not the open
+  // ones, so a node that arrives after the mount opens like one present at it.
+  const [closedIds, setClosedIds] = useState<Set<string>>(() => new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const baseId = useId();
@@ -121,36 +147,34 @@ export function TreeView({
   }, [nodes, childrenOf, q]);
 
   const hasChildren = (id: string) => (childrenOf.get(id)?.length ?? 0) > 0;
-  const isExpanded = (id: string) => (q ? true : expanded.has(id));
+  const isExpanded = useCallback(
+    (id: string) => q !== '' || (expandedIds ? expandedIds.has(id) : !closedIds.has(id)),
+    [q, expandedIds, closedIds],
+  );
 
   // Flatten the currently-rendered rows (DFS, respecting filter + expansion) — the
   // single source of truth for both rendering and keyboard navigation.
   const flat = useMemo(() => {
     const out: { node: TreeViewNode; depth: number }[] = [];
     const vis = (id: string) => !q || subtreeMatches.get(id) === true;
-    const open = (id: string) => (q ? true : expanded.has(id));
     const walk = (list: TreeViewNode[], depth: number) => {
       for (const n of list) {
         if (!vis(n.id)) continue;
         out.push({ node: n, depth });
         const kids = childrenOf.get(n.id) ?? [];
-        if (kids.length > 0 && open(n.id)) walk(kids, depth + 1);
+        if (kids.length > 0 && isExpanded(n.id)) walk(kids, depth + 1);
       }
     };
     walk(roots, 0);
     return out;
-  }, [roots, childrenOf, expanded, q, subtreeMatches]);
+  }, [roots, childrenOf, isExpanded, q, subtreeMatches]);
 
   // A search shows every node open, so an open or close then would change nothing a person sees
   // and would only surface once the search is cleared.
   const toggle = (id: string) => {
     if (q) return;
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    if (expandedIds) onExpandedIdsChange?.(toggled(expandedIds, id));
+    else setClosedIds((prev) => toggled(prev, id));
   };
 
   useEffect(() => {

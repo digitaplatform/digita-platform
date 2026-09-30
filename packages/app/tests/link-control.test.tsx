@@ -31,16 +31,17 @@ const metaState = vi.hoisted(() => ({
 vi.mock('@/hooks/useMeta', () => ({
   useMeta: () => ({ data: metaState.data }),
 }));
+const TREE_ROWS = [
+  { _id: 'N-1', name: 'Root', parent: null },
+  { _id: 'N-2', name: 'Child', parent: 'N-1' },
+  { _id: 'N-3', name: 'Loose', parent: null },
+];
+// `rows: undefined` is a list still on its way from the network.
+const listState = vi.hoisted(() => ({ rows: undefined as Array<Record<string, unknown>> | undefined }));
 vi.mock('@/hooks/useList', () => ({
   useList: () => ({
-    data: {
-      rows: [
-        { _id: 'N-1', name: 'Root', parent: null },
-        { _id: 'N-2', name: 'Child', parent: 'N-1' },
-        { _id: 'N-3', name: 'Loose', parent: null },
-      ],
-    },
-    isLoading: false,
+    data: listState.rows ? { rows: listState.rows } : undefined,
+    isLoading: !listState.rows,
   }),
 }));
 vi.mock('@/lib/chrome-i18n', () => ({
@@ -48,6 +49,7 @@ vi.mock('@/lib/chrome-i18n', () => ({
 }));
 
 import LinkControl from '@/controls/LinkControl';
+import { useUiStore } from '@/stores/ui';
 
 const STATE: FieldControlState = {
   visible: true,
@@ -234,6 +236,8 @@ describe('LinkControl — tree mode', () => {
       tree: { parent_field: 'parent', label_field: 'name' },
       fields: [{ fieldname: 'name', fieldtype: 'Data', label: 'Name' }],
     };
+    listState.rows = TREE_ROWS;
+    useUiStore.setState({ treeExpandedIds: {} });
   });
 
   it('opens only on click, and stays CLOSED after Escape/pick (no reopen loop)', async () => {
@@ -273,11 +277,11 @@ describe('LinkControl — tree mode', () => {
     const root = within(dialog).getByRole('button', { name: 'Root' });
     const rootItem = within(dialog).getByRole('treeitem', { name: 'Root' });
     await user.click(root);
-    expect(rootItem).toHaveAttribute('aria-expanded', 'false');
-    expect(within(dialog).queryByText('Child')).toBeNull();
-    await user.click(root);
     expect(rootItem).toHaveAttribute('aria-expanded', 'true');
     expect(within(dialog).getByText('Child')).toBeInTheDocument();
+    await user.click(root);
+    expect(rootItem).toHaveAttribute('aria-expanded', 'false');
+    expect(within(dialog).queryByText('Child')).toBeNull();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -303,5 +307,63 @@ describe('LinkControl — tree mode', () => {
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Loose' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(onChange).toHaveBeenCalledWith('N-3');
+  });
+
+  const GROUP_ROWS = [
+    { _id: 'G-1', name: 'Retail', parent: null },
+    { _id: 'G-2', name: 'Swiss', parent: 'G-1' },
+    { _id: 'G-3', name: 'Zurich', parent: 'G-2' },
+    { _id: 'G-4', name: 'Wholesale', parent: null },
+    { _id: 'G-5', name: 'Germany', parent: 'G-4' },
+  ];
+
+  it('starts collapsed with the path to the current value open, also for rows that arrive late', async () => {
+    const user = userEvent.setup();
+    const field = makeField({ target: 'Folder' });
+    listState.rows = undefined;
+    const view = render(<Host field={field} value="G-3" />);
+    await user.click(screen.getByRole('combobox'));
+    const dialog = await screen.findByRole('dialog');
+    listState.rows = GROUP_ROWS;
+    view.rerender(<Host field={field} value="G-3" />);
+    expect(within(dialog).getByRole('treeitem', { name: 'Retail' })).toHaveAttribute('aria-expanded', 'true');
+    expect(within(dialog).getByRole('treeitem', { name: 'Swiss' })).toHaveAttribute('aria-expanded', 'true');
+    expect(within(dialog).getByRole('treeitem', { name: 'Wholesale' })).toHaveAttribute('aria-expanded', 'false');
+    expect(within(dialog).getByText('Zurich')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Germany')).toBeNull();
+  });
+
+  it('keeps the groups a person opened for the next open of a picker of the same target', async () => {
+    const user = userEvent.setup();
+    const field = makeField({ target: 'Folder' });
+    listState.rows = GROUP_ROWS;
+    const first = render(<Host field={field} value="G-3" />);
+    await user.click(screen.getByRole('combobox'));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Wholesale' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Retail' }));
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    const expectOpenAsLeft = async () => {
+      await user.click(screen.getByRole('combobox'));
+      const reopened = await screen.findByRole('dialog');
+      expect(within(reopened).getByRole('treeitem', { name: 'Wholesale' })).toHaveAttribute('aria-expanded', 'true');
+      expect(within(reopened).getByRole('treeitem', { name: 'Retail' })).toHaveAttribute('aria-expanded', 'false');
+      expect(within(reopened).getByText('Germany')).toBeInTheDocument();
+      expect(within(reopened).queryByText('Swiss')).toBeNull();
+    };
+    await expectOpenAsLeft();
+    first.unmount();
+    // Another record's form: its picker of the same target opens as the person left it.
+    const second = render(<Host field={field} value={null} />);
+    await expectOpenAsLeft();
+    second.unmount();
+
+    // A picker of another target keeps its own groups.
+    render(<Host field={makeField({ target: 'Region' })} value={null} />);
+    await user.click(screen.getByRole('combobox'));
+    const other = await screen.findByRole('dialog');
+    expect(within(other).getByRole('treeitem', { name: 'Wholesale' })).toHaveAttribute('aria-expanded', 'false');
   });
 });

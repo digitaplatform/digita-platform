@@ -79,13 +79,45 @@ describe('TreeView drag source (getNodeDragData)', () => {
   });
 });
 
-describe('TreeView with names that open groups (expandOnNameClick)', () => {
-  const groups: TreeViewNode[] = [
-    { id: 'main', label: 'Main group', parentId: null },
-    { id: 'sub', label: 'Sub group', parentId: 'main' },
-    { id: 'leaf', label: 'Leaf', parentId: 'sub' },
-  ];
+const groups: TreeViewNode[] = [
+  { id: 'main', label: 'Main group', parentId: null },
+  { id: 'sub', label: 'Sub group', parentId: 'main' },
+  { id: 'leaf', label: 'Leaf', parentId: 'sub' },
+];
 
+const openIds = (container: HTMLElement) =>
+  [...container.querySelectorAll('[role="treeitem"][aria-expanded="true"]')].map((r) =>
+    r.getAttribute('data-tree-id'),
+  );
+
+describe('TreeView open nodes', () => {
+  it('opens the nodes that arrive after the mount like the ones present at it', () => {
+    const late = render(<TreeView nodes={[]} />);
+    late.rerender(<TreeView nodes={groups} />);
+    const atMount = render(<TreeView nodes={groups} />);
+    expect(openIds(atMount.container)).toEqual(['main', 'sub']);
+    expect(openIds(late.container)).toEqual(openIds(atMount.container));
+  });
+
+  it('shows the open nodes it is given and reports a change instead of keeping it', () => {
+    const onExpandedIdsChange = vi.fn();
+    const { container, rerender } = render(
+      <TreeView nodes={groups} expandedIds={new Set(['main'])} onExpandedIdsChange={onExpandedIdsChange} />,
+    );
+    expect(openIds(container)).toEqual(['main']);
+    const tree = container.querySelector('[role="tree"]') as HTMLElement;
+    fireEvent.keyDown(tree, { key: 'ArrowDown' });
+    fireEvent.keyDown(tree, { key: 'ArrowRight' });
+    expect(onExpandedIdsChange).toHaveBeenCalledWith(new Set(['main', 'sub']));
+    expect(screen.queryByText('Leaf')).toBeNull();
+    rerender(
+      <TreeView nodes={groups} expandedIds={new Set(['main', 'sub'])} onExpandedIdsChange={onExpandedIdsChange} />,
+    );
+    expect(screen.getByText('Leaf')).toBeInTheDocument();
+  });
+});
+
+describe('TreeView with names that open groups (expandOnNameClick)', () => {
   it('opens and closes a group on its name and never selects it', () => {
     const onSelect = vi.fn();
     const { container } = render(

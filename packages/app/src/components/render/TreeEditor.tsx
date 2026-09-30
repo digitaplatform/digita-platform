@@ -8,6 +8,7 @@ import { RecordDialog } from '@/components/record/RecordDialog';
 import { useDialogHost } from '@/components/overlay/DialogHost';
 import { useChrome } from '@/lib/chrome-i18n';
 import { qkPrefix } from '@/lib/query-keys';
+import { useUiStore } from '@/stores/ui';
 import { LoadingBlock, ErrorBlock } from '@/components/status';
 
 type Row = Record<string, unknown>;
@@ -48,6 +49,13 @@ export function TreeEditor({
   const [editing, setEditing] = useState<{ name?: string; seed?: Row; ancestry?: string[] } | null>(
     null,
   );
+  const expandedIds = useUiStore((s) => s.treeExpandedIds[entity]);
+  const setTreeExpandedIds = useUiStore((s) => s.setTreeExpandedIds);
+  // The groups start closed, so the group a node is added to or moved into opens, or the node
+  // would drop out of view. Read from the store at the call: a move opens its group only after
+  // the server answered, and the person may have opened or closed groups meanwhile.
+  const openGroup = (id: string) =>
+    setTreeExpandedIds(entity, new Set(useUiStore.getState().treeExpandedIds[entity]).add(id));
 
   const listQ = useList<Row>(entity, {
     filters: tree.group_by && group ? [[tree.group_by, '=', group]] : [],
@@ -122,7 +130,10 @@ export function TreeEditor({
    *  parent + active group partition pre-filled and the ancestry shown. */
   const openCreate = (parentId: string | null) => {
     const seed: Row = {};
-    if (parentId) seed[parentField] = parentId;
+    if (parentId) {
+      seed[parentField] = parentId;
+      openGroup(parentId);
+    }
     if (tree.group_by && group) seed[tree.group_by] = group;
     setEditing({ seed, ancestry: pathTo(parentId) });
   };
@@ -156,6 +167,7 @@ export function TreeEditor({
     setBusy(true);
     try {
       await updateDoc(entity, id, { [parentField]: targetParentId }, modifiedById.get(id) || undefined);
+      if (targetParentId) openGroup(targetParentId);
       await refetch();
     } catch (e) {
       dialog.toast(e instanceof Error ? e.message : tc('ui.status.somethingWrong'), 'error');
@@ -205,6 +217,8 @@ export function TreeEditor({
       <TreeView
         nodes={nodes}
         emptyLabel={tc('ui.select.noResults')}
+        expandedIds={expandedIds ?? new Set()}
+        onExpandedIdsChange={(ids) => setTreeExpandedIds(entity, ids)}
         onSelect={(id) => {
           if (movingId) {
             if (!blocked.has(id)) void moveTo(id);
