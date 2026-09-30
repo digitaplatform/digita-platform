@@ -1,6 +1,7 @@
 import type { EntityDefinition } from '@digitaplatform/shared';
 import { SYSTEM_ROLES, canGrantActionTo } from '@digitaplatform/shared';
 import type { SessionUser } from '@/types';
+import { resolveWorkflowField } from '@/lib/workflow-field';
 
 /**
  * Frontend permission helpers. The engine is the authoritative security boundary;
@@ -38,6 +39,45 @@ export function hasEntityPermission(
   if (!user) return false;
   if (isAdministrator(user)) return true;
   return (entity.permissions ?? []).some((p) => canGrantActionTo(p, user.roles) && p[action] === 1);
+}
+
+type RecordRules = Pick<EntityDefinition, 'permissions' | 'states' | 'transitions' | 'workflow_field'>;
+
+/**
+ * Does the user hold `action` on this record, as the engine checks it against the stored
+ * record: through a level-0 row whose role the record's workflow state does not strip of it?
+ */
+export function hasRecordPermission(
+  entity: RecordRules,
+  user: SessionUser | null | undefined,
+  action: PermAction,
+  record: Record<string, unknown>,
+): boolean {
+  if (!user) return false;
+  if (isAdministrator(user)) return true;
+  return (entity.permissions ?? []).some(
+    (p) => canGrantActionTo(p, user.roles) && p[action] === 1 && !stateStrips(entity, record, p.role, action),
+  );
+}
+
+/** Whether the record's workflow state takes `action` from `role`. Like the engine, only the
+ *  state's first entry for the role counts, and only these five actions can be stripped. */
+function stateStrips(entity: RecordRules, record: Record<string, unknown>, role: string, action: PermAction): boolean {
+  const field = resolveWorkflowField(entity);
+  const value = field ? record[field] : undefined;
+  if (typeof value !== 'string') return false;
+  const strip = entity.states?.find((s) => s.value === value)?.permissions?.find((p) => p.role === role);
+  if (!strip) return false;
+  switch (action) {
+    case 'read':
+    case 'write':
+    case 'submit':
+    case 'cancel':
+    case 'delete':
+      return strip[action] === 0;
+    default:
+      return false;
+  }
 }
 
 /**

@@ -23,7 +23,7 @@ import {
   deriveAllowOnSubmitSet,
   type FieldStateMap,
 } from '@/lib/evaluate-field';
-import { writableLevelPredicate, hasEntityPermission } from '@/lib/permissions';
+import { writableLevelPredicate, hasEntityPermission, hasRecordPermission } from '@/lib/permissions';
 import { toUiMessages, unwrap, type UiMessage } from '@/lib/api-result';
 import { ApiClientError } from '@/lib/errors';
 import { useSessionStore } from '@/stores/session';
@@ -242,6 +242,10 @@ function RecordForm({
     return m;
   }, [meta]);
   const canWriteLevel = useMemo(() => writableLevelPredicate(meta, user), [meta, user]);
+  // The record's workflow state may strip write from every role of the user that grants it.
+  // The engine then refuses the whole save, judged on the stored record, so the form locks.
+  const writeStripped =
+    !isNew && hasEntityPermission(meta, user, 'write') && !hasRecordPermission(meta, user, 'write', initial);
   const hasTable = useMemo(() => meta.fields.some((f) => f.fieldtype === 'Table'), [meta]);
 
   // Live required resolver via a ref → the zod schema instance stays stable.
@@ -287,10 +291,11 @@ function RecordForm({
       allowOnSubmitSet,
       isNew,
       canWriteLevel,
+      formDisabled: writeStripped,
     });
     stateRef.current = map;
     return map;
-  }, [watched, meta, computedSet, frozenSet, allowOnSubmitSet, docstatus, isNew, canWriteLevel, user]);
+  }, [watched, meta, computedSet, frozenSet, allowOnSubmitSet, docstatus, isNew, canWriteLevel, writeStripped, user]);
 
   // Overlay the "updating…" flag on computed fields while a preview is in flight.
   const renderState = useMemo(() => {
@@ -507,7 +512,7 @@ function RecordForm({
   // submitted (1) doc can't be deleted while it stands; cancel it first.
   const docLocked = !!meta.is_submittable && docstatus >= 1;
   const canDelete =
-    hasEntityPermission(meta, user, 'delete') &&
+    hasRecordPermission(meta, user, 'delete', initial) &&
     !isSingle &&
     !(meta.is_submittable && docstatus === 1);
   const onDelete = async () => {
@@ -651,7 +656,7 @@ function RecordForm({
         saving={saving}
         isNew={isNew}
         canDelete={canDelete}
-        hideSave={docLocked}
+        hideSave={docLocked || writeStripped}
         saveDisabled={conflict}
         busy={saving || deleteM.isPending}
         onCancel={() => navigate(-1)}
