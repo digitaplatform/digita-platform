@@ -50,15 +50,15 @@ async function whenStylesheetRequested(designId: string) {
   stylesheet(designId)!.dispatchEvent(new Event("load"));
 }
 
-const sources = { apps: ["erp"], authUrl: "https://acme.example/auth", authCookieSuffix: "acme1" };
+const sources = { apps: ["erp"], authUrl: "https://tenant.example/auth", authCookieSuffix: "tenant1" };
 const signIn = () => {
-  document.cookie = "digita_csrf_acme1=token123";
+  document.cookie = "digita_csrf_tenant1=token123";
 };
 
 beforeEach(() => {
   localStorage.clear();
   document.head.innerHTML = "";
-  document.cookie = "digita_csrf_acme1=; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+  document.cookie = "digita_csrf_tenant1=; expires=Thu, 01 Jan 1970 00:00:00 GMT";
   root().removeAttribute("data-design");
   root().removeAttribute("data-design-variant");
   root().removeAttribute("data-signature");
@@ -122,7 +122,7 @@ describe("loadDeliveredIdentity", () => {
     signIn();
     const calls = serve({
       prefs: [json(401, { success: false }), prefs({ "ui.design": "editorial" })],
-      "https://acme.example/auth/api/v1/auth/refresh": json(200, { success: true }),
+      "https://tenant.example/auth/api/v1/auth/refresh": json(200, { success: true }),
       "/erp/api/v1/plugins": composition(["editorial"], ["editorial"]),
       "/erp/plugins/index.json": json(200, inventory("editorial")),
     });
@@ -141,10 +141,10 @@ describe("loadDeliveredIdentity", () => {
     localStorage.setItem(DESIGN_STORAGE_KEY, "fluent");
     const calls = serve({
       prefs: json(401, { success: false }),
-      "https://acme.example/auth/api/v1/auth/refresh": json(401, { success: false }),
+      "https://tenant.example/auth/api/v1/auth/refresh": json(401, { success: false }),
     });
     expect(await loadDeliveredIdentity(sources)).toBe(false);
-    expect(calls.map((c) => c.url.split("?")[0])).toEqual(["/erp/api/v1/resource/UserPreference", "https://acme.example/auth/api/v1/auth/refresh"]);
+    expect(calls.map((c) => c.url.split("?")[0])).toEqual(["/erp/api/v1/resource/UserPreference", "https://tenant.example/auth/api/v1/auth/refresh"]);
     expect(stylesheet("fluent")).toBeUndefined();
   });
 

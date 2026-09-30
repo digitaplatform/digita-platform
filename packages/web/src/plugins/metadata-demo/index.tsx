@@ -138,7 +138,7 @@ export default function MetadataDemo() {
                   </motion.span>
                   <motion.span variants={row(1)} className="block">
                     {"  "}
-                    <span className="text-primary-600">&quot;customer&quot;</span>: <span className="text-textMain">&quot;ACME GmbH&quot;</span>,
+                    <span className="text-primary-600">&quot;customer&quot;</span>: <span className="text-textMain">&quot;Veloluck GmbH&quot;</span>,
                   </motion.span>
                   <motion.span variants={row(2)} className="block">
                     {"  "}
@@ -176,7 +176,7 @@ export default function MetadataDemo() {
                 <motion.div variants={row(0)}>
                   <label className="mb-1 block text-xs font-medium text-textMuted">Customer</label>
                   <div className="flex h-9 items-center justify-between rounded-input border border-border bg-subtle px-3 text-sm text-textMain">
-                    ACME GmbH <span aria-hidden className="text-textMuted">▾</span>
+                    Veloluck GmbH <span aria-hidden className="text-textMuted">▾</span>
                   </div>
                 </motion.div>
 
