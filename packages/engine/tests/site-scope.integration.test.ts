@@ -33,6 +33,8 @@ vi.mock("../src/core/config/env.js", () => {
     APP_DIRS: [] as string[], SITE_ID: "", ENTITIES_DIR: "./src/entities", MODULES_DIR: "./src/modules", TRANSLATIONS_DIR: process.env.TRANSLATIONS_DIR,
     AUTO_MIGRATE: true, TRACK_CHANGES_DEFAULT: false,
     SEED_APP_DATA_ON_BOOT: false, SEED_DEMO_DATA_ON_BOOT: false,
+    // Its entities grant Guest read, so start-up needs the renderer's purge route; nothing listens there.
+    REVALIDATE_URL: "http://127.0.0.1:9/api/revalidate", REVALIDATE_SECRET: "test-revalidate-secret",
   } };
 });
 vi.mock("../src/core/logging/logger.js", () => ({

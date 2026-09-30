@@ -3,6 +3,7 @@ import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { DocumentService } from "../document/document-service.js";
 import type { LocaleResolver } from "../i18n/locale-resolver.js";
 import type { RealtimeService } from "../realtime/realtime-service.js";
+import type { RevalidateNotifier } from "./revalidate-notifier.js";
 import type { UserContext } from "../permissions/types.js";
 import { callerIsInternal, stripInternalFields } from "../auth/audience.js";
 import { createDelegationClient } from "../auth/delegation-client.js";
@@ -46,6 +47,7 @@ export function registerResourceRoutes(
   documentService: DocumentService,
   localeResolver: LocaleResolver,
   realtimeService: RealtimeService,
+  revalidateNotifier: RevalidateNotifier,
 ): void {
   const basePath = `${prefix}/resource`;
 
@@ -57,9 +59,10 @@ export function registerResourceRoutes(
       request.headers["accept-language"] as string | undefined,
     );
 
-  // Broadcast a committed write so connected clients invalidate their caches.
+  // Broadcast a committed write so connected clients and the website renderer invalidate their caches.
   const emitChange = (op: "insert" | "update" | "delete", doctype: string, name: unknown): void => {
     if (typeof name === "string" && name) realtimeService.broadcast({ entity: doctype, name, op });
+    revalidateNotifier.notify(doctype);
   };
 
   // ─── LIST ──────────────────────────────────────────────

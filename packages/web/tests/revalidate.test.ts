@@ -1,0 +1,77 @@
+// A save the engine posts purges the renderer's reads of that entity at once, and nobody without
+// the shared secret can purge.
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { NextRequest } from "next/server";
+
+vi.mock("server-only", () => ({}));
+const revalidateTag = vi.hoisted(() => vi.fn());
+vi.mock("next/cache", () => ({ revalidateTag, revalidatePath: vi.fn() }));
+
+const ENV = {
+  ENGINE_URL: "http://engine.internal:3000",
+  SITE_ID: "example",
+  SITE_URL: "https://example.org",
+  PUBLIC_ENGINE_URL: "",
+  REVALIDATE_SECONDS: "60",
+  REVALIDATE_SECRET: "shared-secret",
+  TRANSLATIONS_DIR: "/translations",
+  LOCALES: "en,de",
+  DEFAULT_LOCALE: "en",
+};
+
+/** Loads a module afresh under `env`, because getConfig reads the environment once. */
+async function load<T>(module: () => Promise<T>, env: Record<string, string | undefined> = ENV): Promise<T> {
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  vi.resetModules();
+  return module();
+}
+
+const purge = (secret: string | null) =>
+  new NextRequest("http://localhost/api/revalidate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(secret === null ? {} : { "x-revalidate-secret": secret }) },
+    body: JSON.stringify({ tags: ["entity:WebPage"] }),
+  });
+
+afterEach(() => {
+  revalidateTag.mockReset();
+  vi.unstubAllGlobals();
+});
+
+describe("POST /api/revalidate", () => {
+  it("PLANTED DEFECT: purges the posted entity tag with the shared secret", async () => {
+    const { POST } = await load(() => import("../src/app/api/revalidate/route"));
+    const res = await POST(purge("shared-secret"));
+    expect(res.status).toBe(200);
+    expect(revalidateTag).toHaveBeenCalledWith("entity:WebPage");
+  });
+
+  it("PLANTED INNOCENT: refuses a wrong or missing secret and purges nothing", async () => {
+    const { POST } = await load(() => import("../src/app/api/revalidate/route"));
+    expect((await POST(purge("wrong-secret!"))).status).toBe(401);
+    expect((await POST(purge(null))).status).toBe(401);
+    expect(revalidateTag).not.toHaveBeenCalled();
+  });
+});
+
+describe("the renderer's config", () => {
+  it("requires REVALIDATE_SECRET and names it", async () => {
+    const { getConfig } = await load(() => import("../src/config/env"), { ...ENV, REVALIDATE_SECRET: undefined });
+    expect(() => getConfig()).toThrow("[digita-web] missing required env var: REVALIDATE_SECRET");
+  });
+});
+
+describe("a read of the engine", () => {
+  it("is cached under the tag of its entity, which the engine posts", async () => {
+    const fetch = vi.fn(async (_url: string, _init: { next?: { tags?: string[] } }) => Response.json({ data: [] }));
+    vi.stubGlobal("fetch", fetch);
+    const { getPage, getNav, getSite } = await load(() => import("../src/lib/engine-client"));
+    await getPage("en", "about");
+    await getNav("en", "header");
+    await getSite();
+    expect(fetch.mock.calls.map(([, init]) => init.next?.tags)).toEqual([["entity:WebPage"], ["entity:WebNavMenu"], ["entity:WebSite"]]);
+  });
+});

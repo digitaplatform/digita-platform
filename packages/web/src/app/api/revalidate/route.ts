@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { revalidateTag, revalidatePath } from "next/cache";
+import { REVALIDATE_SECRET_HEADER } from "@digitaplatform/shared";
 import { getConfig } from "@/config/env";
 import { timingSafeEqual } from "node:crypto";
 
@@ -12,19 +13,14 @@ function secretsMatch(a: string, b: string): boolean {
 }
 
 /**
- * On-publish revalidation webhook. The engine app-hook (digita-catalog/web) POSTs
- * here with the cache tags affected by a publish. Authenticated by a shared
- * secret so only the engine can purge. Body: `{ tags?: string[], paths?: string[] }`.
+ * The cache purge the engine posts after a committed write of an entity a visitor can read, with
+ * the tag of that entity. Authenticated by the secret the engine and this server share, so only
+ * the engine can purge. Body: `{ tags?: string[], paths?: string[] }`.
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const secret = getConfig().revalidateSecret;
-  if (!secret) {
-    // Explicitly OPTIONAL feature — not configured → off (no silent fallback).
-    return NextResponse.json({ ok: false, message: "Revalidation not configured" }, { status: 503 });
-  }
   // Header-only (a query-string secret leaks into logs/referrers), constant-time.
-  const provided = req.headers.get("x-revalidate-secret");
-  if (!provided || !secretsMatch(provided, secret)) {
+  const provided = req.headers.get(REVALIDATE_SECRET_HEADER);
+  if (!provided || !secretsMatch(provided, getConfig().revalidateSecret)) {
     return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
   }
 

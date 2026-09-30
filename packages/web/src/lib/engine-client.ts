@@ -1,3 +1,4 @@
+import { entityCacheTag } from "@digitaplatform/shared";
 import { getConfig } from "@/config/env";
 import type { WebSite, WebPage, WebNavMenu, WebBranding } from "./types";
 import type { ContactRequest } from "./contact-request";
@@ -6,7 +7,7 @@ import type { ContactRequest } from "./contact-request";
  * Server-side client for the engine's GENERIC public read API
  * (/api/v1/public/resource/*) and its public create of a contact request.
  * Fetched cluster-internally; never sends a token (Guest read and create).
- * ISR-cached with tags so the on-publish revalidation webhook can purge precisely. Always scopes to this deployment's SITE_ID and
+ * ISR-cached under the tag of the entity read, which the engine posts to /api/revalidate after a save. Always scopes to this deployment's SITE_ID and
  * requests only published rows. All config is strict runtime env (no fallbacks),
  * read per-request via getConfig().
  */
@@ -21,7 +22,7 @@ type Tuple = [string, string, unknown];
 type QueryParams = { filters?: Tuple[]; fields?: string[]; page_size?: number; page?: number; order_by?: string };
 
 /** One page of a public list and the number of pages the engine counts for the whole list. */
-async function queryPage<T>(doctype: string, params: QueryParams, tags: string[]): Promise<{ rows: T[]; totalPages: number }> {
+async function queryPage<T>(doctype: string, params: QueryParams): Promise<{ rows: T[]; totalPages: number }> {
   const { engineUrl, revalidateSeconds } = getConfig();
   const qs = new URLSearchParams();
   if (params.filters) qs.set("filters", JSON.stringify(params.filters));
@@ -32,7 +33,7 @@ async function queryPage<T>(doctype: string, params: QueryParams, tags: string[]
   const url = `${engineUrl}/api/v1/public/resource/${doctype}?${qs.toString()}`;
   const none = { rows: [], totalPages: 0 };
   try {
-    const res = await fetch(url, { next: { revalidate: revalidateSeconds, tags } });
+    const res = await fetch(url, { next: { revalidate: revalidateSeconds, tags: [entityCacheTag(doctype)] } });
     if (!res.ok) return none;
     const json = (await res.json()) as { data?: T[]; meta?: { total_pages?: number } };
     if (!Array.isArray(json.data)) return none;
@@ -42,15 +43,13 @@ async function queryPage<T>(doctype: string, params: QueryParams, tags: string[]
   }
 }
 
-async function query<T>(doctype: string, params: QueryParams, tags: string[]): Promise<T[]> {
-  return (await queryPage<T>(doctype, params, tags)).rows;
+async function query<T>(doctype: string, params: QueryParams): Promise<T[]> {
+  return (await queryPage<T>(doctype, params)).rows;
 }
 
 export async function getSite(): Promise<WebSite | null> {
   const site = siteId();
-  const rows = await query<WebSite>("WebSite", { filters: [["_id", "=", site]], page_size: 1 }, [
-    `web:site:${site}`,
-  ]);
+  const rows = await query<WebSite>("WebSite", { filters: [["_id", "=", site]], page_size: 1 });
   return rows[0] ?? null;
 }
 
@@ -67,7 +66,6 @@ export async function getPage(locale: string, slug: string): Promise<WebPage | n
       ],
       page_size: 1,
     },
-    [`web:page:${site}:${locale}:${slug}`],
   );
   return rows[0] ?? null;
 }
@@ -93,7 +91,6 @@ export async function listPages(locale?: string): Promise<WebPage[]> {
         page,
         order_by: "_id asc",
       },
-      [`web:pages:${site}`],
     );
     pages.push(...rows);
     if (page >= totalPages) return pages;
@@ -101,8 +98,9 @@ export async function listPages(locale?: string): Promise<WebPage[]> {
 }
 
 /** The published pages per locale, as slugs, for the language menu (offeredLocales says why).
- *  This entry and a page's own entry expire on their own TTLs, so for up to REVALIDATE_SECONDS
- *  after a publish the two can disagree. */
+ *  This entry and a page's own entry carry the same tag, so a save purges both. When the engine's
+ *  post does not arrive, each expires on its own TTL, and for up to REVALIDATE_SECONDS the two can
+ *  disagree. */
 export async function listPublishedSlugs(): Promise<Record<string, string[]>> {
   const slugs: Record<string, string[]> = {};
   for (const page of await listPages()) (slugs[page.locale] ??= []).push(page.slug);
@@ -122,7 +120,6 @@ export async function getNav(locale: string, location: WebNavMenu["location"]): 
       ],
       page_size: 1,
     },
-    [`web:nav:${site}:${locale}`],
   );
   return rows[0] ?? null;
 }

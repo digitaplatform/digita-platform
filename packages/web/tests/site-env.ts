@@ -10,6 +10,7 @@ export function setSiteEnv(): void {
     SITE_URL: "https://example.org",
     PUBLIC_ENGINE_URL: "",
     REVALIDATE_SECONDS: "60",
+    REVALIDATE_SECRET: "test-revalidate-secret",
     LOCALES: "en,de",
     DEFAULT_LOCALE: "en",
   });

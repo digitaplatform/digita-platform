@@ -22,7 +22,7 @@ const log = createLogger("public-router");
 
 /** Identity for an anonymous request: the built-in "Guest" role. An entity is
  *  reachable here ONLY if it grants Guest read/select in its own permissions. */
-const GUEST_USER: UserContext = { _id: "Guest", email: "Guest", roles: ["Guest"] };
+export const GUEST_USER: UserContext = { _id: "Guest", email: "Guest", roles: ["Guest"] };
 
 /** Hard cap on the anonymous page size — there is no login barrier here, so an
  *  unbounded page_size would be a trivial memory-exhaustion DoS. */

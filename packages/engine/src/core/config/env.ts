@@ -427,6 +427,12 @@ export const env = {
   PASSWORD_FIELD_KEYS: getEnv("PASSWORD_FIELD_KEYS", ""),
   PASSWORD_FIELD_ACTIVE_KEY_ID: getEnv("PASSWORD_FIELD_ACTIVE_KEY_ID", ""),
 
+  // The renderer's cache purge route (digita-web `POST /api/revalidate`) and the secret it
+  // checks. Required as soon as a registered entity grants Guest read: start-up fails and
+  // names the setting (revalidate-notifier.ts).
+  REVALIDATE_URL: getEnv("REVALIDATE_URL", ""),
+  REVALIDATE_SECRET: getEnv("REVALIDATE_SECRET", ""),
+
   // Dev convenience (opt-in): seed app data at boot, auto/non-destructive (skip
   // rows whose _id already exists). Two INDEPENDENT tiers, both OFF by default —
   // production seeds ONLY via POST /api/v1/admin/reseed (destructive reset path).

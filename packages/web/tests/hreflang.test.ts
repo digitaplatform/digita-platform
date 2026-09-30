@@ -18,6 +18,7 @@ Object.assign(process.env, {
   SITE_URL: "https://example.org",
   PUBLIC_ENGINE_URL: "",
   REVALIDATE_SECONDS: "60",
+  REVALIDATE_SECRET: "test-revalidate-secret",
   TRANSLATIONS_DIR: "/translations",
   LOCALES: "en,de,fr",
   DEFAULT_LOCALE: "en",

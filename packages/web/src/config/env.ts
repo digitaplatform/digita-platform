@@ -36,8 +36,8 @@ export interface ServerConfig extends Omit<PublicSiteConfig, "contactEnabled" | 
   /** Cluster-internal engine URL for server-side fetches (never sent to the browser). */
   engineUrl: string;
   revalidateSeconds: number;
-  /** On-publish revalidation secret. Explicitly OPTIONAL: null → that feature is off. */
-  revalidateSecret: string | null;
+  /** The secret the engine sends with a cache purge (REVALIDATE_SECRET). */
+  revalidateSecret: string;
   /** The tenant's apps the header links to (TENANT_APPS, comma separated). Explicitly OPTIONAL:
    *  a site that is no tenant's entry has none. */
   tenantApps: string[];
@@ -63,7 +63,7 @@ export function getConfig(): ServerConfig {
     siteUrl: noTrailing(req("SITE_URL")),
     publicEngineUrl: noTrailing(reqDefined("PUBLIC_ENGINE_URL")),
     revalidateSeconds: reqInt("REVALIDATE_SECONDS"),
-    revalidateSecret: process.env.REVALIDATE_SECRET || null,
+    revalidateSecret: req("REVALIDATE_SECRET"),
     tenantApps: (process.env.TENANT_APPS ?? "").split(",").map((name) => name.trim()).filter(Boolean),
     authUrl: process.env.AUTH_URL ? noTrailing(process.env.AUTH_URL) : null,
     authCookieSuffix: process.env.AUTH_COOKIE_SUFFIX || null,

@@ -79,6 +79,9 @@ export {
   DELEGATION_EXCHANGE_PATH,
 } from "./types/auth-contract.js";
 
+// The renderer's cache purge (engine ⇄ digita-web)
+export { REVALIDATE_SECRET_HEADER, entityCacheTag } from "./types/revalidate-contract.js";
+
 // Audience / tier model (ADR-A1…A5) — the 3-tier app-shell foundation.
 export type { Audience, AudienceGrant, AudienceConfig, AudienceMap } from "./types/audience.js";
 export { AUDIENCE_CLAIM, canEnterAudience } from "./types/audience.js";

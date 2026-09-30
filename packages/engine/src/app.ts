@@ -60,6 +60,7 @@ import {
 } from "./core/api/middleware/request-logger.js";
 import { globalErrorHandler } from "./core/api/middleware/error-handler.js";
 import { registerResourceRoutes } from "./core/api/resource-router.js";
+import { RevalidateNotifier } from "./core/api/revalidate-notifier.js";
 import { registerPublicRoutes } from "./core/api/public-router.js";
 import { registerMetaRoutes } from "./core/api/meta-router.js";
 import { registerBootRoutes } from "./core/api/boot-router.js";
@@ -130,6 +131,7 @@ export async function createApp(
   const linkValidator = new LinkValidator(registry, db);
   const linkTitleResolver = new LinkTitleResolver(registry, db, translationService, permissionChecker);
   const realtimeService = new RealtimeService(permissionChecker);
+  const revalidateNotifier = new RevalidateNotifier(permissionChecker, env);
   const fetchFromResolver = new FetchFromResolver(registry, db);
   const snapshotResolver = new SnapshotResolver(registry, db);
   // RuleEngine is constructed below; late-bind to avoid forward reference.
@@ -421,7 +423,7 @@ export async function createApp(
     });
 
     registerMetaRoutes(scope, env.API_PREFIX, registry, db, permissionChecker);
-    registerResourceRoutes(scope, env.API_PREFIX, registry, documentService, localeResolver, realtimeService);
+    registerResourceRoutes(scope, env.API_PREFIX, registry, documentService, localeResolver, realtimeService, revalidateNotifier);
     registerTranslationRoutes(scope, env.API_PREFIX, translationService, documentService);
     registerSearchRoutes(scope, env.API_PREFIX, globalSearchService, linkSearchService);
     registerSchemaDriftRoutes(scope, env.API_PREFIX, registry, db);
@@ -582,6 +584,9 @@ export async function createApp(
     // 3c. An entity that stores a Password field needs the key set before the
     //     migration below encrypts and before the first save.
     assertPasswordFieldKeys(registry.getAll());
+    // 3d. An entity a visitor can read is cached by the website renderer, which must hear of
+    //     every save.
+    await revalidateNotifier.assertSettings(registry.getAll());
 
     // 4. Run first-time setup (seed data, migrate schemas)
     await firstRun(db, registry, translationService);
@@ -797,6 +802,8 @@ export async function createApp(
           "Boot site-content seed failed (non-fatal) — continuing startup",
         );
       }
+      // The seed writes rows without a request, so no save told the renderer.
+      await revalidateNotifier.notifyAll(registry.getAll());
     }
 
     // 7. Initialize locale resolver
