@@ -29,7 +29,7 @@ export const FILTER_OPERATORS: ReadonlySet<string> = new Set<FilterOp>([
   '=', '!=', '>', '>=', '<', '<=', 'in', 'not in', 'like', 'not like', 'between', 'is', 'regex',
 ]);
 
-export type OperatorArity = 'single' | 'range' | 'multi' | 'presence' | 'boolean';
+export type OperatorArity = 'single' | 'range' | 'multi' | 'presence';
 
 /** How many/what value an operator takes. `is` → presence token; `between` → [lo,hi]. */
 export function operatorArity(op: FilterOp): OperatorArity {
@@ -85,10 +85,6 @@ export const ADVANCED_OPERATORS: ReadonlySet<FilterOp> = new Set<FilterOp>(['reg
 /** Operators a field of this type may filter by (first = default). [] = not filterable. */
 export function operatorsForFieldtype(ft: FieldType): FilterOp[] {
   return OPS_BY_GROUP[group(ft)];
-}
-
-export function valueControlGroup(ft: FieldType): Group {
-  return group(ft);
 }
 
 /** Fields a user can build a filter on (excludes layout / Table / ReadOnly / presence-less). */
