@@ -62,7 +62,6 @@ export type {
   DataGridColumn,
   DataGridCellKind,
   DataGridAlign,
-  DataGridRecomputeTrigger,
   DataGridCellPatch,
   DataGridDisplayArgs,
   DataGridEditArgs,

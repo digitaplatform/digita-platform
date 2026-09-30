@@ -17,13 +17,6 @@ export type DataGridCellKind =
 
 export type DataGridAlign = 'start' | 'center' | 'end';
 
-/**
- * When a cell edit feeds a server-authoritative recompute. `commit` and `blur`
- * fire once the value settles; `change` fires on every keystroke and is reserved
- * for cells that do not drive a recompute.
- */
-export type DataGridRecomputeTrigger = 'blur' | 'commit' | 'change';
-
 /** Column descriptor. Domain meaning is supplied only by the values, never the keys. */
 export interface DataGridColumn {
   /** Field identity within a row object. */
@@ -43,10 +36,6 @@ export interface DataGridColumn {
   /** Fixed pixel width; columns without a width share the remaining space. */
   width?: number;
   align?: DataGridAlign;
-  /** Fields a server recompute owns when this cell changes (server-authoritative). */
-  writes?: string[];
-  /** When the recompute fires. Defaults to `commit`. */
-  trigger?: DataGridRecomputeTrigger;
   /** Show −/+ stepper buttons on this (numeric) cell, clamped to `min`. */
   stepper?: { min?: number; step?: number };
   /** The header is a button that reports a click to `onSort`. */
