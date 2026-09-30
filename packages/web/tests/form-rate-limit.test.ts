@@ -2,15 +2,15 @@
 // limit holds inside the window, and the address leaves memory when the window ends, with no
 // further request to trigger it.
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { ContactRateLimit } from "../src/lib/contact-rate-limit";
+import { FormRateLimit } from "../src/lib/form-rate-limit";
 
 const HOUR = 60 * 60 * 1000;
 
 afterEach(() => vi.useRealTimers());
 
-describe("ContactRateLimit", () => {
+describe("FormRateLimit", () => {
   it("PLANTED INNOCENT: five sends in the window pass, the sixth is over the limit, another address is not counted", () => {
-    const limit = new ContactRateLimit(5, HOUR);
+    const limit = new FormRateLimit(5, HOUR);
     for (let i = 0; i < 5; i++) {
       limit.recordSend("198.51.100.7");
       expect(limit.isOverLimit("198.51.100.7")).toBe(false);
@@ -22,7 +22,7 @@ describe("ContactRateLimit", () => {
 
   it("PLANTED DEFECT: forgets an address when its window ends, without another send", () => {
     vi.useFakeTimers();
-    const limit = new ContactRateLimit(5, HOUR);
+    const limit = new FormRateLimit(5, HOUR);
     limit.recordSend("198.51.100.7");
     vi.advanceTimersByTime(HOUR - 1);
     expect(limit.remembers("198.51.100.7")).toBe(true);
@@ -32,7 +32,7 @@ describe("ContactRateLimit", () => {
 
   it("counts only the sends whose window has not ended", () => {
     vi.useFakeTimers();
-    const limit = new ContactRateLimit(5, HOUR);
+    const limit = new FormRateLimit(5, HOUR);
     for (let i = 0; i < 5; i++) limit.recordSend("198.51.100.7");
     vi.advanceTimersByTime(HOUR / 2);
     limit.recordSend("198.51.100.7");

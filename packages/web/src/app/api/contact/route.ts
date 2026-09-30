@@ -1,24 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getConfig } from "@/config/env";
-import { createContactRequest, getSite } from "@/lib/engine-client";
+import { createRecord, getSite } from "@/lib/engine-client";
 import { CONTACT_TOPICS, type ContactRequest } from "@/lib/contact-request";
-import { ContactRateLimit } from "@/lib/contact-rate-limit";
-
-/** A form sent sooner than this after the server rendered its page was filled by a program. */
-const MIN_FILL_MS = 3000;
-const RATE_LIMIT = 5;
-const RATE_WINDOW_MS = 60 * 60 * 1000;
-
-const rateLimit = new ContactRateLimit(RATE_LIMIT, RATE_WINDOW_MS);
-
-/** The ingress appends the address it saw as the last x-forwarded-for entry; an earlier entry is
- *  whatever the visitor wrote themselves, so only the last one identifies them. */
-function clientAddress(req: NextRequest): string {
-  const forwarded = req.headers.get("x-forwarded-for")?.split(",").map((entry) => entry.trim()).filter(Boolean);
-  return forwarded?.at(-1) || req.headers.get("x-real-ip") || "unknown";
-}
-
-const answer = (status: number, body: Record<string, unknown>) => NextResponse.json(body, { status });
+import { admitFormPost, answer } from "@/lib/form-post";
 
 // A line field goes into a mail subject or header, so a control character is refused, not stripped.
 const CONTROL = /[\u0000-\u001f\u007f]/;
@@ -40,37 +24,21 @@ function parse(body: Record<string, unknown>, locales: string[]): ContactRequest
   const page = line(body.page, 500);
   if (!name || !email || !EMAIL.test(email) || company === null || !topic) return null;
   if (!message || message.length > 5000 || !locale || !locales.includes(locale) || !page?.startsWith("/")) return null;
-  if (typeof body.rendered_at !== "number" || !Number.isFinite(body.rendered_at)) return null;
   return { name, email, company, topic, message, locale, page };
 }
 
 /**
  * The contact sheet's endpoint: stores the request as a ContactRequest on the engine, whose web
- * app mails the site's contact address on insert. A filled honeypot field (`website`) or a form
- * sent under 3 seconds after the server rendered its page is answered like a success and does
- * nothing, so a program learns nothing from it.
+ * app mails the site's contact address on insert. The protections are every form's
+ * (src/lib/form-post.ts): a program that fills the honeypot or sends too fast is answered like a
+ * success and reaches nothing.
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const config = getConfig();
-  const now = Date.now();
-  const visitor = clientAddress(req);
-  rateLimit.recordSend(visitor);
-  if (rateLimit.isOverLimit(visitor)) return answer(429, { ok: false, message: "Too many requests" });
+  const post = await admitFormPost(req);
+  if (post instanceof NextResponse) return post;
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return answer(400, { ok: false, message: "Invalid request" });
-  }
-  if (typeof body !== "object" || body === null || Array.isArray(body)) return answer(400, { ok: false, message: "Invalid request" });
-  const fields = body as Record<string, unknown>;
-
-  const honeypotFilled = typeof fields.website === "string" && fields.website !== "";
-  const filledTooFast = typeof fields.rendered_at === "number" && now - fields.rendered_at < MIN_FILL_MS;
-  if (honeypotFilled || filledTooFast) return answer(200, { ok: true });
-
-  const request = parse(fields, config.locales);
+  const request = parse(post.fields, config.locales);
   if (!request) return answer(400, { ok: false, message: "Invalid request" });
 
   try {
@@ -78,7 +46,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!site?.contact_email) return answer(503, { ok: false, message: "Contact is not configured" });
 
     // The engine stamps the site from its own SITE_ID and refuses a Link in the body.
-    const status = await createContactRequest(request, visitor);
+    const { status } = await createRecord(config.engineUrl, "ContactRequest", request, post.visitor);
     // 403: the engine grants no Guest create on ContactRequest yet, so the sheet offers the address.
     if (status === 403) return answer(503, { ok: false, message: "Contact is not configured" });
     if (status < 200 || status >= 300) throw new Error(`the engine answered HTTP ${status} to the ContactRequest create`);

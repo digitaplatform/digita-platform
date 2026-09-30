@@ -1,11 +1,10 @@
 import { entityCacheTag } from "@digitaplatform/shared";
 import { getConfig } from "@/config/env";
 import type { WebSite, WebPage, WebNavMenu, WebBranding } from "./types";
-import type { ContactRequest } from "./contact-request";
 
 /**
  * Server-side client for the engine's GENERIC public read API
- * (/api/v1/public/resource/*) and its public create of a contact request.
+ * (/api/v1/public/resource/*) and the public create of any engine the site's forms post to.
  * Fetched cluster-internally; never sends a token (Guest read and create).
  * ISR-cached under the tag of the entity read, which the engine posts to /api/revalidate after a save. Always scopes to this deployment's SITE_ID and
  * requests only published rows. All config is strict runtime env (no fallbacks),
@@ -144,18 +143,31 @@ export async function getBranding(): Promise<WebBranding | null> {
   }
 }
 
-/** Stores one contact request on the engine through its public create route, without a
- *  credential: the engine takes it because ContactRequest grants Guest create. Answers the
- *  engine's status, so the route can tell a refused create from a failure. The engine trusts
- *  this server as its one proxy hop and limits the route per visitor, so the visitor's address
- *  travels as the one X-Forwarded-For entry; without it every visitor of the site would share
- *  the renderer's own budget. */
-export async function createContactRequest(request: ContactRequest, visitorAddress: string): Promise<number> {
-  const res = await fetch(`${getConfig().engineUrl}/api/v1/public/resource/ContactRequest`, {
+/** The engine's answer to a public create: its status, and the error code of a refusal. */
+export interface CreateAnswer {
+  status: number;
+  code?: string;
+}
+
+/** Stores one record on an engine through its public create route, without a credential: the
+ *  engine takes it when the entity grants Guest create, and refuses a field its Guest row does not
+ *  let Guest set. Answers the engine's status and code, so a route can tell a refused create from
+ *  a failure. The engine trusts this server as its one proxy hop and limits the route per visitor,
+ *  so the visitor's address travels as the one X-Forwarded-For entry; without it every visitor of
+ *  the site would share the renderer's own budget. */
+export async function createRecord(
+  engineUrl: string,
+  entity: string,
+  values: object,
+  visitorAddress: string,
+): Promise<CreateAnswer> {
+  const res = await fetch(`${engineUrl}/api/v1/public/resource/${encodeURIComponent(entity)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Forwarded-For": visitorAddress },
-    body: JSON.stringify(request),
+    body: JSON.stringify(values),
     signal: AbortSignal.timeout(5000),
   });
-  return res.status;
+  if (res.ok) return { status: res.status };
+  const body = (await res.json().catch(() => null)) as { error?: { code?: unknown } } | null;
+  return { status: res.status, code: typeof body?.error?.code === "string" ? body.error.code : undefined };
 }

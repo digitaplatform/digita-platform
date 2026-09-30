@@ -6,7 +6,7 @@
 // ponytail: in-memory, per process: a restart forgets it and each replica counts on its own, so
 // the real ceiling is `limit` per window per replica. Move it to a shared store (Redis) once the
 // site runs more than one replica or sees real abuse.
-export class ContactRateLimit {
+export class FormRateLimit {
   private readonly sends = new Map<string, number>();
 
   constructor(
