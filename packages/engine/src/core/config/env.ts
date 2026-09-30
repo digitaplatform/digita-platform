@@ -363,15 +363,6 @@ export const env = {
   // the union block in app.ts) to re-arm the license gate over the same bytes.
   PLUGINS_LICENSE_DISABLED: getEnvBool("PLUGINS_LICENSE_DISABLED", true),
 
-  // ─── PERMISSION SCOPE ────────────────────────────────
-  // Gate for declarative permission `scope` enforcement (a generic field-equality
-  // narrowing — e.g. an app scoping records by company / department / tenant). OFF
-  // by default: enabling it before the principal carries the matching claim
-  // (scope.user_field) would lock non-admins out of every scoped entity (no value →
-  // no rows). Flip to true once the auth token carries the claim AND every user has
-  // a value. (`if_owner` scoping is unaffected — it is always enforced.)
-  PERMISSION_SCOPE_ENABLED: getEnvBool("PERMISSION_SCOPE_ENABLED", false),
-
   // ─── BACKGROUND JOBS ─────────────────────────────────
   // NOTE (go-live audit): there is NO background-job runtime today. Every hook
   // runs SYNCHRONOUSLY inside the request transaction (see hook-runner.ts); hooks

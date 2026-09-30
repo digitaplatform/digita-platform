@@ -3,13 +3,11 @@ import { vi, describe, it, expect } from "vitest";
 // Stub env + logger so importing the adapter / permission-checker doesn't demand
 // MONGODB_URI. AUTH_ISSUER / AUTH_AUDIENCE are intentionally left undefined so
 // the locally-signed test tokens (no iss/aud claims) verify; APP_NAME is empty
-// because each test pins the engine's app explicitly via buildTestAuth(app);
-// PERMISSION_SCOPE_ENABLED is false so the check exercises only role grants.
+// because each test pins the engine's app explicitly via buildTestAuth(app).
 vi.mock("../src/core/config/env.js", () => ({
   env: {
     MONGODB_URI: "",
     APP_NAME: "",
-    PERMISSION_SCOPE_ENABLED: false,
   },
 }));
 vi.mock("../src/core/logging/logger.js", () => ({

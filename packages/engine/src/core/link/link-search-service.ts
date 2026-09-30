@@ -6,7 +6,6 @@ import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
 import { applyScopeFilters } from "../permissions/scope-filter.js";
 import { assertFieldAllowed, isFieldAllowed } from "../database/filter-builder.js";
-import { env } from "../config/env.js";
 
 export interface LinkSearchResult {
   _id: string;
@@ -86,7 +85,7 @@ export class LinkSearchService {
     }
 
     // Scope narrowing (if_owner / permission.scope) — same semantics as getList.
-    mongoFilter = applyScopeFilters(entity, user, mongoFilter, env.PERMISSION_SCOPE_ENABLED);
+    mongoFilter = applyScopeFilters(entity, user, mongoFilter);
 
     const fetchFields = cols
       ? Array.from(new Set(["_id", displayField, ...cols]))
@@ -195,7 +194,7 @@ export class LinkSearchService {
     if (orConditions.length > 0) mongoFilter["$or"] = orConditions;
     if (filters) Object.assign(mongoFilter, filters);
     // Scope narrowing applies to the parent docs whose rows get expanded.
-    mongoFilter = applyScopeFilters(entity, user, mongoFilter, env.PERMISSION_SCOPE_ENABLED);
+    mongoFilter = applyScopeFilters(entity, user, mongoFilter);
 
     const docs = await this.db.find(
       targetEntity,

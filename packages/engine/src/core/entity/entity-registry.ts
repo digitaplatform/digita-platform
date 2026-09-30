@@ -908,37 +908,6 @@ export class EntityRegistry {
     return gaps;
   }
 
-  /**
-   * Scope-enforcement audit — `permission.scope` narrows row visibility, but
-   * enforcement is gated by PERMISSION_SCOPE_ENABLED (inert until principals
-   * carry the scope claim, see env.ts). A scope declared while enforcement is
-   * off silently grants the role UNSCOPED access, so boot names every such
-   * declaration. Advisory (warning), never fatal: deployed apps already
-   * declare scopes and must keep booting.
-   */
-  auditUnenforcedScopes(scopeEnforcementEnabled: boolean): Array<{
-    entity: string;
-    role: string;
-    field: string;
-    user_field: string;
-  }> {
-    if (scopeEnforcementEnabled) return [];
-    const out: Array<{ entity: string; role: string; field: string; user_field: string }> = [];
-    for (const entity of this.entities.values()) {
-      for (const perm of entity.permissions ?? []) {
-        if (perm.scope) {
-          out.push({
-            entity: entity.name,
-            role: perm.role,
-            field: perm.scope.field,
-            user_field: perm.scope.user_field,
-          });
-        }
-      }
-    }
-    return out;
-  }
-
   // ─── Attach Storage-Path Audit ─────────────────────────
 
   /**

@@ -30,7 +30,7 @@ vi.mock("../src/core/config/env.js", () => {
     REALTIME_ENABLED: false, WS_PATH: "/ws", WS_PING_INTERVAL_MS: 25000,
     IMPORT_MAX_ROWS: 100, EXPORT_MAX_ROWS: 100,
     APP_DIRS: [] as string[], SITE_ID: "site-a", ENTITIES_DIR: "./src/entities", MODULES_DIR: "./src/modules", TRANSLATIONS_DIR: process.env.TRANSLATIONS_DIR,
-    AUTO_MIGRATE: true, TRACK_CHANGES_DEFAULT: false, PERMISSION_SCOPE_ENABLED: false,
+    AUTO_MIGRATE: true, TRACK_CHANGES_DEFAULT: false,
     SEED_APP_DATA_ON_BOOT: false, SEED_DEMO_DATA_ON_BOOT: false,
   } };
 });

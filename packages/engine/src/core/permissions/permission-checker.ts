@@ -4,7 +4,6 @@ import type { EntityRegistry } from "../entity/entity-registry.js";
 import { docFieldsOf, evaluateExpression } from "../expression/expression-evaluator.js";
 import { scopeValueMatches } from "./scope-filter.js";
 import type { UserContext, PermissionCheckResult } from "./types.js";
-import { env } from "../config/env.js";
 import { createLogger } from "../logging/logger.js";
 
 const log = createLogger("permission-checker");
@@ -147,9 +146,8 @@ export class PermissionChecker {
         if (!conditionMet) continue;
       }
 
-      // Check scope (single-doc) — gated by PERMISSION_SCOPE_ENABLED so it stays
-      // inert until the principal carries the scope claim (mirrors applyScopeFilters).
-      if (perm.scope && doc && env.PERMISSION_SCOPE_ENABLED) {
+      // Check scope (single-doc), as applyScopeFilters does for a list.
+      if (perm.scope && doc) {
         const docValue = doc[perm.scope.field];
         const userValue = (user as Record<string, unknown>)[perm.scope.user_field];
         if (!scopeValueMatches(docValue, userValue)) continue;
@@ -185,7 +183,7 @@ export class PermissionChecker {
       );
       if (!met) return false;
     }
-    if (perm.scope && env.PERMISSION_SCOPE_ENABLED) {
+    if (perm.scope) {
       if (
         !scopeValueMatches(
           doc[perm.scope.field],
@@ -217,7 +215,7 @@ export class PermissionChecker {
 
   /**
    * Does any read grant the user holds on this entity, at any level, depend on the
-   * stored row: an owner, a condition or an enforced scope? Which fields of a row
+   * stored row: an owner, a condition or a scope? Which fields of a row
    * the user may read is then decided on the whole stored row, since a projection
    * may lack the fields such a grant reads; a list or a search projects afterwards.
    */
@@ -228,7 +226,7 @@ export class PermissionChecker {
       (p) =>
         !!p.read &&
         user.roles.includes(p.role) &&
-        (!!p.if_owner || !!p.condition || (!!p.scope && env.PERMISSION_SCOPE_ENABLED)),
+        (!!p.if_owner || !!p.condition || !!p.scope),
     );
   }
 
@@ -282,7 +280,7 @@ export class PermissionChecker {
     return this.getReadableFieldsWhere(
       user,
       entityName,
-      (perm) => !perm.if_owner && !perm.condition && !(perm.scope && env.PERMISSION_SCOPE_ENABLED),
+      (perm) => !perm.if_owner && !perm.condition && !perm.scope,
     );
   }
 
@@ -376,8 +374,7 @@ export class PermissionChecker {
     const levels = new Set<number>();
     for (const perm of entity.permissions) {
       if (!perm.read || !user.roles.includes(perm.role)) continue;
-      const holdsOnEveryRow =
-        !perm.if_owner && !perm.condition && !(perm.scope && env.PERMISSION_SCOPE_ENABLED);
+      const holdsOnEveryRow = !perm.if_owner && !perm.condition && !perm.scope;
       if (perm.level === 0 || holdsOnEveryRow) levels.add(perm.level);
     }
     const fields = new Set<string>();

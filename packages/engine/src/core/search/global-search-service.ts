@@ -5,7 +5,6 @@ import type { UserContext } from "../permissions/types.js";
 import { applyScopeFilters } from "../permissions/scope-filter.js";
 import { isFieldAllowed } from "../database/filter-builder.js";
 import { readStoredRow } from "../entity/field-types.js";
-import { env } from "../config/env.js";
 
 export interface SearchResult {
   entity: string;
@@ -62,12 +61,7 @@ export class GlobalSearchService {
         }));
 
         // Scope narrowing (if_owner / permission.scope) — same semantics as getList.
-        const mongoFilter = applyScopeFilters(
-          entity,
-          user,
-          { $or: orConditions },
-          env.PERMISSION_SCOPE_ENABLED,
-        );
+        const mongoFilter = applyScopeFilters(entity, user, { $or: orConditions });
 
         // A read condition cannot be a Mongo filter: rows it hides are dropped per
         // row, as getList does. ponytail: the page is then short by the rows

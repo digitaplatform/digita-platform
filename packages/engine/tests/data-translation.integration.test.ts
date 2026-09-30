@@ -31,7 +31,7 @@ vi.mock("../src/core/config/env.js", async () => {
     REALTIME_ENABLED: true, WS_PATH: "/ws", WS_PING_INTERVAL_MS: 25000,
     IMPORT_MAX_ROWS: 100, EXPORT_MAX_ROWS: 100,
     APP_DIRS: [], ENTITIES_DIR: "./src/entities", MODULES_DIR: "./src/modules", TRANSLATIONS_DIR: process.env.TRANSLATIONS_DIR,
-    AUTO_MIGRATE: true, TRACK_CHANGES_DEFAULT: false, PERMISSION_SCOPE_ENABLED: true,
+    AUTO_MIGRATE: true, TRACK_CHANGES_DEFAULT: false,
   } };
 });
 vi.mock("../src/core/logging/logger.js", () => ({

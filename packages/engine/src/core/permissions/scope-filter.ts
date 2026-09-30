@@ -44,12 +44,6 @@ export function applyScopeFilters(
   entity: EntityDefinition,
   user: UserContext,
   existingFilters: Record<string, unknown>,
-  /** Honor `permission.scope` (a generic field-equality narrowing — an app may
-   *  scope by any dimension, e.g. company / department / tenant). When false,
-   *  scope-only roles are treated as unrestricted — used to keep scope enforcement
-   *  inert until the principal carries the matching claim. `if_owner` is always
-   *  honored regardless. */
-  enforceScope = true,
 ): Record<string, unknown> {
   // Administrator sees everything.
   if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) {
@@ -73,7 +67,7 @@ export function applyScopeFilters(
     // (hasPermission / permMatchesDoc). Building only one via if/else-if let the
     // list path surface rows single-doc read forbids.
     const parts: Record<string, unknown>[] = [];
-    if (perm.scope && enforceScope) {
+    if (perm.scope) {
       const userValue = (user as Record<string, unknown>)[perm.scope.user_field];
       // scope configured but the user has no value → this role grants nothing
       // (mirrors single-doc, where an undefined userValue always denies).
@@ -84,7 +78,7 @@ export function applyScopeFilters(
       parts.push({ owner: user.email });
     }
     if (parts.length === 0) {
-      // neither scope(enabled) nor if_owner → unrestricted read via this role →
+      // neither scope nor if_owner → unrestricted read via this role →
       // the union is unrestricted, so apply no scope filter.
       return existingFilters;
     }

@@ -6,7 +6,6 @@ import type { PermissionChecker } from "../../permissions/permission-checker.js"
 import { PermissionDeniedError } from "../../permissions/permission-checker.js";
 import type { UserContext } from "../../permissions/types.js";
 import { applyScopeFilters } from "../../permissions/scope-filter.js";
-import { env } from "../../config/env.js";
 import { resolveTokens, type ResolverContext } from "../param-resolver.js";
 import { collectFieldReferences } from "./pipeline-field-walker.js";
 import { coerceMatchDates } from "../../database/filter-value-coercer.js";
@@ -75,10 +74,10 @@ export async function runAggregateSection(
     await deps.permissionChecker.check(user, fromEntity, "select");
     // H3: the security $match is built only for the ROOT section entity, so a
     // bare $lookup can't carry the joined entity's row-level scope. Refuse when
-    // the user's read on the joined entity is row-restricted (if_owner always,
-    // scope when enabled) — otherwise the join returns rows outside their scope.
+    // the user's read on the joined entity is row-restricted (if_owner or scope)
+    // — otherwise the join returns rows outside their scope.
     const fromDef = deps.registry.get(fromEntity);
-    if (Object.keys(applyScopeFilters(fromDef, user, {}, env.PERMISSION_SCOPE_ENABLED)).length > 0) {
+    if (Object.keys(applyScopeFilters(fromDef, user, {})).length > 0) {
       throw new PermissionDeniedError(user.email, fromEntity, "lookup_bypasses_row_scope");
     }
     if (deps.permissionChecker.hasConditionalRowRead(user, fromEntity)) {
@@ -148,9 +147,8 @@ export async function runAggregateSection(
     }
   }
 
-  // 2. Build security $match. Honor PERMISSION_SCOPE_ENABLED like every other
-  // call site — otherwise a scope-only reader is over-restricted to zero rows.
-  const scope = applyScopeFilters(entity, user, {}, env.PERMISSION_SCOPE_ENABLED);
+  // 2. Build security $match.
+  const scope = applyScopeFilters(entity, user, {});
   const securityMatch = Object.keys(scope).length > 0 ? [{ $match: scope } as Document] : [];
 
   // 3. Resolve tokens.

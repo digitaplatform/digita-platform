@@ -9,10 +9,9 @@ vi.mock("../src/core/logging/logger.js", () => ({
     error: vi.fn(),
   }),
 }));
-// document-service now imports env directly (permission-scope gate); stub it so
-// the import graph doesn't demand MONGODB_URI.
+// document-service imports env; stub it so the import graph doesn't demand MONGODB_URI.
 vi.mock("../src/core/config/env.js", () => ({
-  env: { PERMISSION_SCOPE_ENABLED: false },
+  env: {},
 }));
 
 import { globalErrorHandler } from "../src/core/api/middleware/error-handler.js";

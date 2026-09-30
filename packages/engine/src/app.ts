@@ -682,18 +682,6 @@ export async function createApp(
       log.info("Snapshot coverage audit: all submittable Links carry an explicit freeze directive");
     }
 
-    // 5b2. Scope-enforcement audit — permission.scope declarations are inert
-    //      while PERMISSION_SCOPE_ENABLED is off: the affected role sees ALL
-    //      rows. Name every declaration so the gap is a visible decision
-    //      (end-to-end enforcement is the wired-integrity round's headline).
-    const unenforcedScopes = registry.auditUnenforcedScopes(env.PERMISSION_SCOPE_ENABLED);
-    if (unenforcedScopes.length > 0) {
-      log.warn(
-        { count: unenforcedScopes.length, scopes: unenforcedScopes.slice(0, 50) },
-        `Scope audit: ${unenforcedScopes.length} permission.scope declaration(s) are NOT enforced (PERMISSION_SCOPE_ENABLED=false) — affected roles see unscoped data`,
-      );
-    }
-
     // 5c. Attach storage-path lint — uploads are entity-scoped by design
     //     (key = `<storage_path>/<uuid><ext>`; NO default folder, NO
     //     bucket-root fallback). Unlike the freeze audit above, this one is

@@ -1,13 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-
-// PermissionChecker now imports env (permission-scope gate). Stub it so the
-// module graph doesn't demand MONGODB_URI; the object is mutable so the scope
-// tests can toggle PERMISSION_SCOPE_ENABLED at runtime.
-vi.mock("../src/core/config/env.js", () => ({
-  env: { PERMISSION_SCOPE_ENABLED: false },
-}));
-
-import { env } from "../src/core/config/env.js";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // Mock the logger so env.ts is never evaluated during tests (it requires MONGODB_URI)
 vi.mock("../src/core/logging/logger.js", () => ({
@@ -333,10 +324,7 @@ describe("PermissionChecker", () => {
   // ── scope ─────────────────────────────────────────────────────────────────
 
   describe("scope", () => {
-    // Scope enforcement is gated by PERMISSION_SCOPE_ENABLED (off by default so it
-    // stays inert until the principal carries the scope claim); enable it here.
     beforeEach(() => {
-      (env as { PERMISSION_SCOPE_ENABLED: boolean }).PERMISSION_SCOPE_ENABLED = true;
       registry.register(makeEntity({
         permissions: [{
           role: "System User",
@@ -345,9 +333,6 @@ describe("PermissionChecker", () => {
           scope: { field: "department", user_field: "department" },
         }],
       }));
-    });
-    afterEach(() => {
-      (env as { PERMISSION_SCOPE_ENABLED: boolean }).PERMISSION_SCOPE_ENABLED = false;
     });
 
     it("allows when doc scope field matches user scope field", async () => {

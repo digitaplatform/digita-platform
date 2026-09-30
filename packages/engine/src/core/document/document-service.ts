@@ -512,12 +512,7 @@ export class DocumentService {
     const scopedFilter = applyRoleVisibilityFilter(
       entity,
       user,
-      applyScopeFilters(
-        entity,
-        user,
-        baseFilter as Record<string, unknown>,
-        env.PERMISSION_SCOPE_ENABLED,
-      ),
+      applyScopeFilters(entity, user, baseFilter as Record<string, unknown>),
     );
 
     // A sort orders rows by a value, so it names only fields the user may filter
@@ -641,7 +636,7 @@ export class DocumentService {
     const scopedFilter = applyRoleVisibilityFilter(
       entity,
       user,
-      applyScopeFilters(entity, user, { _id: name }, env.PERMISSION_SCOPE_ENABLED),
+      applyScopeFilters(entity, user, { _id: name }),
     );
     const hits = await this.db.count(entity.name, [scopedFilter], entity.database);
     if (hits === 0) return false;
@@ -679,14 +674,12 @@ export class DocumentService {
       for (const key of Object.keys(f ?? {})) assertFieldAllowed(key, allowed);
       Object.assign(merged, f);
     }
-    // Gate scope on PERMISSION_SCOPE_ENABLED exactly like getList/exists — otherwise
-    // count() over-enforces: a scope-only reader lacking the scope claim would get
-    // count=0 while getList shows every row (fail-closed inconsistency). Role
-    // visibility narrows as in getList, or a count reveals a role-restricted row.
+    // Scope and role visibility narrow as in getList, or a count reveals a row the
+    // list hides.
     const scopedFilter = applyRoleVisibilityFilter(
       entity,
       user,
-      applyScopeFilters(entity, user, merged, env.PERMISSION_SCOPE_ENABLED),
+      applyScopeFilters(entity, user, merged),
     );
     // C1: a `condition` read grant cannot be a Mongo filter, so count only the
     // condition-visible rows, as getList's total does.

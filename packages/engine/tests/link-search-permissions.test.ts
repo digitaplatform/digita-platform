@@ -6,7 +6,6 @@ vi.mock("../src/core/config/env.js", () => ({
     MONGODB_MIN_POOL: 1, MONGODB_MAX_POOL: 5, MONGODB_TIMEOUT_MS: 30000, MONGODB_RETRY_WRITES: true,
     MONGODB_IDENTITY_DB: "u", MONGODB_LOGS_DB: "l", MONGODB_AUDITS_DB: "test_audits", MONGODB_CORE_DB: "a",
     MONGODB_APP_DB_PREFIX: "test",
-    PERMISSION_SCOPE_ENABLED: false,
   },
 }));
 vi.mock("../src/core/logging/logger.js", () => ({

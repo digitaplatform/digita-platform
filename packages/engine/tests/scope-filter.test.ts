@@ -84,21 +84,6 @@ describe("applyScopeFilters (D10c — union/OR semantics)", () => {
     const e = entityWith([P("Other", { read: 0 })]);
     expect(applyScopeFilters(e, user(["Other"]), { a: 1 })).toEqual({ a: 1 });
   });
-
-  // Multi-company gate: with enforceScope=false a scope-only role is treated as
-  // unrestricted (the feature stays inert until its env gate + auth claim land).
-  it("enforceScope=false → scope ignored (unrestricted), if_owner still honored", () => {
-    const scoped = entityWith([P("Sales", { scope: { field: "company", user_field: "company" } })]);
-    expect(applyScopeFilters(scoped, user(["Sales"], { company: "ACME" }), {}, false)).toEqual({});
-
-    const owned = entityWith([P("Self", { if_owner: true })]);
-    expect(applyScopeFilters(owned, user(["Self"]), {}, false)).toEqual({ owner: "u1@test.local" });
-  });
-
-  it("enforceScope=true (default) → company scope applied", () => {
-    const e = entityWith([P("Sales", { scope: { field: "company", user_field: "company" } })]);
-    expect(applyScopeFilters(e, user(["Sales"], { company: "ACME" }), {})).toEqual({ company: "ACME" });
-  });
 });
 
 describe("applyRoleVisibilityFilter / isRoleVisible", () => {
