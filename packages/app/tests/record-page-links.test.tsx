@@ -138,14 +138,27 @@ describe('RecordPage links', () => {
 
   it('shows no count for a link without show_count', async () => {
     state.links = [INVOICES, PAYMENTS];
+    // The route answers one entry per declared link, in declaration order.
     answerRelated([
-      { label: 'Payments', entity: 'Payment', count: 0 },
       { label: 'Invoices', entity: 'Invoice', count: 1 },
+      { label: 'Payments', entity: 'Payment', count: 0 },
     ]);
     renderSale();
 
     await screen.findByRole('link', { name: 'Invoices 1' });
     expect(screen.getByRole('link', { name: 'Payments' })).toBeInTheDocument();
+  });
+
+  it('gives two links of the same entity and label their own counts, by declaration order', async () => {
+    state.links = [INVOICES, { ...INVOICES, link_field: 'return_of' }];
+    answerRelated([
+      { label: 'Invoices', entity: 'Invoice', count: 3 },
+      { label: 'Invoices', entity: 'Invoice', count: 1 },
+    ]);
+    renderSale();
+
+    expect(await screen.findByRole('link', { name: 'Invoices 3' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Invoices 1' })).toBeInTheDocument();
   });
 
   it('shows no entry for a linked entity the caller may not read', async () => {

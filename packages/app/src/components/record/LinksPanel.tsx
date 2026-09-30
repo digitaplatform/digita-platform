@@ -22,6 +22,8 @@ export function LinksPanel({ entity, name, links }: { entity: string; name: stri
   const related = useQuery({
     queryKey: qk.relatedDocs(entity, name),
     queryFn: async () => unwrap(await getRelatedDocs(entity, name)),
+    // Only a link that shows a count needs the route.
+    enabled: links.some((link) => link.show_count),
   });
 
   // The meta catalog lists only the entities the caller may select, so a link to any other
@@ -33,9 +35,9 @@ export function LinksPanel({ entity, name, links }: { entity: string; name: stri
   return (
     <div className="flex flex-wrap gap-2" {...tid.component('record-links', entity)}>
       {readable.map((link, i) => {
-        // The route answers each link in the order its count finishes and without its
-        // `link_field`, so an answer is matched to its link by entity and label.
-        const count = related.data?.find((r) => r.entity === link.entity && r.label === link.label)?.count;
+        // The route answers one entry per declared link, in declaration order.
+        const answer = related.data?.[links.indexOf(link)];
+        const count = answer?.entity === link.entity ? answer.count : undefined;
         const filter = JSON.stringify(objectFilterToTuples({ [link.link_field]: name, ...link.filters }));
         return (
           <Link

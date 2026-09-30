@@ -23,10 +23,10 @@ export class RelatedDocService {
   ): Promise<RelatedDocResult[]> {
     if (!entity.links?.length) return [];
 
-    const results: RelatedDocResult[] = [];
-
-    await Promise.all(
-      entity.links.map(async (link) => {
+    // One answer per link, in the order the links are declared: a caller matches answers to its
+    // links by position, since two links may share an entity and a label.
+    return Promise.all(
+      entity.links.map(async (link): Promise<RelatedDocResult> => {
         // Authorize the COUNTED entity, not just the parent (H1 gated the parent
         // read only). Skip the count unless the caller may `select` the linked
         // entity, and count what `count` answers the caller: the rows a list of
@@ -44,15 +44,13 @@ export class RelatedDocService {
           );
         }
 
-        results.push({
+        return {
           label: link.label,
           entity: link.entity,
           count,
           icon: link.icon,
-        });
+        };
       }),
     );
-
-    return results;
   }
 }

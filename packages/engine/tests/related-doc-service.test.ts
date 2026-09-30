@@ -90,3 +90,28 @@ describe("RelatedDocService.getRelatedDocs — authorizes the counted entity", (
     expect(documentService.count).not.toHaveBeenCalled();
   });
 });
+
+describe("RelatedDocService.getRelatedDocs — answers in the order the links are declared", () => {
+  it("keeps the declaration order when a later link's count finishes first", async () => {
+    const twoLinks = {
+      ...parentEntity,
+      links: [
+        { entity: "SalesInvoice", link_field: "lines.product", label: "Invoices", show_count: true },
+        { entity: "SalesInvoice", link_field: "return_of", label: "Invoices", show_count: true },
+      ],
+    } as unknown as EntityDefinition;
+    // The first link's count is slow, so completion order is the reverse of declaration order.
+    const documentService = {
+      count: vi.fn(async (_entity: string, filters: Array<Record<string, unknown>>) => {
+        if ("lines.product" in filters[0]!) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return 3;
+        }
+        return 1;
+      }),
+    };
+    const svc = new RelatedDocService(documentService as never, new PermissionChecker(registry));
+    const out = await svc.getRelatedDocs(twoLinks, "PROD-1", adminUser);
+    expect(out.map((r) => r.count)).toEqual([3, 1]);
+  });
+});
