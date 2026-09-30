@@ -101,6 +101,10 @@ const ENTER_EXIT_TYPES = new Set([
  *  picker takes Enter, and a pick commits the cell itself, but Tab still moves on. */
 const TAB_EXIT_TYPES = new Set([...ENTER_EXIT_TYPES, 'Date']);
 
+/** Field types whose editor does not fit a grid row, as the signature pad does not:
+ *  their cells are display-only, and the row dialog edits them. */
+const ROW_DIALOG_ONLY_TYPES = new Set(['Signature']);
+
 /** Stable row id for the grid: the row's `_row_id`, or a per-row fallback. */
 const fallbackRowIds = new WeakMap<object, string>();
 function stableRowId(row: Row): string {
@@ -184,7 +188,7 @@ export default function TableControl(props: FieldControlProps) {
       tooltip: c.description,
       width: parseGridWidth(c.width),
       stepper: c.stepper,
-      editable: c.display_formula ? false : undefined,
+      editable: c.display_formula || ROW_DIALOG_ONLY_TYPES.has(c.fieldtype) ? false : undefined,
       required: !!(c.required || c.mandatory_depends_on),
     };
   });
@@ -194,6 +198,17 @@ export default function TableControl(props: FieldControlProps) {
   const formulaRow = (cf: FieldDefinition, row: Row): Row => {
     const r = evalFormula(cf.display_formula!, { doc: row, row });
     return { ...row, [cf.fieldname]: r.error ? undefined : r.value };
+  };
+
+  // A signature's PNG data URL would fill its cell as text, so it shows as a small image.
+  const renderCellValue = (cf: FieldDefinition, row: Row): ReactNode => {
+    const signature = row[cf.fieldname];
+    if (cf.fieldtype === 'Signature' && typeof signature === 'string' && signature !== '') {
+      return (
+        <img src={signature} alt={tc('ui.signature.alt')} className="h-7 w-auto rounded border border-border bg-paper" />
+      );
+    }
+    return <CellValue field={cf} row={row} entity={entity} />;
   };
 
   // Cosmetic conditional styling: first matching rule's class for the cell.
@@ -242,7 +257,7 @@ export default function TableControl(props: FieldControlProps) {
     const renderReadOnlyCell = ({ row, column }: DataGridDisplayArgs<Row>): ReactNode => {
       const cf = fieldByName.get(column.key);
       if (!cf) return null;
-      return <CellValue field={cf} row={cf.display_formula ? formulaRow(cf, row) : row} entity={entity} />;
+      return renderCellValue(cf, cf.display_formula ? formulaRow(cf, row) : row);
     };
 
     return (
@@ -266,7 +281,7 @@ export default function TableControl(props: FieldControlProps) {
                   <div key={c.fieldname} className="truncate">
                     <dt className="text-textMuted">{tField(entity, c.fieldname, c.label)}</dt>
                     <dd className="text-textMain">
-                      <CellValue field={c} row={row} entity={entity} />
+                      {renderCellValue(c, row)}
                     </dd>
                   </div>
                 ))}
@@ -361,6 +376,21 @@ export default function TableControl(props: FieldControlProps) {
   const editingRow = editRowId != null ? rows.find((r) => stableRowId(r) === editRowId) : undefined;
   const saveDetail = (updated: Row) =>
     onChange(rows.map((r) => (stableRowId(r) === editRowId ? updated : r)));
+  // An inline grid offers the row dialog too when it is the only place a field is edited.
+  const rowsNeedDialog = detailFieldDefs.some((c) => ROW_DIALOG_ONLY_TYPES.has(c.fieldtype));
+  const rowDialog = editingRow && (
+    <RowDetailDialog
+      open={editRowId !== null}
+      onClose={() => setEditRowId(null)}
+      title={tField(entity, field.fieldname, field.label)}
+      fields={detailFieldDefs}
+      stateMap={rowState(editingRow)}
+      row={editingRow}
+      entity={entity}
+      parentDoc={doc}
+      onSave={saveDetail}
+    />
+  );
   const openAdd = () => {
     setAddOpen(true);
   };
@@ -480,7 +510,7 @@ export default function TableControl(props: FieldControlProps) {
     const pasteCols: PasteColumn[] = cols.map((c) => ({
       key: c.fieldname,
       kind: cellKindFor(c.fieldtype),
-      editable: !c.read_only && !c.display_formula,
+      editable: !c.read_only && !c.display_formula && !ROW_DIALOG_ONLY_TYPES.has(c.fieldtype),
     }));
     const max = field.cannot_add_rows ? rows.length : (field.max_rows ?? 0);
     // H15: paste must skip per-row-locked cells too (column `editable` alone
@@ -496,7 +526,7 @@ export default function TableControl(props: FieldControlProps) {
     if (rowState(row)[column.key]?.visible === false) return null;
     const cf = fieldByName.get(column.key);
     if (!cf) return null;
-    return <CellValue field={cf} row={cf.display_formula ? formulaRow(cf, row) : row} entity={entity} />;
+    return renderCellValue(cf, cf.display_formula ? formulaRow(cf, row) : row);
   };
   const renderEditor = ({
     row,
@@ -579,6 +609,7 @@ export default function TableControl(props: FieldControlProps) {
           footer={footer}
           onCellChange={applyPatch}
           onRemoveRow={removeRowById}
+          onEditRow={rowsNeedDialog ? setEditRowId : undefined}
           apiRef={apiRef}
           onCellCommit={onCellCommit}
           entrySlot={
@@ -592,8 +623,10 @@ export default function TableControl(props: FieldControlProps) {
             ) : undefined
           }
           removeRowLabel={tc('ui.table.removeRow')}
+          editRowLabel={tc('ui.table.editRow')}
           aria-label={tField(entity, field.fieldname, field.label)}
         />
+        {rowDialog}
         {field.entry_context_view && field.entry_context_params && contextRowId && (
           <EntryContextBar
             view={field.entry_context_view}
@@ -639,19 +672,7 @@ export default function TableControl(props: FieldControlProps) {
           editRowLabel={tc('ui.table.editRow')}
           aria-label={tField(entity, field.fieldname, field.label)}
         />
-        {editingRow && (
-          <RowDetailDialog
-            open={editRowId !== null}
-            onClose={() => setEditRowId(null)}
-            title={tField(entity, field.fieldname, field.label)}
-            fields={detailFieldDefs}
-            stateMap={rowState(editingRow)}
-            row={editingRow}
-            entity={entity}
-            parentDoc={doc}
-            onSave={saveDetail}
-          />
-        )}
+        {rowDialog}
         {addViaLink && addField && (
           <AddViaLinkSearch
             open={addOpen}
@@ -665,29 +686,34 @@ export default function TableControl(props: FieldControlProps) {
   }
 
   return (
-    <DataGrid<Row>
-      rows={rows}
-      columns={gridColumns}
-      getRowId={stableRowId}
-      editable
-      canAddRow={!field.cannot_add_rows}
-      canRemoveRow={!field.cannot_delete_rows}
-      autoAppendRow={!field.cannot_add_rows}
-      maxRows={field.max_rows ?? 0}
-      renderDisplay={renderEditableCell}
-      renderEditor={renderEditor}
-      canEditCell={canEditCell}
-      cellClassName={cellClassName}
-      footer={footer}
-      onPasteCells={onPasteCells}
-      onCellChange={applyPatch}
-      onAddRow={addRow}
-      onRemoveRow={removeRowById}
-      onDuplicateRow={duplicateRow}
-      addRowLabel={tc('ui.table.addRow')}
-      removeRowLabel={tc('ui.table.removeRow')}
-      duplicateRowLabel={tc('ui.table.duplicateRow')}
-      aria-label={tField(entity, field.fieldname, field.label)}
-    />
+    <>
+      <DataGrid<Row>
+        rows={rows}
+        columns={gridColumns}
+        getRowId={stableRowId}
+        editable
+        canAddRow={!field.cannot_add_rows}
+        canRemoveRow={!field.cannot_delete_rows}
+        autoAppendRow={!field.cannot_add_rows}
+        maxRows={field.max_rows ?? 0}
+        renderDisplay={renderEditableCell}
+        renderEditor={renderEditor}
+        canEditCell={canEditCell}
+        cellClassName={cellClassName}
+        footer={footer}
+        onPasteCells={onPasteCells}
+        onCellChange={applyPatch}
+        onAddRow={addRow}
+        onRemoveRow={removeRowById}
+        onDuplicateRow={duplicateRow}
+        onEditRow={rowsNeedDialog ? setEditRowId : undefined}
+        addRowLabel={tc('ui.table.addRow')}
+        removeRowLabel={tc('ui.table.removeRow')}
+        duplicateRowLabel={tc('ui.table.duplicateRow')}
+        editRowLabel={tc('ui.table.editRow')}
+        aria-label={tField(entity, field.fieldname, field.label)}
+      />
+      {rowDialog}
+    </>
   );
 }
