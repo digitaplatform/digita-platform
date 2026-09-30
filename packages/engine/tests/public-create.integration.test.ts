@@ -194,6 +194,9 @@ describe("POST /api/v1/public/resource/:doctype", () => {
     for (const [i, [key, value]] of refusals.entries()) {
       const res = await post("Lead", { ...valid, [key]: value }, `198.51.100.${i + 1}`);
       expect(res.statusCode, key).toBe(400);
+      // The website's record route reads this code to answer a refused field as the form's 403,
+      // apart from a value the visitor got wrong (VALIDATION_ERROR, below).
+      expect((res.json().error as { code: string }).code, key).toBe("BAD_REQUEST");
       expect((res.json().error as { detail: string }).detail, key).toContain(`"${key}"`);
     }
     expect(await leads()).toBe(before);
@@ -201,7 +204,9 @@ describe("POST /api/v1/public/resource/:doctype", () => {
 
   it("refuses a body that is no object, and one that misses a required field", async () => {
     expect((await post("Lead", [valid], "203.0.113.3")).statusCode).toBe(400);
-    expect((await post("Lead", { email: "visitor@example.com" }, "203.0.113.3")).statusCode).toBe(400);
+    const missing = await post("Lead", { email: "visitor@example.com" }, "203.0.113.3");
+    expect(missing.statusCode).toBe(400);
+    expect((missing.json().error as { code: string }).code).toBe("VALIDATION_ERROR");
     const nullBody = await app.inject({
       method: "POST", url: `${PUB}/Lead`, payload: "null",
       headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.9" },
