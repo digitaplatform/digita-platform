@@ -7,7 +7,7 @@ import { computeLayout, parseLayout } from '@/components/render/layout';
 
 /**
  * Fleet census — runs the auto-layout engine over the REAL entity fleet (engine
- * platform entities + the digita-catalog/erp app) and proves its invariants hold on
+ * platform entities + every app digita-catalog/apps.yaml lists) and proves its invariants hold on
  * every one, so a metadata change that would drop/reorder a field or wrongly
  * re-layout an authored form fails here. `computeLayout` is pure, so this needs no
  * DOM: it walks the JSON files and checks the derived tree.
@@ -15,7 +15,16 @@ import { computeLayout, parseLayout } from '@/components/render/layout';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ENGINE_DIR = join(HERE, '../../engine/src/entities');
-const ERP_DIR = join(HERE, '../../../../digita-catalog/erp');
+const CATALOG_DIR = join(HERE, '../../../../digita-catalog');
+
+/** The apps digita-catalog runs, as its apps.yaml lists them: each is censused, so a new app is
+ *  covered without a change here. */
+function catalogApps(): string[] {
+  const manifest = join(CATALOG_DIR, 'apps.yaml');
+  if (!existsSync(manifest)) return [];
+  const apps = readFileSync(manifest, 'utf8').split(/^apps:\s*$/m)[1] ?? '';
+  return [...apps.matchAll(/^ {2}- name: (\S+)\s*$/gm)].map((m) => m[1]!).filter((app) => existsSync(join(CATALOG_DIR, app)));
+}
 
 /** Only the layout BOUNDARY types are consumed by the layout tree; Heading/HTML
  *  render as normal cells and must survive into the output. */
@@ -102,10 +111,12 @@ function fleetChecks(label: string, dir: string) {
 
 describe('fleet census — engine entities', () => fleetChecks('engine', ENGINE_DIR));
 
-describe.skipIf(!existsSync(ERP_DIR))('fleet census — digita-catalog/erp', () => fleetChecks('erp', ERP_DIR));
+for (const app of catalogApps()) {
+  describe(`fleet census — digita-catalog/${app}`, () => fleetChecks(app, join(CATALOG_DIR, app)));
+}
 
-if (!existsSync(ERP_DIR)) {
+if (catalogApps().length === 0) {
   // packages/app tests are not in the root CI gate; locally the sibling checkout is
   // always present, so keep the skip loud rather than silently green.
-  console.warn('[fleet-layout] digita-catalog sibling checkout missing — ERP census SKIPPED');
+  console.warn('[fleet-layout] digita-catalog sibling checkout missing — catalog app census SKIPPED');
 }
