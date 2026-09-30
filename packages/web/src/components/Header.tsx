@@ -3,7 +3,7 @@ import { icons, type LucideIcon } from "lucide-react";
 import { BrandMark, TopBar, buttonAttributes, cn, topBarButtonClass, type BrandMarkProps } from "@digitaplatform/components";
 import type { Locale } from "@/i18n/config";
 import type { NavItem, WebNavMenu, WebSite } from "@/lib/types";
-import { isExternalHref, localePath, navHref, sortNav } from "@/lib/nav";
+import { isContactItem, isExternalHref, localePath, navHref, sortNav } from "@/lib/nav";
 import { t } from "@/i18n/messages";
 import { SheetButton } from "@/blocks/marketing/SheetButton";
 import { NavLinks } from "./NavLinks";
@@ -12,11 +12,8 @@ import { FamilySwitcher } from "./FamilySwitcher";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 import { ThemeToggle } from "./ThemeToggle";
 
-/** The header menu item that is the site's call to action: it opens the contact sheet. */
-const CONTACT_HREF = "#contact";
-
-/** The call to action of the header: the contact sheet where the site offers it, else a mail to
- *  the site's address, else nothing. */
+/** The call to action of the header, the header menu's item for the contact sheet: the contact
+ *  sheet where the site offers it, else a mail to the site's address, else nothing. */
 function ContactButton({ item, contactEnabled, contactEmail }: { item: NavItem; contactEnabled: boolean; contactEmail?: string }) {
   const attributes = buttonAttributes({ size: "sm", className: "shrink-0" });
   if (contactEnabled) return <SheetButton {...attributes}>{item.label}</SheetButton>;
@@ -92,7 +89,7 @@ export function Header({
   enabledLocales: string[];
 }) {
   const all = sortNav(nav?.items);
-  const contact = all.find((item) => item.href === CONTACT_HREF);
+  const contact = all.find(isContactItem);
   const items = all.filter((item) => item !== contact);
   const iconLinks = items.flatMap((item) => {
     const icon = iconOf(item);
