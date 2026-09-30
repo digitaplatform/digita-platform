@@ -59,7 +59,7 @@ function setOwn(target: Record<string, unknown>, key: string, value: unknown): v
 
 // The driver hands a sub-document back as a plain object; a Date, an ObjectId or any other
 // BSON value is an instance of its own class, and a projection treats it as a leaf.
-function isSubDocument(value: unknown): value is Record<string, unknown> {
+export function isSubDocument(value: unknown): value is Record<string, unknown> {
   if (typeof value !== "object" || value === null) return false;
   const prototype = Object.getPrototypeOf(value) as unknown;
   return prototype === Object.prototype || prototype === null;

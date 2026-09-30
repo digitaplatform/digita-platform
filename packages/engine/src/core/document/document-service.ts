@@ -29,6 +29,7 @@ import { assertAttachFilesReadable, mayReadFile } from "../storage/file-access.j
 import {
   buildMongoFilter,
   assertFieldAllowed,
+  assertObjectFilterAllowed,
   isFieldAllowed,
   assertListFields,
   buildSort,
@@ -443,6 +444,8 @@ export class DocumentService {
     // link title or a status color resolved from a masked field would show it.
     // When no role may read the row, the share admitted it and shows level 0.
     const sharedForRead = !(await this.permissionChecker.hasPermission(user, doctype, "read", doc._data)).allowed;
+    const readable = this.permissionChecker.getReadableFields(user, doctype, doc._data, sharedForRead);
+    doc._hidesOperatorFields = readable !== null && !readable.has("owner");
     doc._data = this.permissionChecker.filterFieldsForRead(user, doctype, doc._data, sharedForRead);
 
     // Apply per-document data translations for the request locale (translatable
@@ -654,10 +657,15 @@ export class DocumentService {
     return true;
   }
 
+  /**
+   * How many rows of `doctype` a list of `user` answers for `filters`. `scope` is a filter the
+   * engine adds, not the caller, so it may name a field the user cannot filter on.
+   */
   async count(
     doctype: string,
     filters?: Record<string, unknown>[],
     user: UserContext = GUEST_USER,
+    options: { scope?: Record<string, unknown> } = {},
   ): Promise<number> {
     const entity = this.registry.get(doctype);
     // P-SEC: count is a sibling of getList and must enforce the SAME gates — an
@@ -673,7 +681,7 @@ export class DocumentService {
     // their own visible rows, not the global total.
     const merged: Record<string, unknown> = {};
     for (const f of filters ?? []) {
-      for (const key of Object.keys(f ?? {})) assertFieldAllowed(key, allowed);
+      assertObjectFilterAllowed(f ?? {}, allowed);
       Object.assign(merged, f);
     }
     // Scope and role visibility narrow as in getList, or a count reveals a row the
@@ -683,12 +691,13 @@ export class DocumentService {
       user,
       applyScopeFilters(entity, user, merged),
     );
+    const filterArray = [scopedFilter, options.scope ?? {}].filter((filter) => Object.keys(filter).length > 0);
     // C1: a `condition` read grant cannot be a Mongo filter, so count only the
     // condition-visible rows, as getList's total does.
     if (this.permissionChecker.hasConditionalRowRead(user, doctype)) {
-      return (await this.listReadableRows(user, doctype, entity, [scopedFilter])).length;
+      return (await this.listReadableRows(user, doctype, entity, filterArray)).length;
     }
-    return this.db.count(entity.name, [scopedFilter], entity.database);
+    return this.db.count(entity.name, filterArray, entity.database);
   }
 
   /**

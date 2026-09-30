@@ -5,7 +5,7 @@ import { readStoredRow } from "../entity/field-types.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
 import { applyScopeFilters } from "../permissions/scope-filter.js";
-import { assertFieldAllowed, isFieldAllowed } from "../database/filter-builder.js";
+import { assertObjectFilterAllowed, isFieldAllowed } from "../database/filter-builder.js";
 
 export interface LinkSearchResult {
   _id: string;
@@ -128,7 +128,8 @@ export class LinkSearchService {
   /**
    * What a search of `user` on `entityName` may name and must re-check, as getList
    * does: `filters` keys only from the fields the user may filter on (else
-   * FilterFieldNotAllowedError), rows a read condition hides dropped per stored row,
+   * FilterFieldNotAllowedError) and values that are not a list (else
+   * MalformedFilterValueError), rows a read condition hides dropped per stored row,
    * and fields masked on the stored row whenever a grant's owner, condition or scope
    * decides them.
    */
@@ -138,7 +139,7 @@ export class LinkSearchService {
     filters: Record<string, unknown> | undefined,
   ): { allowed: Set<string>; gatesRows: boolean; masksStoredRows: boolean } {
     const allowed = this.permissionChecker.getFilterAllowlist(user, entityName);
-    for (const key of Object.keys(filters ?? {})) assertFieldAllowed(key, allowed);
+    assertObjectFilterAllowed(filters ?? {}, allowed);
     const gatesRows = this.permissionChecker.hasConditionalRowRead(user, entityName);
     const masksStoredRows = gatesRows || this.permissionChecker.hasRowDependentRead(user, entityName);
     return { allowed, gatesRows, masksStoredRows };

@@ -51,6 +51,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
 }));
 
 import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { ObjectId } from "mongodb";
 import type { FastifyInstance } from "fastify";
 import { mkdir, mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
@@ -70,15 +71,26 @@ const PUBLISHED = "eval:doc.status=='published'";
 const PRODUCT_FIELDS = ["title", "slug", "description", "images", "brand", "category"];
 let fixtureRoot: string;
 
+// A signed-in portal role reads a product's title only, and a brand whole.
+const PORTAL: Record<string, Record<string, unknown>> = {
+  Product: { role: "Portal", level: 0, select: 1, read: 1, fields: ["title"] },
+  Brand: { role: "Portal", level: 0, select: 1, read: 1 },
+};
 const entity = (name: string, fields: unknown[], guest: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
   JSON.stringify({
     name, module: "shop", database: DB, naming: { strategy: "user_set" }, title_field: "name", fields,
-    permissions: [ADMIN, { role: "Guest", level: 0, select: 1, read: 1, ...guest }], ...extra,
+    permissions: [ADMIN, { role: "Guest", level: 0, select: 1, read: 1, ...guest }, ...(PORTAL[name] ? [PORTAL[name]] : [])],
+    ...extra,
   });
+// Guest may send an inquiry but read none; an event is named by the system, so its id is an ObjectId.
+const INQUIRY = "65b000000000000000000001";
+const EVENTS = { own: "65a000000000000000000001", other: "65a000000000000000000002" };
 
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
 let db: MongoDBService;
+let portalToken: string;
+let adminToken: string;
 
 beforeAll(async () => {
   replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
@@ -110,7 +122,9 @@ beforeAll(async () => {
     { fieldname: "name", fieldtype: "Data", label: "Name" },
     { fieldname: "slug", fieldtype: "Data", label: "Slug" },
   ];
-  await writeFile(join(entities, "brand.entity.json"), entity("Brand", named, { fields: ["slug"] }), "utf-8");
+  await writeFile(join(entities, "brand.entity.json"), entity("Brand", named, { fields: ["slug"] }, {
+    links: [{ entity: "Product", link_field: "brand", label: "Products", show_count: true }],
+  }), "utf-8");
   await writeFile(join(entities, "category.entity.json"), entity("Category", named, { fields: ["name", "slug"] }), "utf-8");
   // A website engine scopes a page by its `site` link, which the page's Guest row does not list.
   await writeFile(join(entities, "website.entity.json"), entity("WebSite", [
@@ -121,9 +135,39 @@ beforeAll(async () => {
     { fieldname: "title", fieldtype: "Data", label: "Title" },
     { fieldname: "status", fieldtype: "Data", label: "Status" },
   ], { condition: PUBLISHED, fields: ["title"] }, { title_field: "title" }), "utf-8");
+  await writeFile(join(entities, "event.entity.json"), entity("Event", [
+    { fieldname: "site", fieldtype: "Link", label: "Site", target: "WebSite" },
+    { fieldname: "title", fieldtype: "Data", label: "Title" },
+    { fieldname: "status", fieldtype: "Data", label: "Status" },
+  ], { condition: PUBLISHED, fields: ["title"] }, { naming: { strategy: "system" }, title_field: "title" }), "utf-8");
+  await writeFile(join(entities, "inquiry.entity.json"), JSON.stringify({
+    name: "Inquiry", module: "shop", database: DB, naming: { strategy: "system" },
+    fields: [
+      { fieldname: "site", fieldtype: "Link", label: "Site", target: "WebSite" },
+      { fieldname: "message", fieldtype: "Text", label: "Message" },
+    ],
+    permissions: [ADMIN, { role: "Guest", level: 0, create: 1, write: 1 }],
+  }), "utf-8");
+  // Two Guest rows admit different offers and open different fields: a published offer shows its
+  // price, a preview only its title.
+  await writeFile(join(entities, "offer.entity.json"), JSON.stringify({
+    name: "Offer", module: "shop", database: DB, naming: { strategy: "user_set" }, title_field: "title",
+    fields: [
+      { fieldname: "title", fieldtype: "Data", label: "Title" },
+      { fieldname: "price", fieldtype: "Currency", label: "Price" },
+      { fieldname: "status", fieldtype: "Data", label: "Status" },
+    ],
+    permissions: [ADMIN,
+      { role: "Guest", level: 0, select: 1, read: 1, condition: PUBLISHED, fields: ["title", "price"] },
+      { role: "Guest", level: 0, select: 1, read: 1, condition: "eval:doc.status=='preview'", fields: ["title"] },
+    ],
+  }), "utf-8");
   (env as { APP_DIRS: string[] }).APP_DIRS = [fixtureRoot];
 
-  const { authn } = await buildTestAuth();
+  const auth = await buildTestAuth();
+  const { authn } = auth;
+  portalToken = await auth.sign({ sub: "portal-1", email: "portal@shop.test", roles: ["Portal"] });
+  adminToken = await auth.sign({ sub: "admin-1", email: "admin@shop.test", roles: ["Administrator"] });
   const booted = await createApp({ authn });
   app = booted.app;
   db = booted.db;
@@ -151,6 +195,15 @@ beforeAll(async () => {
   await db.insertOne("WebPage", page("W-1", "S-1", "published"), DB);
   await db.insertOne("WebPage", page("W-2", "S-2", "published"), DB);
   await db.insertOne("WebPage", page("W-3", "S-1", "draft"), DB);
+  const event = (_id: string, site: string, title: string) =>
+    ({ doctype: "Event", _id: new ObjectId(_id), site, title, status: "published", ...stamp }) as never;
+  await db.insertOne("Event", event(EVENTS.own, "S-1", "Own"), DB);
+  await db.insertOne("Event", event(EVENTS.other, "S-2", "Other"), DB);
+  await db.insertOne("Inquiry", { doctype: "Inquiry", _id: new ObjectId(INQUIRY), site: "S-1", message: "Hello", ...stamp } as never, DB);
+  const offer = (_id: string, title: string, price: number, status: string) => ({ doctype: "Offer", _id, title, price, status, ...stamp });
+  await db.insertOne("Offer", offer("O-1", "Published", 100, "published"), DB);
+  await db.insertOne("Offer", offer("O-2", "Preview high", 900, "preview"), DB);
+  await db.insertOne("Offer", offer("O-3", "Preview low", 50, "preview"), DB);
 }, 60000);
 
 afterAll(async () => {
@@ -161,10 +214,11 @@ afterAll(async () => {
 }, 30000);
 
 const get = (url: string) => app.inject({ method: "GET", url });
-const listUrl = (query: Record<string, unknown>) =>
-  `/api/v1/public/resource/Product?${new URLSearchParams(
-    Object.entries(query).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]),
-  )}`;
+const authed = (url: string, token = portalToken) => app.inject({ method: "GET", url, headers: { authorization: `Bearer ${token}` } });
+const queryOf = (query: Record<string, unknown>) =>
+  new URLSearchParams(Object.entries(query).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]));
+const listUrl = (query: Record<string, unknown>, doctype = "Product") => `/api/v1/public/resource/${doctype}?${queryOf(query)}`;
+const ids = (res: { json: () => { data: unknown } }) => ((res.json().data ?? []) as Array<{ _id: string }>).map((row) => row._id);
 const EXPECTED_KEYS = ["_id", "creation", "docstatus", "doctype", "modified", ...PRODUCT_FIELDS].sort();
 const dataKeys = (row: Record<string, unknown>) => Object.keys(row).filter((k) => k !== "_link_titles").sort();
 
@@ -251,5 +305,70 @@ describe("A website engine with a Guest row that does not list site", () => {
     } finally {
       (env as { SITE_ID: string }).SITE_ID = "";
     }
+  });
+
+  it("answers an entity Guest may not read alike for an existing and a missing name, and scopes one it may", async () => {
+    (env as { SITE_ID: string }).SITE_ID = "S-1";
+    try {
+      const existing = await get(`/api/v1/public/resource/Inquiry/${INQUIRY}`);
+      const missing = await get("/api/v1/public/resource/Inquiry/65b000000000000000000009");
+      expect([existing.statusCode, missing.statusCode]).toEqual([403, 403]);
+      expect((await get(`/api/v1/public/resource/Event/${EVENTS.own}`)).statusCode).toBe(200);
+      expect((await get(`/api/v1/public/resource/Event/${EVENTS.other}`)).statusCode).toBe(404);
+    } finally {
+      (env as { SITE_ID: string }).SITE_ID = "";
+    }
+  });
+});
+
+describe("A filter value names no other field", () => {
+  it("refuses a tuple or an object in a listed field's value on the public list, and takes a list where the operator does", async () => {
+    for (const filters of [[["title", "=", ["valuation_rate", ">", 500]]], [["title", "=", { $gt: "" }]]]) {
+      const res = await get(listUrl({ filters }));
+      expect([res.statusCode, res.json().data], JSON.stringify(filters)).toEqual([400, null]);
+    }
+    const listed = await get(listUrl({ filters: [["title", "in", ["City Bike", "=", "Road Bike"]]] }));
+    expect(ids(listed).sort()).toEqual(["P-1", "P-2"]);
+  });
+
+  it("refuses a tuple in a count's value, and counts by a listed field", async () => {
+    const count = (filters: unknown) => authed(`/api/v1/resource/Product/count?${queryOf({ filters })}`);
+    expect((await count([{ title: ["valuation_rate", ">", 500] }])).statusCode).toBe(400);
+    const byTitle = await count([{ title: "Road Bike" }]);
+    expect([byTitle.statusCode, byTitle.json().data.count]).toEqual([200, 1]);
+  });
+
+  it("refuses a tuple in a link search's value, and searches by a listed field", async () => {
+    const search = (filters: unknown) => authed(`/api/v1/search/Product?${queryOf({ q: "", filters })}`);
+    expect((await search({ title: ["valuation_rate", ">", 500] })).statusCode).toBe(400);
+    const byTitle = await search({ title: "Road Bike" });
+    expect([byTitle.statusCode, byTitle.json().data]).toEqual([200, [{ _id: "P-2", display: "Road Bike" }]]);
+  });
+});
+
+describe("Rows add up on a record, not across a list", () => {
+  it("refuses a filter and a sort on a field one of two gated Guest rows hides, and takes one both open", async () => {
+    expect((await get(listUrl({ filters: [["price", ">", 500]] }, "Offer"))).statusCode).toBe(400);
+    expect((await get(listUrl({ order_by: "price desc" }, "Offer"))).statusCode).toBe(400);
+    const byTitle = await get(listUrl({ filters: [["title", "like", "Preview%"]], order_by: "title asc" }, "Offer"));
+    expect(ids(byTitle)).toEqual(["O-2", "O-3"]);
+  });
+});
+
+describe("A role whose rows name fields reads through the resource API", () => {
+  it("answers neither owner nor modified_by on the read of one, where a row without fields answers both", async () => {
+    const product = await authed("/api/v1/resource/Product/P-1");
+    expect(product.statusCode).toBe(200);
+    expect(Object.keys(product.json().data)).not.toContain("owner");
+    expect(Object.keys(product.json().data)).not.toContain("modified_by");
+    const brand = await authed("/api/v1/resource/Brand/B-1");
+    expect(brand.json().data).toMatchObject({ owner: "clerk@shop.test", modified_by: "clerk@shop.test" });
+  });
+
+  it("answers the related sidebar without the count of a link on a field the role may not filter on", async () => {
+    const portal = await authed("/api/v1/resource/Brand/B-1/related");
+    expect([portal.statusCode, portal.json().data]).toEqual([200, [{ label: "Products", entity: "Product" }]]);
+    const admin = await authed("/api/v1/resource/Brand/B-1/related", adminToken);
+    expect(admin.json().data).toEqual([{ label: "Products", entity: "Product", count: 3 }]);
   });
 });

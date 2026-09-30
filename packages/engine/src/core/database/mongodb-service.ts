@@ -732,9 +732,6 @@ export class MongoDBService {
    */
   private buildMongoFilter(filters: FilterEntry[]): Filter<Document> {
     const conditions: Record<string, unknown>[] = [];
-    const tupleCondition = ([field, operator, val]: [string, string, unknown]) => ({
-      [field]: mapOperatorToMongo(operator, val),
-    });
 
     for (const filter of filters) {
       // Form 1: top-level tuple [field, operator, value]
@@ -742,33 +739,18 @@ export class MongoDBService {
         if (filter.length !== 3 || typeof filter[0] !== "string" || typeof filter[1] !== "string") {
           throw new MalformedFilterError(filter);
         }
-        conditions.push(tupleCondition(filter));
+        const [field, operator, value] = filter;
+        conditions.push({ [field]: mapOperatorToMongo(operator, value) });
         continue;
       }
 
-      // Form 2: object — `{field: value}` or `{field: {$op: x}}`
-      // Form 3 (legacy / tuple-as-value): `{anyKey: [field, op, val]}`
-      // Reject plain primitives and nulls.
+      // Form 2: object — `{field: value}` or `{field: {$op: x}}`. A value shaped like a tuple
+      // stays a value of its key: read as a filter on the field it names, it would pass the
+      // allow-list its key was checked against. Reject plain primitives and nulls.
       if (filter === null || typeof filter !== "object") {
         throw new MalformedFilterError(filter);
       }
-
-      const condition: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(filter)) {
-        if (
-          Array.isArray(value) &&
-          value.length === 3 &&
-          typeof value[0] === "string" &&
-          typeof value[1] === "string"
-        ) {
-          // Tuple-as-value: outer key is ignored, value is [field, op, val]
-          conditions.push(tupleCondition(value as [string, string, unknown]));
-        } else {
-          // Simple key-value: { status: "Active" } or { field: { $ne: x } }
-          condition[key] = value;
-        }
-      }
-      if (Object.keys(condition).length > 0) conditions.push(condition);
+      if (Object.keys(filter).length > 0) conditions.push({ ...filter });
     }
 
     // Match `_id` queries against native ObjectIds (a 24-hex string → ObjectId).

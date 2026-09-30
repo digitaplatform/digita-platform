@@ -56,6 +56,9 @@ export class BaseDocument {
   // Link titles (resolved on read)
   _link_titles: Record<string, string> = {};
   _status_indicator?: { color: string };
+  // Set on read where the reader may not read `owner` and `modified_by`: toJSON adds them from
+  // the properties above, which the mask of `_data` does not reach.
+  _hidesOperatorFields = false;
 
   constructor(doctype: string, data?: Record<string, unknown>) {
     this.doctype = doctype;
@@ -275,8 +278,7 @@ export class BaseDocument {
       _id: this._id,
       doctype: this.doctype,
       docstatus: this.docstatus,
-      owner: this.owner,
-      modified_by: this.modified_by,
+      ...(this._hidesOperatorFields ? {} : { owner: this.owner, modified_by: this.modified_by }),
       creation: this.creation.toISOString(),
       modified: this.modified.toISOString(),
       _link_titles: Object.keys(this._link_titles).length > 0 ? this._link_titles : undefined,

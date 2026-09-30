@@ -26,6 +26,7 @@ import {
   MalformedFilterError,
   type FilterEntry,
 } from "../src/core/database/mongodb-service.js";
+import { MalformedFilterValueError } from "../src/core/database/filter-builder.js";
 import { env } from "../src/core/config/env.js";
 
 let replSet: MongoMemoryReplSet;
@@ -101,13 +102,16 @@ describe("MongoDBService filter formats", () => {
     expect(r.map((d) => d._id).sort()).toEqual(["c", "d"]);
   });
 
-  it("Form 3 (legacy): tuple-as-value with arbitrary key", async () => {
-    const r = await db.find(
-      COLL,
-      { filters: [{ _whatever: ["n", ">", 2] }] },
-      TARGET,
-    );
-    expect(r.map((d) => d._id).sort()).toEqual(["c", "d"]);
+  it("keeps a tuple-shaped object value a value of its key, never a filter on the field it names", async () => {
+    const r = await db.find(COLL, { filters: [{ group: ["n", ">", 2] }] }, TARGET);
+    expect(r).toEqual([]);
+  });
+
+  it("refuses a tuple's list or object value where its operator takes one value, and takes a list for in", async () => {
+    await expect(db.find(COLL, { filters: [["group", "=", ["n", ">", 2]]] }, TARGET)).rejects.toThrow(MalformedFilterValueError);
+    await expect(db.find(COLL, { filters: [["group", "=", { $ne: "x" }]] }, TARGET)).rejects.toThrow(MalformedFilterValueError);
+    const r = await db.find(COLL, { filters: [["group", "in", ["x", "=", "y"]]] }, TARGET);
+    expect(r.map((d) => d._id).sort()).toEqual(["a", "b", "c", "d"]);
   });
 
   it("mixed forms in one filters array", async () => {

@@ -170,16 +170,16 @@ export function registerPublicRoutes(
   // ─── READ ONE (public; getDoc enforces the per-doc condition) ──
   app.get(`${base}/:doctype/:name`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { doctype, name } = request.params as { doctype: string; name: string };
-    // Another site's document reads as not found, so the read never reveals it. The stored row
-    // decides, since the answer masks `site` where the Guest row does not open it.
+    const ctx = new ResponseContext();
+    const doc = await documentService.getDoc(doctype, name, user(request), ctx, await localeOf(request));
+    // Another site's document reads as not found, so the read never reveals it. It runs after
+    // getDoc's permission check, so an entity Guest may not read answers alike for any name. The
+    // stored row decides, since the answer masks `site` where the Guest row does not open it.
     const scope = siteScope(doctype);
     if (scope && (await db.count(doctype, [{ _id: name }, scope], registry.get(doctype).database)) === 0) {
       throw new NotFoundError(doctype, name);
     }
-    const ctx = new ResponseContext();
-    const doc = await documentService.getDoc(doctype, name, user(request), ctx, await localeOf(request));
-    const data = doc.toJSON();
-    return reply.send(successResponse(stripInternal(data), ctx.getMessages()));
+    return reply.send(successResponse(stripInternal(doc.toJSON()), ctx.getMessages()));
   });
 
   // ─── CREATE (public, always as Guest) ──────────────────

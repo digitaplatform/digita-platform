@@ -18,8 +18,9 @@ import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { PermissionChecker } from "../src/core/permissions/permission-checker.js";
 import type { UserContext } from "../src/core/permissions/types.js";
 
-// A row with `fields` opens the named fields of its level only, and rows add up: what any row of
-// the user opens is open.
+// A row with `fields` opens the named fields of its level only. Rows add up on a record: what any
+// row that admits it opens is open there. A list filters, sorts and searches only on what it reads
+// on every row it answers.
 function checkerFor(permissions: unknown[]): PermissionChecker {
   const registry = new EntityRegistry();
   registry.register({
@@ -89,5 +90,35 @@ describe("PermissionChecker — fields on a permission row", () => {
     expect(await hidden.isTitleVisible(clerk, "Item", { _id: "I-1", title: "Bolt" }, "title")).toBe(false);
     const shown = checkerFor([{ role: "Clerk", level: 0, select: 1, read: 1, fields: ["title"] }]);
     expect(await shown.isTitleVisible(clerk, "Item", { _id: "I-1", title: "Bolt" }, "title")).toBe(true);
+  });
+
+  // A released item shows its title and cost, a draft only its cost.
+  const gated = () =>
+    checkerFor([
+      { role: "Clerk", level: 0, select: 1, read: 1, condition: "eval:doc.status=='released'", fields: ["title", "cost"] },
+      { role: "Clerk", level: 0, select: 1, read: 1, condition: "eval:doc.status=='draft'", fields: ["cost"] },
+    ]);
+
+  it("shows a link title only where a row that admits the record names it", async () => {
+    const checker = gated();
+    const draft = { _id: "I-2", title: "Secret", status: "draft" };
+    expect(checker.getReadableFields(clerk, "Item", draft)!.has("title")).toBe(false);
+    expect(await checker.isTitleVisible(clerk, "Item", draft, "title")).toBe(false);
+    expect(await checker.isTitleVisible(clerk, "Item", { _id: "I-1", title: "Bolt", status: "released" }, "title")).toBe(true);
+  });
+
+  it("lets a list filter and a picker show only what every gated level-0 row opens", () => {
+    const checker = gated();
+    expect(checker.getFilterableFields(clerk, "Item")).toEqual(new Set(["cost"]));
+    expect(checker.isPickerTitleVisible(clerk, "Item", "title")).toBe(false);
+  });
+
+  it("lets a row that holds on every row open its fields to a list, and no gated row add to them", () => {
+    const checker = checkerFor([
+      { role: "Clerk", level: 0, select: 1, read: 1, fields: ["title"] },
+      { role: "Clerk", level: 0, select: 1, read: 1, condition: "eval:doc.status=='released'", fields: ["title", "cost"] },
+    ]);
+    expect(checker.getFilterableFields(clerk, "Item")).toEqual(new Set(["title"]));
+    expect(checker.isPickerTitleVisible(clerk, "Item", "title")).toBe(true);
   });
 });

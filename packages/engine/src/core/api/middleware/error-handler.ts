@@ -28,7 +28,7 @@ import { PermissionDeniedError } from "../../permissions/permission-checker.js";
 import { DocStatusError } from "../../document/docstatus-engine.js";
 import { ViewNotFoundError, BadRequestError } from "../../view/view-engine.js";
 import { UnknownDoctypeError } from "../../entity/entity-registry.js";
-import { FilterFieldNotAllowedError, MalformedFieldsError } from "../../database/filter-builder.js";
+import { FilterFieldNotAllowedError, MalformedFieldsError, MalformedFilterValueError } from "../../database/filter-builder.js";
 import { FieldValueError } from "../../entity/field-types.js";
 import { PasswordKeyNotListedError } from "../../entity/password-cipher.js";
 import { createLogger } from "../../logging/logger.js";
@@ -86,6 +86,18 @@ export function globalErrorHandler(
       data: null,
       messages: [{ text: error.message, type: "error", show: true }],
       error: { code: "MALFORMED_FIELDS", detail: error.message, trace_id: traceId },
+    };
+    reply.code(400).send(response);
+    return;
+  }
+
+  if (error instanceof MalformedFilterValueError) {
+    const response: ApiResponse<null> = {
+      success: false,
+      status_code: 400,
+      data: null,
+      messages: [{ text: error.message, type: "error", show: true }],
+      error: { code: "MALFORMED_FILTER_VALUE", detail: error.message, trace_id: traceId },
     };
     reply.code(400).send(response);
     return;

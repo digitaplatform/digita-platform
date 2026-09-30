@@ -24,7 +24,10 @@ const salesInvoice: EntityDefinition = {
   module: "test",
   database: "app",
   naming: { strategy: "user_set" },
-  fields: [{ fieldname: "product", fieldtype: "Data", label: "Product", idx: 1 }],
+  fields: [
+    { fieldname: "lines", fieldtype: "Table", label: "Lines", idx: 1, child_fields: [{ fieldname: "product", fieldtype: "Data", label: "Product" }] },
+    { fieldname: "return_of", fieldtype: "Link", label: "Return Of", target: "Product", idx: 2 },
+  ],
   permissions: [{ role: "Sales", level: 0, select: 1, read: 1, if_owner: true }],
 } as unknown as EntityDefinition;
 
@@ -69,10 +72,10 @@ describe("RelatedDocService.getRelatedDocs — authorizes the counted entity", (
     expect(documentService.count).not.toHaveBeenCalled();
   });
 
-  it("asks count for the rows that point at the document, as the caller", async () => {
+  it("asks count for the rows that point at the document, as the caller, with the link's filter as the engine's", async () => {
     const { svc, documentService } = makeService();
     const out = await svc.getRelatedDocs(parentEntity, "PROD-1", salesUser);
-    expect(documentService.count).toHaveBeenCalledWith("SalesInvoice", [{ "lines.product": "PROD-1" }], salesUser);
+    expect(documentService.count).toHaveBeenCalledWith("SalesInvoice", [], salesUser, { scope: { "lines.product": "PROD-1" } });
     expect(out[0]!.count).toBe(7);
   });
 
@@ -102,8 +105,8 @@ describe("RelatedDocService.getRelatedDocs — answers in the order the links ar
     } as unknown as EntityDefinition;
     // The first link's count is slow, so completion order is the reverse of declaration order.
     const documentService = {
-      count: vi.fn(async (_entity: string, filters: Array<Record<string, unknown>>) => {
-        if ("lines.product" in filters[0]!) {
+      count: vi.fn(async (_entity: string, _filters: unknown, _user: unknown, options: { scope: Record<string, unknown> }) => {
+        if ("lines.product" in options.scope) {
           await new Promise((resolve) => setTimeout(resolve, 20));
           return 3;
         }

@@ -1,4 +1,5 @@
 import type { EntityDefinition } from "@digitaplatform/shared";
+import { isFieldAllowed } from "../database/filter-builder.js";
 import type { DocumentService } from "../document/document-service.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
@@ -6,7 +7,9 @@ import type { UserContext } from "../permissions/types.js";
 export interface RelatedDocResult {
   label: string;
   entity: string;
-  count: number;
+  /** Absent where the link filters on a field the caller may not filter on: its count would
+   *  show what that field hides. */
+  count?: number;
   icon?: string;
 }
 
@@ -31,17 +34,19 @@ export class RelatedDocService {
         // read only). Skip the count unless the caller may `select` the linked
         // entity, and count what `count` answers the caller: the rows a list of
         // the linked entity shows, after scope, role visibility and read condition.
-        let count = 0;
+        let count: number | undefined = 0;
         if (
           link.show_count &&
           user &&
           (await this.permissionChecker.hasPermission(user, link.entity, "select")).allowed
         ) {
-          count = await this.documentService.count(
-            link.entity,
-            [{ [link.link_field]: documentName, ...link.filters }],
-            user,
-          );
+          // The link's filter is the engine's, not the caller's, so a field outside the caller's
+          // allow-list skips this count instead of refusing the whole answer.
+          const filter = { [link.link_field]: documentName, ...link.filters };
+          const allowed = this.permissionChecker.getFilterAllowlist(user, link.entity);
+          count = Object.keys(filter).every((field) => isFieldAllowed(field, allowed))
+            ? await this.documentService.count(link.entity, [], user, { scope: filter })
+            : undefined;
         }
 
         return {
