@@ -547,6 +547,7 @@ export default function TableControl(props: FieldControlProps) {
           onCommit={done}
           controlId={`${tableId}-${rowId}-${cf.fieldname}`}
           labelId={colId(cf)}
+          inGrid
         />
       </div>
     );
