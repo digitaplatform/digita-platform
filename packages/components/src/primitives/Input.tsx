@@ -1,4 +1,4 @@
-import { type InputHTMLAttributes, type ReactNode, forwardRef } from 'react';
+import { type InputHTMLAttributes, type ReactNode, forwardRef, useId } from 'react';
 import { cn } from '../lib/cn.js';
 
 // `h-[var(--control-h)]` — the single-line control height the theme emits per design;
@@ -41,6 +41,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   { className, label, error, errorMessage, leftIcon, rightIcon, wrapperClassName, framed, id, disabled, ...props },
   ref,
 ) {
+  // The label and the error text bind to the input by its id, so a field given neither an id nor
+  // a name gets its own: two such fields on a page must not share one.
+  const autoId = useId();
   const fieldMode = framed || label != null || errorMessage != null || leftIcon != null || rightIcon != null;
   const invalid = error || errorMessage != null;
 
@@ -58,7 +61,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     );
   }
 
-  const inputId = id ?? props.name;
+  const inputId = id ?? props.name ?? autoId;
   return (
     <div className={cn('flex flex-col gap-1.5', wrapperClassName)}>
       {label != null && (

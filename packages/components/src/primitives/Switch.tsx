@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useId } from 'react';
 import { cn } from '../lib/cn.js';
 
 export interface SwitchProps {
@@ -33,13 +33,15 @@ export function Switch({
   'aria-labelledby': ariaLabelledby,
   'aria-describedby': ariaDescribedby,
 }: SwitchProps) {
+  const labelId = useId();
   const control = (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       aria-label={label ? undefined : ariaLabel}
-      aria-labelledby={ariaLabelledby}
+      // The label drawn beside the switch is its name, unless the caller points at another element.
+      aria-labelledby={ariaLabelledby ?? (label != null ? labelId : undefined)}
       aria-describedby={ariaDescribedby}
       id={id}
       name={name}
@@ -78,6 +80,7 @@ export function Switch({
     <span className="inline-flex items-center gap-2 text-sm text-textMain">
       {control}
       <span
+        id={labelId}
         onClick={() => !disabled && onChange(!checked)}
         className={cn('select-none', disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer')}
       >

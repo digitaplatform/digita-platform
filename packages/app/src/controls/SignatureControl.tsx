@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { Button } from '@digitaplatform/components';
 import type { FieldControlProps } from '@/controls/types';
 import { describedBy } from '@/controls/control-styles';
@@ -45,12 +45,34 @@ export default function SignatureControl({
   // shows what it stores as the image.
   if (state.readOnly && drawn !== undefined) setDrawn(undefined);
   const stroke = useRef<{ canvas: HTMLCanvasElement; pointerId: number; x: number; y: number } | null>(null);
+  // Clear unmounts the button that holds the focus, so the pad that takes the signature's place
+  // gets it, on the first render after the click and not on any later one.
+  const padRef = useRef<HTMLCanvasElement>(null);
+  const focusPadNext = useRef(false);
+  useEffect(() => {
+    if (!focusPadNext.current) return;
+    focusPadNext.current = false;
+    padRef.current?.focus();
+  });
 
-  const image = stored && <img src={stored} alt={tc('ui.signature.alt')} className={IMAGE_CLASS} />;
+  // The id is the one the field label points at, in the image view as on the pad.
+  const image = stored && <img id={controlId} src={stored} alt={tc('ui.signature.alt')} className={IMAGE_CLASS} />;
   if (state.readOnly) return image || <span className="text-sm text-textMuted">{tc('ui.signature.empty')}</span>;
 
+  const clearId = `${controlId}-clear`;
   const clear = (
-    <Button type="button" variant="secondary" size="sm" onClick={() => onChange(undefined)}>
+    <Button
+      id={clearId}
+      type="button"
+      variant="secondary"
+      size="sm"
+      // Its own text, then the field label: a form with two signatures has two Clear buttons.
+      aria-labelledby={`${clearId} ${labelId}`}
+      onClick={() => {
+        focusPadNext.current = true;
+        onChange(undefined);
+      }}
+    >
       {tc('ui.action.clear')}
     </Button>
   );
@@ -118,7 +140,10 @@ export default function SignatureControl({
     <div className="flex flex-col items-start gap-1.5">
       <canvas
         key={padKey}
+        ref={padRef}
         id={controlId}
+        // Focusable for the hand-over after Clear, but no tab stop: the pad cannot be used from the keyboard.
+        tabIndex={-1}
         role="img"
         aria-labelledby={labelId}
         aria-describedby={describedBy(hintId, describedById, errorId)}
