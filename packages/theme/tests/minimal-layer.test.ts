@@ -15,7 +15,8 @@ describe('theme.css bundles only the variant layer of the minimal plugin', () =>
   it('drops the plugin token blocks, whose values belong to the plugin release', () => {
     // The theme emits its own pair of these blocks for the baked design; the plugin's pair is dropped.
     expect(THEME_CSS.split(':root[data-design="minimal"] {')).toHaveLength(2);
-    expect(THEME_CSS.split(':root[data-design="minimal"].dark {')).toHaveLength(2);
+    // The theme's own dark block carries its dark band twin.
+    expect(THEME_CSS.split(':root[data-design="minimal"].dark,')).toHaveLength(2);
   });
 
   it('bakes the minimal release that plugins.lock.json delivers, so the baked default and the plugin agree', () => {
@@ -34,6 +35,14 @@ describe('theme.css bundles only the variant layer of the minimal plugin', () =>
     const rules =
       ':root[data-design="minimal"] [data-ui="card"] { color: red; }\n' +
       ':root[data-design-variant="minimal"] [data-ui="card"] { color: blue; }\n';
+    expect(stripPluginTokenBlocks(tokens + rules)).toBe(rules);
+  });
+
+  it('drops the dark token block of a plugin release that carries its dark band twin', () => {
+    const tokens =
+      ':root[data-design="minimal"] {\n  --a: 1;\n}\n' +
+      ':root[data-design="minimal"].dark,\n:root[data-design="minimal"] [data-block][data-variant="dark"] {\n  --a: 2;\n}\n';
+    const rules = ':root[data-design-variant="minimal"].dark [data-ui="card"] { color: blue; }\n';
     expect(stripPluginTokenBlocks(tokens + rules)).toBe(rules);
   });
 });

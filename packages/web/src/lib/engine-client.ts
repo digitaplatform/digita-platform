@@ -88,7 +88,7 @@ export async function listPages(locale?: string): Promise<WebPage[]> {
       "WebPage",
       {
         filters,
-        fields: ["_id", "slug", "locale", "nav_label", "title", "translation_group", "modified"],
+        fields: ["_id", "slug", "locale", "title", "translation_group", "modified"],
         page_size: 200,
         page,
         order_by: "_id asc",

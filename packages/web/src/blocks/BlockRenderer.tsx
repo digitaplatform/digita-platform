@@ -8,8 +8,8 @@ import { PluginBlock } from "./PluginBlock";
  * Renders an ordered list of content blocks. Each block resolves its component
  * from the registry (or the plugin seam for `type: "plugin"`). Unknown types are
  * skipped so a new engine-side type never crashes a deployed renderer. `anchor`
- * becomes a scroll target; `theme_variant` is exposed as a data attribute for
- * per-section theme overrides.
+ * becomes a scroll target; `theme_variant: "dark"` becomes `data-variant="dark"`, which the theme
+ * draws as a dark band (DARK_BAND_SELECTOR in @digitaplatform/theme).
  */
 export function BlockRenderer({ blocks, locale }: { blocks?: Block[]; locale: Locale }) {
   if (!blocks?.length) return null;

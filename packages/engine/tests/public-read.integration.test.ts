@@ -90,7 +90,7 @@ beforeAll(async () => {
   });
 
   // Seed directly (raw insert, like seed-app-data) into the web_content DB.
-  await db.insertOne("WebSite", { doctype: "WebSite", docstatus: 0, owner: "system", _id: "t-site", site_name: "Test Site", default_locale: "en", status: "published", creation: now, modified: now }, "web_content");
+  await db.insertOne("WebSite", { doctype: "WebSite", docstatus: 0, owner: "system", _id: "t-site", site_name: "Test Site", status: "published", creation: now, modified: now }, "web_content");
   await db.insertOne("WebPage", baseRow({ _id: "t-site::en::", slug: "", title: "Home", status: "published" }), "web_content");
   await db.insertOne("WebPage", baseRow({ _id: "t-site::en::draft", slug: "draft", title: "Draft", status: "draft" }), "web_content");
 }, 60000);
@@ -114,7 +114,7 @@ describe.skipIf(!APPS_PRESENT)("Public read scope (generic Guest)", () => {
   it("lists the published pages for the renderer's projection, which omits status (#41)", async () => {
     const qs = new URLSearchParams({
       filters: JSON.stringify([["site", "=", "t-site"], ["status", "=", "published"]]),
-      fields: JSON.stringify(["_id", "slug", "locale", "nav_label", "title", "translation_group", "modified"]),
+      fields: JSON.stringify(["_id", "slug", "locale", "title", "translation_group", "modified"]),
       page_size: "200",
     });
     const res = await app.inject({ method: "GET", url: `${PUB}?${qs}` });

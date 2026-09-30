@@ -12,3 +12,4 @@ export * from './runtime/identity-preferences.js';
 export * from './designs/index.js';
 export * from './signatures/index.js';
 export * from './signatures/runtime-registry.js';
+export * from './dark-band.js';
