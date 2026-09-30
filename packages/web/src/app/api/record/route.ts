@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getConfig } from "@/config/env";
 import { createRecord } from "@/lib/engine-client";
 import { admitFormPost, answer } from "@/lib/form-post";
+import { refuseOversizedBody } from "@/app/api/body-limit";
 
 /** An entity name as the engine spells it, so the name cannot leave the resource path. */
 const ENTITY = /^[A-Za-z][A-Za-z0-9_]*$/;
@@ -34,6 +35,8 @@ function parse(fields: Record<string, unknown>): RecordPost | null {
  * lands, and the protections are every form's (src/lib/form-post.ts).
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const oversized = await refuseOversizedBody(req);
+  if (oversized) return oversized;
   const post = await admitFormPost(req);
   if (post instanceof NextResponse) return post;
 

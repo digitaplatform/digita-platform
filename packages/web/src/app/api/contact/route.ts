@@ -3,6 +3,7 @@ import { getConfig } from "@/config/env";
 import { createRecord, getSite } from "@/lib/engine-client";
 import { CONTACT_TOPICS, type ContactRequest } from "@/lib/contact-request";
 import { admitFormPost, answer } from "@/lib/form-post";
+import { refuseOversizedBody } from "@/app/api/body-limit";
 
 // A line field goes into a mail subject or header, so a control character is refused, not stripped.
 const CONTROL = /[\u0000-\u001f\u007f]/;
@@ -35,6 +36,8 @@ function parse(body: Record<string, unknown>, locales: string[]): ContactRequest
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const config = getConfig();
+  const oversized = await refuseOversizedBody(req);
+  if (oversized) return oversized;
   const post = await admitFormPost(req);
   if (post instanceof NextResponse) return post;
 
