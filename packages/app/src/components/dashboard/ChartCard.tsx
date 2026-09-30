@@ -5,6 +5,7 @@ import { PRIMARY, ACCENT, NEUTRAL } from '@digitaplatform/theme';
 import { useThemeStore } from '@/stores/theme';
 import { useChrome } from '@/lib/chrome-i18n';
 import { EMPTY } from '@/lib/format';
+import { useMeta } from '@/hooks/useMeta';
 import { CardShell, type CardStatus } from './CardShell';
 
 /** recharts lives ONLY behind this lazy boundary (code-split off the dashboard). */
@@ -38,6 +39,8 @@ interface ChartCardProps {
   status: CardStatus;
   error?: string;
   data: ViewSectionData;
+  /** The entity of the card's section; its field labels name the series. */
+  entity?: string;
 }
 
 function resolvePalette(host: HTMLElement): string[] {
@@ -53,9 +56,10 @@ function resolvePalette(host: HTMLElement): string[] {
  * x_field / empty y_fields → loud red), reads resolved theme hex once its chart host
  * exists, and lazy-loads the recharts canvas. Legitimate empty section rows render a calm note.
  */
-export function ChartCard({ card, icon, status, error, data }: ChartCardProps) {
+export function ChartCard({ card, icon, status, error, data, entity }: ChartCardProps) {
   const tc = useChrome();
   const mode = useThemeStore((s) => s.mode);
+  const meta = useMeta(entity);
   // State, not a ref: the host mounts only once the card is ready, usually after the first
   // render, and the measurements below have to run again when it does.
   const [host, setHost] = useState<HTMLDivElement | null>(null);
@@ -83,9 +87,13 @@ export function ChartCard({ card, icon, status, error, data }: ChartCardProps) {
 
   const rows = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
-  if (status !== 'ready') {
-    return <CardShell label={card.label} icon={icon} status={status} error={error} />;
+  // The chart waits for the labels, so its legend never flashes the keys.
+  const shellStatus = status === 'ready' && meta.isLoading ? 'loading' : status;
+  if (shellStatus !== 'ready') {
+    return <CardShell label={card.label} icon={icon} status={shellStatus} error={error} />;
   }
+  // A key no field has (an aggregate can name one) names its series as it is.
+  const seriesLabel = (key: string) => meta.data?.fields.find((f) => f.fieldname === key)?.label ?? key;
 
   // FAIL LOUD on a malformed chart contract.
   let configError: string | undefined;
@@ -116,7 +124,14 @@ export function ChartCard({ card, icon, status, error, data }: ChartCardProps) {
               </div>
             }
           >
-            <ChartCanvas card={card} rows={rows} colors={colors} gridColor={gridColor} compact={compact} />
+            <ChartCanvas
+              card={card}
+              rows={rows}
+              colors={colors}
+              gridColor={gridColor}
+              compact={compact}
+              seriesLabel={seriesLabel}
+            />
           </Suspense>
         )}
       </div>

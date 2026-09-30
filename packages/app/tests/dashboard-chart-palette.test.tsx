@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import type { ReactNode } from 'react';
 import { render, screen, act } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ChartCard as ChartCardDef } from '@digitaplatform/shared';
 import type { ChartCanvasProps } from '@/components/dashboard/ChartCanvas';
 
@@ -97,20 +99,30 @@ function resizeCard(width: number) {
   act(() => observers.forEach((observer) => observer.report()));
 }
 
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+function Design({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <div className="design">{children}</div>
+    </QueryClientProvider>
+  );
+}
+
 describe('the colors and the width of a chart card', () => {
   it('are measured once the chart exists, and again on a mode flip and a resize', async () => {
     cardWidth = 240;
     const { rerender } = render(
-      <div className="design">
+      <Design>
         <ChartCard card={CARD} status="loading" data={null} />
-      </div>,
+      </Design>,
     );
     expect(screen.getByRole('status')).toBeInTheDocument();
 
     rerender(
-      <div className="design">
+      <Design>
         <ChartCard card={CARD} status="ready" data={ROWS} />
-      </div>,
+      </Design>,
     );
     const canvas = await screen.findByTestId('chart-canvas');
     expect(canvas.dataset.colors).toBe(LIGHT.join(' '));

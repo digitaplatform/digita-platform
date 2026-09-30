@@ -113,6 +113,7 @@ export function renderCard(
           status={shellStatus(card, r)}
           error={r.message?.text}
           data={r.data}
+          entity={r.entity}
         />
       );
     }
