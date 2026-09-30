@@ -174,6 +174,12 @@ describe("the security headers", () => {
     },
   );
 
+  it("refuse an AUTH_URL that is not a URL, on every path, and name the setting", () => {
+    process.env.AUTH_URL = "auth.example.com";
+    expect(() => run(page)).toThrow("env var AUTH_URL must be a URL");
+    expect(() => run("https://example.com/robots.txt")).toThrow("env var AUTH_URL must be a URL");
+  });
+
   it("let the development server evaluate code, and production never", () => {
     const scripts = () => directives(run(page).headers.get("content-security-policy")).get("script-src");
     expect(scripts()).not.toContain("'unsafe-eval'");
