@@ -34,6 +34,13 @@ export interface EntityPermission {
   report?: 0 | 1;
   if_owner?: boolean;
   condition?: string;
+  /**
+   * The fields this row opens for reading, filtering, sorting and search. Without it the row
+   * opens every field of its `level`; with it only the named fields of that level, and a named
+   * Table opens its children of that level. A row with `fields` never opens `owner` or
+   * `modified_by`.
+   */
+  fields?: string[];
   scope?: {
     field: string;
     user_field: string;

@@ -251,7 +251,7 @@ export class PermissionChecker {
   }
 
   /**
-   * Get all fields the user can read (based on perm_level).
+   * Get all fields the user can read: by perm_level, and by `fields` on a row that names them.
    */
   getReadableFields(
     user: UserContext,
@@ -296,32 +296,18 @@ export class PermissionChecker {
     }
 
     const entity = this.registry.get(entityName);
-    const readableFields = new Set<string>();
-    const readableLevels = new Set<number>(readsLevel0 ? [0] : []);
+    const rows: ReadRow[] = entity.permissions.filter(
+      (perm) => user.roles.includes(perm.role) && !!perm.read && admits(perm),
+    );
+    if (readsLevel0) rows.push({ level: 0 });
 
-    for (const perm of entity.permissions) {
-      if (!user.roles.includes(perm.role)) continue;
-      if (perm.read && admits(perm)) {
-        readableLevels.add(perm.level);
-      }
-    }
-
+    const readableFields = new Set<string>(IDENTITY_FIELDS);
     for (const field of entity.fields) {
-      const level = field.perm_level ?? 0;
-      if (readableLevels.has(level)) {
+      if (rows.some((row) => opensField(row, field.fieldname, field.perm_level ?? 0))) {
         readableFields.add(field.fieldname);
       }
     }
-
-    // Always include standard fields
-    readableFields.add("_id");
-    readableFields.add("doctype");
-    readableFields.add("docstatus");
-    readableFields.add("owner");
-    readableFields.add("modified_by");
-    readableFields.add("creation");
-    readableFields.add("modified");
-
+    if (opensOperatorFields(rows)) for (const field of OPERATOR_FIELDS) readableFields.add(field);
     return readableFields;
   }
 
@@ -345,15 +331,13 @@ export class PermissionChecker {
     const anyGated = tableField.child_fields.some((c) => (c.perm_level ?? 0) > 0);
     if (!anyGated) return null;
 
-    const readableLevels = new Set<number>(sharedForRead ? [0] : []);
-    for (const perm of entity.permissions) {
-      if (!user.roles.includes(perm.role)) continue;
-      if (perm.read && this.permMatchesDoc(perm, user, doc)) readableLevels.add(perm.level);
-    }
+    const rows: ReadRow[] = entity.permissions.filter(
+      (perm) => user.roles.includes(perm.role) && !!perm.read && this.permMatchesDoc(perm, user, doc),
+    );
+    if (sharedForRead) rows.push({ level: 0 });
     const out = new Set<string>(["_row_id", "idx"]);
     for (const child of tableField.child_fields) {
-      const lvl = child.perm_level ?? 0;
-      if (readableLevels.has(lvl)) out.add(child.fieldname);
+      if (rows.some((row) => opensField(row, tableFieldname, child.perm_level ?? 0))) out.add(child.fieldname);
     }
     return out;
   }
@@ -371,28 +355,38 @@ export class PermissionChecker {
   getFilterableFields(user: UserContext, entityName: string): Set<string> | null {
     if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return null;
     const entity = this.registry.get(entityName);
-    const levels = new Set<number>();
-    for (const perm of entity.permissions) {
-      if (!perm.read || !user.roles.includes(perm.role)) continue;
-      const holdsOnEveryRow = !perm.if_owner && !perm.condition && !perm.scope;
-      if (perm.level === 0 || holdsOnEveryRow) levels.add(perm.level);
-    }
+    const rows = this.filterRows(user, entity);
     const fields = new Set<string>();
     for (const field of entity.fields) {
-      if (!levels.has(field.perm_level ?? 0)) continue;
+      if (!rows.some((row) => opensField(row, field.fieldname, field.perm_level ?? 0))) continue;
       const children = field.fieldtype === "Table" ? (field.child_fields ?? []) : [];
-      const readableChildren = children.filter((child) => levels.has(child.perm_level ?? 0));
+      const readableChildren = children.filter((child) =>
+        rows.some((row) => opensField(row, field.fieldname, child.perm_level ?? 0)),
+      );
       if (readableChildren.length === children.length) fields.add(field.fieldname);
       else for (const child of readableChildren) fields.add(`${field.fieldname}.${child.fieldname}`);
     }
     return fields;
   }
 
+  /** The read rows of `user` that decide what a list may filter, search and sort on: a level-0
+   *  row with its gate, since the list keeps only the rows it admits, and a higher row only when
+   *  it holds on every row. */
+  private filterRows(user: UserContext, entity: EntityDefinition): EntityPermission[] {
+    return entity.permissions.filter(
+      (perm) =>
+        !!perm.read &&
+        user.roles.includes(perm.role) &&
+        (perm.level === 0 || (!perm.if_owner && !perm.condition && !perm.scope)),
+    );
+  }
+
   /**
    * Whether `user` may see `displayField` of the stored `row` of `entityName`, the
    * title a Link to that row shows: the user may select or read the row, and may
    * read the field when it sits above level 0. A picker shows a level-0 title to
-   * whoever may select, so a link title does too.
+   * whoever may select, so a link title does too, unless every row of the user
+   * that selects or reads names `fields` without it.
    */
   async isTitleVisible(
     user: UserContext,
@@ -405,8 +399,13 @@ export class PermissionChecker {
       (await this.hasPermission(user, entityName, "select", row)).allowed ||
       (await this.hasPermission(user, entityName, "read", row)).allowed;
     if (!admitted) return false;
-    const level = this.registry.get(entityName).fields.find((f) => f.fieldname === displayField)?.perm_level ?? 0;
-    if (level === 0) return true;
+    const entity = this.registry.get(entityName);
+    const level = entity.fields.find((f) => f.fieldname === displayField)?.perm_level ?? 0;
+    const pickerShowsTitle = entity.permissions.some(
+      (perm) =>
+        user.roles.includes(perm.role) && (!!perm.select || !!perm.read) && opensField(perm, displayField, 0),
+    );
+    if (level === 0 && pickerShowsTitle) return true;
     const readable = this.getReadableFields(user, entityName, row);
     return readable === null || readable.has(displayField);
   }
@@ -436,10 +435,12 @@ export class PermissionChecker {
   /** The set of field names a list, count or search query of `user` may filter,
    *  search and sort `entityName` on: the entity's declared fields + Table child
    *  fields for a reader of every level, otherwise getFilterableFields; + the
-   *  standard system fields (P-SEC/R7). */
+   *  identity fields, and `owner` and `modified_by` unless every row names `fields`
+   *  (P-SEC/R7). */
   getFilterAllowlist(user: UserContext, entityName: string): Set<string> {
     const entity = this.registry.get(entityName);
     const filterable = this.getFilterableFields(user, entityName);
+    const operatorFields = filterable === null || opensOperatorFields(this.filterRows(user, entity)) ? OPERATOR_FIELDS : [];
     return new Set<string>([
       ...(filterable ?? [
         ...entity.fields.map((f) => f.fieldname),
@@ -447,7 +448,8 @@ export class PermissionChecker {
           .filter((f) => f.fieldtype === "Table")
           .flatMap((f) => f.child_fields?.map((c) => c.fieldname) ?? []),
       ]),
-      "_id", "doctype", "docstatus", "owner", "modified_by", "creation", "modified",
+      ...IDENTITY_FIELDS,
+      ...operatorFields,
       "idx", "parent", "parenttype", "parentfield",
     ]);
   }
@@ -772,4 +774,23 @@ function entityHasStateStripOverrides(entity: EntityDefinition): boolean {
     if (s.permissions && s.permissions.length > 0) return true;
   }
   return false;
+}
+
+/** The stored fields every readable row shows: what the row is and when it changed. */
+const IDENTITY_FIELDS = ["_id", "doctype", "docstatus", "creation", "modified"] as const;
+/** The stored fields that name the people who wrote a row. A read row with `fields` hides them. */
+const OPERATOR_FIELDS = ["owner", "modified_by"] as const;
+
+/** The part of a read row that decides which fields it opens. */
+type ReadRow = Pick<EntityPermission, "level" | "fields">;
+
+/** Whether `row` opens the field `fieldname` of `level`, or a child of `level` of the Table
+ *  `fieldname`: the row's level, and its `fields`, when it has them, name the field. */
+function opensField(row: ReadRow, fieldname: string, level: number): boolean {
+  return row.level === level && (!row.fields || row.fields.includes(fieldname));
+}
+
+/** Whether `rows` open `owner` and `modified_by`: unless every one of them carries `fields`. */
+function opensOperatorFields(rows: readonly ReadRow[]): boolean {
+  return rows.length === 0 || rows.some((row) => !row.fields);
 }
