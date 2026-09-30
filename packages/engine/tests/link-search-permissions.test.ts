@@ -167,7 +167,9 @@ describe("LinkSearchService — RBAC", () => {
     const { svc, db } = makeService([{ _id: "TEN-7", title: "Secret merger" }]);
     expect(await svc.search("tender", "TEN-7", portalUser)).toEqual([{ _id: "TEN-7", display: "TEN-7" }]);
     const passedQuery = db.find.mock.calls[0]![1] as { filters: Record<string, unknown>[]; order_by: string };
-    expect(passedQuery.filters).toEqual([{ $or: [{ _id: { $regex: "TEN-7", $options: "i" } }] }]);
+    expect(passedQuery.filters).toEqual([
+      { $or: [{ $expr: { $regexMatch: { input: { $toString: "$_id" }, regex: "TEN-7", options: "i" } } }] },
+    ]);
     expect(passedQuery.order_by).toBe("_id asc");
   });
 

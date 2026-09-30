@@ -71,9 +71,8 @@ export class LinkSearchService {
     const requestedCols = columns?.filter((c) => knownFields.has(c));
     const cols = requestedCols && requestedCols.length > 0 ? requestedCols : undefined;
 
-    const searchConditions = searchFields.map((field) => ({
-      [field]: { $regex: this.escapeRegex(query), $options: "i" },
-    }));
+    const escaped = this.escapeRegex(query);
+    const searchConditions = searchFields.map((field) => this.searchCondition(field, escaped));
 
     let mongoFilter: Record<string, unknown> = {};
 
@@ -157,6 +156,13 @@ export class LinkSearchService {
     return showsTitle || fields.includes("_id") ? fields : [...fields, "_id"];
   }
 
+  /** The condition that finds the escaped text in `field` as the result shows it: the id as its
+   *  string, since a `system`-named row stores it as an ObjectId, which `$regex` never matches. */
+  private searchCondition(field: string, escaped: string): Record<string, unknown> {
+    if (field !== "_id") return { [field]: { $regex: escaped, $options: "i" } };
+    return { $expr: { $regexMatch: { input: { $toString: "$_id" }, regex: escaped, options: "i" } } };
+  }
+
   /**
    * Search parents and expand into row-level results. Each parent's matching
    * `<target_path>[]` rows become individual results with a composite `_id`
@@ -189,9 +195,9 @@ export class LinkSearchService {
     const { allowed, gatesRows, masksStoredRows } = this.readScope(user, targetEntity, filters);
     const showsTitle = this.showsTitle(user, targetEntity, displayField, allowed);
     const escaped = this.escapeRegex(query);
-    const parentSearch = this.searchableFields(entity.search_fields ?? [displayField], displayField, allowed, showsTitle).map((f) => ({
-      [f]: { $regex: escaped, $options: "i" },
-    }));
+    const parentSearch = this.searchableFields(entity.search_fields ?? [displayField], displayField, allowed, showsTitle).map((f) =>
+      this.searchCondition(f, escaped),
+    );
     const childTextFields = tableField.child_fields
       .filter((c) => c.fieldtype === "Data" || c.fieldtype === "Text")
       .filter((c) => isFieldAllowed(`${targetPath}.${c.fieldname}`, allowed))
