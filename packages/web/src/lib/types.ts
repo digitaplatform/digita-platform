@@ -21,6 +21,7 @@ export type BlockType =
   | "contact_details"
   | "showcase"
   | "record_form"
+  | "app_list"
   | "plugin";
 
 export interface Block {
