@@ -54,14 +54,14 @@ async function render(): Promise<string> {
 beforeEach(() => {
   site = { _id: "example", site_name: "example", domain: "example.org" };
   publishedSlugs = { en: [""], de: [""] };
-  requestHeaders = {};
+  requestHeaders = { "x-nonce": "bm9uY2U=" };
   localeCookie = undefined;
   redirect.mockClear();
 });
 
 describe("the locale layout", () => {
   it("PLANTED INNOCENT: never negotiates a bare URL itself, because a soft navigation keeps the layout and would skip it", async () => {
-    requestHeaders = { "x-locale-negotiable": "/", "accept-language": "de" };
+    requestHeaders = { ...requestHeaders, "x-locale-negotiable": "/", "accept-language": "de" };
     expect(await render()).toContain('lang="en"');
     expect(redirect).not.toHaveBeenCalled();
   });
@@ -95,5 +95,16 @@ describe("the locale layout", () => {
     expect(html).toContain('data-signature="simetrix"');
     // A page identity without `signature` lets the boot resolve the stored id; this goes red then.
     expect(html).toContain('"signature":"simetrix"');
+  });
+
+  it("runs the pre-paint boot under the policy, with the request's nonce", async () => {
+    // Every script that runs (a data block never does) carries the nonce. A boot script without it
+    // is blocked by the policy; this goes red then.
+    expect((await render()).match(/<script(?![^>]*type="application\/(ld\+)?json")[^>]*>/g)).toEqual(['<script nonce="bm9uY2U=">']);
+  });
+
+  it("PLANTED DEFECT: refuses a request the middleware did not give a nonce, instead of writing a script the policy blocks", async () => {
+    requestHeaders = {};
+    await expect(render()).rejects.toThrow("x-nonce");
   });
 });

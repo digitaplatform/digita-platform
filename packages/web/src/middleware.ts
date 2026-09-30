@@ -1,11 +1,28 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getLocales, getDefaultLocale } from "./config/locales";
+import { contentSecurityPolicy } from "./lib/content-security-policy";
 
-/** The host the site answers on: the host of SITE_URL. Read at call time, as the locales are. */
-function canonicalHostname(): string {
-  const siteUrl = process.env.SITE_URL;
-  if (!siteUrl) throw new Error("[digita-web] missing required env var: SITE_URL");
-  return new URL(siteUrl).hostname;
+/** The site's URL (SITE_URL): the site answers on its host. Read at call time, as the locales are. */
+function siteUrl(): URL {
+  const value = process.env.SITE_URL;
+  if (!value) throw new Error("[digita-web] missing required env var: SITE_URL");
+  return new URL(value);
+}
+
+/**
+ * The security headers of an answer. The policy carries a nonce made for this request; Next reads
+ * it from the request's Content-Security-Policy header and puts it on every script it writes, and
+ * the layout reads it from x-nonce for its own. A browser that reached the site over https keeps
+ * to https for a year; the canonical host is the apex, so the rule binds no subdomain.
+ */
+function secure(request: Headers): Headers {
+  const nonce = btoa(crypto.randomUUID());
+  const policy = contentSecurityPolicy(nonce, process.env);
+  request.set("x-nonce", nonce);
+  request.set("content-security-policy", policy);
+  const answer = new Headers({ "content-security-policy": policy });
+  if (siteUrl().protocol === "https:") answer.set("strict-transport-security", "max-age=31536000");
+  return answer;
 }
 
 /**
@@ -20,7 +37,7 @@ export function middleware(req: NextRequest): NextResponse {
   const host = req.headers.get("host") ?? req.nextUrl.host;
   // The Host header names the port the visitor used, if any; the request URL carries the pod's.
   const [hostname = "", port = ""] = host.split(":");
-  const canonical = canonicalHostname();
+  const canonical = siteUrl().hostname;
   if (hostname !== canonical && (hostname === `www.${canonical}` || `www.${hostname}` === canonical)) {
     const url = req.nextUrl.clone();
     url.hostname = canonical;
@@ -35,11 +52,12 @@ export function middleware(req: NextRequest): NextResponse {
   // prefixed URL redirect, so it is dropped before any route reads it.
   const headers = new Headers(req.headers);
   headers.delete("x-locale-negotiable");
+  const answer = secure(headers);
   // The API and files with an extension (sitemap.xml, robots.txt) are no locale's pages.
   const { pathname, search } = req.nextUrl;
   const isPage = !/^\/(api(\/|$)|.*\.)/.test(pathname);
   const hasLocale = getLocales().some((l) => pathname === `/${l}` || pathname.startsWith(`/${l}/`));
-  if (!isPage || hasLocale) return NextResponse.next({ request: { headers } });
+  if (!isPage || hasLocale) return NextResponse.next({ request: { headers }, headers: answer });
 
   const url = req.nextUrl.clone();
   url.pathname = `/${getDefaultLocale()}${pathname === "/" ? "" : pathname}`;
@@ -47,7 +65,8 @@ export function middleware(req: NextRequest): NextResponse {
   // the path named here, its query kept. Page or redirect, the bare URL's answer depends on the
   // browser's language and the locale cookie, so every cache keeps them apart.
   headers.set("x-locale-negotiable", `${pathname}${search}`);
-  return NextResponse.rewrite(url, { request: { headers }, headers: { vary: "Accept-Language, Cookie" } });
+  answer.set("vary", "Accept-Language, Cookie");
+  return NextResponse.rewrite(url, { request: { headers }, headers: answer });
 }
 
 export const config = {

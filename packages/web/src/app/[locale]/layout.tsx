@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { brandingStyle, signatureStyle, PAGE_IDENTITY_ELEMENT_ID } from "@digitaplatform/theme";
 import { IDENTITY_BOOT_SCRIPT } from "@digitaplatform/theme/identity-boot";
 import favicon from "@digitaplatform/theme/favicon.svg";
@@ -73,6 +74,10 @@ export default async function LocaleLayout({
     nameIsCustom: Boolean(site?.site_name ?? branding?.app_name),
     signature,
   };
+  // The middleware makes a nonce per request; without it the boot script would not run under the
+  // policy, so a missing nonce is an error, not a script without one.
+  const nonce = (await headers()).get("x-nonce");
+  if (!nonce) throw new Error("[digita-web] the request carries no x-nonce: the middleware did not run");
   const identitySources = { apps: config.tenantApps, authUrl: config.authUrl, authCookieSuffix: config.authCookieSuffix };
 
   return (
@@ -83,7 +88,7 @@ export default async function LocaleLayout({
           id={PAGE_IDENTITY_ELEMENT_ID}
           dangerouslySetInnerHTML={{ __html: jsonForScript({ signature: signature.id, signatures: [signature], branding }) }}
         />
-        <script dangerouslySetInnerHTML={{ __html: IDENTITY_BOOT_SCRIPT }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: IDENTITY_BOOT_SCRIPT }} />
       </head>
       <body className="bg-background text-textMain antialiased">
         <ConfigProvider value={siteConfig}>

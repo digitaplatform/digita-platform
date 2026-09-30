@@ -10,6 +10,8 @@ beforeEach(() => {
   process.env.LOCALES = "en,de";
   process.env.DEFAULT_LOCALE = "en";
   process.env.SITE_URL = "https://example.com";
+  delete process.env.AUTH_URL;
+  delete process.env.CONTENT_SECURITY_POLICY_HOSTS;
 });
 
 const run = (url: string, headers?: Record<string, string>) => middleware(new NextRequest(url, { headers }));
@@ -93,6 +95,111 @@ describe("the middleware", () => {
   it("PLANTED INNOCENT: leaves a path with a locale alone", () => {
     expect(passes(run("https://example.com/de/about"))).toBe(true);
     expect(passes(run("https://example.com/de"))).toBe(true);
+  });
+});
+
+/** The directives of a policy, by name. */
+const directives = (policy: string | null) =>
+  new Map((policy ?? "").split(";").map((d) => d.trim().split(/\s+/)).map(([name = "", ...sources]) => [name, sources]));
+
+/** What is wrong with a page answer's policy: empty when scripts run only with the request's nonce and no site frames the page. */
+function policyFaults(res: NextResponse): string[] {
+  const policy = res.headers.get("content-security-policy");
+  const nonce = res.headers.get("x-middleware-request-x-nonce");
+  const faults: string[] = [];
+  if (!policy) return ["no policy on the answer"];
+  if (!nonce) faults.push("no nonce on the request");
+  if (res.headers.get("x-middleware-request-content-security-policy") !== policy) faults.push("the request carries another policy");
+  const d = directives(policy);
+  const scripts = d.get("script-src") ?? [];
+  if (scripts.join(" ") !== `'nonce-${nonce}' 'strict-dynamic'`) faults.push(`script-src is ${scripts.join(" ")}`);
+  if ((d.get("frame-ancestors") ?? []).join(" ") !== "'none'") faults.push("frame-ancestors is not 'none'");
+  if ((d.get("object-src") ?? []).join(" ") !== "'none'") faults.push("object-src is not 'none'");
+  return faults;
+}
+
+describe("the security headers", () => {
+  const page = "https://example.com/de/about";
+  it.each([
+    ["a page with a locale", "https://example.com/de/about"],
+    ["a bare page", "https://example.com/about"],
+    ["the API", "https://example.com/api/contact"],
+  ])("send %s a policy under which only a script with the request's nonce runs and no site frames it", (_name, url) => {
+    expect(policyFaults(run(url))).toEqual([]);
+  });
+
+  it("make a new nonce for every request", () => {
+    const nonces = [run(page), run(page)].map((res) => res.headers.get("x-middleware-request-x-nonce"));
+    expect(nonces[0]).toBeTruthy();
+    expect(nonces[0]).not.toBe(nonces[1]);
+  });
+
+  it("PLANTED DEFECT: a policy that lets inline scripts run, a fixed nonce and a page anybody may frame each fail the check above", () => {
+    const withPolicy = (edit: (policy: string) => string) => {
+      const res = run(page);
+      const policy = edit(res.headers.get("content-security-policy") ?? "");
+      res.headers.set("content-security-policy", policy);
+      res.headers.set("x-middleware-request-content-security-policy", policy);
+      return res;
+    };
+    expect(policyFaults(withPolicy((p) => p.replace("'strict-dynamic'", "'strict-dynamic' 'unsafe-inline'")))).not.toEqual([]);
+    expect(policyFaults(withPolicy((p) => p.replace(/'nonce-[^']*'/, "'nonce-fixed'")))).not.toEqual([]);
+    expect(policyFaults(withPolicy((p) => p.replace("; frame-ancestors 'none'", "")))).not.toEqual([]);
+  });
+
+  it("let images and frames come from any https host, as an editor may point an image or an embed at one", () => {
+    const d = directives(run(page).headers.get("content-security-policy"));
+    // A signature's backdrop graphics are data: images; without data: the site loses its backdrop.
+    expect(d.get("img-src")).toEqual(["'self'", "https:", "data:"]);
+    expect(d.get("frame-src")).toEqual(["'self'", "https:"]);
+  });
+
+  it("let the page connect to its own origin, the identity provider and the named hosts, and nowhere else", () => {
+    expect(directives(run(page).headers.get("content-security-policy")).get("connect-src")).toEqual(["'self'"]);
+    process.env.AUTH_URL = "https://auth.example.com/";
+    process.env.CONTENT_SECURITY_POLICY_HOSTS = " https://pay.example.net, https://api.example.org:8443 ,";
+    expect(directives(run(page).headers.get("content-security-policy")).get("connect-src")).toEqual([
+      "'self'",
+      "https://auth.example.com",
+      "https://pay.example.net",
+      "https://api.example.org:8443",
+    ]);
+  });
+
+  it.each(["https://pay.example.net/checkout", "https://pay.example.net; script-src *", "pay.example.net"])(
+    "refuse a named host that is not an origin, such as %s, since it lands in the policy as written",
+    (entry) => {
+      process.env.CONTENT_SECURITY_POLICY_HOSTS = entry;
+      expect(() => run(page)).toThrow("CONTENT_SECURITY_POLICY_HOSTS");
+    },
+  );
+
+  it("let the development server evaluate code, and production never", () => {
+    const scripts = () => directives(run(page).headers.get("content-security-policy")).get("script-src");
+    expect(scripts()).not.toContain("'unsafe-eval'");
+    const nodeEnv = process.env.NODE_ENV;
+    try {
+      (process.env as Record<string, string>).NODE_ENV = "development";
+      expect(scripts()).toContain("'unsafe-eval'");
+    } finally {
+      (process.env as Record<string, string | undefined>).NODE_ENV = nodeEnv;
+    }
+  });
+
+  it("keep a browser on https for a year when the site is served over https", () => {
+    expect(run(page).headers.get("strict-transport-security")).toBe("max-age=31536000");
+    expect(run("https://example.com/about").headers.get("strict-transport-security")).toBe("max-age=31536000");
+  });
+
+  it("PLANTED INNOCENT: a site served over http sends no transport rule and keeps its policy", () => {
+    process.env.SITE_URL = "http://example.com";
+    const res = run("http://example.com/de/about");
+    expect(res.headers.get("strict-transport-security")).toBeNull();
+    expect(policyFaults(res)).toEqual([]);
+  });
+
+  it("PLANTED INNOCENT: overwrite a nonce the client sent", () => {
+    expect(run(page, { "x-nonce": "chosen" }).headers.get("x-middleware-request-x-nonce")).not.toBe("chosen");
   });
 });
 
