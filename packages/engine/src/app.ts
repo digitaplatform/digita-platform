@@ -79,6 +79,7 @@ import { registerAuditLogRoutes } from "./core/api/audit-log-router.js";
 import { registerImportExportRoutes } from "./core/api/import-export-router.js";
 import { registerUploadRoutes } from "./core/api/upload-router.js";
 import { createStoragePort } from "./core/storage/storage-factory.js";
+import { attachLegacyLooseFilesOnce } from "./core/storage/legacy-file-attachment.js";
 import { registerSidebarRoutes } from "./core/api/sidebar-router.js";
 import { RelatedDocService } from "./core/related/related-doc-service.js";
 import { DocumentShareService } from "./core/permissions/document-share-service.js";
@@ -673,6 +674,10 @@ export async function createApp(
 
     // 5. Reload entity definitions from MongoDB (DB is the runtime source of truth)
     await registry.loadFromDb(db);
+
+    // 5a. Attach each legacy loose upload to the document that names it, once per database. It
+    //     reads every entity's records, those defined in the database too, so it runs after 5.
+    if (env.AUTO_MIGRATE) await attachLegacyLooseFilesOnce(db, registry.getAll());
 
     // 5b. Snapshot coverage audit — every Link on a submittable entity
     //     should declare a freeze directive (`freeze: true | false |

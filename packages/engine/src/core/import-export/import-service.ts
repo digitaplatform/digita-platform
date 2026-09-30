@@ -24,6 +24,8 @@ import {
   resolveLinksByBk,
 } from "./bk-resolver.js";
 import { serializeRowForStorage } from "./row-serializer.js";
+import { assertAttachFilesReadable } from "../storage/file-access.js";
+import { collectAttachFileIds } from "../storage/file-cleanup.js";
 import { createLogger } from "../logging/logger.js";
 
 const log = createLogger("import-service");
@@ -153,7 +155,7 @@ export class ImportService {
 
         if (mode === "validate") {
           const existingId = bkVal ? ownIdx?.get(bkVal) : undefined;
-          await this.dryRunValidate(entity, row, inFileBks, user, !!existingId);
+          await this.dryRunValidate(entity, row, inFileBks, user, existingId);
           if (existingId) report.updated++;
           else report.inserted++;
           continue;
@@ -317,8 +319,9 @@ export class ImportService {
     row: Record<string, unknown>,
     inFileBks: Set<string>,
     user: UserContext,
-    isUpdate: boolean,
+    existingId: string | undefined,
   ): Promise<void> {
+    const isUpdate = existingId !== undefined;
     const data = serializeRowForStorage(entity, row);
 
     const zres = validateEntityDataZod(entity, data, this.zodSchemaBuilder, !isUpdate);
@@ -335,6 +338,16 @@ export class ImportService {
     }
 
     await this.permissionChecker.check(user, entity.name, isUpdate ? "write" : "create");
+
+    // The real run refuses a file the saver may not read; a ref the stored row holds passes.
+    const stored = isUpdate ? await this.db.findOne(entity.name, existingId, entity.database) : null;
+    await assertAttachFilesReadable(
+      { db: this.db, registry: this.registry, permissionChecker: this.permissionChecker },
+      entity,
+      data,
+      new Set(stored ? collectAttachFileIds(entity.fields, stored) : []),
+      user,
+    );
   }
 
   /** Blank out self-target Link values that point at another as-yet-uninserted in-file row. */

@@ -909,3 +909,48 @@ describe("updateSubmitted — computed refresh (D5)", () => {
     expect(raw?.["total_released"]).toBe(0);
   });
 });
+
+describe("updateSubmitted — an attach cell of a Table in the band", () => {
+  const clerk: UserContext = { _id: "clerk-001", email: "clerk@test.local", roles: ["System User"] };
+  let fileSeq = 0;
+
+  beforeAll(async () => {
+    const { readFile } = await import("fs/promises");
+    registry.register(JSON.parse(await readFile(new URL("../src/entities/File.entity.json", import.meta.url), "utf8")));
+    // A flagged Table opens every cell of its rows to a post-submit patch, an attach cell too.
+    registry.register({
+      name: "ReceiptDoc",
+      module: "test",
+      database: "app",
+      naming: { strategy: "auto_increment", prefix: "RD-", pad_length: 4 },
+      is_submittable: true,
+      storage_path: "receipts",
+      fields: [
+        { fieldname: "title", fieldtype: "Data", label: "Title" },
+        { fieldname: "receipts", fieldtype: "Table", label: "Receipts", allow_on_submit: true, child_fields: [{ fieldname: "scan", fieldtype: "Attach", label: "Scan" }] },
+      ],
+      permissions: [fullPerms, { role: "System User", level: 0, select: 1, read: 1, write: 1 }],
+    } as unknown as EntityDefinition);
+    await db.ensureCollection("ReceiptDoc", "app");
+    await db.ensureCollection(DIGITA.COLLECTIONS.FILE, "core");
+  });
+
+  async function uploadedBy(owner: string): Promise<string> {
+    const id = `FILE-RD${String(++fileSeq).padStart(4, "0")}`;
+    const fileUrl = `/api/v1/file/${id}/download`;
+    await db.insertOne(DIGITA.COLLECTIONS.FILE, { _id: id, file_name: "scan.pdf", file_url: fileUrl, attached_to_entity: "ReceiptDoc", is_private: true, owner }, "core");
+    return fileUrl;
+  }
+
+  it("refuses a patch that names a file the user may not read, or no file at all", async () => {
+    const doc = await docService.insert("ReceiptDoc", { title: "Paid", receipts: [{ scan: null }] }, admin);
+    await docService.submit("ReceiptDoc", doc._id, admin);
+    const rowId = ((await db.findOne("ReceiptDoc", doc._id, "app"))?.["receipts"] as Array<Record<string, unknown>>)[0]!["_row_id"] as string;
+    const patchScan = (scan: string) =>
+      docService.updateSubmitted("ReceiptDoc", doc._id, { children: [{ table: "receipts", row_id: rowId, set: { scan } }] }, clerk);
+
+    await expect(patchScan(await uploadedBy("colleague@test.local"))).rejects.toBeInstanceOf(PermissionDeniedError);
+    await expect(patchScan("/api/v1/file/FILE-RD9999/download")).rejects.toBeInstanceOf(PermissionDeniedError);
+    await expect(patchScan(await uploadedBy(clerk.email))).resolves.toBeDefined();
+  });
+});

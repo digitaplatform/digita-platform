@@ -24,8 +24,8 @@ import { DocumentShareService } from "../permissions/document-share-service.js";
 import { entityHasAnySnapshot, entityHasAnyFreeze } from "../snapshot/snapshot-resolver.js";
 import { resolveStatusIndicator } from "../status/status-resolver.js";
 import type { StoragePort } from "../storage/storage-port.js";
-import { collectAttachFileIds, deleteFileRefCounted, cleanupDocumentAttachments, parseFileId, FILE_FIELD_TYPES } from "../storage/file-cleanup.js";
-import { mayReadFile } from "../storage/file-access.js";
+import { collectAttachFileIds, cleanupDocumentAttachments, parseFileId, FILE_FIELD_TYPES } from "../storage/file-cleanup.js";
+import { assertAttachFilesReadable, mayReadFile } from "../storage/file-access.js";
 import {
   buildMongoFilter,
   assertFieldAllowed,
@@ -1043,7 +1043,7 @@ export class DocumentService {
       doc.creation = now;
       doc.modified = now;
 
-      await this.assertAttachFilesReadable(entity, doc._data, new Set(), user, session);
+      await assertAttachFilesReadable(this.fileAccess(), entity, doc._data, new Set(), user, session);
 
       // Store in DB
       await this.db.insertOne(entity.name, doc.toMongo(), entity.database, session);
@@ -1327,7 +1327,7 @@ export class DocumentService {
       doc.modified = new Date();
       doc.modified_by = user.email;
 
-      await this.assertAttachFilesReadable(entity, doc._data, new Set(attachFilesBefore), user, session);
+      await assertAttachFilesReadable(this.fileAccess(), entity, doc._data, new Set(attachFilesBefore), user, session);
 
       // Save to DB
       await this.db.updateOne(
@@ -1372,23 +1372,13 @@ export class DocumentService {
 
       // Reference-counted cleanup of files this save removed or replaced, once
       // the transaction commits — its own or the caller's — so a rollback never
-      // leaves the document pointing at a deleted file. Best-effort: a storage
-      // hiccup must never fail the save. doc._data now holds the new values;
-      // any file present before but gone now is an orphan.
+      // leaves the document pointing at a deleted file. doc._data now holds the
+      // new values; any file present before but gone now is an orphan.
       const storage = this.storage;
       const after = new Set(collectAttachFileIds(entity.fields, doc._data));
       const orphans = attachFilesBefore.filter((fileId) => !after.has(fileId));
       if (storage && orphans.length > 0) {
-        this.db.afterCommit(session, async () => {
-          for (const fileId of orphans) {
-            try {
-              if (!(await this.isFileOfDocument(fileId, doctype, name, user))) continue;
-              await deleteFileRefCounted(this.db, storage, fileId);
-            } catch (err) {
-              log.warn({ doctype, name, fileId, err }, "Attachment cleanup failed on update");
-            }
-          }
-        });
+        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, storage, orphans, { entity: entity.name, name }, user));
       }
     };
     if (options.sessionOverride) {
@@ -1534,6 +1524,8 @@ export class DocumentService {
         });
       }
       resultDoc = doc;
+      // A patch can name a file: in an attach cell of a flagged Table, or in a flagged Image field.
+      const attachFilesBefore = new Set(collectAttachFileIds(entity.fields, doc._data));
 
       // Clean dirty baseline: only the fields we touch below should be written
       // and versioned (a fresh load starts non-dirty; belt-and-suspenders).
@@ -1803,6 +1795,8 @@ export class DocumentService {
         }
       }
 
+      await assertAttachFilesReadable(this.fileAccess(), entity, doc._data, attachFilesBefore, user, session);
+
       // Stamp + write. modified/modified_by are class props (never in _dirty);
       // getChanges() appends them.
       doc.modified = new Date();
@@ -1935,7 +1929,8 @@ export class DocumentService {
       // them (best-effort — never fails the delete).
       const storage = this.storage;
       if (storage) {
-        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, storage, entity.fields, doc._data));
+        const fileIds = collectAttachFileIds(entity.fields, doc._data);
+        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, storage, fileIds, { entity: entity.name, name }, user));
       }
     };
     if (sessionOverride) {
@@ -2458,12 +2453,14 @@ export class DocumentService {
     await this.permissionChecker.check(user, doctype, "amend", doc._data);
 
     const amendData = this.docStatusEngine.prepareAmend(entity, doc);
-    const copyData = copyDocumentData(entity, doc._data, stored);
     // Give the amendment its OWN File docs (sharing the same blob) so deleting or
-    // replacing an attachment on either document never destroys the other's.
-    await this.cloneAttachments(entity, copyData, user);
-
-    const newDoc = await this.insert(doctype, { ...copyData, ...amendData }, user, ctx);
+    // replacing an attachment on either document never destroys the other's. The
+    // clones are written in the insert's transaction, so a refused amendment leaves none.
+    const newDoc = await this.db.withTransaction(async (session) => {
+      const copyData = copyDocumentData(entity, doc._data, stored);
+      await this.cloneAttachments(entity, name, copyData, user, session);
+      return this.insert(doctype, { ...copyData, ...amendData }, user, ctx, session);
+    });
 
     // The "Amended" entry is supplemental to the "Created" entry that
     // insert() already wrote transactionally; if this one fails we keep
@@ -2501,11 +2498,14 @@ export class DocumentService {
     // Document-level read check (owner / condition / scope filters).
     await this.permissionChecker.check(user, doctype, "read", doc._data);
 
-    const copyData = copyDocumentData(entity, doc._data, stored);
     // Give the copy its OWN File docs (sharing the same blob) so attachment
-    // deletes/replaces on either document don't destroy the other's file.
-    await this.cloneAttachments(entity, copyData, user);
-    return this.insert(doctype, copyData, user, ctx);
+    // deletes/replaces on either document don't destroy the other's file. The
+    // clones are written in the insert's transaction, so a refused copy leaves none.
+    return this.db.withTransaction(async (session) => {
+      const copyData = copyDocumentData(entity, doc._data, stored);
+      await this.cloneAttachments(entity, name, copyData, user, session);
+      return this.insert(doctype, copyData, user, ctx, session);
+    });
   }
 
   /**
@@ -2516,18 +2516,21 @@ export class DocumentService {
    * safe; the File doc pointer is not). For each attach-type field (top-level +
    * Table child_fields) this mints a NEW File doc that shares the same
    * storage_key/thumbnail_key/blob but has its own _id + URL, and rewrites the
-   * field to the new URL. A missing/legacy File doc is left untouched (skipped).
+   * field to the new URL. A ref whose File is gone names nothing and is dropped,
+   * since the insert refuses a file that does not exist.
    */
   private async cloneAttachments(
     entity: EntityDefinition,
+    sourceName: string,
     data: Record<string, unknown>,
     user: UserContext,
+    session: import("mongodb").ClientSession,
   ): Promise<void> {
-    const cloneOne = async (value: unknown): Promise<string | undefined> => {
+    const cloneOne = async (value: unknown): Promise<string | null | undefined> => {
       const srcId = parseFileId(value);
       if (!srcId) return undefined;
-      const src = await this.db.findOne(DIGITA.COLLECTIONS.FILE, srcId, DIGITA.DATABASES.CORE);
-      if (!src) return undefined; // legacy/missing File doc → leave the ref as-is
+      const src = await this.db.findOne(DIGITA.COLLECTIONS.FILE, srcId, DIGITA.DATABASES.CORE, session);
+      if (!src) return null;
       const s = src as Record<string, unknown>;
       // A file the copier may not read is not cloned: the ref stays, and the insert refuses it.
       if (!(await mayReadFile(this.fileAccess(), user, s))) return undefined;
@@ -2546,22 +2549,26 @@ export class DocumentService {
         ...s,
         _id: newId,
         file_url: fileUrl,
-        owner: user.email,
         modified_by: user.email,
         creation: now,
         modified: now,
       };
-      // The clone belongs to the new document, which insert attaches it to.
-      delete clone["attached_to_name"];
+      // The clone of a file bound to the source becomes the copier's loose upload, which the insert
+      // binds to the copy. Any other clone keeps the source file's owner and binding, so its readers
+      // stay that file's readers; the insert binds it only when it is the copier's own upload.
+      if (s["attached_to_entity"] === entity.name && s["attached_to_name"] === sourceName) {
+        clone["owner"] = user.email;
+        delete clone["attached_to_name"];
+      }
       if (s["thumbnail_key"]) clone["thumbnail_url"] = `${fileUrl}?thumb=1`;
-      await this.db.insertOne(DIGITA.COLLECTIONS.FILE, clone, DIGITA.DATABASES.CORE);
+      await this.db.insertOne(DIGITA.COLLECTIONS.FILE, clone, DIGITA.DATABASES.CORE, session);
       return fileUrl;
     };
 
     for (const field of entity.fields) {
       if (FILE_FIELD_TYPES.has(field.fieldtype)) {
         const newUrl = await cloneOne(data[field.fieldname]);
-        if (newUrl) data[field.fieldname] = newUrl;
+        if (newUrl !== undefined) data[field.fieldname] = newUrl;
       } else if (
         field.fieldtype === "Table" &&
         field.child_fields &&
@@ -2575,11 +2582,15 @@ export class DocumentService {
           if (!row || typeof row !== "object") continue;
           for (const cf of attachChildFields) {
             const newUrl = await cloneOne(row[cf.fieldname]);
-            if (newUrl) row[cf.fieldname] = newUrl;
+            if (newUrl !== undefined) row[cf.fieldname] = newUrl;
           }
         }
       }
     }
+  }
+
+  private fileAccess() {
+    return { db: this.db, registry: this.registry, permissionChecker: this.permissionChecker };
   }
 
   /**
@@ -2590,46 +2601,6 @@ export class DocumentService {
    * attached to this one, when the user may write that File row, which is the
    * grant that lets a user set `attached_to_name` through the resource API.
    */
-  private fileAccess() {
-    return { db: this.db, registry: this.registry, permissionChecker: this.permissionChecker };
-  }
-
-  /**
-   * Refuse a save that newly names a file the saver may not read. File ids are sequential, so
-   * without this a user could name any file in a record and read it through a copy's clone, or
-   * delete it by clearing the field again. A ref the save keeps from the stored row passes.
-   */
-  private async assertAttachFilesReadable(
-    entity: EntityDefinition,
-    data: Record<string, unknown>,
-    before: Set<string>,
-    user: UserContext,
-    session: import("mongodb").ClientSession,
-  ): Promise<void> {
-    const added = collectAttachFileIds(entity.fields, data).filter((fileId) => !before.has(fileId));
-    if (added.length === 0) return;
-    const files = await this.db.find(
-      DIGITA.COLLECTIONS.FILE,
-      { filters: [{ _id: { $in: added } }] },
-      DIGITA.DATABASES.CORE,
-      session,
-    );
-    for (const file of files) {
-      if (!(await mayReadFile(this.fileAccess(), user, file as Record<string, unknown>))) {
-        throw new PermissionDeniedError(user.email, DIGITA.COLLECTIONS.FILE, "read");
-      }
-    }
-  }
-
-  /** Whether a file a save removed may be deleted: it was bound to this document, or it is the
-   *  saver's own loose upload. Any other file stays, whoever named it here. */
-  private async isFileOfDocument(fileId: string, doctype: string, name: string, user: UserContext): Promise<boolean> {
-    const file = (await this.db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE)) as Record<string, unknown> | null;
-    if (!file) return false;
-    if (file["attached_to_name"]) return file["attached_to_entity"] === doctype && file["attached_to_name"] === name;
-    return file["owner"] === user.email || file["owner"] === user._id;
-  }
-
   private async attachFilesToDocument(
     entity: EntityDefinition,
     name: string,

@@ -153,21 +153,29 @@ export async function deleteBlobIfUnreferenced(
 }
 
 /**
- * Best-effort cleanup of every File referenced by a document's attach fields —
- * used by the document-delete cascade. Never throws (cleanup must not fail the
- * owning operation); each File is reference-counted via deleteFileRefCounted.
+ * Delete the files a document stopped naming, by its update or its delete. Only a file the
+ * document owns goes: one bound to it, or the user's own loose upload. A record can name a file
+ * it does not own, a colleague's or one bound to another record; that file stays. Never throws,
+ * because a cleanup must not fail the operation that owns it; a failure is logged. Each File is
+ * reference-counted via deleteFileRefCounted.
  */
 export async function cleanupDocumentAttachments(
   db: MongoDBService,
   storage: StoragePort,
-  fields: ReadonlyArray<{ fieldname: string; fieldtype: string }>,
-  data: Record<string, unknown>,
+  fileIds: ReadonlyArray<string>,
+  document: { entity: string; name: string },
+  user: { _id: string; email: string },
 ): Promise<void> {
-  for (const id of collectAttachFileIds(fields, data)) {
+  for (const fileId of fileIds) {
     try {
-      await deleteFileRefCounted(db, storage, id);
+      const file = (await db.findOne(FILE, fileId, CORE)) as Record<string, unknown> | null;
+      if (!file) continue;
+      const isOwned = file["attached_to_name"]
+        ? file["attached_to_entity"] === document.entity && file["attached_to_name"] === document.name
+        : file["owner"] === user.email || file["owner"] === user._id;
+      if (isOwned) await deleteFileRefCounted(db, storage, fileId);
     } catch (err) {
-      log.warn({ fileId: id, err }, "Attachment cleanup failed for one file");
+      log.warn({ fileId, ...document, err }, "Attachment cleanup failed for one file");
     }
   }
 }
