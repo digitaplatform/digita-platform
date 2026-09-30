@@ -14,7 +14,7 @@ interface WorkspaceCardBase {
   kind: WorkspaceCardKind;
   label: string;
   icon?: string;
-  /** Grid span; default 1. */
+  /** Grid span; default 2 for a chart or a list card, 1 for any other. */
   width?: 1 | 2 | 3;
   /**
    * CLIENT-side per-card behavior on empty/locked section data. Does NOT change the

@@ -84,7 +84,7 @@ export function ChartCard({ card, icon, status, error, data }: ChartCardProps) {
   const rows = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
   if (status !== 'ready') {
-    return <CardShell label={card.label} icon={icon} width={card.width} status={status} error={error} />;
+    return <CardShell label={card.label} icon={icon} status={status} error={error} />;
   }
 
   // FAIL LOUD on a malformed chart contract.
@@ -95,12 +95,12 @@ export function ChartCard({ card, icon, status, error, data }: ChartCardProps) {
     configError = 'chart card has no y_fields';
   if (configError) {
     return (
-      <CardShell label={card.label} icon={icon} width={card.width} status="error" error={configError} />
+      <CardShell label={card.label} icon={icon} status="error" error={configError} />
     );
   }
 
   return (
-    <CardShell label={card.label} icon={icon} width={card.width ?? 2} status="ready">
+    <CardShell label={card.label} icon={icon} status="ready">
       <div ref={hostRef} className="h-48 w-full">
         {rows.length === 0 ? (
           <p className="flex h-full items-center text-sm text-textMuted">{EMPTY}</p>

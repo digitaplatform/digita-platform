@@ -50,7 +50,7 @@ export function ListCard({ card, icon, status, error, data, entity, onNavigate }
   // The table waits for the labels, so its headers never flash the keys.
   const shellStatus = status === 'ready' && meta.isLoading ? 'loading' : status;
   if (shellStatus !== 'ready') {
-    return <CardShell label={card.label} icon={icon} width={card.width} status={shellStatus} error={error} />;
+    return <CardShell label={card.label} icon={icon} status={shellStatus} error={error} />;
   }
 
   const rows = Array.isArray(data) ? data : [];
@@ -60,14 +60,14 @@ export function ListCard({ card, icon, status, error, data, entity, onNavigate }
 
   if (limited.length === 0) {
     return (
-      <CardShell label={card.label} icon={icon} width={card.width ?? 2} status="ready">
+      <CardShell label={card.label} icon={icon} status="ready">
         <p className="flex flex-1 items-center text-sm text-textMuted">{EMPTY}</p>
       </CardShell>
     );
   }
 
   return (
-    <CardShell label={card.label} icon={icon} width={card.width ?? 2} status="ready">
+    <CardShell label={card.label} icon={icon} status="ready">
       <div className="-mx-1 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-left text-textMuted">

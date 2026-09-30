@@ -39,6 +39,25 @@ export type CardResolve = (
   section: string,
 ) => ResolvedSection;
 
+/** Grid width → literal Tailwind col-span class, written whole so the Tailwind scan keeps it.
+ *  The responsive grid lives in DashboardPage (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`);
+ *  a width only widens a card at the three-column breakpoint, so a phone always stacks. */
+const WIDTH_SPAN: Record<1 | 2 | 3, string> = {
+  1: 'lg:col-span-1',
+  2: 'lg:col-span-2',
+  3: 'lg:col-span-3',
+};
+
+/**
+ * The col-span class of the grid item that holds `card`. It belongs on the grid's own child:
+ * on the card inside that child a span does nothing. A chart or a list needs room to be read,
+ * so it is two columns wide unless it names its width; any other card is one.
+ */
+export function cardSpan(card: WorkspaceCard): string {
+  const needsRoom = card.kind === 'chart' || card.kind === 'list';
+  return WIDTH_SPAN[card.width ?? (needsRoom ? 2 : 1)];
+}
+
 /**
  * Map a resolver result + the card's on_data_error policy to a CardShell status.
  * Loud errors are always loud. A locked/empty section is CALM by default; a card

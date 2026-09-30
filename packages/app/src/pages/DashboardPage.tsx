@@ -11,7 +11,7 @@ import { getDoc, getView } from '@/services/resource';
 import { qk } from '@/lib/query-keys';
 import { ApiClientError } from '@/lib/errors';
 import { unwrap } from '@/lib/api-result';
-import { renderCard, type CardResolve, type ResolvedSection } from '@/components/dashboard';
+import { cardSpan, renderCard, type CardResolve, type ResolvedSection } from '@/components/dashboard';
 import { ErrorBlock, EmptyState } from '@/components/status';
 import { CardsSkeleton } from '@digitaplatform/components';
 
@@ -152,7 +152,7 @@ export default function DashboardPage() {
         <h1 className="text-h1 font-display text-textMain">{ws.data?.name ?? tc('ui.dashboard.title')}</h1>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {cards.map((card) => (
-            <div key={card.id}>{renderCard(card, resolve, go)}</div>
+            <div key={card.id} className={cardSpan(card)}>{renderCard(card, resolve, go)}</div>
           ))}
         </div>
       </div>

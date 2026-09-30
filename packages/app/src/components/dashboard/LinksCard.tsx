@@ -19,7 +19,7 @@ const linkClass =
  */
 export function LinksCard({ card, icon, onNavigate }: LinksCardProps) {
   return (
-    <CardShell label={card.label} icon={icon} width={card.width} status="ready">
+    <CardShell label={card.label} icon={icon} status="ready">
       <ul className="-mx-2 flex flex-col">
         {card.links.map((link, i) => (
           <li key={i}>

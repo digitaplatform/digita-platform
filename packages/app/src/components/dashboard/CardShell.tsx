@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Card, cn } from '@digitaplatform/components';
+import { Card } from '@digitaplatform/components';
 import { useChrome } from '@/lib/chrome-i18n';
 import { EMPTY } from '@/lib/format';
 
@@ -8,26 +8,9 @@ import { EMPTY } from '@/lib/format';
  *  (it renders the em-dash itself) so it is NOT a CardShell status here. */
 export type CardStatus = 'loading' | 'locked' | 'error' | 'ready';
 
-/** Grid width → literal Tailwind col-span class. The responsive GRID itself lives
- *  in DashboardPage (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`); width only WIDENS
- *  a card, never narrows it, and clamps to 1..3. Mobile always stacks (col-span-1 is
- *  the base; the lg: span only applies at the 3-col breakpoint). */
-const WIDTH_SPAN: Record<1 | 2 | 3, string> = {
-  1: 'lg:col-span-1',
-  2: 'lg:col-span-2',
-  3: 'lg:col-span-3',
-};
-
-function clampWidth(width: number | undefined): 1 | 2 | 3 {
-  if (width === 2) return 2;
-  if (width === 3) return 3;
-  return 1;
-}
-
 interface CardShellProps {
   label: string;
   icon?: ReactNode;
-  width?: 1 | 2 | 3;
   status: CardStatus;
   /** Loud error detail (only shown when status === 'error'). */
   error?: string;
@@ -40,9 +23,8 @@ interface CardShellProps {
  * ready → children. Legitimate empty data is the card body's concern (renders a
  * calm em-dash); misconfiguration is loud here.
  */
-export function CardShell({ label, icon, width, status, error, children }: CardShellProps) {
+export function CardShell({ label, icon, status, error, children }: CardShellProps) {
   const tc = useChrome();
-  const span = WIDTH_SPAN[clampWidth(width)];
 
   return (
     // The active signature's `card` layer rides on top of the design's card
@@ -50,7 +32,7 @@ export function CardShell({ label, icon, width, status, error, children }: CardS
     // vector as a stretch-adapted data-URI SVG, painted 100%×100%); an unset
     // var falls back to the plain surface, so thin signatures are visually
     // unchanged.
-    <Card graphic className={cn('flex min-h-[8rem] flex-col', span)}>
+    <Card graphic className="flex min-h-[8rem] flex-col">
       <div className="mb-3 flex items-start gap-3">
         {icon && (
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-card bg-subtle text-textMuted" aria-hidden="true">
