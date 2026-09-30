@@ -4,7 +4,7 @@
 // jsdom lays nothing out, so the test reads the grid from the classes the form renders, the way a
 // browser sizes it: the tracks of `grid-cols-N` are minmax(0, 1fr) and shrink to nothing, while
 // each column gap between the tracks a cell spans keeps its full width.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import resolveConfig from 'tailwindcss/resolveConfig';
@@ -12,6 +12,11 @@ import type { FieldDefinition } from '@digitaplatform/shared';
 import type { FieldStateMap } from '@/lib/evaluate-field';
 import { FormRenderer } from '@/components/render/FormRenderer';
 import tailwindConfig from '../tailwind.config.js';
+
+// A Link and a Table control read the engine. The grid, not the control, sizes a cell, so they
+// stand in empty.
+vi.mock('@/controls/LinkControl', () => ({ default: () => null }));
+vi.mock('@/controls/TableControl', () => ({ default: () => null }));
 
 const theme = resolveConfig(tailwindConfig).theme;
 const breakpoints: Record<string, unknown> = theme.screens;
@@ -45,8 +50,8 @@ function gridUtilitiesAt(className: string, viewport: number): string[] {
   return applying.sort((a, b) => a.from - b.from || a.order - b.order).map((entry) => entry.utility);
 }
 
-/** How wide a cell of a grid is in a form `formWidth` px wide on a viewport `viewport` px wide. */
-function cellWidth(gridClassName: string, cellClassName: string, formWidth: number, viewport: number): number {
+/** The tracks of a grid and the gap between them, on a viewport `viewport` px wide. */
+function gridAt(gridClassName: string, viewport: number): { tracks: number; columnGap: number } {
   let tracks: number | undefined;
   let columnGap = 0;
   for (const utility of gridUtilitiesAt(gridClassName, viewport)) {
@@ -60,6 +65,12 @@ function cellWidth(gridClassName: string, cellClassName: string, formWidth: numb
     }
   }
   if (tracks === undefined) throw new Error(`no grid-cols-N applies at ${viewport}px: ${gridClassName}`);
+  return { tracks, columnGap };
+}
+
+/** How wide a cell of a grid is in a form `formWidth` px wide on a viewport `viewport` px wide. */
+function cellWidth(gridClassName: string, cellClassName: string, formWidth: number, viewport: number): number {
+  const { tracks, columnGap } = gridAt(gridClassName, viewport);
   let span = 1;
   for (const utility of gridUtilitiesAt(cellClassName, viewport)) {
     const match = /^col-span-(\d+|full)$/.exec(utility);
@@ -70,10 +81,24 @@ function cellWidth(gridClassName: string, cellClassName: string, formWidth: numb
   return span * track + (span - 1) * columnGap;
 }
 
-/** A 360 px phone and its narrowest form: the shell pads the page by 16 px and a card in the
- *  spacious density pads the section by 32 px, on each side. */
+/** The narrowest form of a phone `viewport` px wide: the shell pads the page by 16 px and a card in
+ *  the spacious density pads the section by 32 px, on each side. */
+const phoneForm = (viewport: number) => viewport - 2 * 16 - 2 * 32;
 const PHONE = 360;
-const PHONE_FORM = PHONE - 2 * 16 - 2 * 32;
+const PHONE_FORM = phoneForm(PHONE);
+
+const EDITABLE = { visible: true, required: false, readOnly: false, invalid: false, isComputed: false, isFrozen: false, updating: false };
+
+/** Draws `fields` as the form of a WorkOrder and returns the cell of each field, in order. */
+function renderCells(fields: FieldDefinition[]): HTMLElement[] {
+  const fieldState: FieldStateMap = Object.fromEntries(fields.map((f) => [f.fieldname, EDITABLE]));
+  render(
+    <MemoryRouter>
+      <FormRenderer entity="WorkOrder" fields={fields} doc={{}} fieldState={fieldState} errors={{}} onFieldChange={() => {}} />
+    </MemoryRouter>,
+  );
+  return fields.map((f) => screen.getByTestId(`field:WorkOrder:${f.fieldname}`));
+}
 
 describe('the layout rule of a form grid', () => {
   it('finds the full row of a twelve-track grid with fixed gaps wider than a phone form', () => {
@@ -92,27 +117,48 @@ const FIELDS = [
   { fieldname: 'customer_signature', fieldtype: 'Signature', label: 'Customer signature' },
 ] as FieldDefinition[];
 
-const STATE: FieldStateMap = Object.fromEntries(
-  FIELDS.map((f) => [
-    f.fieldname,
-    { visible: true, required: false, readOnly: false, invalid: false, isComputed: false, isFrozen: false, updating: false },
-  ]),
-);
-
 describe('a form on a 360 px phone', () => {
   it('draws no cell wider than the form, the Signature pad inside its cell', async () => {
-    render(
-      <MemoryRouter>
-        <FormRenderer entity="WorkOrder" fields={FIELDS} doc={{}} fieldState={STATE} errors={{}} onFieldChange={() => {}} />
-      </MemoryRouter>,
-    );
-    for (const field of FIELDS) {
-      const cell = screen.getByTestId(`field:WorkOrder:${field.fieldname}`);
-      expect(cellWidth(cell.parentElement!.className, cell.className, PHONE_FORM, PHONE), field.fieldname).toBeLessThanOrEqual(
+    const cells = renderCells(FIELDS);
+    cells.forEach((cell, i) => {
+      expect(cellWidth(cell.parentElement!.className, cell.className, PHONE_FORM, PHONE), FIELDS[i]!.fieldname).toBeLessThanOrEqual(
         PHONE_FORM,
       );
-    }
+    });
     const signature = screen.getByTestId('field:WorkOrder:customer_signature');
     expect(await within(signature).findByRole('img', { name: 'Customer signature' })).toBeInTheDocument();
+  });
+});
+
+/** The intake of a workshop's work order: one section, no ColumnBreak. */
+const INTAKE = [
+  { fieldname: 'customer', fieldtype: 'Link', label: 'Customer', options: 'Customer' },
+  { fieldname: 'bike', fieldtype: 'Link', label: 'Bike', options: 'Bike' },
+  { fieldname: 'received_on', fieldtype: 'Date', label: 'Received on' },
+  { fieldname: 'quantity', fieldtype: 'Int', label: 'Quantity' },
+  { fieldname: 'complaint', fieldtype: 'SmallText', label: 'Complaint' },
+  { fieldname: 'parts', fieldtype: 'Table', label: 'Parts', options: 'WorkOrderPart' },
+  { fieldname: 'notes', fieldtype: 'Text', label: 'Notes' },
+] as FieldDefinition[];
+
+/** The grid every width drew before a phone got its own; from md on the form still draws it. */
+const TABLET_AND_DESKTOP_GRID = 'grid grid-cols-12 gap-x-8 gap-y-6';
+
+describe('a section without ColumnBreak on a 390 px phone', () => {
+  it('draws every field of the section inside the card', () => {
+    const cells = renderCells(INTAKE);
+    cells.forEach((cell, i) => {
+      expect(cellWidth(cell.parentElement!.className, cell.className, phoneForm(390), 390), INTAKE[i]!.fieldname).toBeLessThanOrEqual(
+        phoneForm(390),
+      );
+    });
+  });
+
+  it('keeps the grid of md and lg', () => {
+    const [cell] = renderCells(INTAKE);
+    for (const viewport of [768, 1024, 1280]) {
+      expect(gridAt(cell!.parentElement!.className, viewport)).toEqual(gridAt(TABLET_AND_DESKTOP_GRID, viewport));
+    }
+    expect(gridAt(cell!.parentElement!.className, 768)).toEqual({ tracks: 12, columnGap: 32 });
   });
 });
