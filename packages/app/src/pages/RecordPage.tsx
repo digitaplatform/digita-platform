@@ -100,6 +100,7 @@ export default function RecordPage() {
   const singleQ = useSingle<Doc>(isSingle ? entity : undefined);
   const loaded = isSingle ? singleQ : docQ;
   const tc = useChrome();
+  const tEntity = useI18nStore((s) => s.tEntity);
   const user = useSessionStore((s) => s.user);
 
   if (metaQ.isLoading) return <FormSkeleton fields={8} />;
@@ -109,6 +110,16 @@ export default function RecordPage() {
       <ErrorBlock
         title={tc('ui.entity.notFound')}
         detail={e instanceof Error ? e.message : String(e ?? entity)}
+      />
+    );
+  }
+  // The engine refuses a new record without `create`; a bookmark or a link to the new-record
+  // route must not draw a form whose Create answers 403.
+  if (isNew && !hasEntityPermission(metaQ.data, user, 'create')) {
+    return (
+      <ErrorBlock
+        title={tc('ui.dashboard.noAccess')}
+        detail={`${tEntity(entity, metaQ.data.label ?? entity)} · ${tc('ui.record.new')}`}
       />
     );
   }
@@ -242,10 +253,9 @@ function RecordForm({
     return m;
   }, [meta]);
   const canWriteLevel = useMemo(() => writableLevelPredicate(meta, user), [meta, user]);
-  // The record's workflow state may strip write from every role of the user that grants it.
-  // The engine then refuses the whole save, judged on the stored record, so the form locks.
-  const writeStripped =
-    !isNew && hasEntityPermission(meta, user, 'write') && !hasRecordPermission(meta, user, 'write', initial);
+  // The engine refuses the whole save of a stored record without `write` on it, which a
+  // workflow state may also strip, so the form locks and offers no Save.
+  const writeRefused = !isNew && !hasRecordPermission(meta, user, 'write', initial);
   const hasTable = useMemo(() => meta.fields.some((f) => f.fieldtype === 'Table'), [meta]);
 
   // Live required resolver via a ref → the zod schema instance stays stable.
@@ -291,11 +301,11 @@ function RecordForm({
       allowOnSubmitSet,
       isNew,
       canWriteLevel,
-      formDisabled: writeStripped,
+      formDisabled: writeRefused,
     });
     stateRef.current = map;
     return map;
-  }, [watched, meta, computedSet, frozenSet, allowOnSubmitSet, docstatus, isNew, canWriteLevel, writeStripped, user]);
+  }, [watched, meta, computedSet, frozenSet, allowOnSubmitSet, docstatus, isNew, canWriteLevel, writeRefused, user]);
 
   // Overlay the "updating…" flag on computed fields while a preview is in flight.
   const renderState = useMemo(() => {
@@ -656,7 +666,7 @@ function RecordForm({
         saving={saving}
         isNew={isNew}
         canDelete={canDelete}
-        hideSave={docLocked || writeStripped}
+        hideSave={docLocked || writeRefused}
         saveDisabled={conflict}
         busy={saving || deleteM.isPending}
         onCancel={() => navigate(-1)}
