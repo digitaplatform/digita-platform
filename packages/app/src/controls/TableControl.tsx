@@ -78,8 +78,8 @@ function parseGridWidth(w?: string): number | undefined {
 
 /**
  * Field types whose editor commits and closes on Enter. Excluded: controls that
- * use Enter internally (Link/Select pickers, JSON/Tag/Barcode), so Enter does not
- * prematurely close them.
+ * use Enter internally (Link/Select pickers, the Date picker's trigger, JSON/Tag/
+ * Barcode), so Enter does not prematurely close them.
  */
 const ENTER_EXIT_TYPES = new Set([
   'Data',
@@ -89,7 +89,6 @@ const ENTER_EXIT_TYPES = new Set([
   'Currency',
   'Percent',
   'Duration',
-  'Date',
   'Datetime',
   'Time',
   'Phone',
@@ -97,6 +96,10 @@ const ENTER_EXIT_TYPES = new Set([
   'Color',
   'Rating',
 ]);
+
+/** Field types whose editor commits and closes on Tab. A Date cell is one: its
+ *  picker takes Enter, and a pick commits the cell itself, but Tab still moves on. */
+const TAB_EXIT_TYPES = new Set([...ENTER_EXIT_TYPES, 'Date']);
 
 /** Stable row id for the grid: the row's `_row_id`, or a per-row fallback. */
 const fallbackRowIds = new WeakMap<object, string>();
@@ -523,8 +526,8 @@ export default function TableControl(props: FieldControlProps) {
             e.stopPropagation();
             cancel();
           } else if (
-            (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) &&
-            ENTER_EXIT_TYPES.has(cf.fieldtype)
+            (e.key === 'Enter' && ENTER_EXIT_TYPES.has(cf.fieldtype)) ||
+            (e.key === 'Tab' && !e.shiftKey && TAB_EXIT_TYPES.has(cf.fieldtype))
           ) {
             // preventDefault for BOTH: Enter would otherwise fire the record
             // form's implicit submit (confirm-save mid-line), Tab would move
