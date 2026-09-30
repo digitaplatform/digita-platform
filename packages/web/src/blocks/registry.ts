@@ -12,6 +12,8 @@ import { Signals } from "./marketing/Signals";
 import { CtaPanel } from "./marketing/CtaPanel";
 import { ContactDetails } from "./marketing/ContactDetails";
 import { Showcase } from "./marketing/Showcase";
+import { RecordForm } from "./RecordForm";
+import { RECORD_FORM_INPUTS } from "./record-form";
 import { PLUGIN_MANIFESTS } from "@/plugins";
 
 /** The heading every marketing section opens with. */
@@ -384,6 +386,47 @@ export const BLOCK_MANIFESTS: BlockManifest[] = [
       LEDE,
       { name: "plugin_id", label: "Plugin", type: "select", required: true, options: PLUGIN_MANIFESTS.map((plugin) => plugin.id) },
       { name: "caption", label: "Caption", type: "text" },
+    ],
+  },
+  {
+    type: "record_form",
+    name: "Record form",
+    description: "A form that creates one record of an entity through the Guest create of its engine, then thanks the visitor.",
+    category: "interactive",
+    component: RecordForm,
+    props: [
+      EYEBROW,
+      HEADING,
+      LEDE,
+      { name: "app", label: "App", type: "text", help: "The tenant app whose engine holds the entity; empty for the site's own engine." },
+      { name: "entity", label: "Entity", type: "text", required: true, help: "Its Guest row grants create, and write on every field below." },
+      {
+        name: "fields",
+        label: "Fields",
+        type: "list",
+        required: true,
+        help: "In the order the form shows them.",
+        itemFields: [
+          { name: "name", label: "Field", type: "text", required: true, help: "The entity's field name." },
+          { name: "label", label: "Label", type: "text", help: "Required unless the input is hidden." },
+          { name: "type", label: "Input", type: "select", options: [...RECORD_FORM_INPUTS], help: "Empty for a line of text." },
+          { name: "required", label: "Required", type: "boolean" },
+          { name: "max_length", label: "Max length", type: "number" },
+          {
+            name: "options",
+            label: "Options",
+            type: "list",
+            help: "The choices of a select, the first chosen at the start.",
+            itemFields: [
+              { name: "value", label: "Value", type: "text", required: true },
+              { name: "label", label: "Label", type: "text", required: true },
+            ],
+          },
+          { name: "value", label: "Value", type: "text", help: "What a hidden input sends, such as the page's language." },
+        ],
+      },
+      { name: "send_label", label: "Button label", type: "text" },
+      { name: "thanks", label: "Thank-you text", type: "textarea", help: "Shown in place of the form once the record is created." },
     ],
   },
 ];

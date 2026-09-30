@@ -20,6 +20,7 @@ export type BlockType =
   | "cta_panel"
   | "contact_details"
   | "showcase"
+  | "record_form"
   | "plugin";
 
 export interface Block {

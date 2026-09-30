@@ -32,9 +32,40 @@ function reqInt(key: string): number {
 }
 const noTrailing = (u: string): string => u.replace(/\/+$/, "");
 
+/**
+ * The engines of the tenant's apps by app name, from ENGINE_URLS: a JSON object of app to that
+ * app's cluster-internal engine URL, which the chart renders from the tenant's apps. Unset means
+ * none beside ENGINE_URL. A value that is not such an object fails every request and names the
+ * variable, so a form never posts to an engine nobody declared. A Map, so an app named
+ * "__proto__" is only a name.
+ */
+export function parseEngineUrls(raw: string | undefined): ReadonlyMap<string, string> {
+  const urls = new Map<string, string>();
+  if (raw === undefined || raw === "") return urls;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("[digita-web] ENGINE_URLS must be a JSON object of app to engine URL");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("[digita-web] ENGINE_URLS must be a JSON object of app to engine URL");
+  }
+  for (const [app, url] of Object.entries(parsed)) {
+    if (typeof url !== "string" || !/^https?:\/\//.test(url)) {
+      throw new Error(`[digita-web] ENGINE_URLS names app "${app}" without an http(s) URL`);
+    }
+    urls.set(app, noTrailing(url));
+  }
+  return urls;
+}
+
 export interface ServerConfig extends Omit<PublicSiteConfig, "contactEnabled" | "notFound"> {
   /** Cluster-internal engine URL for server-side fetches (never sent to the browser). */
   engineUrl: string;
+  /** The engines of the tenant's apps a record form may post to (ENGINE_URLS, parseEngineUrls).
+   *  Explicitly OPTIONAL: a site without one posts only to its own engine. */
+  engineUrls: ReadonlyMap<string, string>;
   revalidateSeconds: number;
   /** The secret the engine sends with a cache purge (REVALIDATE_SECRET). */
   revalidateSecret: string;
@@ -59,6 +90,7 @@ export function getConfig(): ServerConfig {
   if (cached) return cached;
   cached = {
     engineUrl: noTrailing(req("ENGINE_URL")),
+    engineUrls: parseEngineUrls(process.env.ENGINE_URLS),
     siteId: req("SITE_ID"),
     siteUrl: noTrailing(req("SITE_URL")),
     publicEngineUrl: noTrailing(reqDefined("PUBLIC_ENGINE_URL")),
