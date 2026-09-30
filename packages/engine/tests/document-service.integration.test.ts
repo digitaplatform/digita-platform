@@ -637,6 +637,110 @@ describe("A save keeps the stored value of a child field the user may not write"
   });
 });
 
+describe("An update re-derives the fetch_from fields of a row whose Link changed", () => {
+  // SalesOrder.lines in small: `product_code` is read_only, `uom` is writable,
+  // both fetch_from the row's `product` with fetch_if_empty.
+  const salesperson: UserContext = { _id: "sp-001", email: "sp@test.local", roles: ["Salesperson"], full_name: "Sales" };
+
+  beforeAll(async () => {
+    registry.register(
+      makeEntity({
+        name: "FetchProduct",
+        naming: { strategy: "user_set" },
+        fields: [
+          { fieldname: "product_no", fieldtype: "Data" as const, label: "Product No" },
+          { fieldname: "sales_uom", fieldtype: "Data" as const, label: "Sales UOM" },
+        ],
+      }),
+    );
+    registry.register(
+      makeEntity({
+        name: "FetchOrder",
+        fields: [
+          { fieldname: "title", fieldtype: "Data" as const, label: "Title" },
+          {
+            fieldname: "lines",
+            fieldtype: "Table" as const,
+            label: "Lines",
+            child_fields: [
+              { fieldname: "product", fieldtype: "Link" as const, label: "Product", target: "FetchProduct" },
+              {
+                fieldname: "product_code",
+                fieldtype: "Data" as const,
+                label: "Product Code",
+                read_only: true,
+                fetch_from: "product.product_no",
+                fetch_if_empty: true,
+              },
+              { fieldname: "uom", fieldtype: "Data" as const, label: "UOM", fetch_from: "product.sales_uom", fetch_if_empty: true },
+              { fieldname: "quantity", fieldtype: "Float" as const, label: "Quantity" },
+            ],
+          },
+        ],
+        permissions: [
+          { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
+          { role: "Salesperson", level: 0, select: 1, read: 1, write: 1, create: 1 },
+        ],
+      }),
+    );
+    await db.ensureCollection("FetchProduct", "app");
+    await db.ensureCollection("FetchOrder", "app");
+    await docService.insert("FetchProduct", { _id: "SERVICE", product_no: "S-100", sales_uom: "HOUR" }, adminUser);
+    await docService.insert("FetchProduct", { _id: "STOCKABLE", product_no: "P-200", sales_uom: "PCS" }, adminUser);
+  });
+
+  async function storedLines(name: string): Promise<Record<string, unknown>[]> {
+    const raw = (await db.findOne("FetchOrder", name, "app")) as Record<string, unknown>;
+    return raw["lines"] as Record<string, unknown>[];
+  }
+
+  it("re-derives the changed row, adds a new row's values, and leaves an unchanged row alone", async () => {
+    const created = await docService.insert(
+      "FetchOrder",
+      { title: "SO", lines: [{ product: "SERVICE", quantity: 1 }, { product: "SERVICE", quantity: 2 }] },
+      salesperson,
+    );
+    const [changed, unchanged] = await storedLines(created._id);
+    expect(changed!["product_code"]).toBe("S-100");
+    // A later edit of the product must not reach a row whose product stays.
+    await db.updateOne("FetchProduct", "SERVICE", { product_no: "S-101" }, "app");
+
+    // The salesperson resends the rows as read and points the first at another product.
+    await docService.update(
+      "FetchOrder",
+      created._id,
+      {
+        lines: [
+          { ...changed, product: "STOCKABLE" },
+          { ...unchanged },
+          { product: "STOCKABLE", quantity: 3 },
+        ],
+      },
+      salesperson,
+    );
+
+    const rows = await storedLines(created._id);
+    expect(rows.map((r) => r["product_code"])).toEqual(["P-200", "S-100", "P-200"]);
+    expect(rows.map((r) => r["uom"])).toEqual(["PCS", "HOUR", "PCS"]);
+  });
+
+  it("keeps a value the same write sets on the row whose Link changed", async () => {
+    const created = await docService.insert("FetchOrder", { title: "SO", lines: [{ product: "SERVICE" }] }, adminUser);
+    const [row] = await storedLines(created._id);
+
+    await docService.update(
+      "FetchOrder",
+      created._id,
+      { lines: [{ ...row, product: "STOCKABLE", product_code: "CUSTOM-1", uom: "BOX" }] },
+      adminUser,
+    );
+
+    const [stored] = await storedLines(created._id);
+    expect(stored!["product_code"]).toBe("CUSTOM-1");
+    expect(stored!["uom"]).toBe("BOX");
+  });
+});
+
 describe("Read-field-level permissions: a link title or status color shows only with its field", () => {
   // Clerk reads level 0 only: the Link `customer` and the `status` sit at level 1.
   const clerk: UserContext = {

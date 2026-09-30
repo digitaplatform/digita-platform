@@ -1219,7 +1219,8 @@ export class DocumentService {
       }
     }
 
-    // Fetch-from for changed link fields
+    // Fetch-from: a changed top-level Link resolves the whole document; a child
+    // row the write adds or points at another source re-derives its own fields.
     const changedFields = doc.getChangedFields();
     const hasChangedLinks = entity.fields.some(
       (f) => f.fieldtype === "Link" && changedFields.includes(f.fieldname),
@@ -1228,6 +1229,7 @@ export class DocumentService {
       const fetched = await this.fetchFromResolver.resolve(entity, doc._data, options.sessionOverride);
       doc.merge(fetched);
     }
+    await this.fetchFromResolver.resolveChangedRows(entity, doc._data, doc._original, options.sessionOverride);
 
     // Wrap field-change/computed/validate/Zod/link/period + before_save +
     // write + on_update/on_change in a single transaction so any hook DB

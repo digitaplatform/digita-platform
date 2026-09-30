@@ -1,4 +1,4 @@
-import type { EntityDefinition, DatabaseTarget } from "@digitaplatform/shared";
+import type { EntityDefinition, DatabaseTarget, FieldDefinition } from "@digitaplatform/shared";
 import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from "@digitaplatform/shared";
 import type { ClientSession } from "mongodb";
 import type { MongoDBService } from "../database/mongodb-service.js";
@@ -103,53 +103,108 @@ export class FetchFromResolver {
       if (field.fieldtype !== "Table" || !field.child_fields) continue;
       const rows = result[field.fieldname];
       if (!Array.isArray(rows)) continue;
-
-      for (const row of rows) {
-        const rowData = row as Record<string, unknown>;
-        for (const childField of field.child_fields) {
-          if (!childField.fetch_from) continue;
-          const parts = childField.fetch_from.split(".");
-          if (parts.length < 2) continue;
-          const linkFieldname = parts[0]!;
-          const path = parts.slice(1).join(".");
-
-          if (childField.fetch_if_empty) {
-            const current = rowData[childField.fieldname];
-            if (current !== null && current !== undefined && current !== "") continue;
-          }
-          const linkedId = rowData[linkFieldname];
-          if (!linkedId) continue;
-
-          const linkField = field.child_fields.find((f) => f.fieldname === linkFieldname);
-          if (!linkField || linkField.fieldtype !== "Link" || !linkField.target) continue;
-
-          let lookupId = String(linkedId);
-          let targetPath: string | undefined;
-          let rowId: string | undefined;
-          if (linkField.target_path) {
-            const parsed = parseSubRowLink(lookupId);
-            if (!parsed) continue;
-            lookupId = parsed.parentId;
-            targetPath = linkField.target_path;
-            rowId = parsed.rowId;
-          }
-
-          requests.push({
-            db: this.registry.get(linkField.target).database,
-            target: linkField.target,
-            id: lookupId,
-            path,
-            targetPath,
-            rowId,
-            assign: (v) => {
-              if (v !== undefined) rowData[childField.fieldname] = v;
-            },
-          });
-        }
-      }
+      for (const row of rows) this.collectRowRequests(field, row as Record<string, unknown>, requests);
     }
 
-    if (requests.length === 0) return result;
+    await this.fetchInto(requests, session);
+    return result;
+  }
+
+  /**
+   * On an update, re-derive the fetch_from fields of each child row that the
+   * write adds or whose source Link differs from its row in `stored`, matched by
+   * `_row_id`. A new row resolves as on insert. In a row whose source changed, a
+   * `fetch_if_empty` field also re-derives while it still holds its stored
+   * value, so a value the same write sets is kept. Every other row stays as it
+   * is. The rows of `data` change in place.
+   */
+  async resolveChangedRows(
+    entity: EntityDefinition,
+    data: Record<string, unknown>,
+    stored: Record<string, unknown>,
+    session?: ClientSession,
+  ): Promise<void> {
+    const requests: FetchRequest[] = [];
+    for (const field of entity.fields) {
+      if (field.fieldtype !== "Table" || !field.child_fields) continue;
+      const rows = data[field.fieldname];
+      if (!Array.isArray(rows)) continue;
+      const storedRows = new Map<string, Record<string, unknown>>();
+      const storedTable = stored[field.fieldname];
+      for (const storedRow of Array.isArray(storedTable) ? (storedTable as Array<Record<string, unknown>>) : []) {
+        const rowId = storedRow?.[ROW_ID_FIELD];
+        if (typeof rowId === "string") storedRows.set(rowId, storedRow);
+      }
+      for (const row of rows) {
+        const rowData = row as Record<string, unknown>;
+        const rowId = rowData[ROW_ID_FIELD];
+        this.collectRowRequests(field, rowData, requests, typeof rowId === "string" ? storedRows.get(rowId) : undefined);
+      }
+    }
+    await this.fetchInto(requests, session);
+  }
+
+  /**
+   * Collect the lookups of one child row. Without `storedRow` every fetch_from
+   * field resolves, a `fetch_if_empty` one only while empty. With it, only the
+   * fields whose source Link differs from `storedRow` resolve.
+   */
+  private collectRowRequests(
+    field: FieldDefinition,
+    rowData: Record<string, unknown>,
+    requests: FetchRequest[],
+    storedRow?: Record<string, unknown>,
+  ): void {
+    for (const childField of field.child_fields ?? []) {
+      if (!childField.fetch_from) continue;
+      const parts = childField.fetch_from.split(".");
+      if (parts.length < 2) continue;
+      const linkFieldname = parts[0]!;
+      const path = parts.slice(1).join(".");
+
+      if (storedRow && storedRow[linkFieldname] === rowData[linkFieldname]) continue;
+      if (childField.fetch_if_empty) {
+        const current = rowData[childField.fieldname];
+        const isEmpty = current === null || current === undefined || current === "";
+        // Compared as JSON: a stored Date comes back from the client as its ISO string.
+        const isStoredValue =
+          storedRow !== undefined && JSON.stringify(current) === JSON.stringify(storedRow[childField.fieldname]);
+        if (!isEmpty && !isStoredValue) continue;
+      }
+      const linkedId = rowData[linkFieldname];
+      if (!linkedId) continue;
+
+      const linkField = field.child_fields?.find((f) => f.fieldname === linkFieldname);
+      if (!linkField || linkField.fieldtype !== "Link" || !linkField.target) continue;
+
+      let lookupId = String(linkedId);
+      let targetPath: string | undefined;
+      let rowId: string | undefined;
+      if (linkField.target_path) {
+        const parsed = parseSubRowLink(lookupId);
+        if (!parsed) continue;
+        lookupId = parsed.parentId;
+        targetPath = linkField.target_path;
+        rowId = parsed.rowId;
+      }
+
+      requests.push({
+        db: this.registry.get(linkField.target).database,
+        target: linkField.target,
+        id: lookupId,
+        path,
+        targetPath,
+        rowId,
+        assign: (v) => {
+          if (v !== undefined) rowData[childField.fieldname] = v;
+        },
+      });
+    }
+  }
+
+  /** Fetch every collected lookup, one `$in` query per (database, target), and assign the values. */
+  private async fetchInto(requests: FetchRequest[], session?: ClientSession): Promise<void> {
+    if (requests.length === 0) return;
 
     // ── Phase 2: one $in query per (db, target) ──────────────────────────
     const groups = new Map<string, { db: DatabaseTarget; target: string; ids: Set<string> }>();
@@ -197,7 +252,5 @@ export class FetchFromResolver {
       }
       r.assign(navigatePath(source, r.path));
     }
-
-    return result;
   }
 }
