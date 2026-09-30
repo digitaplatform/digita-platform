@@ -1,8 +1,9 @@
 import { BrandMark, type BrandMarkProps } from "@digitaplatform/components";
 import type { Locale } from "@/i18n/config";
 import type { WebNavMenu, WebSite } from "@/lib/types";
-import { sortNav } from "@/lib/nav";
+import { isContactItem, sortNav } from "@/lib/nav";
 import { t } from "@/i18n/messages";
+import { SheetButton } from "@/blocks/marketing/SheetButton";
 import { NavItemLink } from "./NavItemLink";
 
 const LINK = "inline-flex w-fit items-center gap-1 text-sm text-textMain transition-colors hover:text-primary-600";
@@ -10,7 +11,8 @@ const LINK = "inline-flex w-fit items-center gap-1 text-sm text-textMain transit
 /**
  * Site footer, the columns of the canvas: the brand with the site's contact address, then the
  * footer menu, which carries the site's pages, the family's other sites and the legal pages in the
- * visitor's language, flowing into columns. The site's footer text closes it.
+ * visitor's language, flowing into columns; its item for the contact sheet opens the sheet. The
+ * site's footer text closes it.
  */
 export function Footer({
   locale,
@@ -23,7 +25,10 @@ export function Footer({
   nav: WebNavMenu | null;
   brand: BrandMarkProps;
 }) {
-  const items = sortNav(nav?.items);
+  // The layout draws the contact sheet for a site that names its contact address; without the
+  // sheet an item for it would lead nowhere, so it is left out.
+  const offersContactSheet = Boolean(site?.contact_email);
+  const items = sortNav(nav?.items).filter((item) => offersContactSheet || !isContactItem(item));
 
   return (
     <footer className="mt-auto border-t border-border">
@@ -44,7 +49,11 @@ export function Footer({
               <ul className="gap-x-8 sm:columns-2 lg:columns-3">
                 {items.map((item, i) => (
                   <li key={`${item.label}-${i}`} className="mb-2.5 break-inside-avoid">
-                    <NavItemLink locale={locale} item={item} comingLabel={t("familyComing", locale)} className={LINK} />
+                    {isContactItem(item) ? (
+                      <SheetButton className={LINK}>{item.label}</SheetButton>
+                    ) : (
+                      <NavItemLink locale={locale} item={item} comingLabel={t("familyComing", locale)} className={LINK} />
+                    )}
                   </li>
                 ))}
               </ul>

@@ -52,3 +52,12 @@ export function navHref(locale: string, defaultLocale: string, item: NavItem): s
 export function sortNav(items: NavItem[] | undefined): NavItem[] {
   return [...(items ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
+
+/** The href of a menu item that stands for the contact sheet. No element of a page is its anchor,
+ *  so as a plain link the item would lead nowhere. */
+const CONTACT_HREF = "#contact";
+
+/** Whether a menu item stands for the contact sheet rather than for a page. */
+export function isContactItem(item: NavItem): boolean {
+  return item.href === CONTACT_HREF;
+}

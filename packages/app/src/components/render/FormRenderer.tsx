@@ -7,7 +7,7 @@ import { useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
 import type { FieldControlState } from '@/controls/types';
 import type { FieldStateMap } from '@/lib/evaluate-field';
-import { computeLayout, duplicateFieldnames, spanClass, type LayoutSection } from './layout';
+import { SECTION_GRID_CLASS, computeLayout, duplicateFieldnames, spanClass, type LayoutSection } from './layout';
 import { ControlRenderer } from './ControlRenderer';
 import { tid } from '@/lib/testid';
 
@@ -199,7 +199,7 @@ function SectionBlock({
         // Implicit single column → dense 12-track grid by intrinsic span (density-
         // capped via entity.form.columns). EVERY field renders — organization comes
         // from computeLayout (tabs/sections), never from hiding fields behind a bucket.
-        <div className="grid grid-cols-12 gap-x-8 gap-y-6">
+        <div className={SECTION_GRID_CLASS}>
           {(section.columns[0]?.fields ?? []).map((f) => render(f, spanClass(f, columns)))}
         </div>
       ) : (

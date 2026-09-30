@@ -23,7 +23,13 @@ import {
   deriveAllowOnSubmitSet,
   type FieldStateMap,
 } from '@/lib/evaluate-field';
-import { writableLevelPredicate, hasEntityPermission } from '@/lib/permissions';
+import {
+  writableLevelPredicate,
+  readableFieldPredicate,
+  readableChildFields,
+  hasEntityPermission,
+  hasRecordPermission,
+} from '@/lib/permissions';
 import { toUiMessages, unwrap, type UiMessage } from '@/lib/api-result';
 import { ApiClientError } from '@/lib/errors';
 import { useSessionStore } from '@/stores/session';
@@ -100,6 +106,7 @@ export default function RecordPage() {
   const singleQ = useSingle<Doc>(isSingle ? entity : undefined);
   const loaded = isSingle ? singleQ : docQ;
   const tc = useChrome();
+  const tEntity = useI18nStore((s) => s.tEntity);
   const user = useSessionStore((s) => s.user);
 
   if (metaQ.isLoading) return <FormSkeleton fields={8} />;
@@ -109,6 +116,16 @@ export default function RecordPage() {
       <ErrorBlock
         title={tc('ui.entity.notFound')}
         detail={e instanceof Error ? e.message : String(e ?? entity)}
+      />
+    );
+  }
+  // The engine refuses a new record without `create`; a bookmark or a link to the new-record
+  // route must not draw a form whose Create answers 403.
+  if (isNew && !hasEntityPermission(metaQ.data, user, 'create')) {
+    return (
+      <ErrorBlock
+        title={tc('ui.dashboard.noAccess')}
+        detail={`${tEntity(entity, metaQ.data.label ?? entity)} · ${tc('ui.record.new')}`}
       />
     );
   }
@@ -242,6 +259,24 @@ function RecordForm({
     return m;
   }, [meta]);
   const canWriteLevel = useMemo(() => writableLevelPredicate(meta, user), [meta, user]);
+  // The engine refuses the whole save of a stored record without `write` on it, which a
+  // workflow state may also strip, so the form locks and offers no Save.
+  const writeRefused = !isNew && !hasRecordPermission(meta, user, 'write', initial);
+  // Only a stored record arrives without the fields the user may not read; the form leaves
+  // them out, and each grid its unreadable child columns.
+  const canReadField = useMemo(
+    () => (isNew ? undefined : readableFieldPredicate(meta, user, initial)),
+    [isNew, meta, user, initial],
+  );
+  const formFields = useMemo(
+    () =>
+      canReadField
+        ? meta.fields.map((f) =>
+            f.fieldtype === 'Table' && f.child_fields ? { ...f, child_fields: readableChildFields(f, canReadField) } : f,
+          )
+        : meta.fields,
+    [meta, canReadField],
+  );
   const hasTable = useMemo(() => meta.fields.some((f) => f.fieldtype === 'Table'), [meta]);
 
   // Live required resolver via a ref → the zod schema instance stays stable.
@@ -287,10 +322,12 @@ function RecordForm({
       allowOnSubmitSet,
       isNew,
       canWriteLevel,
+      canReadField,
+      formDisabled: writeRefused,
     });
     stateRef.current = map;
     return map;
-  }, [watched, meta, computedSet, frozenSet, allowOnSubmitSet, docstatus, isNew, canWriteLevel, user]);
+  }, [watched, meta, computedSet, frozenSet, allowOnSubmitSet, docstatus, isNew, canWriteLevel, canReadField, writeRefused, user]);
 
   // Overlay the "updating…" flag on computed fields while a preview is in flight.
   const renderState = useMemo(() => {
@@ -507,7 +544,7 @@ function RecordForm({
   // submitted (1) doc can't be deleted while it stands; cancel it first.
   const docLocked = !!meta.is_submittable && docstatus >= 1;
   const canDelete =
-    hasEntityPermission(meta, user, 'delete') &&
+    hasRecordPermission(meta, user, 'delete', initial) &&
     !isSingle &&
     !(meta.is_submittable && docstatus === 1);
   const onDelete = async () => {
@@ -633,7 +670,7 @@ function RecordForm({
       >
         <FormRenderer
           entity={entity}
-          fields={meta.fields}
+          fields={formFields}
           form={meta.form}
           doc={watched}
           fieldState={renderState}
@@ -651,7 +688,7 @@ function RecordForm({
         saving={saving}
         isNew={isNew}
         canDelete={canDelete}
-        hideSave={docLocked}
+        hideSave={docLocked || writeRefused}
         saveDisabled={conflict}
         busy={saving || deleteM.isPending}
         onCancel={() => navigate(-1)}

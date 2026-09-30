@@ -151,6 +151,11 @@ export const SPAN_CLASS: Record<FieldSpan, string> = {
   12: 'col-span-12',
 };
 
+/** The grid the spans above place a field in. Below `md` every field takes the full row, so the
+ *  twelve tracks keep no gap there: the tracks shrink to nothing, but eleven fixed gaps would
+ *  still make a row wider than the form of a phone. Static string so Tailwind emits it. */
+export const SECTION_GRID_CLASS = 'grid grid-cols-12 gap-y-6 md:gap-x-8';
+
 // ─── Auto-layout engine (metadata-driven, `entity.form`) ───────────────────────
 
 /** A TabBreak/ColumnBreak makes the form FULLY AUTHORED — the auto engine steps
@@ -159,6 +164,8 @@ const AUTHORING_BREAKS: ReadonlySet<string> = new Set(['TabBreak', 'ColumnBreak'
 /** Non-data decorations — not counted toward the tab/merge thresholds. */
 const DECORATION: ReadonlySet<string> = new Set(['Heading', 'HTML']);
 
+// FormLayoutConfig in @digitaplatform/shared states these defaults to the author of an app, who
+// decides from them whether a form tabs; tests/form-tabify-default.test.ts holds its comments to them.
 const DEFAULT_TABIFY = 12;
 const DEFAULT_MIN_TAB_FIELDS = 3;
 

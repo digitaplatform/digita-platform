@@ -15,7 +15,7 @@ import {
   type FilterTuple,
 } from '@/lib/filter-from-url';
 import type { ListPreferenceDoc, ViewVisibility } from '@/services/listPreference';
-import { hasEntityPermission, type PermAction } from '@/lib/permissions';
+import { hasEntityPermission, readableFieldPredicate, type PermAction } from '@/lib/permissions';
 import { useSessionStore } from '@/stores/session';
 import { SegmentedControl, ReportPreviewDialog } from '@digitaplatform/components';
 import { ListRenderer } from '@/components/render/ListRenderer';
@@ -83,6 +83,14 @@ export default function ListPage() {
         : hasEntityPermission(meta, user, required);
     });
     return permitted.find((l) => l.primary) ?? permitted[0] ?? null;
+  }, [meta, user]);
+
+  // The engine leaves a field out of every row when no read row of the user opens it, so the
+  // list leaves its column out instead of showing it empty.
+  const readableMeta = useMemo(() => {
+    if (!meta) return undefined;
+    const canReadField = readableFieldPredicate(meta, user);
+    return { ...meta, fields: meta.fields.filter((f) => canReadField(f.fieldname, f.perm_level ?? 0)) };
   }, [meta, user]);
 
   // Live-sync: refresh this list when another user (or tab) writes to the entity.
@@ -193,14 +201,9 @@ export default function ListPage() {
   // Import is new + destructive → require the modeled `import` bit with NO
   // read-fallback (Administrator still bypasses inside hasEntityPermission).
   const canImport = hasEntityPermission(meta, user, 'import');
-  // Round-trip export hits the engine endpoint (enforces the `export` bit). Gate
-  // the button with the PrintMenu modeled-fallback idiom: require the bit only
-  // when some permission row models `export`, else fall back to `read` so
-  // never-modeled entities keep an ungated affordance.
-  const exportModelled = (meta.permissions ?? []).some((p) => p.export !== undefined);
-  const canExportRoundTrip = exportModelled
-    ? hasEntityPermission(meta, user, 'export')
-    : hasEntityPermission(meta, user, 'read');
+  // Round-trip export hits the engine endpoint, which requires the `export` bit with
+  // no fallback to `read`, whether or not a row models it.
+  const canExportRoundTrip = hasEntityPermission(meta, user, 'export');
   const treeMode = !!meta.tree && display === 'tree';
 
   // ── URL writers ────────────────────────────────────────────────────────────
@@ -249,13 +252,16 @@ export default function ListPage() {
   };
 
   // Round-trip export via the engine endpoint: links as business keys, no system
-  // fields → a re-importable CSV. Reuses the current filter set.
+  // fields → a re-importable CSV. It asks for the rows the list shows, so it carries the
+  // list's OR filters and search too: a re-import must not touch a row the user filtered out.
   const onExportRoundTrip = async () => {
     try {
       const text = await api.get<string>(`/api/v1/export/${encodeURIComponent(entity!)}`, {
         format: 'csv',
         round_trip: true,
         filters: JSON.stringify(filters),
+        or_filters: effOrFilters.length ? JSON.stringify(effOrFilters) : undefined,
+        search: search || undefined,
       });
       downloadCsv(`${entity}-roundtrip-${new Date().toISOString().slice(0, 10)}.csv`, text);
     } catch (e) {
@@ -414,7 +420,7 @@ export default function ListPage() {
       ) : (
         <ListRenderer
           entity={entity!}
-          meta={meta}
+          meta={readableMeta!}
           rows={listQ.data!.rows}
           orderBy={orderBy}
           page={listQ.data!.page}

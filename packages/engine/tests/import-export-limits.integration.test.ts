@@ -137,3 +137,29 @@ describe("Import/Export — malformed input is 400, over-cap limit is 400", () =
     expect(res.statusCode).toBe(200);
   });
 });
+
+// The export applies `filters` only. Asked to apply a list's OR filters or its search as well,
+// it refuses instead of answering the rows they leave out, which a re-import would then touch.
+describe("Export — OR filters and a search it cannot apply are refused", () => {
+  it("400s an export asked to apply or_filters", async () => {
+    const orFilters = encodeURIComponent(JSON.stringify([["title", "=", "A"], ["title", "=", "B"]]));
+    const res = await app.inject({ method: "GET", url: `/api/v1/export/ExpDoc?or_filters=${orFilters}`, headers: bearer(adminTok) });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.detail).toContain("or_filters");
+  });
+
+  it("400s an export asked to apply a search", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/v1/export/ExpDoc?search=Imported", headers: bearer(adminTok) });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.detail).toContain("search");
+  });
+
+  it("answers an export asked to apply filters only", async () => {
+    const rows = [{ title: "Kept" }, { title: "Left out" }];
+    await app.inject({ method: "POST", url: "/api/v1/import/ExpDoc", headers: bearer(adminTok), payload: { rows, mode: "insert" } });
+    const filters = encodeURIComponent(JSON.stringify([["title", "=", "Kept"]]));
+    const res = await app.inject({ method: "GET", url: `/api/v1/export/ExpDoc?filters=${filters}`, headers: bearer(adminTok) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.map((row: { title: string }) => row.title)).toEqual(["Kept"]);
+  });
+});

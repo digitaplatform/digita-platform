@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { BrandMark, TopBar, buttonAttributes, type BrandMarkProps } from "@digitaplatform/components";
+import { icons, type LucideIcon } from "lucide-react";
+import { BrandMark, TopBar, buttonAttributes, cn, topBarButtonClass, type BrandMarkProps } from "@digitaplatform/components";
 import type { Locale } from "@/i18n/config";
 import type { NavItem, WebNavMenu, WebSite } from "@/lib/types";
-import { localePath, sortNav } from "@/lib/nav";
+import { isContactItem, isExternalHref, localePath, navHref, sortNav } from "@/lib/nav";
 import { t } from "@/i18n/messages";
 import { SheetButton } from "@/blocks/marketing/SheetButton";
 import { NavLinks } from "./NavLinks";
@@ -11,11 +12,8 @@ import { FamilySwitcher } from "./FamilySwitcher";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 import { ThemeToggle } from "./ThemeToggle";
 
-/** The header menu item that is the site's call to action: it opens the contact sheet. */
-const CONTACT_HREF = "#contact";
-
-/** The call to action of the header: the contact sheet where the site offers it, else a mail to
- *  the site's address, else nothing. */
+/** The call to action of the header, the header menu's item for the contact sheet: the contact
+ *  sheet where the site offers it, else a mail to the site's address, else nothing. */
 function ContactButton({ item, contactEnabled, contactEmail }: { item: NavItem; contactEnabled: boolean; contactEmail?: string }) {
   const attributes = buttonAttributes({ size: "sm", className: "shrink-0" });
   if (contactEnabled) return <SheetButton {...attributes}>{item.label}</SheetButton>;
@@ -27,10 +25,44 @@ function ContactButton({ item, contactEnabled, contactEmail }: { item: NavItem; 
   );
 }
 
+/** The lucide icon a menu item names, in kebab or Pascal case. The site's data names it, so the
+ *  renderer keeps no list of icons; a name lucide lacks is reported, and the item shows as one
+ *  that names no icon. */
+function iconOf(item: NavItem): LucideIcon | undefined {
+  if (!item.icon) return undefined;
+  const key = item.icon
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+  const icon = (icons as Record<string, LucideIcon | undefined>)[key];
+  if (!icon) console.error(`[digita-web] the menu item "${item.label}" names the icon "${item.icon}", which lucide does not have`);
+  return icon;
+}
+
+/** A header link as its icon, where the top bar has no room for its label: a site path in the
+ *  page's locale, a web link in a new tab. The label names the link and shows as its tooltip. */
+function IconLink({ href, item, icon: Icon }: { href: string; item: NavItem; icon: LucideIcon }) {
+  const glyph = <Icon className="h-5 w-5" aria-hidden="true" />;
+  if (isExternalHref(href)) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" aria-label={item.label} title={item.label} className={topBarButtonClass}>
+        {glyph}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} aria-label={item.label} title={item.label} className={topBarButtonClass}>
+      {glyph}
+    </Link>
+  );
+}
+
 /** Site header: the app's top bar (the kit's TopBar) with the app's brand precedence (BrandMark),
  *  the content-driven nav, the product family menu, the language menu, the mode button and the
- *  call to action. A phone keeps the brand, the call to action and the menu button; the rest moves
- *  into MobileNav. */
+ *  call to action. Every width shows the language menu and the mode button. Below lg a link whose
+ *  data names an icon shows as that icon; a tablet shows the other links as text, and a phone
+ *  keeps them, the tenant's apps and the family behind the menu button (MobileNav). */
 export function Header({
   locale,
   defaultLocale,
@@ -57,8 +89,14 @@ export function Header({
   enabledLocales: string[];
 }) {
   const all = sortNav(nav?.items);
-  const contact = all.find((item) => item.href === CONTACT_HREF);
+  const contact = all.find(isContactItem);
   const items = all.filter((item) => item !== contact);
+  const iconLinks = items.flatMap((item) => {
+    const icon = iconOf(item);
+    const href = navHref(locale, defaultLocale, item);
+    return icon && href ? [{ item, icon, href }] : [];
+  });
+  const textItems = items.filter((item) => !iconLinks.some((link) => link.item === item));
   const familyItems = sortNav(family?.items);
   const comingLabel = t("familyComing", locale);
   const controls = (
@@ -75,15 +113,29 @@ export function Header({
           <BrandMark {...brand} />
         </Link>
 
-        <nav className="hidden flex-1 items-center gap-1 md:flex" aria-label={t("navPrimary", locale)}>
-          <NavLinks locale={locale} items={items} apps={apps} comingLabel={comingLabel} />
+        <nav className={cn(iconLinks.length > 0 ? "flex" : "hidden md:flex", "flex-1 items-center gap-1")} aria-label={t("navPrimary", locale)}>
+          {iconLinks.length > 0 && (
+            <div className="flex items-center gap-1 lg:hidden">
+              {iconLinks.map(({ item, icon, href }, i) => (
+                <IconLink key={`${item.label}-${i}`} href={href} item={item} icon={icon} />
+              ))}
+            </div>
+          )}
+          <div className="hidden items-center gap-1 md:flex lg:hidden">
+            <NavLinks locale={locale} items={textItems} apps={apps} comingLabel={comingLabel} />
+          </div>
+          <div className="hidden items-center gap-1 lg:flex">
+            <NavLinks locale={locale} items={items} apps={apps} comingLabel={comingLabel} />
+          </div>
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          <div className="hidden items-center gap-1 md:flex">
-            <FamilySwitcher locale={locale} items={familyItems} domain={site?.domain} label={t("familyLabel", locale)} comingLabel={comingLabel} />
-            {controls}
-          </div>
+          {familyItems.length > 0 && (
+            <div className="hidden items-center gap-1 md:flex">
+              <FamilySwitcher locale={locale} items={familyItems} domain={site?.domain} label={t("familyLabel", locale)} comingLabel={comingLabel} />
+            </div>
+          )}
+          {controls}
           {contact && <ContactButton item={contact} contactEnabled={contactEnabled} contactEmail={site?.contact_email} />}
           <MobileNav
             locale={locale}

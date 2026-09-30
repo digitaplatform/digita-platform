@@ -42,6 +42,25 @@ describe('evaluateField — visibility', () => {
   });
 });
 
+describe('evaluateField — fields the user may not read', () => {
+  const canReadLevel0 = (_fieldname: string, level: number) => level === 0;
+
+  it('leaves out, and does not require, a field the user may not read', () => {
+    const s = evaluateField(
+      field({ fieldname: 'cost', required: true, perm_level: 1 }),
+      ctx({}, { isNew: false, canReadField: canReadLevel0 }),
+    );
+    expect(s.visible).toBe(false);
+    expect(s.required).toBe(false);
+  });
+
+  it('keeps a readable field visible and required', () => {
+    const s = evaluateField(field({ fieldname: 'name', required: true }), ctx({}, { isNew: false, canReadField: canReadLevel0 }));
+    expect(s.visible).toBe(true);
+    expect(s.required).toBe(true);
+  });
+});
+
 describe('evaluateField — required', () => {
   it('mandatory_depends_on overrides required', () => {
     const f = field({ fieldname: 'x', mandatory_depends_on: 'doc.need' });

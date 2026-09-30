@@ -172,6 +172,15 @@ describe("PermissionChecker", () => {
       const result = await checker.hasPermission(makeUser(), "TestDoc", "unknown_action");
       expect(result.allowed).toBe(false);
     });
+
+    // The app offers the export for re-import by the same rule.
+    it('denies "export" to a reader of an entity whose rows never model export', async () => {
+      registry.register(makeEntity({
+        permissions: [{ role: "System User", level: 0, select: 1, read: 1 }],
+      }));
+      const result = await checker.hasPermission(makeUser(), "TestDoc", "export");
+      expect(result.allowed).toBe(false);
+    });
   });
 
   // ── if_owner ──────────────────────────────────────────────────────────────
