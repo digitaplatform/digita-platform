@@ -47,12 +47,14 @@ export class GlobalSearchService {
         if (!allowed) return;
 
         // As in link search: match only on fields the user may filter on and on
-        // the title the result shows anyway, or which rows answer would reveal a
-        // masked value.
+        // the title when the result shows it anyway, or which rows answer would
+        // reveal a masked value.
         const titleField = entity.title_field ?? "_id";
         const filterable = this.permissionChecker.getFilterAllowlist(user, entity.name);
-        const searchFields = (entity.search_fields ?? []).filter(
-          (field) => field === titleField || isFieldAllowed(field, filterable),
+        const showsTitle =
+          this.permissionChecker.isPickerTitleVisible(user, entity.name, titleField) || isFieldAllowed(titleField, filterable);
+        const searchFields = (entity.search_fields ?? []).filter((field) =>
+          field === titleField ? showsTitle : isFieldAllowed(field, filterable),
         );
         if (searchFields.length === 0) return;
 
@@ -83,7 +85,7 @@ export class GlobalSearchService {
           results.push({
             entity: entity.name,
             _id: String(d["_id"]),
-            title: String(d[titleField] ?? d["_id"]),
+            title: String((showsTitle ? d[titleField] : undefined) ?? d["_id"]),
           });
         }
       }),

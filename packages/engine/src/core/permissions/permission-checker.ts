@@ -401,13 +401,22 @@ export class PermissionChecker {
     if (!admitted) return false;
     const entity = this.registry.get(entityName);
     const level = entity.fields.find((f) => f.fieldname === displayField)?.perm_level ?? 0;
-    const pickerShowsTitle = entity.permissions.some(
+    if (level === 0 && this.isPickerTitleVisible(user, entityName, displayField)) return true;
+    const readable = this.getReadableFields(user, entityName, row);
+    return readable === null || readable.has(displayField);
+  }
+
+  /**
+   * Whether a link picker or a search of `user` on `entityName` shows `displayField`, the title of
+   * every row it answers, and so may match on it: whoever may select or read sees the title,
+   * unless every such row of the user names `fields` without it.
+   */
+  isPickerTitleVisible(user: UserContext, entityName: string, displayField: string): boolean {
+    if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return true;
+    return this.registry.get(entityName).permissions.some(
       (perm) =>
         user.roles.includes(perm.role) && (!!perm.select || !!perm.read) && opensField(perm, displayField, 0),
     );
-    if (level === 0 && pickerShowsTitle) return true;
-    const readable = this.getReadableFields(user, entityName, row);
-    return readable === null || readable.has(displayField);
   }
 
   /**

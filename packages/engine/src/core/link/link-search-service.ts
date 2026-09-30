@@ -60,7 +60,8 @@ export class LinkSearchService {
     const entity = this.registry.get(targetEntity);
     const displayField = entity.title_field ?? "_id";
     const { allowed, gatesRows, masksStoredRows } = this.readScope(user, targetEntity, filters);
-    const searchFields = this.searchableFields(entity.search_fields ?? [displayField], displayField, allowed);
+    const showsTitle = this.showsTitle(user, targetEntity, displayField, allowed);
+    const searchFields = this.searchableFields(entity.search_fields ?? [displayField], displayField, allowed, showsTitle);
     // Extra column values requested by the search-dialog picker. Returned ONLY
     // when explicitly asked for, so the plain dropdown stays {_id, display}.
     // Matching itself always uses search_fields, regardless of columns.
@@ -108,7 +109,7 @@ export class LinkSearchService {
       if (gatesRows && !(await this.permissionChecker.hasPermission(user, targetEntity, "read", doc)).allowed) continue;
       const result: LinkSearchResult = {
         _id: String(doc["_id"]),
-        display: String(doc[displayField] ?? doc["_id"]),
+        display: String((showsTitle ? doc[displayField] : undefined) ?? doc["_id"]),
       };
       if (cols) {
         // Field-level read permissions (perm_level) apply to picker columns too,
@@ -143,10 +144,15 @@ export class LinkSearchService {
     return { allowed, gatesRows, masksStoredRows };
   }
 
+  /** Whether the results show the display field: a picker shows it, or the user may filter on it. */
+  private showsTitle(user: UserContext, entityName: string, displayField: string, allowed: Set<string>): boolean {
+    return this.permissionChecker.isPickerTitleVisible(user, entityName, displayField) || isFieldAllowed(displayField, allowed);
+  }
+
   /** The search fields a query may match on: those the user may filter on, and the
-   *  display field, which the result shows anyway. */
-  private searchableFields(searchFields: string[], displayField: string, allowed: Set<string>): string[] {
-    return searchFields.filter((field) => field === displayField || isFieldAllowed(field, allowed));
+   *  display field when the result shows it anyway. */
+  private searchableFields(searchFields: string[], displayField: string, allowed: Set<string>, showsTitle: boolean): string[] {
+    return searchFields.filter((field) => (field === displayField ? showsTitle : isFieldAllowed(field, allowed)));
   }
 
   /**
@@ -179,8 +185,9 @@ export class LinkSearchService {
     }
 
     const { allowed, gatesRows, masksStoredRows } = this.readScope(user, targetEntity, filters);
+    const showsTitle = this.showsTitle(user, targetEntity, displayField, allowed);
     const escaped = this.escapeRegex(query);
-    const parentSearch = this.searchableFields(entity.search_fields ?? [displayField], displayField, allowed).map((f) => ({
+    const parentSearch = this.searchableFields(entity.search_fields ?? [displayField], displayField, allowed, showsTitle).map((f) => ({
       [f]: { $regex: escaped, $options: "i" },
     }));
     const childTextFields = tableField.child_fields
@@ -223,7 +230,7 @@ export class LinkSearchService {
       const readable = this.permissionChecker.filterFieldsForRead(user, targetEntity, doc);
       const rows = readable[targetPath] as Array<Record<string, unknown>> | undefined;
       if (!Array.isArray(rows)) continue;
-      const parentDisplay = String(doc[displayField] ?? doc["_id"]);
+      const parentDisplay = String((showsTitle ? doc[displayField] : undefined) ?? doc["_id"]);
       for (const row of rows) {
         const rowId = row[ROW_ID_FIELD];
         if (typeof rowId !== "string" || !rowId) continue;

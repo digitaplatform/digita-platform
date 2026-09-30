@@ -51,9 +51,25 @@ const privateNote: EntityDefinition = {
   permissions: [{ role: "Sales", level: 0, select: 1, read: 1, if_owner: true }],
 } as unknown as EntityDefinition;
 
+// A portal role's row names `fields` without the title: the picker neither shows it nor matches on it.
+const contract: EntityDefinition = {
+  name: "contract",
+  module: "test",
+  database: "app",
+  naming: { strategy: "user_set" },
+  title_field: "title",
+  search_fields: ["title", "code"],
+  fields: [
+    { fieldname: "title", fieldtype: "Data", label: "Title", idx: 1 },
+    { fieldname: "code", fieldtype: "Data", label: "Code", idx: 2 },
+  ],
+  permissions: [{ role: "Portal", level: 0, select: 1, read: 1, fields: ["code"] }],
+} as unknown as EntityDefinition;
+
 const entities: Record<string, EntityDefinition> = {
   customer,
   privatenote: privateNote,
+  contract,
 };
 
 const registry = {
@@ -68,6 +84,7 @@ const registry = {
 const salesUser: UserContext = { _id: "u1", email: "sales@test", roles: ["Sales"] };
 const strangerUser: UserContext = { _id: "u2", email: "stranger@test", roles: ["Guest"] };
 const adminUser: UserContext = { _id: "u3", email: "admin@test", roles: ["Administrator"] };
+const portalUser: UserContext = { _id: "u4", email: "portal@test", roles: ["Portal"] };
 
 function makeDb(rows: Record<string, unknown>[]) {
   return { find: vi.fn().mockResolvedValue(rows) } as never;
@@ -120,6 +137,21 @@ describe("LinkSearchService — RBAC", () => {
     // The projection sent to the DB must not request unknown columns either.
     const passedQuery = db.find.mock.calls[0]![1] as { fields: string[] };
     expect(passedQuery.fields).not.toContain("does_not_exist");
+  });
+
+  it("neither matches nor shows a title that the user's rows name no field for", async () => {
+    const { svc, db } = makeService([{ _id: "CON-1", title: "Secret merger", code: "C-7" }]);
+    const out = await svc.search("contract", "merger", portalUser);
+    expect(out).toEqual([{ _id: "CON-1", display: "CON-1" }]);
+    const passedQuery = db.find.mock.calls[0]![1] as { filters: Record<string, unknown>[] };
+    expect(JSON.stringify(passedQuery.filters)).not.toContain('"title"');
+    expect(JSON.stringify(passedQuery.filters)).toContain('"code"');
+  });
+
+  it("shows and matches the title where the row names it", async () => {
+    const { svc, db } = makeService([{ _id: "CUST-1", name: "Acme GmbH" }]);
+    expect(await svc.search("customer", "Acme", salesUser)).toEqual([{ _id: "CUST-1", display: "Acme GmbH" }]);
+    expect(JSON.stringify((db.find.mock.calls[0]![1] as { filters: unknown[] }).filters)).toContain('"name"');
   });
 
   it("enforces the same select check in sub-row (target_path) mode", async () => {

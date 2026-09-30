@@ -42,7 +42,23 @@ const privateNote: EntityDefinition = {
   permissions: [{ role: "Sales", level: 0, select: 1, read: 1, if_owner: true }],
 } as unknown as EntityDefinition;
 
-const entities: Record<string, EntityDefinition> = { customer, privatenote: privateNote };
+// A portal role's row names `fields` without the title: a search neither shows it nor matches on it.
+const contract: EntityDefinition = {
+  name: "contract",
+  module: "test",
+  database: "app",
+  naming: { strategy: "user_set" },
+  title_field: "title",
+  in_global_search: true,
+  search_fields: ["title", "code"],
+  fields: [
+    { fieldname: "title", fieldtype: "Data", label: "Title", idx: 1 },
+    { fieldname: "code", fieldtype: "Data", label: "Code", idx: 2 },
+  ],
+  permissions: [{ role: "Portal", level: 0, select: 1, read: 1, fields: ["code"] }],
+} as unknown as EntityDefinition;
+
+const entities: Record<string, EntityDefinition> = { customer, privatenote: privateNote, contract };
 
 const registry = {
   has: (n: string) => n in entities,
@@ -57,6 +73,7 @@ const registry = {
 const salesUser: UserContext = { _id: "u1", email: "sales@test", roles: ["Sales"] };
 const strangerUser: UserContext = { _id: "u2", email: "stranger@test", roles: ["Guest"] };
 const adminUser: UserContext = { _id: "u3", email: "admin@test", roles: ["Administrator"] };
+const portalUser: UserContext = { _id: "u4", email: "portal@test", roles: ["Portal"] };
 
 function makeService(rows: Record<string, unknown>[]) {
   const db = { find: vi.fn().mockResolvedValue(rows) };
@@ -86,6 +103,16 @@ describe("GlobalSearchService — RBAC + scope + bounded limit", () => {
       JSON.stringify((c[1] as { filters: unknown[] }).filters).includes('"owner":"sales@test"'),
     );
     expect(anyFilterHasOwner).toBe(true);
+  });
+
+  it("neither matches nor shows a title that the user's rows name no field for", async () => {
+    const { svc, db } = makeService([{ _id: "CON-1", title: "Secret merger", code: "C-7" }]);
+    const out = await svc.search("merger", portalUser);
+    expect(out).toEqual([{ entity: "contract", _id: "CON-1", title: "CON-1" }]);
+    expect(db.find).toHaveBeenCalledTimes(1);
+    const filters = JSON.stringify((db.find.mock.calls[0]![1] as { filters: unknown[] }).filters);
+    expect(filters).not.toContain('"title"');
+    expect(filters).toContain('"code"');
   });
 
   it("lets Administrator bypass and receive rows", async () => {
