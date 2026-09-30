@@ -65,8 +65,9 @@ import type { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { SchemaMigrator } from "../src/core/database/schema-migrator.js";
 
 // A field that becomes `public: true` after files were uploaded to it: the boot's schema step
-// moves those files, and the URLs the rows hold, forward to public. A file of a private field
-// stays private.
+// moves those files, and the URLs the rows hold, forward to public. A file of a private field,
+// a file no row holds, and a file of a private field that shares its name with a public one stay
+// private.
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
 let db: MongoDBService;
@@ -91,6 +92,12 @@ const shop = (isPublic: boolean): EntityDefinition =>
           { fieldname: "picture", fieldtype: "AttachImage", label: "Picture", ...(isPublic ? { public: true } : {}) },
           { fieldname: "caption", fieldtype: "Data", label: "Caption" },
         ],
+      },
+      {
+        fieldname: "receipts",
+        fieldtype: "Table",
+        label: "Receipts",
+        child_fields: [{ fieldname: "picture", fieldtype: "AttachImage", label: "Picture" }],
       },
     ],
     permissions: [],
@@ -144,19 +151,30 @@ describe("Files of a field that became public", () => {
     const main = await upload("image", "main.pdf", "main picture");
     const gallery = await upload("picture", "gallery.pdf", "gallery picture");
     const scan = await upload("invoice_scan", "scan.pdf", "private scan");
-    for (const file of [main, gallery, scan]) {
+    // Attached to a public field by its uploader, but no row holds it.
+    const loose = await upload("image", "loose.pdf", "never saved to a row");
+    // Held by the private `receipts[].picture`, which shares its name with the public `images[].picture`.
+    const receipt = await upload("picture", "receipt.pdf", "private receipt");
+    // A boot stopped after the rows moved: the row holds the public URL, the File is still private.
+    const halfway = await upload("picture", "halfway.pdf", "moved row");
+    for (const file of [main, gallery, scan, loose, receipt, halfway]) {
       expect(file.file_url).toBe(`/api/v1/file/${file._id}/download`);
       expect((await publicFile(file._id)).statusCode).toBe(404);
     }
     await db.insertOne("TestShopItem", {
       _id: "ITEM-1", doctype: "TestShopItem", docstatus: 0, image: main.file_url, invoice_scan: scan.file_url,
       images: [{ _row_id: "r1", idx: 1, picture: gallery.file_url, caption: "side" }, { _row_id: "r2", idx: 2, picture: null, caption: "none" }],
+      receipts: [{ _row_id: "r3", idx: 1, picture: receipt.file_url }],
+    }, DIGITA.DATABASES.CORE);
+    await db.insertOne("TestShopItem", {
+      _id: "ITEM-2", doctype: "TestShopItem", docstatus: 0,
+      images: [{ _row_id: "r4", idx: 1, picture: `/api/v1/public/file/${halfway._id}` }],
     }, DIGITA.DATABASES.CORE);
 
     registry.register(shop(true));
     await new SchemaMigrator(db).migrate(registry.get("TestShopItem"));
 
-    for (const file of [main, gallery]) {
+    for (const file of [main, gallery, halfway]) {
       const res = await publicFile(file._id);
       expect(res.statusCode).toBe(200);
       const stored = await fileRow(file._id);
@@ -175,13 +193,18 @@ describe("Files of a field that became public", () => {
     expect((await publicFile(scan._id)).statusCode).toBe(404);
     expect((await fileRow(scan._id))["is_private"]).toBe(true);
     expect(item["invoice_scan"]).toBe(scan.file_url);
+    for (const file of [loose, receipt]) {
+      expect((await publicFile(file._id)).statusCode).toBe(404);
+      expect((await fileRow(file._id))["is_private"]).toBe(true);
+    }
+    expect(item["receipts"]).toEqual([{ _row_id: "r3", idx: 1, picture: receipt.file_url }]);
   });
 
   it("changes nothing on a second run", async () => {
     const before = await db.findManyByFilter(DIGITA.COLLECTIONS.FILE, { attached_to_entity: "TestShopItem" }, DIGITA.DATABASES.CORE);
-    const itemBefore = await db.findOne("TestShopItem", "ITEM-1", DIGITA.DATABASES.CORE);
+    const itemsBefore = await db.findManyByFilter("TestShopItem", {}, DIGITA.DATABASES.CORE);
     await new SchemaMigrator(db).migrate(registry.get("TestShopItem"));
     expect(await db.findManyByFilter(DIGITA.COLLECTIONS.FILE, { attached_to_entity: "TestShopItem" }, DIGITA.DATABASES.CORE)).toEqual(before);
-    expect(await db.findOne("TestShopItem", "ITEM-1", DIGITA.DATABASES.CORE)).toEqual(itemBefore);
+    expect(await db.findManyByFilter("TestShopItem", {}, DIGITA.DATABASES.CORE)).toEqual(itemsBefore);
   });
 });
