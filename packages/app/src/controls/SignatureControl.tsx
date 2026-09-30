@@ -44,7 +44,7 @@ export default function SignatureControl({
   // A read-only field has no pad, and the strokes go with its canvas: editable again, the field
   // shows what it stores as the image.
   if (state.readOnly && drawn !== undefined) setDrawn(undefined);
-  const stroke = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const stroke = useRef<{ canvas: HTMLCanvasElement; pointerId: number; x: number; y: number } | null>(null);
 
   const image = stored && <img src={stored} alt={tc('ui.signature.alt')} className={IMAGE_CLASS} />;
   if (state.readOnly) return image || <span className="text-sm text-textMuted">{tc('ui.signature.empty')}</span>;
@@ -69,8 +69,14 @@ export default function SignatureControl({
     x: (e.nativeEvent.offsetX / e.currentTarget.clientWidth) * PAD_WIDTH,
     y: (e.nativeEvent.offsetY / e.currentTarget.clientHeight) * PAD_HEIGHT,
   });
+  // The pointer that started a stroke on this canvas owns it until it lifts, so a palm or a second
+  // finger draws nothing; a stroke of a canvas that a blank pad replaced stores nothing.
+  const strokeOf = (e: PointerEvent<HTMLCanvasElement>) => {
+    const current = stroke.current;
+    return current?.canvas === e.currentTarget && current.pointerId === e.pointerId ? current : null;
+  };
   const startStroke = (e: PointerEvent<HTMLCanvasElement>) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || stroke.current?.canvas === e.currentTarget) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     e.preventDefault();
     const pen = e.currentTarget.getContext('2d')!;
@@ -86,21 +92,21 @@ export default function SignatureControl({
     pen.beginPath();
     pen.arc(x, y, LINE_WIDTH / 2, 0, 2 * Math.PI);
     pen.fill();
-    stroke.current = { pointerId: e.pointerId, x, y };
+    stroke.current = { canvas: e.currentTarget, pointerId: e.pointerId, x, y };
   };
   const extendStroke = (e: PointerEvent<HTMLCanvasElement>) => {
-    const last = stroke.current;
-    if (last?.pointerId !== e.pointerId) return;
+    const last = strokeOf(e);
+    if (!last) return;
     const pen = e.currentTarget.getContext('2d')!;
     const { x, y } = pointOf(e);
     pen.beginPath();
     pen.moveTo(last.x, last.y);
     pen.lineTo(x, y);
     pen.stroke();
-    stroke.current = { pointerId: e.pointerId, x, y };
+    stroke.current = { ...last, x, y };
   };
   const endStroke = (e: PointerEvent<HTMLCanvasElement>) => {
-    if (stroke.current?.pointerId !== e.pointerId) return;
+    if (!strokeOf(e)) return;
     stroke.current = null;
     const url = e.currentTarget.toDataURL('image/png');
     setDrawn(url);
@@ -125,6 +131,7 @@ export default function SignatureControl({
         onPointerMove={extendStroke}
         onPointerUp={endStroke}
         onPointerCancel={endStroke}
+        onLostPointerCapture={endStroke}
       />
       <div className="flex w-full items-center justify-between gap-2" style={{ maxWidth: PAD_WIDTH }}>
         <span id={hintId} className="text-xs text-textMuted">

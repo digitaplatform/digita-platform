@@ -147,19 +147,52 @@ describe('SignatureControl on an editable field', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('follows the finger that started the stroke, not a second one on the pad', () => {
+  it('lets the pointer that started a stroke own it: a second finger or a palm draws nothing', () => {
     const onChange = vi.fn();
     render(<Form onChange={onChange} />);
     const canvas = pad();
 
     fireEvent.pointerDown(canvas, { pointerId: 1, button: 0, clientX: 10, clientY: 20 });
+    fireEvent.pointerDown(canvas, { pointerId: 2, button: 0, clientX: 90, clientY: 90 });
     fireEvent.pointerMove(canvas, { pointerId: 2, clientX: 60, clientY: 40 });
     fireEvent.pointerUp(canvas, { pointerId: 2, clientX: 60, clientY: 40 });
+    expect(pen.arc).toHaveBeenCalledTimes(1);
     expect(pen.lineTo).not.toHaveBeenCalled();
     expect(onChange).not.toHaveBeenCalled();
 
-    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 10, clientY: 20 });
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 30, clientY: 30 });
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 30, clientY: 30 });
+    expect(pen.lineTo).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenLastCalledWith(drawnImage(1));
+  });
+
+  it('ends a stroke whose pointer capture is lost, and stores what it drew', () => {
+    const onChange = vi.fn();
+    render(<Form onChange={onChange} />);
+    const canvas = pad();
+    fireEvent.pointerDown(canvas, { pointerId: 1, button: 0, clientX: 10, clientY: 20 });
+    fireEvent.lostPointerCapture(canvas, { pointerId: 1 });
+    expect(onChange).toHaveBeenLastCalledWith(drawnImage(1));
+
+    drawStroke(canvas);
+    expect(onChange).toHaveBeenLastCalledWith(drawnImage(2));
+  });
+
+  it('stores no blank pad for a stroke whose canvas a new pad replaced, and the new pad draws', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<Signature onChange={onChange} />);
+    drawStroke(pad());
+    rerender(<Signature value={drawnImage(1)} onChange={onChange} />);
+    fireEvent.pointerDown(pad(), { pointerId: 1, button: 0, clientX: 10, clientY: 20 });
+
+    // A form reset in the middle of the stroke gives a blank pad; the lifted finger lands on it.
+    rerender(<Signature value={undefined} onChange={onChange} />);
+    fireEvent.pointerUp(pad(), { pointerId: 1, clientX: 10, clientY: 20 });
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    drawStroke(pad());
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(onChange).toHaveBeenLastCalledWith(drawnImage(2));
   });
 
   it('clears the drawing to a blank pad, which the record form saves as null', () => {
