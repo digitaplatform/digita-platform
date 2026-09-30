@@ -77,6 +77,9 @@ export interface NavItem {
   page?: string;
   href?: string;
   order?: number;
+  /** A lucide icon by its name (as lucide.dev lists it, "calendar-days"): the top bar of phones and
+   *  tablets shows a header item as this icon, since it has no room for the item's label. */
+  icon?: string;
 }
 
 export interface WebNavMenu {
