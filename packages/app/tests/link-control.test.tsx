@@ -237,7 +237,7 @@ describe('LinkControl — tree mode', () => {
       fields: [{ fieldname: 'name', fieldtype: 'Data', label: 'Name' }],
     };
     listState.rows = TREE_ROWS;
-    useUiStore.setState({ treeExpandedIds: {} });
+    useUiStore.setState({ treePickerExpandedIds: {} });
   });
 
   it('opens only on click, and stays CLOSED after Escape/pick (no reopen loop)', async () => {
@@ -365,5 +365,20 @@ describe('LinkControl — tree mode', () => {
     await user.click(screen.getByRole('combobox'));
     const other = await screen.findByRole('dialog');
     expect(within(other).getByRole('treeitem', { name: 'Wholesale' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('leaves the kept groups as they were when a name is clicked during a search', async () => {
+    const user = userEvent.setup();
+    listState.rows = GROUP_ROWS;
+    render(<Host field={makeField({ target: 'Folder' })} value="G-3" />);
+    await user.click(screen.getByRole('combobox'));
+    const dialog = await screen.findByRole('dialog');
+    const search = within(dialog).getByRole('searchbox');
+    await user.type(search, 'Zur');
+    await user.click(within(dialog).getByRole('button', { name: 'Retail' }));
+    expect(useUiStore.getState().treePickerExpandedIds.Folder).toBeUndefined();
+    await user.clear(search);
+    expect(within(dialog).getByRole('treeitem', { name: 'Retail' })).toHaveAttribute('aria-expanded', 'true');
+    expect(within(dialog).getByText('Zurich')).toBeInTheDocument();
   });
 });

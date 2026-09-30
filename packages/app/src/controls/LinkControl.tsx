@@ -47,8 +47,8 @@ export default function LinkControl({
   // tree mode (hierarchical picker) state.
   const [treeOpen, setTreeOpen] = useState(false);
   const [treeQuery, setTreeQuery] = useState('');
-  const keptTreeExpandedIds = useUiStore((s) => (field.target ? s.treeExpandedIds[field.target] : undefined));
-  const setTreeExpandedIds = useUiStore((s) => s.setTreeExpandedIds);
+  const keptTreeExpandedIds = useUiStore((s) => (field.target ? s.treePickerExpandedIds[field.target] : undefined));
+  const setTreePickerExpandedIds = useUiStore((s) => s.setTreePickerExpandedIds);
 
   // Debounce the query that drives the search (empty/short queries now fire too).
   useEffect(() => {
@@ -188,9 +188,9 @@ export default function LinkControl({
       }
       disabledIds = blocked;
     }
-    // Until a person opens or closes a group of this entity, the path to the current value is
-    // open, so the picked group shows. It is read from the rows of this render, never seeded at
-    // the dialog's mount, so rows from the network and rows from the cache open alike.
+    // Until a person opens or closes a group in a picker of this entity, the path to the current
+    // value is open, so the picked group shows. It is read from the rows of this render, never
+    // seeded at the dialog's mount, so rows from the network and rows from the cache open alike.
     let expandedIds = keptTreeExpandedIds;
     if (!expandedIds) {
       const parentOf = new Map(nodes.map((n) => [n.id, n.parentId]));
@@ -273,7 +273,12 @@ export default function LinkControl({
             expandOnNameClick
             selectLabel={tc('ui.tree.select')}
             expandedIds={expandedIds}
-            onExpandedIdsChange={(ids) => setTreeExpandedIds(field.target!, ids)}
+            onExpandedChange={(id, expanded) => {
+              const ids = new Set(expandedIds);
+              if (expanded) ids.add(id);
+              else ids.delete(id);
+              setTreePickerExpandedIds(field.target!, ids);
+            }}
             onSelect={(id) => {
               const node = nodes.find((n) => n.id === id);
               setTreeOpen(false);

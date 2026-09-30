@@ -48,10 +48,10 @@ export interface TreeViewProps {
   /** Localized text of the Select button (consumer-provided); its accessible name adds the node's label. */
   selectLabel?: string;
   /** The ids of the open nodes, for a consumer that keeps them beyond one mount;
-   *  a person's change arrives through `onExpandedIdsChange`. Without it every
-   *  node is open until a person closes it. */
+   *  a person's open or close of a node arrives through `onExpandedChange`.
+   *  Without it every node is open until a person closes it. */
   expandedIds?: Set<string>;
-  onExpandedIdsChange?: (ids: Set<string>) => void;
+  onExpandedChange?: (id: string, expanded: boolean) => void;
 }
 
 function buildChildren(nodes: TreeViewNode[]): {
@@ -103,12 +103,12 @@ export function TreeView({
   expandOnNameClick,
   selectLabel = 'Select',
   expandedIds,
-  onExpandedIdsChange,
+  onExpandedChange,
 }: TreeViewProps) {
   const { childrenOf, roots } = useMemo(() => buildChildren(nodes), [nodes]);
   // Without `expandedIds` the tree keeps the nodes a person closed, not the open
   // ones, so a node that arrives after the mount opens like one present at it.
-  const [closedIds, setClosedIds] = useState<Set<string>>(() => new Set());
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const baseId = useId();
@@ -148,8 +148,8 @@ export function TreeView({
 
   const hasChildren = (id: string) => (childrenOf.get(id)?.length ?? 0) > 0;
   const isExpanded = useCallback(
-    (id: string) => q !== '' || (expandedIds ? expandedIds.has(id) : !closedIds.has(id)),
-    [q, expandedIds, closedIds],
+    (id: string) => q !== '' || (expandedIds ? expandedIds.has(id) : !collapsedIds.has(id)),
+    [q, expandedIds, collapsedIds],
   );
 
   // Flatten the currently-rendered rows (DFS, respecting filter + expansion) — the
@@ -173,8 +173,8 @@ export function TreeView({
   // and would only surface once the search is cleared.
   const toggle = (id: string) => {
     if (q) return;
-    if (expandedIds) onExpandedIdsChange?.(toggled(expandedIds, id));
-    else setClosedIds((prev) => toggled(prev, id));
+    if (expandedIds) onExpandedChange?.(id, !expandedIds.has(id));
+    else setCollapsedIds((prev) => toggled(prev, id));
   };
 
   useEffect(() => {

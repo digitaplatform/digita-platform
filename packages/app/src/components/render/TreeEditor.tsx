@@ -49,13 +49,16 @@ export function TreeEditor({
   const [editing, setEditing] = useState<{ name?: string; seed?: Row; ancestry?: string[] } | null>(
     null,
   );
-  const expandedIds = useUiStore((s) => s.treeExpandedIds[entity]);
-  const setTreeExpandedIds = useUiStore((s) => s.setTreeExpandedIds);
-  // The groups start closed, so the group a node is added to or moved into opens, or the node
-  // would drop out of view. Read from the store at the call: a move opens its group only after
-  // the server answered, and the person may have opened or closed groups meanwhile.
-  const openGroup = (id: string) =>
-    setTreeExpandedIds(entity, new Set(useUiStore.getState().treeExpandedIds[entity]).add(id));
+  const collapsedIds = useUiStore((s) => s.treeEditorCollapsedIds[entity]);
+  const setTreeEditorCollapsedIds = useUiStore((s) => s.setTreeEditorCollapsedIds);
+  // Read from the store at the call: a move opens its target node only after the server answered,
+  // and the person may have opened or closed nodes meanwhile.
+  const setNodeExpanded = (id: string, expanded: boolean) => {
+    const ids = new Set(useUiStore.getState().treeEditorCollapsedIds[entity]);
+    if (expanded) ids.delete(id);
+    else ids.add(id);
+    setTreeEditorCollapsedIds(entity, ids);
+  };
 
   const listQ = useList<Row>(entity, {
     filters: tree.group_by && group ? [[tree.group_by, '=', group]] : [],
@@ -84,6 +87,12 @@ export function TreeEditor({
   );
 
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+  // Every node is open until a person closes it, so a node that arrives with an add, a move or
+  // another partition opens like the others.
+  const expandedIds = useMemo(
+    () => new Set(nodes.filter((n) => !collapsedIds?.has(n.id)).map((n) => n.id)),
+    [nodes, collapsedIds],
+  );
 
   // Labels from the root down to (and including) `id` — the ancestry breadcrumb
   // so the operator sees where a node sits. Cycle-guarded.
@@ -132,7 +141,8 @@ export function TreeEditor({
     const seed: Row = {};
     if (parentId) {
       seed[parentField] = parentId;
-      openGroup(parentId);
+      // A new child under a closed node would not show.
+      setNodeExpanded(parentId, true);
     }
     if (tree.group_by && group) seed[tree.group_by] = group;
     setEditing({ seed, ancestry: pathTo(parentId) });
@@ -167,7 +177,8 @@ export function TreeEditor({
     setBusy(true);
     try {
       await updateDoc(entity, id, { [parentField]: targetParentId }, modifiedById.get(id) || undefined);
-      if (targetParentId) openGroup(targetParentId);
+      // A node moved under a closed node would drop out of view.
+      if (targetParentId) setNodeExpanded(targetParentId, true);
       await refetch();
     } catch (e) {
       dialog.toast(e instanceof Error ? e.message : tc('ui.status.somethingWrong'), 'error');
@@ -217,11 +228,16 @@ export function TreeEditor({
       <TreeView
         nodes={nodes}
         emptyLabel={tc('ui.select.noResults')}
-        expandedIds={expandedIds ?? new Set()}
-        onExpandedIdsChange={(ids) => setTreeExpandedIds(entity, ids)}
+        expandedIds={expandedIds}
+        onExpandedChange={setNodeExpanded}
+        // While a node moves, a name opens its group and the row's Select button moves the node
+        // there, as in a picker; the node and its subtree cannot be picked.
+        expandOnNameClick={movingId !== null}
+        selectLabel={tc('ui.tree.select')}
+        disabledIds={blocked}
         onSelect={(id) => {
           if (movingId) {
-            if (!blocked.has(id)) void moveTo(id);
+            void moveTo(id);
             return;
           }
           const node = byId.get(id);

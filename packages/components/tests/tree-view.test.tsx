@@ -100,20 +100,22 @@ describe('TreeView open nodes', () => {
   });
 
   it('shows the open nodes it is given and reports a change instead of keeping it', () => {
-    const onExpandedIdsChange = vi.fn();
+    const onExpandedChange = vi.fn();
     const { container, rerender } = render(
-      <TreeView nodes={groups} expandedIds={new Set(['main'])} onExpandedIdsChange={onExpandedIdsChange} />,
+      <TreeView nodes={groups} expandedIds={new Set(['main'])} onExpandedChange={onExpandedChange} />,
     );
     expect(openIds(container)).toEqual(['main']);
     const tree = container.querySelector('[role="tree"]') as HTMLElement;
     fireEvent.keyDown(tree, { key: 'ArrowDown' });
     fireEvent.keyDown(tree, { key: 'ArrowRight' });
-    expect(onExpandedIdsChange).toHaveBeenCalledWith(new Set(['main', 'sub']));
+    expect(onExpandedChange).toHaveBeenCalledWith('sub', true);
     expect(screen.queryByText('Leaf')).toBeNull();
     rerender(
-      <TreeView nodes={groups} expandedIds={new Set(['main', 'sub'])} onExpandedIdsChange={onExpandedIdsChange} />,
+      <TreeView nodes={groups} expandedIds={new Set(['main', 'sub'])} onExpandedChange={onExpandedChange} />,
     );
     expect(screen.getByText('Leaf')).toBeInTheDocument();
+    fireEvent.keyDown(tree, { key: 'ArrowLeft' });
+    expect(onExpandedChange).toHaveBeenLastCalledWith('sub', false);
   });
 });
 
