@@ -606,6 +606,7 @@ export class PermissionChecker {
         }
       }
       for (const [tableName, tableField] of tableFields) {
+        if (!(tableName in filtered)) continue;
         this.assertChildLocksKept(user, entityName, tableField, filtered[tableName], contextDoc[tableName], contextDoc);
       }
     }
@@ -617,9 +618,11 @@ export class PermissionChecker {
    * The Table counterpart of the read_only_depends_on lock above. The condition
    * sees the row as `doc`, as the grid evaluates it, with the stored values of
    * the cells the write leaves out. A Table save stores its rows whole, so a
-   * writable cell left out of a row is erased, which changes it. A new row has
-   * no stored value to keep, and a cell the write filter strips is not the
-   * client's change.
+   * writable cell left out of a row is erased, which changes it, and a stored row
+   * no sent row names by `_row_id` is deleted: it may not hold a cell whose
+   * condition holds on the stored row. A value that is not a list deletes every
+   * row. A new row has no stored value to keep, and a cell the write filter
+   * strips is not the client's change.
    */
   private assertChildLocksKept(
     user: UserContext,
@@ -630,14 +633,16 @@ export class PermissionChecker {
     contextDoc: Record<string, unknown>,
   ): void {
     const lockable = tableField.child_fields?.filter((c) => c.read_only_depends_on) ?? [];
-    if (lockable.length === 0 || !Array.isArray(rows) || !Array.isArray(storedRows)) return;
+    if (lockable.length === 0 || !Array.isArray(storedRows)) return;
     const writable = this.getWritableChildFields(user, entityName, tableField.fieldname, contextDoc);
     const storedById = new Map(
       (storedRows as Array<Record<string, unknown>>).map((r) => [r["_row_id"], r] as const),
     );
-    for (const row of rows as Array<Record<string, unknown>>) {
+    const keptRowIds = new Set<unknown>();
+    for (const row of (Array.isArray(rows) ? rows : []) as Array<Record<string, unknown>>) {
       const stored = row["_row_id"] === undefined ? undefined : storedById.get(row["_row_id"]);
       if (!stored) continue;
+      keptRowIds.add(row["_row_id"]);
       const resultingRow = { ...stored, ...row };
       for (const child of lockable) {
         if (writable && !writable.has(child.fieldname)) continue;
@@ -653,6 +658,22 @@ export class PermissionChecker {
             `change the locked cell "${tableField.fieldname}.${child.fieldname}" of`,
           );
         }
+      }
+    }
+    for (const stored of storedRows as Array<Record<string, unknown>>) {
+      if (keptRowIds.has(stored["_row_id"])) continue;
+      const locked = lockable.find((child) =>
+        evaluateExpression(child.read_only_depends_on!, {
+          doc: stored,
+          user: user as unknown as Record<string, unknown>,
+        }),
+      );
+      if (locked) {
+        throw new PermissionDeniedError(
+          user.email,
+          entityName,
+          `delete the row holding the locked cell "${tableField.fieldname}.${locked.fieldname}" of`,
+        );
       }
     }
   }

@@ -1297,6 +1297,59 @@ describe("A Table cell's read_only_depends_on locks the cell on update", () => {
     const rows = await storedLines(doc._id);
     expect(rows.map((r) => r["note"])).toEqual(["kept", "new"]);
   });
+
+  it("refuses an update that drops a stored row holding a locked cell (#245)", async () => {
+    const doc = await docService.insert(
+      "LoanDoc",
+      { title: "L", lines: [{ state: "returned", note: "scratch on frame" }, { state: "out", note: "open" }] },
+      clerk,
+    );
+    const [, open] = await storedLines(doc._id);
+    await expect(docService.update("LoanDoc", doc._id, { lines: [open] }, clerk)).rejects.toBeInstanceOf(
+      PermissionDeniedError,
+    );
+    await expect(docService.update("LoanDoc", doc._id, { lines: null }, clerk)).rejects.toBeInstanceOf(
+      PermissionDeniedError,
+    );
+    expect((await storedLines(doc._id)).map((r) => r["note"])).toEqual(["scratch on frame", "open"]);
+  });
+
+  it("accepts an update that leaves the Table out or drops a row with no locked cell (#245)", async () => {
+    const doc = await docService.insert(
+      "LoanDoc",
+      { title: "L", lines: [{ state: "returned", note: "kept" }, { state: "out", note: "open" }] },
+      clerk,
+    );
+    await docService.update("LoanDoc", doc._id, { title: "M" }, clerk);
+    const [locked] = await storedLines(doc._id);
+    await docService.update("LoanDoc", doc._id, { lines: [locked] }, clerk);
+    expect((await storedLines(doc._id)).map((r) => r["note"])).toEqual(["kept"]);
+  });
+
+  it("refuses a locked row resent without its _row_id in place of its stored twin (#245)", async () => {
+    const doc = await docService.insert(
+      "LoanDoc",
+      { title: "L", lines: [{ state: "returned", note: "scratch on frame" }] },
+      clerk,
+    );
+    await expect(
+      docService.update("LoanDoc", doc._id, { lines: [{ state: "returned", note: "no damage" }] }, clerk),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    expect((await storedLines(doc._id))[0]!["note"]).toBe("scratch on frame");
+  });
+
+  it("lets an Administrator drop a locked row and resend it without its _row_id (#245)", async () => {
+    const doc = await docService.insert(
+      "LoanDoc",
+      { title: "L", lines: [{ state: "returned", note: "scratch on frame" }, { state: "out", note: "open" }] },
+      clerk,
+    );
+    const [, open] = await storedLines(doc._id);
+    await docService.update("LoanDoc", doc._id, { lines: [{ state: "returned", note: "no damage" }, open] }, adminUser);
+    expect((await storedLines(doc._id)).map((r) => r["note"])).toEqual(["no damage", "open"]);
+    await docService.update("LoanDoc", doc._id, { lines: [open] }, adminUser);
+    expect((await storedLines(doc._id)).map((r) => r["note"])).toEqual(["open"]);
+  });
 });
 
 describe("runAction — a long_running action with no handler fails loud (A2)", () => {
