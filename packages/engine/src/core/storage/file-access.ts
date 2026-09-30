@@ -18,8 +18,8 @@ export interface FileAccessDeps {
  * Whether `actor` may read the file `fileDoc`: through the File read grant (its uploader, an
  * Administrator), or through read on the document the file is bound to, judged on the stored row.
  * The download route asks here, a save asks here for every file it newly names (insert, update, a
- * submitted patch, an import and its dry run), and a copy asks for every file it clones; a clone
- * its copy does not own keeps the source file's owner and binding. So neither a save nor a copy
+ * submitted patch, an import and its dry run), and a copy asks for every file it clones; the clone
+ * of a colleague's loose upload stays theirs and loose. So neither a save nor a copy
  * opens a file to a user the download refuses. File ids are sequential, so a path that skipped
  * this would let any user name any file.
  */

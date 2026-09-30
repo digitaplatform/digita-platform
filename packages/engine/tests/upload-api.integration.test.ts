@@ -1233,21 +1233,41 @@ describe("Upload API Integration", () => {
         expect(await db.findOne(DIGITA.COLLECTIONS.FILE, later._id, "core")).not.toBeNull();
       });
 
-      it("names the colleague's file as it is when an Administrator copies a record naming it, cloning nothing", async () => {
+      it("keeps the clone the colleague's when an Administrator copies a record naming the colleague's loose file", async () => {
         const secret = await uploadAsApp(salesToken, "letter", "%PDF sales secret");
         const planted = await plantBook(ownerToken, { title: "Bait", letter: secret.file_url });
-        const before = await fileCount();
         const copied = await app.inject({
           method: "POST",
           url: `/api/v1/resource/TestBook/${planted.json().data._id}/copy`,
           headers: authHeaders(authToken),
         });
         expect(copied.statusCode).toBe(201);
-        expect(copied.json().data.letter).toBe(secret.file_url);
-        expect(await fileCount()).toBe(before);
+        const cloneId = /\/file\/([^/]+)\/download/.exec(copied.json().data.letter as string)![1]!;
+        expect(cloneId).not.toBe(secret._id);
 
-        expect((await downloadAs(ownerToken, secret._id)).statusCode).toBe(403);
-        expect((await downloadAs(salesToken, secret._id)).statusCode).toBe(200);
+        expect((await downloadAs(ownerToken, cloneId)).statusCode).toBe(403);
+        expect((await downloadAs(salesToken, cloneId)).statusCode).toBe(200);
+      });
+
+      it("keeps the source's colleague file when its uploader clears it in an Administrator's copy", async () => {
+        const letter = await uploadAsApp(salesToken, "letter", "%PDF sales loose letter, copied by admin");
+        const planted = await plantBook(ownerToken, { title: "Pride", letter: letter.file_url });
+        const copied = await app.inject({
+          method: "POST",
+          url: `/api/v1/resource/TestBook/${planted.json().data._id}/copy`,
+          headers: authHeaders(authToken),
+        });
+        expect(copied.statusCode).toBe(201);
+        const cleared = await app.inject({
+          method: "PUT",
+          url: `/api/v1/resource/TestBook/${copied.json().data._id}`,
+          headers: authHeaders(salesToken),
+          payload: { letter: null },
+        });
+        expect(cleared.statusCode).toBe(200);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(await db.findOne(DIGITA.COLLECTIONS.FILE, letter._id, "core")).not.toBeNull();
+        expect((await downloadAs(salesToken, letter._id)).statusCode).toBe(200);
       });
 
       it("leaves no clone behind when the insert refuses a copy", async () => {

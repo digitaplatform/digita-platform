@@ -2453,8 +2453,8 @@ export class DocumentService {
     await this.permissionChecker.check(user, doctype, "amend", doc._data);
 
     const amendData = this.docStatusEngine.prepareAmend(entity, doc);
-    // Give the amendment its OWN File docs (sharing the same blob) so deleting or
-    // replacing an attachment on either document never destroys the other's. The
+    // Give the amendment its own File docs (sharing the same blob) for the files it may lose with a
+    // cleanup, so deleting or replacing an attachment on either document never destroys the other's. The
     // clones are written in the insert's transaction, so a refused amendment leaves none.
     const newDoc = await this.db.withTransaction(async (session) => {
       const copyData = copyDocumentData(entity, doc._data, stored);
@@ -2498,8 +2498,8 @@ export class DocumentService {
     // Document-level read check (owner / condition / scope filters).
     await this.permissionChecker.check(user, doctype, "read", doc._data);
 
-    // Give the copy its OWN File docs (sharing the same blob) so attachment
-    // deletes/replaces on either document don't destroy the other's file. The
+    // Give the copy its own File docs (sharing the same blob) for the files it may lose with a
+    // cleanup, so attachment deletes or replaces on either document don't destroy the other's file. The
     // clones are written in the insert's transaction, so a refused copy leaves none.
     return this.db.withTransaction(async (session) => {
       const copyData = copyDocumentData(entity, doc._data, stored);
@@ -2514,7 +2514,7 @@ export class DocumentService {
    * at ONE File doc — deleting or replacing the attachment on either silently
    * destroyed the other's (refcount is by storage_key, so the blob itself is
    * safe; the File doc pointer is not). For each attach-type field (top-level +
-   * Table child_fields) this mints a NEW File doc that shares the same
+   * Table child_fields) whose file is not bound to another record, this mints a NEW File doc that shares the same
    * storage_key/thumbnail_key/blob but has its own _id + URL, and rewrites the
    * field to the new URL. A ref whose File is gone names nothing and is dropped,
    * since the insert refuses a file that does not exist.
@@ -2534,12 +2534,14 @@ export class DocumentService {
       const s = src as Record<string, unknown>;
       // A file the copier may not read is not cloned: the ref stays, and the insert refuses it.
       if (!(await mayReadFile(this.fileAccess(), user, s))) return undefined;
-      // A file bound to the source, or the copier's own loose upload, is cloned for the copy: the
-      // cleanup may delete either with the record that holds it, so the copy needs its own. Any other
-      // file is named by the copy as it is, so its readers stay that file's readers.
+      // A file bound to another record is named by the copy as it is: no record's cleanup deletes a
+      // file bound elsewhere, and its readers stay that file's readers. Every other file gets a clone,
+      // because a cleanup may delete a loose file with the record its uploader clears it from. The
+      // clone of a file bound to the source, or of the copier's own loose upload, is the copier's and
+      // binds to the copy; the clone of a colleague's loose upload stays theirs and loose.
       const boundToSource = s["attached_to_entity"] === entity.name && s["attached_to_name"] === sourceName;
-      const copiersLoose = !s["attached_to_name"] && (s["owner"] === user.email || s["owner"] === user._id);
-      if (!boundToSource && !copiersLoose) return undefined;
+      if (s["attached_to_name"] && !boundToSource) return undefined;
+      const copiers = boundToSource || s["owner"] === user.email || s["owner"] === user._id;
       const seq = await this.db.getNextSequence(
         DIGITA.COLLECTIONS.FILE,
         "naming_seq",
@@ -2551,12 +2553,11 @@ export class DocumentService {
         ? `${env.API_PREFIX}/public/file/${newId}`
         : `${env.API_PREFIX}/file/${newId}/download`;
       const now = new Date();
-      // The clone becomes the copier's loose upload, which the insert binds to the copy.
       const clone: Record<string, unknown> = {
         ...s,
         _id: newId,
         file_url: fileUrl,
-        owner: user.email,
+        owner: copiers ? user.email : s["owner"],
         modified_by: user.email,
         creation: now,
         modified: now,
