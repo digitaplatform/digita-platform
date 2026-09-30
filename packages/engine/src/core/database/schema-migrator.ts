@@ -306,7 +306,7 @@ export class SchemaMigrator {
    * are logged in full before the drop, so an operator can still recreate what they meant.
    * Idempotent: a database that holds none of it is left as it is.
    */
-  private async removeRetiredEntity(retired: RetiredEntity): Promise<void> {
+  async removeRetiredEntity(retired: RetiredEntity): Promise<void> {
     const { name, database } = retired;
     if ((await this.db.listCollections(database)).includes(name)) {
       const rows = await this.db.find(name, {}, database);

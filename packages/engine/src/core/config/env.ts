@@ -179,9 +179,6 @@ const reservedDb = (role: string, override: string): string =>
 export const env = {
   // ─── APP ──────────────────────────────────────────────
   NODE_ENV: getEnv("NODE_ENV", "development"),
-  // Destructive app-data reseed (/admin/reseed) is disabled in production
-  // unless explicitly allowed, so it can't be triggered accidentally live.
-  ALLOW_DESTRUCTIVE_RESEED: getEnvBool("ALLOW_DESTRUCTIVE_RESEED", false),
   APP_VERSION: getEnv("APP_VERSION", "0.1.0"),
   SERVICE_NAME: getEnv("SERVICE_NAME", "digita-platform"),
   PORT: getEnvInt("PORT", 3000),
@@ -199,6 +196,10 @@ export const env = {
   // Set only for a website engine: it seeds `<domainDir>/sites/<SITE_ID>/` at boot
   // and scopes the public read API to that site. Empty for every other app.
   SITE_ID: getEnv("SITE_ID", ""),
+  // Marks the tenant as a demo. Only there does the engine register the DemoReset action,
+  // which the Jobs page schedules nightly, and run /admin/reseed in production. Both wipe the
+  // app's data, so every other tenant keeps them off and cannot lose its data by accident.
+  DEMO_TENANT: getEnvBool("DEMO_TENANT", false),
 
   // ─── MONGODB ──────────────────────────────────────────
   MONGODB_URI: getEnvRequired("MONGODB_URI"),

@@ -120,11 +120,12 @@ export interface HookServices {
 // Hooks that spawn side-effect docs (e.g. an on_submit posting a ledger entry) do
 // so inline via documentService.insert(), participating in the parent transaction's
 // ClientSession, so the whole lifecycle commits or rolls back atomically.
+// An action handler's return value is the action's result (`runAction`).
 type HookFunction = (
   doc: BaseDocument,
   ctx?: ResponseContext,
   services?: HookServices,
-) => Promise<void> | void;
+) => unknown;
 
 /** Merge per-call session + user into the platform-wide HookServices.
  *  Returns the unmodified base services when neither is supplied so we
@@ -344,6 +345,15 @@ export class HookRunner {
    *  from `runAction` naming the reference, not from the handler-less branch. */
   hasActionHandler(doctype: string, actionName: string): boolean {
     return this.hooks.get(doctype)?.has(`action:${actionName}`) ?? false;
+  }
+
+  /** Register a handler the engine defines in code, for an action whose work needs services a
+   *  hook module cannot reach. `loadHooks` replaces only the handlers of an entity that declares
+   *  `hooks`, so such an entity declares none. */
+  registerAction(doctype: string, actionName: string, fn: HookFunction): void {
+    const entityHooks = this.hooks.get(doctype) ?? new Map<string, HookFunction>();
+    entityHooks.set(`action:${actionName}`, fn);
+    this.hooks.set(doctype, entityHooks);
   }
 
   async runAction(

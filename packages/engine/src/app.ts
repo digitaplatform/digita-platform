@@ -86,6 +86,8 @@ import { RelatedDocService } from "./core/related/related-doc-service.js";
 import { DocumentShareService } from "./core/permissions/document-share-service.js";
 import { generateOpenAPISpec } from "./core/api/openapi-generator.js";
 import { firstRun } from "./core/setup/first-run.js";
+import { enableDemoReset, removeDemoReset } from "./core/setup/demo-reset.js";
+import type { ReseedDeps } from "./core/setup/reseed-app-data.js";
 import { successResponse } from "./core/api/response-model.js";
 import { RuleEngine } from "./core/rules/rule-engine.js";
 import { seedRulesFromFiles } from "./core/rules/rule-loader.js";
@@ -181,6 +183,13 @@ export async function createApp(
   let discoveredDomainDirs: DomainDirectory[] = [];
   let discoveredEntityDirs: string[] = [];
   let discoveredLocaleDirs: string[] = [];
+  const reseedDeps: ReseedDeps = {
+    db,
+    registry,
+    translationService,
+    appDirs: env.APP_DIRS,
+    getDomainDirs: () => discoveredDomainDirs,
+  };
   // App-declared frontend plugin composition (selection + opaque placement).
   // Populated during startup(); read late by the plugin-manifest route via the
   // variable's current value.
@@ -429,16 +438,7 @@ export async function createApp(
     registerTranslationRoutes(scope, env.API_PREFIX, translationService, documentService);
     registerSearchRoutes(scope, env.API_PREFIX, globalSearchService, linkSearchService);
     registerSchemaDriftRoutes(scope, env.API_PREFIX, registry, db);
-    registerAdminReseedRoutes(scope, env.API_PREFIX, {
-      db,
-      registry,
-      translationService,
-      appDirs: env.APP_DIRS,
-      // Late-binding: domainDirs is populated during startup(), but
-      // the route is registered earlier in createApp(). Resolved at
-      // request time via this getter.
-      getDomainDirs: () => discoveredDomainDirs,
-    });
+    registerAdminReseedRoutes(scope, env.API_PREFIX, reseedDeps);
     registerAdminReloadDefinitionsRoutes(scope, env.API_PREFIX, {
       db,
       registry,
@@ -574,6 +574,12 @@ export async function createApp(
     for (const d of domainDirs) {
       await registry.loadAll(join(d.root, "entities"), { defaultDatabase: d.dbName });
     }
+
+    // 3a. The demo reset exists only on a demo tenant. It is registered before first-run
+    //     stores and migrates the definitions; elsewhere, a definition an earlier boot as a demo
+    //     stored is removed before 5 would register it again.
+    if (env.DEMO_TENANT) await enableDemoReset(db, registry, hookRunner, reseedDeps);
+    else await removeDemoReset(db);
 
     // 3b. Domain folders contribute to the same module/locale/seed dir lists.
     //     The downstream loaders are dir-array-aware already, so a missing
