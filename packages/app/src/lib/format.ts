@@ -6,6 +6,8 @@
  * the runtime default. A null/empty value renders the em-dash, never a fake 0.
  */
 
+import type { FieldDefinition } from '@digitaplatform/shared';
+
 export const EMPTY = '—';
 
 const warned = new Set<string>();
@@ -103,22 +105,35 @@ export function formatPercent(value: unknown, locale: string | undefined, precis
   return `${formatNumber(n, locale, { precision })} %`;
 }
 
-export function formatDuration(
-  seconds: unknown,
-  options?: { hideDays?: boolean; hideSeconds?: boolean },
-): string {
+/** The keys of a Duration field that hide a unit. */
+type DurationUnits = Pick<FieldDefinition, 'hide_days' | 'hide_seconds'>;
+
+/** A Duration, stored as whole seconds, as `[<d>d:]<h>:<mm>[:<ss>]`. `hide_days` folds
+ *  the days into the hours and `hide_seconds` drops the seconds. The form control and
+ *  the list and grid cells all draw a Duration through here, so they show one text. */
+export function formatDuration(seconds: unknown, units?: DurationUnits): string {
   if (isBlank(seconds)) return EMPTY;
   const s = typeof seconds === 'number' ? seconds : Number(seconds);
-  if (isNaN(s) || s < 0) return '0:00';
-  const days = Math.floor(s / 86400);
-  const hours = Math.floor((s % 86400) / 3600);
+  if (isNaN(s) || s < 0) return String(seconds);
+  const days = units?.hide_days ? 0 : Math.floor(s / 86400);
+  const hours = Math.floor(s / 3600) - days * 24;
   const mins = Math.floor((s % 3600) / 60);
-  const secs = Math.floor(s % 60);
-  const parts: string[] = [];
-  if (days > 0 && !options?.hideDays) parts.push(`${days}d`);
-  parts.push(`${hours}:${String(mins).padStart(2, '0')}`);
-  if (!options?.hideSeconds) parts.push(String(secs).padStart(2, '0'));
+  const parts = [`${hours}:${String(mins).padStart(2, '0')}`];
+  if (days > 0) parts.unshift(`${days}d`);
+  if (!units?.hide_seconds) parts.push(String(Math.floor(s % 60)).padStart(2, '0'));
   return parts.join(':');
+}
+
+/** Whole seconds from a text `formatDuration` writes. The last number counts in the
+ *  smallest unit the field shows, so a plain `90` is 90 minutes under `hide_seconds`.
+ *  Undefined for a text that is no duration. */
+export function parseDuration(text: string, units?: DurationUnits): number | undefined {
+  const m = /^(?:(\d+)d:?)?(\d+(?::\d+)*)$/.exec(text.replace(/\s+/g, ''));
+  if (!m) return undefined;
+  const steps = units?.hide_seconds ? [60, 3600] : [1, 60, 3600];
+  const numbers = m[2]!.split(':').reverse();
+  if (numbers.length > steps.length) return undefined;
+  return numbers.reduce((sum, n, i) => sum + Number(n) * steps[i]!, Number(m[1] ?? 0) * 86400);
 }
 
 export function formatFileSize(bytes: unknown, locale?: string): string {

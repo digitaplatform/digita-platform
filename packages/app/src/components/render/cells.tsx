@@ -65,7 +65,7 @@ export function CellValue({
     case 'Percent':
       return <span className="tabular-nums">{formatPercent(value, locale?.format_locale, field.precision ?? 2)}</span>;
     case 'Duration':
-      return <>{formatDuration(value)}</>;
+      return <>{formatDuration(value, field)}</>;
     case 'Select':
       return <>{tOption(entity, field.fieldname, String(value))}</>;
     case 'JSON':

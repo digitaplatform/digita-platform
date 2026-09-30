@@ -273,3 +273,54 @@ describe('TableControl per-row required indicator', () => {
     expect(note?.textContent).not.toContain('*'); // plain optional → no marker
   });
 });
+
+describe('a Duration cell honors hide_days and hide_seconds', () => {
+  /** 1 day, 2 hours, 3 minutes, 4 seconds; without the keys it shows as 1d:2:03:04. */
+  const seconds = 86400 + 2 * 3600 + 3 * 60 + 4;
+  const durations = [
+    { fieldname: 'lead', fieldtype: 'Duration', label: 'Lead', in_list_view: true, hide_days: true },
+    { fieldname: 'wait', fieldtype: 'Duration', label: 'Wait', in_list_view: true, hide_seconds: true },
+  ];
+  const cellTexts = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll('[role="gridcell"], [role="cell"], td')).map((c) => c.textContent);
+
+  it('in a list', () => {
+    const m = meta([{ fieldname: 'name', fieldtype: 'Data', label: 'Name', in_list_view: true }, ...durations] as Partial<FieldDefinition>[]);
+    const { container } = render(
+      <ListRenderer
+        entity="Widget"
+        meta={m}
+        rows={[{ _id: 'c1', name: 'Acme', lead: seconds, wait: seconds }]}
+        page={1}
+        total={1}
+        totalPages={1}
+        onRowClick={noop}
+        onSort={noop}
+        onPageChange={noop}
+      />,
+    );
+    const text = container.textContent ?? '';
+    expect(text).toContain('26:03:04');
+    expect(text).toContain('1d:2:03');
+    expect(text).not.toContain('1d:2:03:04');
+  });
+
+  it('in the grid of a Table field', () => {
+    const field = { fieldname: 'lines', fieldtype: 'Table', label: 'Lines', child_fields: durations } as unknown as FieldDefinition;
+    const { container } = render(
+      <Suspense fallback={null}>
+        <TableControl
+          field={field}
+          value={[{ _row_id: 'r1', lead: seconds, wait: seconds }]}
+          doc={{}}
+          state={CELL_STATE}
+          entity="Widget"
+          onChange={noop}
+          controlId="lines"
+          labelId="lines-label"
+        />
+      </Suspense>,
+    );
+    expect(cellTexts(container)).toEqual(expect.arrayContaining(['26:03:04', '1d:2:03']));
+  });
+});
