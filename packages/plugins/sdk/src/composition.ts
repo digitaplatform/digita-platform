@@ -43,6 +43,7 @@ export interface PluginInventoryEntry {
    *  world + decorative graphics + wordmark. */
   accent?: string;
   fonts?: { display?: string; sans?: string; mono?: string };
+  family?: string;
   logoUrl?: string;
   monogram?: string;
   wordmark?: string;
@@ -85,6 +86,7 @@ export interface PluginSource {
    *  carries the brand colour world + decorative graphics + wordmark. */
   accent?: string;
   fonts?: { display?: string; sans?: string; mono?: string };
+  family?: string;
   logoUrl?: string;
   monogram?: string;
   wordmark?: string;
@@ -125,6 +127,7 @@ export function joinCompositionWithInventory(
         // colour world + graphics + wordmark for a full one (e.g. digita).
         accent: staged.accent,
         fonts: staged.fonts,
+        family: staged.family,
         logoUrl: staged.logoUrl,
         monogram: staged.monogram,
         wordmark: staged.wordmark,

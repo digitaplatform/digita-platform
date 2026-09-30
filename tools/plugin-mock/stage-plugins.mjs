@@ -169,12 +169,13 @@ function stageOne(section, id, version) {
   }
 
   // Signatures are PURE CONFIG — no artifact to copy or hash. Inline the full
-  // identity (accent + fonts + colour world + graphics + monogram + wordmark)
-  // into the inventory record; the host applies it via applySignature(). No
-  // entry / url / integrity — nothing is fetched beyond these inlined fields.
+  // identity (accent + fonts + lockup family + colour world + graphics +
+  // monogram + wordmark) into the inventory record; the host applies it via
+  // applySignature(). No entry / url / integrity — nothing is fetched beyond
+  // these inlined fields.
   if (manifest.type === 'signature') {
     const identity = {};
-    for (const key of ['accent', 'fonts', 'logoUrl', 'monogram', 'wordmark', 'colors', 'graphics']) {
+    for (const key of ['accent', 'fonts', 'family', 'logoUrl', 'monogram', 'wordmark', 'colors', 'graphics']) {
       if (manifest[key] !== undefined) identity[key] = manifest[key];
     }
     if (typeof identity.accent !== 'string' || identity.accent.length === 0) {

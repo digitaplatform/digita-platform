@@ -94,6 +94,8 @@ export interface SignaturePlugin {
   title?: string;
   accent?: string;
   fonts?: { display?: string; sans?: string; mono?: string };
+  /** The family word of a lockup system (`<family> ● <product>`); absent, the wordmark is the brand. */
+  family?: string;
   logoUrl?: string;
   /** Inline SVG brand mark (self-contained, `fill="currentColor"`). */
   monogram?: string;

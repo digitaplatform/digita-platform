@@ -62,6 +62,13 @@ describe('registerDeliveredSignature', () => {
     registerDeliveredSignature({ id: 'plain' });
     expect(getSignature('plain')).toMatchObject({ id: 'plain', name: 'plain', accent: '' });
   });
+
+  it("keeps a delivered signature's family, and gives one delivered without a family none", () => {
+    registerDeliveredSignature({ id: 'lineage', title: 'Lineage', accent: '#654321', family: 'lineage' });
+    expect(getSignature('lineage').family).toBe('lineage');
+    registerDeliveredSignature({ id: 'solo', title: 'Solo', accent: '#654321' });
+    expect(getSignature('solo').family).toBeUndefined();
+  });
 });
 
 describe('readPageIdentity', () => {
