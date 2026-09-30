@@ -34,6 +34,8 @@ export interface ChartCanvasProps {
   gridColor: string;
   /** Narrow widths drop the legend/axis chrome. */
   compact: boolean;
+  /** The name a y field's series shows in the legend and the tooltip. */
+  seriesLabel: (key: string) => string;
 }
 
 function colorAt(colors: string[], i: number): string {
@@ -42,7 +44,7 @@ function colorAt(colors: string[], i: number): string {
   return colors[i % colors.length] ?? NEUTRAL[400]!;
 }
 
-export default function ChartCanvas({ card, rows, colors, gridColor, compact }: ChartCanvasProps) {
+export default function ChartCanvas({ card, rows, colors, gridColor, compact, seriesLabel }: ChartCanvasProps) {
   const { chart_type, x_field, y_fields, stacked } = card;
 
   // Pie / donut: single series over the first y_field, sliced by x_field.
@@ -70,15 +72,16 @@ export default function ChartCanvas({ card, rows, colors, gridColor, compact }: 
     );
   }
 
-  const axes = (
-    <>
-      <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-      <XAxis dataKey={x_field} hide={compact} tick={{ fontSize: 11 }} />
-      <YAxis hide={compact} tick={{ fontSize: 11 }} width={40} />
-      <Tooltip />
-      {!compact && <Legend />}
-    </>
-  );
+  // recharts 2 looks for its grid, axes, tooltip and legend among the chart's children with
+  // react-is 18, which does not know a React 19 fragment and skips all it holds. A keyed
+  // array reaches recharts as plain children.
+  const axes = [
+    <CartesianGrid key="grid" strokeDasharray="3 3" stroke={gridColor} />,
+    <XAxis key="x" dataKey={x_field} hide={compact} tick={{ fontSize: 11 }} />,
+    <YAxis key="y" hide={compact} tick={{ fontSize: 11 }} width={40} />,
+    <Tooltip key="tooltip" />,
+    !compact && <Legend key="legend" />,
+  ];
 
   if (chart_type === 'line') {
     return (
@@ -90,6 +93,7 @@ export default function ChartCanvas({ card, rows, colors, gridColor, compact }: 
               key={y}
               type="monotone"
               dataKey={y}
+              name={seriesLabel(y)}
               stroke={colorAt(colors, i)}
               dot={false}
               isAnimationActive={false}
@@ -110,6 +114,7 @@ export default function ChartCanvas({ card, rows, colors, gridColor, compact }: 
               key={y}
               type="monotone"
               dataKey={y}
+              name={seriesLabel(y)}
               stroke={colorAt(colors, i)}
               fill={colorAt(colors, i)}
               fillOpacity={0.2}
@@ -131,6 +136,7 @@ export default function ChartCanvas({ card, rows, colors, gridColor, compact }: 
           <Bar
             key={y}
             dataKey={y}
+            name={seriesLabel(y)}
             fill={colorAt(colors, i)}
             stackId={stacked ? 'stack' : undefined}
             isAnimationActive={false}

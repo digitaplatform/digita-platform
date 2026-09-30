@@ -65,14 +65,14 @@ export function NumberCard({ card, icon, status, error, data, onNavigate }: Numb
 
   // Non-ready states pass straight through to the shell.
   if (status !== 'ready') {
-    return <CardShell label={card.label} icon={icon} width={card.width} status={status} error={error} />;
+    return <CardShell label={card.label} icon={icon} status={status} error={error} />;
   }
 
   // $count_rows: an explicit opt-in to row counting (never a silent fallback).
   if (card.value_field === COUNT_ROWS) {
     const count = Array.isArray(data) ? data.length : 0;
     return (
-      <CardShell label={card.label} icon={icon} width={card.width} status="ready">
+      <CardShell label={card.label} icon={icon} status="ready">
         <Body
           text={formatNumber(count, formatLocale, { precision: 0 })}
           trend={undefined}
@@ -88,7 +88,7 @@ export function NumberCard({ card, icon, status, error, data, onNavigate }: Numb
   // No row at all = legitimate empty section → calm em-dash.
   if (!row) {
     return (
-      <CardShell label={card.label} icon={icon} width={card.width} status="ready">
+      <CardShell label={card.label} icon={icon} status="ready">
         <Body text={EMPTY} trend={undefined} deepLink={undefined} onNavigate={onNavigate} />
       </CardShell>
     );
@@ -100,7 +100,6 @@ export function NumberCard({ card, icon, status, error, data, onNavigate }: Numb
       <CardShell
         label={card.label}
         icon={icon}
-        width={card.width}
         status="error"
         error={`aggregate row has no field '${card.value_field}'`}
       />
@@ -116,7 +115,7 @@ export function NumberCard({ card, icon, status, error, data, onNavigate }: Numb
   }
 
   return (
-    <CardShell label={card.label} icon={icon} width={card.width} status="ready">
+    <CardShell label={card.label} icon={icon} status="ready">
       <Body text={text} trend={trend} deepLink={card.deep_link} onNavigate={onNavigate} />
     </CardShell>
   );

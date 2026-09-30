@@ -1,16 +1,17 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ChartCard as ChartCardDef, ViewSectionData } from '@digitaplatform/shared';
 import { Spinner } from '@digitaplatform/components';
 import { PRIMARY, ACCENT, NEUTRAL } from '@digitaplatform/theme';
 import { useThemeStore } from '@/stores/theme';
 import { useChrome } from '@/lib/chrome-i18n';
 import { EMPTY } from '@/lib/format';
+import { useMeta } from '@/hooks/useMeta';
 import { CardShell, type CardStatus } from './CardShell';
 
 /** recharts lives ONLY behind this lazy boundary (code-split off the dashboard). */
 const ChartCanvas = lazy(() => import('./ChartCanvas'));
 
-/** CSS variables read on mount → resolved hex passed to recharts (SVG fill/stroke
+/** CSS variables read off the chart host → resolved hex passed to recharts (SVG fill/stroke
  *  does not inherit CSS vars). Safe fallbacks if a variable is missing. */
 const PALETTE_VARS = [
   '--color-primary-600',
@@ -38,6 +39,8 @@ interface ChartCardProps {
   status: CardStatus;
   error?: string;
   data: ViewSectionData;
+  /** The entity of the card's section; its field labels name the series. */
+  entity?: string;
 }
 
 function resolvePalette(host: HTMLElement): string[] {
@@ -50,13 +53,16 @@ function resolvePalette(host: HTMLElement): string[] {
 
 /**
  * Pure chart card. Validates the chart contract loud (unknown chart_type / missing
- * x_field / empty y_fields → loud red), reads resolved theme hex on mount, and
- * lazy-loads the recharts canvas. Legitimate empty section rows render a calm note.
+ * x_field / empty y_fields → loud red), reads resolved theme hex once its chart host
+ * exists, and lazy-loads the recharts canvas. Legitimate empty section rows render a calm note.
  */
-export function ChartCard({ card, icon, status, error, data }: ChartCardProps) {
+export function ChartCard({ card, icon, status, error, data, entity }: ChartCardProps) {
   const tc = useChrome();
   const mode = useThemeStore((s) => s.mode);
-  const hostRef = useRef<HTMLDivElement>(null);
+  const meta = useMeta(entity);
+  // State, not a ref: the host mounts only once the card is ready, usually after the first
+  // render, and the measurements below have to run again when it does.
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
   const [colors, setColors] = useState<string[]>(PALETTE_FALLBACK);
   const [gridColor, setGridColor] = useState<string>(GRID_FALLBACK);
   const [compact, setCompact] = useState(false);
@@ -64,28 +70,30 @@ export function ChartCard({ card, icon, status, error, data }: ChartCardProps) {
   // Re-resolve the theme hex whenever the mode flips — recharts gets concrete
   // colors (SVG can't inherit CSS vars), so a live light/dark toggle must refresh.
   useEffect(() => {
-    const el = hostRef.current;
-    if (!el) return;
-    setColors(resolvePalette(el));
-    setGridColor(getComputedStyle(el).getPropertyValue('--color-border').trim() || GRID_FALLBACK);
-  }, [mode]);
+    if (!host) return;
+    setColors(resolvePalette(host));
+    setGridColor(getComputedStyle(host).getPropertyValue('--color-border').trim() || GRID_FALLBACK);
+  }, [host, mode]);
 
   useEffect(() => {
-    const el = hostRef.current;
-    if (!el) return;
+    if (!host) return;
     const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? el.clientWidth;
+      const w = entries[0]?.contentRect.width ?? host.clientWidth;
       setCompact(w < COMPACT_BELOW);
     });
-    ro.observe(el);
+    ro.observe(host);
     return () => ro.disconnect();
-  }, []);
+  }, [host]);
 
   const rows = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
-  if (status !== 'ready') {
-    return <CardShell label={card.label} icon={icon} width={card.width} status={status} error={error} />;
+  // The chart waits for the labels, so its legend never flashes the keys.
+  const shellStatus = status === 'ready' && meta.isLoading ? 'loading' : status;
+  if (shellStatus !== 'ready') {
+    return <CardShell label={card.label} icon={icon} status={shellStatus} error={error} />;
   }
+  // A key no field has (an aggregate can name one) names its series as it is.
+  const seriesLabel = (key: string) => meta.data?.fields.find((f) => f.fieldname === key)?.label ?? key;
 
   // FAIL LOUD on a malformed chart contract.
   let configError: string | undefined;
@@ -95,13 +103,13 @@ export function ChartCard({ card, icon, status, error, data }: ChartCardProps) {
     configError = 'chart card has no y_fields';
   if (configError) {
     return (
-      <CardShell label={card.label} icon={icon} width={card.width} status="error" error={configError} />
+      <CardShell label={card.label} icon={icon} status="error" error={configError} />
     );
   }
 
   return (
-    <CardShell label={card.label} icon={icon} width={card.width ?? 2} status="ready">
-      <div ref={hostRef} className="h-48 w-full">
+    <CardShell label={card.label} icon={icon} status="ready">
+      <div ref={setHost} className="h-48 w-full">
         {rows.length === 0 ? (
           <p className="flex h-full items-center text-sm text-textMuted">{EMPTY}</p>
         ) : (
@@ -116,7 +124,14 @@ export function ChartCard({ card, icon, status, error, data }: ChartCardProps) {
               </div>
             }
           >
-            <ChartCanvas card={card} rows={rows} colors={colors} gridColor={gridColor} compact={compact} />
+            <ChartCanvas
+              card={card}
+              rows={rows}
+              colors={colors}
+              gridColor={gridColor}
+              compact={compact}
+              seriesLabel={seriesLabel}
+            />
           </Suspense>
         )}
       </div>

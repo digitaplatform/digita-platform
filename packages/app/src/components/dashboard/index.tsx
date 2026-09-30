@@ -31,13 +31,36 @@ export interface ResolvedSection {
   entity?: string;
 }
 
-/** The Page-supplied resolver: maps a card's (view, section) to its section data.
+/** The params a view-bound card sends its view. */
+export type ViewParams = Record<string, string | number | boolean>;
+
+/** The Page-supplied resolver: maps a card's (view, section, params) to its section data.
  *  `view` may be undefined (the card inherits the workspace default_view, already
  *  merged by the Page). For shortcut/links cards (no view) it is not called. */
 export type CardResolve = (
   view: string | undefined,
   section: string,
+  params?: ViewParams,
 ) => ResolvedSection;
+
+/** Grid width → literal Tailwind col-span class, written whole so the Tailwind scan keeps it.
+ *  The responsive grid lives in DashboardPage (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`);
+ *  a width only widens a card at the three-column breakpoint, so a phone always stacks. */
+const WIDTH_SPAN: Record<1 | 2 | 3, string> = {
+  1: 'lg:col-span-1',
+  2: 'lg:col-span-2',
+  3: 'lg:col-span-3',
+};
+
+/**
+ * The col-span class of the grid item that holds `card`. It belongs on the grid's own child:
+ * on the card inside that child a span does nothing. A chart or a list needs room to be read,
+ * so it is two columns wide unless it names its width; any other card is one.
+ */
+export function cardSpan(card: WorkspaceCard): string {
+  const needsRoom = card.kind === 'chart' || card.kind === 'list';
+  return WIDTH_SPAN[card.width ?? (needsRoom ? 2 : 1)];
+}
 
 /**
  * Map a resolver result + the card's on_data_error policy to a CardShell status.
@@ -69,7 +92,7 @@ export function renderCard(
 
   switch (card.kind) {
     case 'number': {
-      const r = resolve(card.view, card.section);
+      const r = resolve(card.view, card.section, card.params);
       return (
         <NumberCard
           card={card}
@@ -82,7 +105,7 @@ export function renderCard(
       );
     }
     case 'chart': {
-      const r = resolve(card.view, card.section);
+      const r = resolve(card.view, card.section, card.params);
       return (
         <ChartCard
           card={card}
@@ -90,11 +113,12 @@ export function renderCard(
           status={shellStatus(card, r)}
           error={r.message?.text}
           data={r.data}
+          entity={r.entity}
         />
       );
     }
     case 'list': {
-      const r = resolve(card.view, card.section);
+      const r = resolve(card.view, card.section, card.params);
       return (
         <ListCard
           card={card}
