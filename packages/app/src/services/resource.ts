@@ -50,6 +50,19 @@ export function getSingle<T = Doc>(entity: string): Promise<ApiResponse<T>> {
   return api.get<ApiResponse<T>>(`${RESOURCE}/${enc(entity)}/single`);
 }
 
+/** One `links` entry of a document's entity, as the related route answers it. `count` is 0
+ *  where the link has no `show_count` or the caller may not select the linked entity. */
+export interface RelatedDocResult {
+  label: string;
+  entity: string;
+  count: number;
+  icon?: string;
+}
+
+export function getRelatedDocs(entity: string, name: string): Promise<ApiResponse<RelatedDocResult[]>> {
+  return api.get<ApiResponse<RelatedDocResult[]>>(`${RESOURCE}/${enc(entity, name)}/related`);
+}
+
 /** One typeahead result for a Link field. Sub-row results carry a composite
  *  `<parent>::<row_id>` _id + a parent-title subtitle. */
 export interface LinkSearchResult {

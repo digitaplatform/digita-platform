@@ -11,6 +11,7 @@ export const qk = {
   doc: (entity: string, name: string) => ['resource', entity, 'doc', name] as const,
   single: (entity: string) => ['resource', entity, 'single'] as const,
   actions: (entity: string, name: string) => ['resource', entity, 'doc', name, 'actions'] as const,
+  relatedDocs: (entity: string, name: string) => ['resource', entity, 'doc', name, 'related'] as const,
   search: (entity: string, q: string, filters?: unknown) =>
     ['search', entity, q, filters ?? null] as const,
   globalSearch: (q: string) => ['search', 'global', q] as const,

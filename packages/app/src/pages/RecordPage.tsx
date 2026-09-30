@@ -31,6 +31,7 @@ import { useI18nStore } from '@/stores/i18n';
 import { FormRenderer } from '@/components/render/FormRenderer';
 import { workflowBadge } from '@/components/render/cells';
 import { ContextPanel } from '@/components/record/ContextPanel';
+import { LinksPanel } from '@/components/record/LinksPanel';
 import { WorkflowBar } from '@/components/workflow/WorkflowBar';
 import { ActionBar } from '@/components/workflow/ActionBar';
 import { PrintMenu } from '@/components/workflow/PrintMenu';
@@ -604,6 +605,7 @@ function RecordForm({
         </div>
       )}
       {!isNew && <RecordKpis entity={entity} meta={meta} doc={watched as Record<string, unknown>} />}
+      {!isNew && !!meta.links?.length && <LinksPanel entity={entity} name={name!} links={meta.links} />}
 
       {conflict && (
         <div
