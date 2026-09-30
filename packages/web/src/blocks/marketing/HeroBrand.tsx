@@ -3,6 +3,12 @@ import type { Locale } from "@/i18n/config";
 import { resolvePlugin } from "@/plugins";
 import { Actions, Eyebrow, type P, Section, list, readAction, s, texts } from "./shared";
 
+/* The text sits at its reading width until a figure is drawn beside it. Whether one is drawn is
+   known only once the plugin has rendered (it may draw nothing without its content, or for a site
+   without a mark), so the page itself decides: the two columns open when a second child is there. */
+const LAYOUT =
+  "max-w-3xl has-[>:nth-child(2)]:grid has-[>:nth-child(2)]:max-w-none has-[>:nth-child(2)]:items-center has-[>:nth-child(2)]:gap-12 md:has-[>:nth-child(2)]:grid-cols-2 md:has-[>:nth-child(2)]:gap-14";
+
 /**
  * The opening section of a site: headline, lede and calls to action beside the site's figure.
  * `visual` names the plugin that draws the figure and gets the block's props; `none` or an id no
@@ -17,7 +23,7 @@ export function HeroBrand({ props, locale }: { props?: P; locale: Locale }) {
     <div className="relative isolate overflow-hidden">
       {s(props, "atmosphere") === "data-rain" && <DataRain columns={list(props, "rain").map((column) => texts(column, "tokens"))} />}
       <Section>
-        <div className={Figure ? "grid items-center gap-12 md:grid-cols-2 md:gap-14" : "max-w-3xl"}>
+        <div className={LAYOUT}>
           <div className="flex flex-col gap-7">
             {s(props, "eyebrow") && <Eyebrow>{s(props, "eyebrow")}</Eyebrow>}
             <h1 className="text-balance font-display text-4xl font-semibold tracking-tight text-textMain [overflow-wrap:anywhere] sm:text-5xl lg:text-7xl">

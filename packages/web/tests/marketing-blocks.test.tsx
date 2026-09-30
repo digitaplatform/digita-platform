@@ -47,8 +47,7 @@ const CASES: { type: BlockType; props: Record<string, unknown>; shows: string[];
   {
     type: "hero_brand",
     props: { eyebrow: "Company", heading: "Your business, as software.", lede: "Described once.", primary: sheet, secondary: link, visual: "brand-mark" },
-    // The figure is a code-split plugin, which a static render leaves to the client; the slot for it shows.
-    shows: ["<h1", "Your business, as software.", "Described once.", "Book a call", 'href="/how-we-work"', "md:grid-cols-2"],
+    shows: ["<h1", "Your business, as software.", "Described once.", "Book a call", 'href="/how-we-work"'],
     required: "heading",
   },
   {
@@ -173,11 +172,9 @@ describe("the marketing blocks", () => {
     expect(pillars(3)).not.toContain("grid-cols-4");
   });
 
-  it("hero_brand keeps a figure slot only for a plugin it knows", () => {
+  it("hero_brand draws no figure for an id no plugin carries", () => {
     const hero = (visual: string) => render("hero_brand", { heading: "One file. A whole app.", visual });
-    expect(hero("code-app")).toContain("md:grid-cols-2");
-    expect(hero("none")).not.toContain("md:grid-cols-2");
-    expect(hero("simetrix-mark")).not.toContain("md:grid-cols-2");
+    expect(hero("simetrix-mark")).toBe(hero("none"));
     expect(hero("none")).toContain("max-w-3xl");
   });
 

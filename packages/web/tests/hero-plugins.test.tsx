@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // The figure of a hero is a plugin: the hero hands it the block's props and the page's locale, the
 // brand mark draws the monogram of the site's own signature, and the code app draws the texts of
 // its seed row.
@@ -16,7 +17,9 @@ vi.mock("@/lib/engine-client", () => ({ getSite: async () => ({ _id: "example", 
 // A plugin that shows what it was handed, in place of the code-split registry a static render cannot wait for.
 vi.mock("@/plugins", () => {
   const Probe = ({ props, locale }: { props?: P; locale: string }) => <p>{`probe ${String(props?.form_title)} ${locale}`}</p>;
-  return { PLUGIN_MANIFESTS: [], resolvePlugin: (id?: string) => (id === "probe" ? Probe : null) };
+  // A plugin that draws nothing, as the code app does without its definition.
+  const Blank = () => null;
+  return { PLUGIN_MANIFESTS: [], resolvePlugin: (id?: string) => ({ probe: Probe, blank: Blank })[id ?? ""] ?? null };
 });
 
 const { HeroBrand } = await import("../src/blocks/marketing/HeroBrand");
@@ -31,6 +34,20 @@ describe("a hero's figure", () => {
     expect(renderToStaticMarkup(<HeroBrand props={{ heading: "H", visual: "probe", form_title: "Order" }} locale="de" />)).toContain("probe Order de");
     expect(renderToStaticMarkup(<Showcase props={{ plugin_id: "probe", form_title: "Order" }} locale="de" />)).toContain("probe Order de");
     expect(renderToStaticMarkup(<PluginBlock props={{ plugin_id: "probe", form_title: "Order" }} locale="de" />)).toContain("probe Order de");
+  });
+
+  it("opens a column beside the text only when the plugin draws a figure", () => {
+    const layout = (visual: string) => {
+      const host = document.createElement("div");
+      host.innerHTML = renderToStaticMarkup(<HeroBrand props={{ heading: "H", visual }} locale="en" />);
+      return host.querySelector("h1")!.parentElement!.parentElement!;
+    };
+    // PLANTED DEFECT: a plugin that draws nothing leaves the text at its reading width, as `none` does.
+    expect(layout("blank").outerHTML).toBe(layout("none").outerHTML);
+    expect(layout("blank").matches(":has(> :nth-child(2))")).toBe(false);
+    // PLANTED INNOCENT: a drawn figure is the second child, and the two columns open on it alone.
+    expect(layout("probe").matches(":has(> :nth-child(2))")).toBe(true);
+    expect([...layout("probe").classList].filter((name) => name.includes("grid-cols"))).toEqual(["md:has-[>:nth-child(2)]:grid-cols-2"]);
   });
 });
 
