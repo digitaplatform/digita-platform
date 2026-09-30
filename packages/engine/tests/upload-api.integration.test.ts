@@ -1233,19 +1233,21 @@ describe("Upload API Integration", () => {
         expect(await db.findOne(DIGITA.COLLECTIONS.FILE, later._id, "core")).not.toBeNull();
       });
 
-      it("keeps the clone the colleague's when an Administrator copies a record naming the colleague's file", async () => {
+      it("names the colleague's file as it is when an Administrator copies a record naming it, cloning nothing", async () => {
         const secret = await uploadAsApp(salesToken, "letter", "%PDF sales secret");
         const planted = await plantBook(ownerToken, { title: "Bait", letter: secret.file_url });
+        const before = await fileCount();
         const copied = await app.inject({
           method: "POST",
           url: `/api/v1/resource/TestBook/${planted.json().data._id}/copy`,
           headers: authHeaders(authToken),
         });
         expect(copied.statusCode).toBe(201);
-        const cloneId = /\/file\/([^/]+)\/download/.exec(copied.json().data.letter as string)![1]!;
+        expect(copied.json().data.letter).toBe(secret.file_url);
+        expect(await fileCount()).toBe(before);
 
-        expect((await downloadAs(ownerToken, cloneId)).statusCode).toBe(403);
-        expect((await downloadAs(salesToken, cloneId)).statusCode).toBe(200);
+        expect((await downloadAs(ownerToken, secret._id)).statusCode).toBe(403);
+        expect((await downloadAs(salesToken, secret._id)).statusCode).toBe(200);
       });
 
       it("leaves no clone behind when the insert refuses a copy", async () => {

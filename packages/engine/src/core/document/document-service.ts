@@ -2534,6 +2534,12 @@ export class DocumentService {
       const s = src as Record<string, unknown>;
       // A file the copier may not read is not cloned: the ref stays, and the insert refuses it.
       if (!(await mayReadFile(this.fileAccess(), user, s))) return undefined;
+      // A file bound to the source, or the copier's own loose upload, is cloned for the copy: the
+      // cleanup may delete either with the record that holds it, so the copy needs its own. Any other
+      // file is named by the copy as it is, so its readers stay that file's readers.
+      const boundToSource = s["attached_to_entity"] === entity.name && s["attached_to_name"] === sourceName;
+      const copiersLoose = !s["attached_to_name"] && (s["owner"] === user.email || s["owner"] === user._id);
+      if (!boundToSource && !copiersLoose) return undefined;
       const seq = await this.db.getNextSequence(
         DIGITA.COLLECTIONS.FILE,
         "naming_seq",
@@ -2545,21 +2551,17 @@ export class DocumentService {
         ? `${env.API_PREFIX}/public/file/${newId}`
         : `${env.API_PREFIX}/file/${newId}/download`;
       const now = new Date();
+      // The clone becomes the copier's loose upload, which the insert binds to the copy.
       const clone: Record<string, unknown> = {
         ...s,
         _id: newId,
         file_url: fileUrl,
+        owner: user.email,
         modified_by: user.email,
         creation: now,
         modified: now,
       };
-      // The clone of a file bound to the source becomes the copier's loose upload, which the insert
-      // binds to the copy. Any other clone keeps the source file's owner and binding, so its readers
-      // stay that file's readers; the insert binds it only when it is the copier's own upload.
-      if (s["attached_to_entity"] === entity.name && s["attached_to_name"] === sourceName) {
-        clone["owner"] = user.email;
-        delete clone["attached_to_name"];
-      }
+      delete clone["attached_to_name"];
       if (s["thumbnail_key"]) clone["thumbnail_url"] = `${fileUrl}?thumb=1`;
       await this.db.insertOne(DIGITA.COLLECTIONS.FILE, clone, DIGITA.DATABASES.CORE, session);
       return fileUrl;
