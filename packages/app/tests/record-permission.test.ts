@@ -5,8 +5,9 @@ import type { SessionUser } from '@/types';
 
 /**
  * hasRecordPermission answers what the engine's PermissionChecker.hasPermission answers for a
- * stored record: a level-0 row of one of the user's roles sets the bit, and the record's
- * workflow state does not strip it from that row's role.
+ * stored record: a level-0 row of one of the user's roles sets the bit, the record's workflow
+ * state does not strip it from that row's role, and the row's if_owner, condition and scope
+ * admit the record.
  */
 
 const reception: SessionUser = { _id: 'u1', email: 'rita@example.com', roles: ['Reception'] };
@@ -66,5 +67,24 @@ describe('hasRecordPermission and workflow state strips', () => {
   it('lets Administrator act in every state', () => {
     const admin: SessionUser = { _id: 'a1', email: 'admin@example.com', roles: ['Administrator'] };
     expect(hasRecordPermission(workOrder(), admin, 'write', { status: 'in_repair' })).toBe(true);
+  });
+});
+
+describe('hasRecordPermission and the gates of a row', () => {
+  it('leaves to the engine a row whose condition the app cannot read', () => {
+    const meta = workOrder({
+      permissions: [{ role: 'Reception', level: 0, delete: 1, condition: "eval:(doc.status == 'open'" }],
+    });
+    expect(hasRecordPermission(meta, reception, 'delete', { status: 'closed' })).toBe(true);
+  });
+
+  it('refuses through a scoped row where the session holds an empty value for the scope', () => {
+    const meta = workOrder({
+      permissions: [{ role: 'Reception', level: 0, delete: 1, scope: { field: 'branch', user_field: 'branch' } }],
+    });
+    const withoutBranch = { ...reception, branch: null } as unknown as SessionUser;
+    expect(hasRecordPermission(meta, withoutBranch, 'delete', { branch: 'North' })).toBe(false);
+    const north = { ...reception, branch: 'North' } as unknown as SessionUser;
+    expect(hasRecordPermission(meta, north, 'delete', { branch: 'North' })).toBe(true);
   });
 });

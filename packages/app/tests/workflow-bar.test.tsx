@@ -4,7 +4,7 @@ import { render, cleanup } from '@testing-library/react';
 import type { EntityDefinition } from '@digitaplatform/shared';
 
 // The session user drives role-gating; reset per test.
-let user: { roles: string[] } | null = { roles: ['Editor'] };
+let user: { _id?: string; email?: string; roles: string[] } | null = { roles: ['Editor'] };
 
 vi.mock('@/stores/session', () => ({
   useSessionStore: (sel: (s: { user: typeof user }) => unknown) => sel({ user }),
@@ -92,6 +92,44 @@ describe('WorkflowBar (generic, meta-driven)', () => {
     expect(renderBar(m, { docstatus: 0 }).container.firstChild).toBeNull();
     cleanup();
     expect(renderBar(m, { docstatus: 1 }).container.firstChild).toBeNull();
+  });
+
+  it("offers no Submit on another user's draft where submit needs ownership, and Submit to its owner", () => {
+    user = { _id: 'u-ann', email: 'ann@example.com', roles: ['Editor'] };
+    const m = meta({
+      is_submittable: true,
+      permissions: [{ role: 'Editor', level: 0, read: 1, write: 1, submit: 1, if_owner: true }],
+    });
+    expect(renderBar(m, { docstatus: 0, owner: 'bob@example.com' }).container.firstChild).toBeNull();
+    cleanup();
+    expect(renderBar(m, { docstatus: 0, owner: 'ann@example.com' }).queryByText('ui.workflow.submit')).not.toBeNull();
+  });
+
+  it('offers no Cancel where the cancel row condition does not hold for the document', () => {
+    const m = meta({
+      is_submittable: true,
+      permissions: [{ role: 'Editor', level: 0, read: 1, cancel: 1, condition: 'eval:doc.paid != 1' }],
+    });
+    expect(renderBar(m, { docstatus: 1, paid: 1 }).container.firstChild).toBeNull();
+    cleanup();
+    expect(renderBar(m, { docstatus: 1, paid: 0 }).queryByText('ui.workflow.cancel')).not.toBeNull();
+  });
+
+  it('offers no Submit in a workflow state that strips submit from the role', () => {
+    const m = meta({
+      is_submittable: true,
+      permissions: [{ role: 'Editor', level: 0, read: 1, submit: 1 }],
+      states: [{ value: 'on_hold', color: 'amber', permissions: [{ role: 'Editor', submit: 0 }] }],
+    });
+    expect(renderBar(m, { docstatus: 0, status: 'on_hold' }).container.firstChild).toBeNull();
+  });
+
+  it("offers no Amend on another user's cancelled document where amend needs ownership", () => {
+    user = { _id: 'u-ann', email: 'ann@example.com', roles: ['Editor'] };
+    const m = meta({ is_submittable: true, permissions: [{ role: 'Editor', level: 0, amend: 1, if_owner: true }] });
+    expect(renderBar(m, { docstatus: 2, owner: 'bob@example.com' }).container.firstChild).toBeNull();
+    cleanup();
+    expect(renderBar(m, { docstatus: 2, owner: 'ann@example.com' }).queryByText('ui.workflow.amend')).not.toBeNull();
   });
 
   it('Administrator is offered Submit and Cancel without a permission row', () => {

@@ -1,6 +1,7 @@
-import type { EntityDefinition } from '@digitaplatform/shared';
+import type { EntityDefinition, EntityPermission } from '@digitaplatform/shared';
 import { SYSTEM_ROLES, canGrantActionTo } from '@digitaplatform/shared';
 import type { SessionUser } from '@/types';
+import { evaluateExpr } from '@/lib/expression';
 import { resolveWorkflowField } from '@/lib/workflow-field';
 
 /**
@@ -45,7 +46,8 @@ type RecordRules = Pick<EntityDefinition, 'permissions' | 'states' | 'transition
 
 /**
  * Does the user hold `action` on this record, as the engine checks it against the stored
- * record: through a level-0 row whose role the record's workflow state does not strip of it?
+ * record: through a level-0 row whose role the record's workflow state does not strip of it,
+ * and whose `if_owner`, `condition` and `scope` admit the record?
  */
 export function hasRecordPermission(
   entity: RecordRules,
@@ -56,8 +58,38 @@ export function hasRecordPermission(
   if (!user) return false;
   if (isAdministrator(user)) return true;
   return (entity.permissions ?? []).some(
-    (p) => canGrantActionTo(p, user.roles) && p[action] === 1 && !stateStrips(entity, record, p.role, action),
+    (p) =>
+      canGrantActionTo(p, user.roles) &&
+      p[action] === 1 &&
+      !stateStrips(entity, record, p.role, action) &&
+      rowAdmits(p, user, record),
   );
+}
+
+/**
+ * Whether the row's `if_owner`, `condition` and `scope` admit the record. A gate the app cannot
+ * judge from what it holds leaves the row standing, so the app never hides what the engine may
+ * allow: an owner this reader may not see, a condition the app's evaluator cannot read, a user
+ * attribute the session does not carry.
+ */
+function rowAdmits(p: EntityPermission, user: SessionUser, record: Record<string, unknown>): boolean {
+  const owner = record['owner'];
+  if (p.if_owner && owner !== undefined && owner !== user.email && owner !== user._id) return false;
+  if (p.condition) {
+    const met = evaluateExpr(p.condition, { doc: record, user: user as unknown as Record<string, unknown> });
+    if (!met.error && !met.value) return false;
+  }
+  if (p.scope) {
+    const userValue = (user as unknown as Record<string, unknown>)[p.scope.user_field];
+    if (userValue !== undefined && !scopeMatches(record[p.scope.field], userValue)) return false;
+  }
+  return true;
+}
+
+/** The engine's scope match: the record's value is the user's, or a list that holds it. */
+function scopeMatches(recordValue: unknown, userValue: unknown): boolean {
+  if (userValue === null) return false;
+  return Array.isArray(recordValue) ? recordValue.includes(userValue) : recordValue === userValue;
 }
 
 /** Whether the record's workflow state takes `action` from `role`. Like the engine, only the

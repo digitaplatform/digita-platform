@@ -4,7 +4,7 @@ import type { EntityDefinition } from '@digitaplatform/shared';
 import { Button } from '@digitaplatform/components';
 import { evaluateExpr } from '@/lib/expression';
 import { resolveWorkflowField } from '@/lib/workflow-field';
-import { isAdministrator, hasEntityPermission } from '@/lib/permissions';
+import { isAdministrator, hasRecordPermission } from '@/lib/permissions';
 import { toUiMessages } from '@/lib/api-result';
 import { useSessionStore } from '@/stores/session';
 import { useI18nStore } from '@/stores/i18n';
@@ -67,14 +67,14 @@ export function WorkflowBar({
     return true;
   });
 
-  // The engine refuses Submit and Cancel without the `submit` / `cancel` bit.
-  const canSubmit = !!meta.is_submittable && docstatus === 0 && hasEntityPermission(meta, user, 'submit');
-  const canCancel = !!meta.is_submittable && docstatus === 1 && hasEntityPermission(meta, user, 'cancel');
+  // The engine refuses Submit and Cancel without the `submit` / `cancel` bit on this document.
+  const canSubmit = !!meta.is_submittable && docstatus === 0 && hasRecordPermission(meta, user, 'submit', doc);
+  const canCancel = !!meta.is_submittable && docstatus === 1 && hasRecordPermission(meta, user, 'cancel', doc);
   // A cancelled (docstatus 2) submittable doc can be amended into a fresh draft —
-  // gated by the `amend` permission (Administrator bypasses via hasEntityPermission).
+  // gated by the `amend` permission on this document (Administrator bypasses).
   // The engine re-checks authoritatively; this is only for affordance visibility.
   const canAmend =
-    !!meta.is_submittable && docstatus === 2 && hasEntityPermission(meta, user, 'amend');
+    !!meta.is_submittable && docstatus === 2 && hasRecordPermission(meta, user, 'amend', doc);
 
   if (!canSubmit && !canCancel && !canAmend && transitions.length === 0) return null;
 
