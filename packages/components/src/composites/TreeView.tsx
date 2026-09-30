@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { cn } from '../lib/cn.js';
 import { Button } from '../primitives/Button.js';
 
@@ -35,7 +35,7 @@ export interface TreeViewProps {
    *  where a person opens groups to reach deeper nodes and may still pick a group.
    *  Enter keeps selecting the active node. */
   expandOnNameClick?: boolean;
-  /** Localized text of the Select button (consumer-provided). */
+  /** Localized text of the Select button (consumer-provided); its accessible name adds the node's label. */
   selectLabel?: string;
 }
 
@@ -85,6 +85,7 @@ export function TreeView({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(nodes.map((n) => n.id)));
   const [activeId, setActiveId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const baseId = useId();
   const q = query.trim().toLowerCase();
 
   // A node is "visible" under a filter when it matches or any descendant does,
@@ -140,13 +141,17 @@ export function TreeView({
     return out;
   }, [roots, childrenOf, expanded, q, subtreeMatches]);
 
-  const toggle = (id: string) =>
+  // A search shows every node open, so an open or close then would change nothing a person sees
+  // and would only surface once the search is cleared.
+  const toggle = (id: string) => {
+    if (q) return;
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+  };
 
   useEffect(() => {
     if (autoFocus) containerRef.current?.focus();
@@ -201,7 +206,8 @@ export function TreeView({
         className,
       )}
     >
-      {flat.map(({ node, depth }) => {
+      {flat.map(({ node, depth }, index) => {
+        const nameId = `${baseId}-name-${index}`;
         const expandable = hasChildren(node.id);
         const open = isExpanded(node.id);
         const selected = node.id === selectedId;
@@ -216,6 +222,8 @@ export function TreeView({
             key={node.id}
             data-tree-id={node.id}
             role="treeitem"
+            // Named by its name alone: named by its content, it would add the names of the row's buttons.
+            aria-labelledby={nameId}
             aria-level={depth + 1}
             aria-selected={selected}
             aria-expanded={expandable ? open : undefined}
@@ -253,11 +261,11 @@ export function TreeView({
               </span>
             </button>
             <button
+              id={nameId}
               type="button"
               tabIndex={-1}
               disabled={nameDisabled}
               aria-disabled={nameDisabled || undefined}
-              aria-expanded={opensOnName ? open : undefined}
               onClick={() => {
                 if (nameDisabled) return;
                 setActiveId(node.id);
@@ -276,9 +284,12 @@ export function TreeView({
             </button>
             {opensOnName && (
               <Button
+                type="button"
                 variant="outline"
                 size="xs"
                 tabIndex={-1}
+                // Named after its node: a screen reader listing the buttons would read "Select" on every row.
+                aria-label={`${selectLabel} ${node.label}`}
                 disabled={disabled}
                 onClick={() => {
                   setActiveId(node.id);

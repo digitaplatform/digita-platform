@@ -1,3 +1,4 @@
+import type { FormEvent } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent, screen, within } from '@testing-library/react';
 import { TreeView, type TreeViewNode } from '../src/composites/TreeView.js';
@@ -87,14 +88,16 @@ describe('TreeView with names that open groups (expandOnNameClick)', () => {
 
   it('opens and closes a group on its name and never selects it', () => {
     const onSelect = vi.fn();
-    render(<TreeView nodes={groups} onSelect={onSelect} expandOnNameClick selectLabel="Select" />);
+    const { container } = render(
+      <TreeView nodes={groups} onSelect={onSelect} expandOnNameClick selectLabel="Select" />,
+    );
     const name = screen.getByRole('button', { name: 'Main group' });
-    expect(name).toHaveAttribute('aria-expanded', 'true');
+    expect(row(container, 'main')).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(name);
-    expect(name).toHaveAttribute('aria-expanded', 'false');
+    expect(row(container, 'main')).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText('Sub group')).toBeNull();
     fireEvent.click(name);
-    expect(name).toHaveAttribute('aria-expanded', 'true');
+    expect(row(container, 'main')).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('Sub group')).toBeInTheDocument();
     expect(onSelect).not.toHaveBeenCalled();
   });
@@ -104,9 +107,9 @@ describe('TreeView with names that open groups (expandOnNameClick)', () => {
     const { container } = render(
       <TreeView nodes={groups} onSelect={onSelect} expandOnNameClick selectLabel="Select" />,
     );
-    fireEvent.click(within(row(container, 'sub')).getByRole('button', { name: 'Select' }));
+    fireEvent.click(within(row(container, 'sub')).getByRole('button', { name: 'Select Sub group' }));
     expect(onSelect).toHaveBeenLastCalledWith('sub');
-    expect(within(row(container, 'leaf')).queryByRole('button', { name: 'Select' })).toBeNull();
+    expect(within(row(container, 'leaf')).queryByText('Select')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Leaf' }));
     expect(onSelect).toHaveBeenLastCalledWith('leaf');
     expect(onSelect).toHaveBeenCalledTimes(2);
@@ -134,10 +137,40 @@ describe('TreeView with names that open groups (expandOnNameClick)', () => {
         disabledIds={new Set(['sub', 'leaf'])}
       />,
     );
-    const name = screen.getByRole('button', { name: 'Sub group' });
-    fireEvent.click(name);
-    expect(name).toHaveAttribute('aria-expanded', 'false');
-    expect(within(row(container, 'sub')).getByRole('button', { name: 'Select' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Sub group' }));
+    expect(row(container, 'sub')).toHaveAttribute('aria-expanded', 'false');
+    expect(within(row(container, 'sub')).getByRole('button', { name: 'Select Sub group' })).toBeDisabled();
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('names the Select button after its group and states the group once, on its treeitem', () => {
+    render(<TreeView nodes={groups} expandOnNameClick selectLabel="Select" />);
+    const main = screen.getByRole('treeitem', { name: 'Main group' });
+    expect(main).toHaveAttribute('aria-expanded', 'true');
+    expect(main.querySelectorAll('[aria-expanded]')).toHaveLength(0);
+    expect(within(main).getByRole('button', { name: 'Select Main group' })).toBeInTheDocument();
+  });
+
+  it('never submits a form around the tree from its Select button', () => {
+    const onSelect = vi.fn();
+    const onSubmit = vi.fn((e: FormEvent) => e.preventDefault());
+    const { container } = render(
+      <form onSubmit={onSubmit}>
+        <TreeView nodes={groups} onSelect={onSelect} expandOnNameClick selectLabel="Select" />
+      </form>,
+    );
+    fireEvent.click(within(row(container, 'main')).getByText('Select'));
+    expect(onSelect).toHaveBeenCalledWith('main');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('leaves the open groups as they were when a name is clicked during a search', () => {
+    const { container, rerender } = render(
+      <TreeView nodes={groups} expandOnNameClick selectLabel="Select" query="leaf" />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Main group' }));
+    rerender(<TreeView nodes={groups} expandOnNameClick selectLabel="Select" />);
+    expect(row(container, 'main')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Leaf')).toBeInTheDocument();
   });
 });

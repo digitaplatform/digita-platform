@@ -257,7 +257,7 @@ describe('LinkControl — tree mode', () => {
 
     // Reopen, pick a node → closes, commits, STAYS closed.
     await user.click(input);
-    await user.click(await screen.findByRole('button', { name: 'ui.tree.select' }));
+    await user.click(await screen.findByRole('button', { name: 'ui.tree.select Root' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(onChange).toHaveBeenCalledWith('N-1');
     expect(onCommit).toHaveBeenCalledTimes(1);
@@ -271,11 +271,12 @@ describe('LinkControl — tree mode', () => {
     await user.click(screen.getByRole('combobox'));
     const dialog = await screen.findByRole('dialog');
     const root = within(dialog).getByRole('button', { name: 'Root' });
+    const rootItem = within(dialog).getByRole('treeitem', { name: 'Root' });
     await user.click(root);
-    expect(root).toHaveAttribute('aria-expanded', 'false');
+    expect(rootItem).toHaveAttribute('aria-expanded', 'false');
     expect(within(dialog).queryByText('Child')).toBeNull();
     await user.click(root);
-    expect(root).toHaveAttribute('aria-expanded', 'true');
+    expect(rootItem).toHaveAttribute('aria-expanded', 'true');
     expect(within(dialog).getByText('Child')).toBeInTheDocument();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
@@ -288,7 +289,7 @@ describe('LinkControl — tree mode', () => {
     render(<Host field={makeField({ target: 'Folder' })} onChange={onChange} onCommit={onCommit} />);
     await user.click(screen.getByRole('combobox'));
     const dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: 'ui.tree.select' }));
+    await user.click(within(dialog).getByRole('button', { name: 'ui.tree.select Root' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(onChange).toHaveBeenCalledWith('N-1');
     expect(onCommit).toHaveBeenCalledTimes(1);
