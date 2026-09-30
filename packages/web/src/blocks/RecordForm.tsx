@@ -28,8 +28,12 @@ export function RecordForm({ props, locale }: { props?: P; locale: Locale }) {
           send: s(props, "send_label") || t("recordFormSend", locale),
           sent: s(props, "thanks") || t("recordFormSent", locale),
           failed: t("recordFormFailed", locale),
+          invalidField: t("recordFormInvalidField", locale),
+          unavailable: t("recordFormUnavailable", locale),
+          tooMany: t("recordFormTooMany", locale),
         }}
         renderedAt={Date.now()}
+        locale={locale}
       />
     </Section>
   );

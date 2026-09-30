@@ -162,10 +162,15 @@ export async function getBranding(): Promise<WebBranding | null> {
   }
 }
 
-/** The engine's answer to a public create: its status, and the error code of a refusal. */
+/** The engine's answer to a public create: its status, the error code of a refusal, the field a 400
+ *  names and the wait it asks of a visitor over its budget. */
 export interface CreateAnswer {
   status: number;
   code?: string;
+  /** The field of the engine's error, or of its first message that names one. */
+  field?: string;
+  /** Seconds, from the Retry-After header of a 429. */
+  retryAfter?: number;
 }
 
 /** Stores one record on an engine through its public create route, without a credential: the
@@ -187,6 +192,14 @@ export async function createRecord(
     signal: AbortSignal.timeout(5000),
   });
   if (res.ok) return { status: res.status };
-  const body = (await res.json().catch(() => null)) as { error?: { code?: unknown } } | null;
-  return { status: res.status, code: typeof body?.error?.code === "string" ? body.error.code : undefined };
+  const body = (await res.json().catch(() => null)) as { error?: { code?: unknown; field?: unknown }; messages?: { path?: unknown }[] } | null;
+  const messages = body?.messages;
+  const messagePath = Array.isArray(messages) ? messages.map((message) => message.path).find((path) => typeof path === "string") : undefined;
+  const wait = Number(res.headers.get("Retry-After"));
+  return {
+    status: res.status,
+    code: typeof body?.error?.code === "string" ? body.error.code : undefined,
+    field: typeof body?.error?.field === "string" ? body.error.field : typeof messagePath === "string" ? messagePath : undefined,
+    retryAfter: Number.isInteger(wait) && wait > 0 ? wait : undefined,
+  };
 }

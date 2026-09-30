@@ -3,6 +3,7 @@ import { getConfig } from "@/config/env";
 import { createRecord } from "@/lib/engine-client";
 import { admitFormPost, answer } from "@/lib/form-post";
 import { refuseOversizedBody } from "@/app/api/body-limit";
+import { OWN_BUDGET_WAIT_SECONDS, tellRetryAfter } from "@/app/api/retry-after";
 
 /** An entity name as the engine spells it, so the name cannot leave the resource path. */
 const ENTITY = /^[A-Za-z][A-Za-z0-9_]*$/;
@@ -18,13 +19,16 @@ interface RecordPost {
 const isValue = (value: unknown): value is Value =>
   typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value)) || (typeof value === "string" && value.length <= MAX_TEXT);
 
-function parse(fields: Record<string, unknown>): RecordPost | null {
+/** The post, or why it is refused: the name of the value that is no field value, when one is. */
+function parse(fields: Record<string, unknown>): { record: RecordPost } | { field?: string } {
   const { app = "", entity, values } = fields;
-  if (typeof app !== "string" || typeof entity !== "string" || !ENTITY.test(entity)) return null;
-  if (typeof values !== "object" || values === null || Array.isArray(values)) return null;
+  if (typeof app !== "string" || typeof entity !== "string" || !ENTITY.test(entity)) return {};
+  if (typeof values !== "object" || values === null || Array.isArray(values)) return {};
   const entries = Object.entries(values);
-  if (!entries.length || !entries.every(([, value]) => isValue(value))) return null;
-  return { app, entity, values: Object.fromEntries(entries) as Record<string, Value> };
+  const refused = entries.find(([, value]) => !isValue(value));
+  if (refused) return { field: refused[0] };
+  if (!entries.length) return {};
+  return { record: { app, entity, values: Object.fromEntries(entries) as Record<string, Value> } };
 }
 
 /**
@@ -38,17 +42,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const oversized = await refuseOversizedBody(req);
   if (oversized) return oversized;
   const post = await admitFormPost(req);
-  if (post instanceof NextResponse) return post;
+  if (post instanceof NextResponse) return tellRetryAfter(post, post.status === 429 ? OWN_BUDGET_WAIT_SECONDS : undefined);
 
-  const record = parse(post.fields);
-  if (!record) return answer(400, { ok: false, message: "Invalid request" });
+  const parsed = parse(post.fields);
+  if (!("record" in parsed)) return answer(400, { ok: false, message: "Invalid request", ...(parsed.field === undefined ? {} : { field: parsed.field }) });
+  const { record } = parsed;
 
   const config = getConfig();
   const engineUrl = record.app ? config.engineUrls.get(record.app) : config.engineUrl;
   if (!engineUrl) return answer(503, { ok: false, message: "The form is not configured" });
 
   try {
-    const { status, code } = await createRecord(engineUrl, record.entity, record.values, post.visitor);
+    const { status, code, field, retryAfter } = await createRecord(engineUrl, record.entity, record.values, post.visitor);
     if (status >= 200 && status < 300) return answer(200, { ok: true });
     // The public create answers 403 when the entity grants Guest no create, 404 when the engine
     // holds no such entity, and 400 BAD_REQUEST for a key the Guest row does not let Guest set.
@@ -58,8 +63,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       console.error(`[digita-web] the engine refused a ${record.entity} create a visitor sent: HTTP ${status} ${code ?? ""}`);
       return answer(403, { ok: false, message: "The form may not create this record" });
     }
-    if (status === 400 || status === 413) return answer(400, { ok: false, message: "Invalid request" });
-    if (status === 429) return answer(429, { ok: false, message: "Too many requests" });
+    if (status === 400 || status === 413) return answer(400, { ok: false, message: "Invalid request", ...(field === undefined ? {} : { field }) });
+    if (status === 429) return tellRetryAfter(answer(429, { ok: false, message: "Too many requests" }), retryAfter);
     throw new Error(`the engine answered HTTP ${status} to the ${record.entity} create`);
   } catch (err) {
     console.error("[digita-web] record create failed:", err instanceof Error ? err.message : err);

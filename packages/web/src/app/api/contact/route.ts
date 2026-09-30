@@ -4,6 +4,7 @@ import { createRecord, getSite } from "@/lib/engine-client";
 import { CONTACT_TOPICS, type ContactRequest } from "@/lib/contact-request";
 import { admitFormPost, answer } from "@/lib/form-post";
 import { refuseOversizedBody } from "@/app/api/body-limit";
+import { OWN_BUDGET_WAIT_SECONDS, tellRetryAfter } from "@/app/api/retry-after";
 
 // A line field goes into a mail subject or header, so a control character is refused, not stripped.
 const CONTROL = /[\u0000-\u001f\u007f]/;
@@ -15,7 +16,8 @@ function line(value: unknown, max: number): string | null {
   return text && text.length <= max && !CONTROL.test(text) ? text : null;
 }
 
-function parse(body: Record<string, unknown>, locales: string[]): ContactRequest | null {
+/** The request, or the first field the route refuses, in the order of the form. */
+function parse(body: Record<string, unknown>, locales: string[]): { request: ContactRequest } | { field: string } {
   const name = line(body.name, 200);
   const email = line(body.email, 254);
   const company = body.company === undefined || body.company === "" ? "" : line(body.company, 200);
@@ -23,9 +25,14 @@ function parse(body: Record<string, unknown>, locales: string[]): ContactRequest
   const message = typeof body.message === "string" ? body.message.trim() : "";
   const locale = line(body.locale, 10);
   const page = line(body.page, 500);
-  if (!name || !email || !EMAIL.test(email) || company === null || !topic) return null;
-  if (!message || message.length > 5000 || !locale || !locales.includes(locale) || !page?.startsWith("/")) return null;
-  return { name, email, company, topic, message, locale, page };
+  if (!name) return { field: "name" };
+  if (!email || !EMAIL.test(email)) return { field: "email" };
+  if (company === null) return { field: "company" };
+  if (!topic) return { field: "topic" };
+  if (!message || message.length > 5000) return { field: "message" };
+  if (!locale || !locales.includes(locale)) return { field: "locale" };
+  if (!page?.startsWith("/")) return { field: "page" };
+  return { request: { name, email, company, topic, message, locale, page } };
 }
 
 /**
@@ -39,10 +46,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const oversized = await refuseOversizedBody(req);
   if (oversized) return oversized;
   const post = await admitFormPost(req);
-  if (post instanceof NextResponse) return post;
+  if (post instanceof NextResponse) return tellRetryAfter(post, post.status === 429 ? OWN_BUDGET_WAIT_SECONDS : undefined);
 
-  const request = parse(post.fields, config.locales);
-  if (!request) return answer(400, { ok: false, message: "Invalid request" });
+  const parsed = parse(post.fields, config.locales);
+  if (!("request" in parsed)) return answer(400, { ok: false, message: "Invalid request", field: parsed.field });
+  const { request } = parsed;
 
   try {
     const site = await getSite();
