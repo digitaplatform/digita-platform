@@ -12,7 +12,7 @@ export default {
     // Central plugin library — same reason; scope to src/ so we never walk node_modules.
     '../plugins/plugins/*/src/**/*.{js,ts,jsx,tsx}',
   ],
-  // The design tokens (colors, fonts, shadows, darkMode:'class') come from the
+  // The design tokens (colors, fonts, shadows, the dark mode variant) come from the
   // central @digitaplatform/theme preset — one source for every Digita frontend + plugin.
   presets: [digitaTheme],
   theme: {

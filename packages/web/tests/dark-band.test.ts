@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
 // A block set to theme_variant "dark" is a dark band: the site's Tailwind `dark:` utilities, which
 // draw the signature graphics and the kit's cards, apply inside the band as under the `.dark` root.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import postcss, { type AcceptedPlugin } from "postcss";
 import tailwind, { type Config } from "tailwindcss";
 import digitaTheme from "@digitaplatform/theme/preset";
+import { DARK_BAND_SELECTOR } from "@digitaplatform/theme";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { BlockRenderer } from "../src/blocks/BlockRenderer";
+import type { Block } from "../src/lib/types";
+
+vi.mock("server-only", () => ({}));
 
 /** The selectors Tailwind builds for the classes in `html` with the preset the site renders with. */
 async function utilitySelectors(html: string): Promise<string[]> {
@@ -44,5 +51,17 @@ describe("the site's dark: utilities", () => {
 
   it("PLANTED INNOCENT: still apply everywhere under the .dark root", async () => {
     expect(await matchedIds(true)).toEqual(["button", "in", "out"]);
+  });
+});
+
+describe("the block renderer", () => {
+  it("draws a block set to theme_variant dark as the band, and only that block", () => {
+    const blocks = [
+      { type: "richtext", theme_variant: "dark", props: { heading: "Dark", body: "In the band." } },
+      { type: "richtext", props: { heading: "Light", body: "Beside the band." } },
+    ] as Block[];
+    document.body.innerHTML = renderToStaticMarkup(createElement(BlockRenderer, { blocks, locale: "en" }));
+    const bands = Array.from(document.querySelectorAll(DARK_BAND_SELECTOR), (e) => e.querySelector("h2, h3")?.textContent);
+    expect(bands).toEqual(["Dark"]);
   });
 });

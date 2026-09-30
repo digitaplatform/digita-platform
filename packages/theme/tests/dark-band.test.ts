@@ -89,6 +89,21 @@ describe('addDarkBandSelectors', () => {
     expect(() => addDarkBandSelectors(':root:not(.dark) a { color: red; }')).toThrow(/outside its first compound/);
     expect(() => addDarkBandSelectors('main .dark a { color: red; }')).toThrow(/outside its first compound/);
   });
+
+  it('PLANTED DEFECT: refuses a pseudo on the .dark compound or a sibling combinator after it', () => {
+    expect(() => addDarkBandSelectors(':root.dark::-webkit-scrollbar { width: 8px; }')).toThrow(/cannot keep/);
+    expect(() => addDarkBandSelectors('.dark::before { content: ""; }')).toThrow(/cannot keep/);
+    expect(() => addDarkBandSelectors('.dark:before { content: ""; }')).toThrow(/cannot keep/);
+    expect(() => addDarkBandSelectors('.dark:hover a { color: red; }')).toThrow(/cannot keep/);
+    expect(() => addDarkBandSelectors('.dark + a { color: red; }')).toThrow(/cannot keep/);
+    expect(() => addDarkBandSelectors('.dark ~ a { color: red; }')).toThrow(/cannot keep/);
+  });
+
+  it('PLANTED INNOCENT: twins :root, attributes and a pseudo past the .dark compound', () => {
+    expect(twinOf(':root[data-tint="x:y"].dark')).toBe(`:root[data-tint="x:y"] ${BAND}`);
+    expect(twinOf('.dark a:hover')).toBe(`${BAND} a:hover`);
+    expect(twinOf('.dark > a::after')).toBe(`${BAND} > a::after`);
+  });
 });
 
 describe('theme.css flips inside a dark band', () => {

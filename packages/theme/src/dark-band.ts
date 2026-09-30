@@ -58,6 +58,18 @@ function firstCompoundEnd(selector: string): number {
   return end;
 }
 
+/** Whether `compound` carries a pseudo-class or pseudo-element other than `:root`. */
+function carriesPseudoBesideRoot(compound: string): boolean {
+  let carries = false;
+  forEachOutsideStrings(compound, (i, depth) => {
+    if (depth !== 0 || compound[i] !== ':') return;
+    if (compound.startsWith(':root', i) && !/[\w-]/.test(compound.charAt(i + ':root'.length))) return;
+    carries = true;
+    return false;
+  });
+  return carries;
+}
+
 /** The twin of one selector scoped by `.dark`: the band stands where the class stood. */
 function bandTwin(selector: string): string {
   const [dark, ...more] = darkClasses(selector);
@@ -69,6 +81,13 @@ function bandTwin(selector: string): string {
   }
   const compound = selector.slice(0, dark.index) + selector.slice(dark.index + '.dark'.length, end);
   const rest = selector.slice(end);
+  if (carriesPseudoBesideRoot(compound) || /^\s*[+~]/.test(rest)) {
+    // The rest of the compound becomes an ancestor of the band. A pseudo-element there makes an
+    // invalid selector, and a browser then drops the whole rule, the original included; a
+    // pseudo-class such as `:hover` would test an ancestor; a sibling combinator would reach the
+    // block beside the band.
+    throw new Error(`[theme] dark band: the selector "${selector}" has a shape its band twin cannot keep`);
+  }
   return compound ? `${compound} ${DARK_BAND_SELECTOR}${rest}` : `${DARK_BAND_SELECTOR}${rest}`;
 }
 
