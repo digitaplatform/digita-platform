@@ -18,11 +18,10 @@ export function siteId(): string {
 
 type Tuple = [string, string, unknown];
 
-async function query<T>(
-  doctype: string,
-  params: { filters?: Tuple[]; fields?: string[]; page_size?: number; page?: number; order_by?: string },
-  tags: string[],
-): Promise<T[]> {
+type QueryParams = { filters?: Tuple[]; fields?: string[]; page_size?: number; page?: number; order_by?: string };
+
+/** One page of a public list and the number of pages the engine counts for the whole list. */
+async function queryPage<T>(doctype: string, params: QueryParams, tags: string[]): Promise<{ rows: T[]; totalPages: number }> {
   const { engineUrl, revalidateSeconds } = getConfig();
   const qs = new URLSearchParams();
   if (params.filters) qs.set("filters", JSON.stringify(params.filters));
@@ -31,14 +30,20 @@ async function query<T>(
   if (params.page) qs.set("page", String(params.page));
   if (params.order_by) qs.set("order_by", params.order_by);
   const url = `${engineUrl}/api/v1/public/resource/${doctype}?${qs.toString()}`;
+  const none = { rows: [], totalPages: 0 };
   try {
     const res = await fetch(url, { next: { revalidate: revalidateSeconds, tags } });
-    if (!res.ok) return [];
-    const json = (await res.json()) as { data?: T[] };
-    return Array.isArray(json.data) ? json.data : [];
+    if (!res.ok) return none;
+    const json = (await res.json()) as { data?: T[]; meta?: { total_pages?: number } };
+    if (!Array.isArray(json.data)) return none;
+    return { rows: json.data, totalPages: json.meta?.total_pages ?? 0 };
   } catch {
-    return []; // engine unreachable (e.g. transient) → render gracefully, no fake data
+    return none; // engine unreachable (e.g. transient) → render gracefully, no fake data
   }
+}
+
+async function query<T>(doctype: string, params: QueryParams, tags: string[]): Promise<T[]> {
+  return (await queryPage<T>(doctype, params, tags)).rows;
 }
 
 export async function getSite(): Promise<WebSite | null> {
@@ -74,24 +79,24 @@ export async function listPages(locale?: string): Promise<WebPage[]> {
     ["status", "=", "published"],
   ];
   if (locale) filters.push(["locale", "=", locale]);
-  // The engine clamps page_size to 200 and fills every page but the last, so a short page is the end.
-  // A unique order keeps offset paging from skipping or repeating a row that shares its sort value.
-  const pageSize = 200;
+  // The engine clamps page_size to its own ceiling, so the loop stops on the page count it answers, not on
+  // a short page. A unique order keeps offset paging from skipping or repeating a row that shares its sort value.
+  // Each engine page re-checks every matching row before it slices, so listing N rows costs about N * N / 200 read checks.
   const pages: WebPage[] = [];
   for (let page = 1; ; page++) {
-    const rows = await query<WebPage>(
+    const { rows, totalPages } = await queryPage<WebPage>(
       "WebPage",
       {
         filters,
         fields: ["_id", "slug", "locale", "nav_label", "title", "translation_group", "modified"],
-        page_size: pageSize,
+        page_size: 200,
         page,
         order_by: "_id asc",
       },
       [`web:pages:${site}`],
     );
     pages.push(...rows);
-    if (rows.length < pageSize) return pages;
+    if (page >= totalPages) return pages;
   }
 }
 
