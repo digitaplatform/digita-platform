@@ -9,6 +9,7 @@ import {
   transitionDuration,
   transitionTimingFunction,
 } from './tokens/index.js';
+import { DARK_BAND_SELECTOR } from './dark-band.js';
 
 /**
  * The Digita Tailwind PRESET — the build-time half of the design system. Every
@@ -28,7 +29,8 @@ function ramp(name: string): Record<string, string> {
 }
 
 const preset = {
-  darkMode: 'class',
+  // `dark:` applies under the `.dark` class on the root and inside a dark band of a website page.
+  darkMode: ['variant', ['&:is(.dark *)', `&:is(${DARK_BAND_SELECTOR} *)`]],
   theme: {
     extend: {
       colors: {

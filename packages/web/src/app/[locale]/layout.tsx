@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import { brandingStyle, signatureStyle, PAGE_IDENTITY_ELEMENT_ID } from "@digitaplatform/theme";
+import { brandingStyle, darkBandIdentityRule, signatureStyle, PAGE_IDENTITY_ELEMENT_ID } from "@digitaplatform/theme";
 import { IDENTITY_BOOT_SCRIPT } from "@digitaplatform/theme/identity-boot";
 import favicon from "@digitaplatform/theme/favicon.svg";
 import { SignatureBackdrop } from "@digitaplatform/components";
@@ -61,6 +61,8 @@ export default async function LocaleLayout({
   const tenant = brandingStyle(branding);
   const attributes = { ...signatureStyles.attributes, ...tenant.attributes };
   const properties = { ...signatureStyles.properties, ...tenant.properties };
+  // A block set to theme_variant "dark" keeps the site's signature and the tenant's brand.
+  const darkBandRule = darkBandIdentityRule(properties);
   const siteConfig = publicConfig(site, {
     title: t("notFoundTitle", locale as Locale),
     body: t("notFoundBody", locale as Locale),
@@ -89,6 +91,7 @@ export default async function LocaleLayout({
           dangerouslySetInnerHTML={{ __html: jsonForScript({ signature: signature.id, signatures: [signature], branding }) }}
         />
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: IDENTITY_BOOT_SCRIPT }} />
+        {darkBandRule && <style dangerouslySetInnerHTML={{ __html: darkBandRule }} />}
       </head>
       <body className="bg-background text-textMain antialiased">
         <ConfigProvider value={siteConfig}>

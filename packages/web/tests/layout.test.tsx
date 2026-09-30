@@ -90,6 +90,24 @@ describe("the locale layout", () => {
     expect(await render()).not.toContain('href="/crm/"');
   });
 
+  it("declares the site's signature again for a dark band, so the band keeps the site's own colors", async () => {
+    site = { ...site, theme: "simetrix" };
+    const html = await render();
+    const style = /<html[^>]* style="([^"]*)"/.exec(html)![1]!
+      .replace(/&quot;/g, '"')
+      .replace(/&#x27;/g, "'")
+      .replace(/&amp;/g, "&");
+    const band = /<style>:root \[data-block\]\[data-variant="dark"\] \{ ([^}]*) \}<\/style>/.exec(html);
+    // A layout without the band rule leaves the band to the design's dark tokens; this goes red then.
+    expect(band).not.toBeNull();
+    const inline = style.split(";").filter((d) => d.startsWith("--"));
+    expect(inline.length).toBeGreaterThan(10);
+    for (const declaration of inline) {
+      const [name, value] = [declaration.slice(0, declaration.indexOf(":")), declaration.slice(declaration.indexOf(":") + 1)];
+      expect(band![1]).toContain(`${name}: ${value} !important;`);
+    }
+  });
+
   it("hands the pre-paint boot the site's signature, so a stored one does not replace it", async () => {
     site = { ...site, theme: "simetrix" };
     const html = await render();

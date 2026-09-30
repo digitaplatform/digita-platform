@@ -26,7 +26,8 @@ export interface Block {
   type: BlockType;
   props?: Record<string, unknown>;
   anchor?: string;
-  theme_variant?: string;
+  /** "dark" draws the block as a dark band on a light page. */
+  theme_variant?: "dark";
   _row_id?: string;
 }
 
@@ -36,7 +37,6 @@ export interface WebPage {
   locale: string;
   slug: string;
   title: string;
-  nav_label?: string;
   translation_group?: string;
   blocks?: Block[];
   meta_title?: string;
@@ -45,7 +45,6 @@ export interface WebPage {
   canonical_url?: string;
   no_index?: boolean;
   status?: string;
-  published_at?: string;
   modified?: string;
   /** Denormalized link display titles, keyed by fieldname (from the engine). */
   _link_titles?: Record<string, string>;
@@ -57,7 +56,6 @@ export interface WebSite {
   domain?: string;
   /** The id of the signature the site is drawn in. */
   theme?: string;
-  default_locale?: string;
   enabled_locales?: string[];
   default_og_image?: string;
   footer_text?: string;
