@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQueries } from '@tanstack/react-query';
+import { hashKey, useQueries } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutDashboard } from 'lucide-react';
 import type { ViewDefinition, ViewResult, ResponseMessage } from '@digitaplatform/shared';
@@ -11,7 +11,7 @@ import { getDoc, getView } from '@/services/resource';
 import { qk } from '@/lib/query-keys';
 import { ApiClientError } from '@/lib/errors';
 import { unwrap } from '@/lib/api-result';
-import { cardSpan, renderCard, type CardResolve, type ResolvedSection } from '@/components/dashboard';
+import { cardSpan, renderCard, type CardResolve, type ResolvedSection, type ViewParams } from '@/components/dashboard';
 import { ErrorBlock, EmptyState } from '@/components/status';
 import { CardsSkeleton } from '@digitaplatform/components';
 
@@ -19,6 +19,15 @@ interface ViewQueryData {
   result: ViewResult | null;
   messages: ResponseMessage[];
 }
+
+/** One request to a view, keyed as the query cache keys it, so the same params in another
+ *  order are the same request. No params and an empty set ask the view for the same data. */
+function viewRead(name: string, params: ViewParams | undefined) {
+  const sent = params && Object.keys(params).length > 0 ? params : null;
+  const queryKey = qk.view(name, sent);
+  return { name, params: sent, queryKey, key: hashKey(queryKey) };
+}
+type ViewRead = ReturnType<typeof viewRead>;
 
 /** Resolve unanchored deep-link tokens client-side ($user.* / $now). An unresolved
  *  $token → dev error + null (drop the nav rather than route to junk). */
@@ -61,28 +70,38 @@ export default function DashboardPage() {
 
   const ws = useWorkspace(wsId ?? undefined);
 
-  // Distinct effective view names (card.view ?? workspace.default_view, + shortcut counts).
-  const viewNames = useMemo(() => {
+  // Distinct effective view reads (card.view ?? workspace.default_view with the card's params,
+  // + shortcut counts): cards that send one view the same params share its request.
+  const viewReads = useMemo(() => {
     const cards = ws.data?.cards ?? [];
-    const names = new Set<string>();
+    const reads = new Map<string, ViewRead>();
+    const add = (read: ViewRead) => {
+      reads.set(read.key, read);
+    };
     for (const c of cards) {
       if (c.kind === 'number' || c.kind === 'chart' || c.kind === 'list') {
         const v = c.view ?? ws.data?.default_view;
-        if (v) names.add(v);
-      } else if (c.kind === 'shortcut' && c.count_view) {
-        names.add(c.count_view);
+        if (v) add(viewRead(v, c.params));
+      } else if (c.kind === 'shortcut' && (c.count_view || c.count_section)) {
+        // Requested as renderCard resolves the count, on the default view when the card names no
+        // count view: the other cards on that view may all send params, so none shares this read.
+        const v = c.count_view ?? ws.data?.default_view;
+        if (v) add(viewRead(v, undefined));
       }
     }
-    return [...names];
+    return [...reads.values()];
   }, [ws.data]);
 
+  // A view's definition is the same whatever params a card sends it.
+  const viewNames = useMemo(() => [...new Set(viewReads.map((read) => read.name))], [viewReads]);
+
   const viewQueries = useQueries({
-    queries: viewNames.map((name) => ({
-      queryKey: qk.view(name, null),
-      enabled: !!name,
+    queries: viewReads.map((read) => ({
+      queryKey: read.queryKey,
+      enabled: !!read.name,
       staleTime: 30_000,
       queryFn: async (): Promise<ViewQueryData> => {
-        const res = await getView(name);
+        const res = await getView(read.name, read.params ?? undefined);
         if (!res.success) {
           throw new ApiClientError(res.error?.detail ?? 'View failed', res.status_code ?? 500, res);
         }
@@ -100,18 +119,18 @@ export default function DashboardPage() {
     })),
   });
 
-  const byView = useMemo(() => {
+  const byRead = useMemo(() => {
     const m = new Map<string, (typeof viewQueries)[number]>();
-    viewNames.forEach((n, i) => m.set(n, viewQueries[i]!));
+    viewReads.forEach((read, i) => m.set(read.key, viewQueries[i]!));
     return m;
-  }, [viewNames, viewQueries]);
+  }, [viewReads, viewQueries]);
 
-  const resolve: CardResolve = (view, section) => {
+  const resolve: CardResolve = (view, section, params) => {
     const effective = view ?? ws.data?.default_view;
     if (!effective) {
       return { status: 'error', data: null, message: { text: tc('ui.dashboard.cardError'), type: 'error', show: true } };
     }
-    const q = byView.get(effective);
+    const q = byRead.get(viewRead(effective, params).key);
     const definition = viewDefinitions[viewNames.indexOf(effective)];
     if (!q || q.isPending || definition?.isPending) return { status: 'loading', data: null };
     if (q.isError) {

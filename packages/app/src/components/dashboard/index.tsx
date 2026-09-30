@@ -31,12 +31,16 @@ export interface ResolvedSection {
   entity?: string;
 }
 
-/** The Page-supplied resolver: maps a card's (view, section) to its section data.
+/** The params a view-bound card sends its view. */
+export type ViewParams = Record<string, string | number | boolean>;
+
+/** The Page-supplied resolver: maps a card's (view, section, params) to its section data.
  *  `view` may be undefined (the card inherits the workspace default_view, already
  *  merged by the Page). For shortcut/links cards (no view) it is not called. */
 export type CardResolve = (
   view: string | undefined,
   section: string,
+  params?: ViewParams,
 ) => ResolvedSection;
 
 /** Grid width → literal Tailwind col-span class, written whole so the Tailwind scan keeps it.
@@ -88,7 +92,7 @@ export function renderCard(
 
   switch (card.kind) {
     case 'number': {
-      const r = resolve(card.view, card.section);
+      const r = resolve(card.view, card.section, card.params);
       return (
         <NumberCard
           card={card}
@@ -101,7 +105,7 @@ export function renderCard(
       );
     }
     case 'chart': {
-      const r = resolve(card.view, card.section);
+      const r = resolve(card.view, card.section, card.params);
       return (
         <ChartCard
           card={card}
@@ -113,7 +117,7 @@ export function renderCard(
       );
     }
     case 'list': {
-      const r = resolve(card.view, card.section);
+      const r = resolve(card.view, card.section, card.params);
       return (
         <ListCard
           card={card}

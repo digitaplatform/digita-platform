@@ -29,6 +29,7 @@ interface ViewBoundCard extends WorkspaceCardBase {
   view?: string;
   /** ViewSection.key the card reads. */
   section: string;
+  /** Values for the view's params, sent with the card's request to its view. */
   params?: Record<string, string | number | boolean>;
 }
 
