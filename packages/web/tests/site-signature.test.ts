@@ -1,4 +1,5 @@
-// A site names its signature in `theme`; simetrix.ch wears the simetrix mark, not the family's.
+// A site names its signature in `theme`; simetrix.ch wears the simetrix mark and the Veloluck site
+// one of Veloluck's three looks, not the family's.
 import { describe, it, expect } from "vitest";
 import { siteSignature } from "../src/lib/identity";
 
