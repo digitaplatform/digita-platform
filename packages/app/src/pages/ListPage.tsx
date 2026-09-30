@@ -252,13 +252,16 @@ export default function ListPage() {
   };
 
   // Round-trip export via the engine endpoint: links as business keys, no system
-  // fields → a re-importable CSV. Reuses the current filter set.
+  // fields → a re-importable CSV. It asks for the rows the list shows, so it carries the
+  // list's OR filters and search too: a re-import must not touch a row the user filtered out.
   const onExportRoundTrip = async () => {
     try {
       const text = await api.get<string>(`/api/v1/export/${encodeURIComponent(entity!)}`, {
         format: 'csv',
         round_trip: true,
         filters: JSON.stringify(filters),
+        or_filters: effOrFilters.length ? JSON.stringify(effOrFilters) : undefined,
+        search: search || undefined,
       });
       downloadCsv(`${entity}-roundtrip-${new Date().toISOString().slice(0, 10)}.csv`, text);
     } catch (e) {

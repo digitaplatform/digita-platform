@@ -97,6 +97,15 @@ export function registerImportExportRoutes(
     const { doctype } = request.params as { doctype: string };
     const query = request.query as Record<string, string>;
 
+    // A list narrows its rows with OR filters and a search too, but the export applies
+    // `filters` only. Answering without them would hand back rows the caller filtered out,
+    // which a re-import of the file would then touch, so the export refuses them.
+    if (query["or_filters"] || query["search"]) {
+      throw new BadRequestError(
+        "query params 'or_filters' and 'search' are not applied by an export, which applies 'filters' only",
+      );
+    }
+
     // Malformed filters must be a clean 400, not a 500 from an unhandled parse.
     let filters: [string, string, unknown][] | undefined;
     if (query["filters"]) {
