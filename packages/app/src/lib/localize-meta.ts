@@ -1,4 +1,4 @@
-import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
+import type { EntityDefinition, FieldDefinition, WorkspaceCard, WorkspaceDoc } from '@digitaplatform/shared';
 import type { EntitySummary } from '@/types';
 
 /**
@@ -58,5 +58,25 @@ export function localizeSummary(s: EntitySummary, t: Dict): EntitySummary {
     ...s,
     label: t[`entity.${s.name}`] ?? s.label,
     label_plural: t[`entity_plural.${s.name}`] ?? s.label_plural,
+  };
+}
+
+/** Localize a workspace: its name and the texts of its cards. The keys name the workspace by its
+ *  `_id` and a card by its `id`, the way the usermenu keys `user_menu.<_id>.label`. A links entry
+ *  has no id, so its key names its position in `links`; reordering the entries moves their texts. */
+export function localizeWorkspace(ws: WorkspaceDoc, t: Dict): WorkspaceDoc {
+  const w = `workspace.${ws._id}`;
+  return {
+    ...ws,
+    name: t[`${w}.name`] ?? ws.name,
+    cards: ws.cards.map((card) => {
+      const c = `${w}.card.${card.id}`;
+      const out: WorkspaceCard = { ...card, label: t[`${c}.label`] ?? card.label };
+      if (out.kind === 'shortcut' && out.description) out.description = t[`${c}.description`] ?? out.description;
+      if (out.kind === 'links') {
+        out.links = out.links.map((link, i) => ({ ...link, label: t[`${c}.link.${i}.label`] ?? link.label }));
+      }
+      return out;
+    }),
   };
 }

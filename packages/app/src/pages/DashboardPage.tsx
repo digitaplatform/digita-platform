@@ -2,14 +2,15 @@ import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutDashboard } from 'lucide-react';
-import type { ViewResult, ResponseMessage } from '@digitaplatform/shared';
+import type { ViewDefinition, ViewResult, ResponseMessage } from '@digitaplatform/shared';
 import { useSessionStore } from '@/stores/session';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useWorkspaceCatalog } from '@/hooks/useWorkspaceCatalog';
 import { useWorkspace } from '@/hooks/useWorkspace';
-import { getView } from '@/services/resource';
+import { getDoc, getView } from '@/services/resource';
 import { qk } from '@/lib/query-keys';
 import { ApiClientError } from '@/lib/errors';
+import { unwrap } from '@/lib/api-result';
 import { renderCard, type CardResolve, type ResolvedSection } from '@/components/dashboard';
 import { ErrorBlock, EmptyState } from '@/components/status';
 import { CardsSkeleton } from '@digitaplatform/components';
@@ -90,6 +91,15 @@ export default function DashboardPage() {
     })),
   });
 
+  // A view's definition names the entity each section reads; its field labels head a card's columns.
+  const viewDefinitions = useQueries({
+    queries: viewNames.map((name) => ({
+      queryKey: qk.doc('View', name),
+      staleTime: 5 * 60_000,
+      queryFn: async () => unwrap(await getDoc<ViewDefinition>('View', name)),
+    })),
+  });
+
   const byView = useMemo(() => {
     const m = new Map<string, (typeof viewQueries)[number]>();
     viewNames.forEach((n, i) => m.set(n, viewQueries[i]!));
@@ -102,7 +112,8 @@ export default function DashboardPage() {
       return { status: 'error', data: null, message: { text: tc('ui.dashboard.cardError'), type: 'error', show: true } };
     }
     const q = byView.get(effective);
-    if (!q || q.isPending) return { status: 'loading', data: null };
+    const definition = viewDefinitions[viewNames.indexOf(effective)];
+    if (!q || q.isPending || definition?.isPending) return { status: 'loading', data: null };
     if (q.isError) {
       return { status: 'error', data: null, message: { text: tc('ui.dashboard.cardError'), type: 'error', show: true } };
     }
@@ -112,6 +123,7 @@ export default function DashboardPage() {
       status: message ? 'locked' : 'ready',
       data: section in sections ? sections[section]! : null,
       message,
+      entity: definition?.data?.sections.find((s) => s.key === section)?.entity,
     };
     return result;
   };

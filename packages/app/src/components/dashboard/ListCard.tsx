@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { ListCard as ListCardDef, ViewSectionData } from '@digitaplatform/shared';
 import { cn } from '@digitaplatform/components';
 import { EMPTY } from '@/lib/format';
+import { useMeta } from '@/hooks/useMeta';
 import { CardShell, type CardStatus } from './CardShell';
 
 interface ListCardProps {
@@ -10,6 +11,8 @@ interface ListCardProps {
   status: CardStatus;
   error?: string;
   data: ViewSectionData;
+  /** The entity of the card's section; its field labels head the columns. */
+  entity?: string;
   onNavigate?: (to: string) => void;
 }
 
@@ -33,15 +36,21 @@ function cellText(value: unknown): string {
 }
 
 /**
- * Pure compact read-only table over the section rows. No field meta is available
- * here (cards are app-agnostic over arbitrary views), so values render via
- * String(value) with an em-dash for null — CellValue is intentionally NOT used.
+ * Compact read-only table over the section rows. A column header is the field label
+ * of the section's entity. Values render via String(value) with an em-dash for
+ * null — CellValue is intentionally NOT used: a column may name a key no field
+ * of the entity has.
  * Each row links via card.deep_link (with $token interpolation done at the Page,
  * passed down as onNavigate), or is non-interactive when no deep_link is set.
  */
-export function ListCard({ card, icon, status, error, data, onNavigate }: ListCardProps) {
-  if (status !== 'ready') {
-    return <CardShell label={card.label} icon={icon} width={card.width} status={status} error={error} />;
+export function ListCard({ card, icon, status, error, data, entity, onNavigate }: ListCardProps) {
+  const meta = useMeta(entity);
+  // A key no field has (an aggregate can name one) heads its column as it is.
+  const fieldLabel = (key: string) => meta.data?.fields.find((f) => f.fieldname === key)?.label ?? key;
+  // The table waits for the labels, so its headers never flash the keys.
+  const shellStatus = status === 'ready' && meta.isLoading ? 'loading' : status;
+  if (shellStatus !== 'ready') {
+    return <CardShell label={card.label} icon={icon} width={card.width} status={shellStatus} error={error} />;
   }
 
   const rows = Array.isArray(data) ? data : [];
@@ -65,7 +74,7 @@ export function ListCard({ card, icon, status, error, data, onNavigate }: ListCa
             <tr>
               {columns.map((c) => (
                 <th key={c} className="px-1 pb-2 text-xs font-medium uppercase tracking-wide">
-                  {c}
+                  {fieldLabel(c)}
                 </th>
               ))}
             </tr>

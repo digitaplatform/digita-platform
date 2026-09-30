@@ -27,6 +27,8 @@ export interface ResolvedSection {
   status: 'loading' | 'ready' | 'error' | 'locked';
   data: ViewSectionData;
   message?: ResponseMessage;
+  /** The entity the section reads, from the view definition; unset when that failed to load. */
+  entity?: string;
 }
 
 /** The Page-supplied resolver: maps a card's (view, section) to its section data.
@@ -100,6 +102,7 @@ export function renderCard(
           status={shellStatus(card, r)}
           error={r.message?.text}
           data={r.data}
+          entity={r.entity}
           onNavigate={navigate}
         />
       );
