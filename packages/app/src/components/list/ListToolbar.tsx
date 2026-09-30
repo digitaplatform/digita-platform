@@ -5,7 +5,7 @@ import { Button, Chip, Input, Fab, Menu, MenuItem, PageHeader, Tooltip, useFocus
 import { useChrome } from '@/lib/chrome-i18n';
 import { useSessionStore } from '@/stores/session';
 import { formatNumber } from '@/lib/format';
-import type { FilterTuple } from '@/lib/filter-from-url';
+import { isCompleteFilter, type FilterTuple } from '@/lib/filter-from-url';
 import type { ListPreferenceDoc, ViewVisibility } from '@/services/listPreference';
 import { FilterChip } from './FilterChip';
 import { FilterEditor } from './FilterEditor';
@@ -19,11 +19,12 @@ import { ViewPicker } from './ViewPicker';
  * that opens a popover (desktop) / bottom-sheet (mobile) of FilterEditor rows
  * with an AND/OR group toggle.
  *
- * PURE: the ListPage owns ALL state (URL params + useListPreferences) and passes
- * it down; this component only emits via callbacks. The AND list lives in
+ * PURE: the ListPage owns ALL applied state (URL params + useListPreferences) and
+ * passes it down; this component only emits via callbacks. The AND list lives in
  * `filters`, the OR list in `orFilters`; the group toggle routes new rows to the
  * active bucket. onFiltersChange emits BOTH buckets so the page writes ?f + ?of
- * atomically.
+ * atomically. Only the filter panel keeps rows of its own: those still missing a
+ * field or an operator, which are no filters yet.
  */
 
 export interface ListToolbarProps {
@@ -364,14 +365,31 @@ interface FilterPanelProps {
   onClose: () => void;
 }
 
+type FilterGroup = 'and' | 'or';
+
 function FilterPanel({ meta, filters, orFilters, onChange, onClose }: FilterPanelProps) {
   const tc = useChrome();
   // Which bucket newly-added rows go to. MVP: a single global AND/OR switch.
-  const [group, setGroup] = useState<'and' | 'or'>(orFilters.length && !filters.length ? 'or' : 'and');
+  const [group, setGroup] = useState<FilterGroup>(orFilters.length && !filters.length ? 'or' : 'and');
+  // The engine answers a filter without a field name with 400, so a row still missing its
+  // field or operator stays here, out of the URL and the list request, until it is complete
+  // or removed. The panel therefore shows its own rows: the applied filters and those.
+  const [shownRows, setShownRows] = useState<Record<FilterGroup, FilterTuple[]>>({ and: filters, or: orFilters });
+  // The applied filters also change outside the panel, as when a chip is removed or a view
+  // applied; the rows on screen then follow them.
+  const [lastApplied, setLastApplied] = useState({ and: filters, or: orFilters });
+  if (lastApplied.and !== filters || lastApplied.or !== orFilters) {
+    setLastApplied({ and: filters, or: orFilters });
+    setShownRows((shown) => ({ and: followApplied(shown.and, filters), or: followApplied(shown.or, orFilters) }));
+  }
 
-  const rows = group === 'and' ? filters : orFilters;
-  const setRows = (next: FilterTuple[]) =>
-    group === 'and' ? onChange(next, orFilters) : onChange(filters, next);
+  const rows = shownRows[group];
+  const setRows = (next: FilterTuple[]) => {
+    const nextShown = { ...shownRows, [group]: next };
+    setShownRows(nextShown);
+    if (sameFilters(next.filter(isCompleteFilter), rows.filter(isCompleteFilter))) return;
+    onChange(nextShown.and.filter(isCompleteFilter), nextShown.or.filter(isCompleteFilter));
+  };
 
   function addRow(): void {
     setRows([...rows, ['', '', ''] as FilterTuple]);
@@ -381,6 +399,12 @@ function FilterPanel({ meta, filters, orFilters, onChange, onClose }: FilterPane
   }
   function removeRow(i: number): void {
     setRows(rows.filter((_, idx) => idx !== i));
+  }
+  function clearAll(): void {
+    // The incomplete rows were never applied, so nothing brings their removal back: they go
+    // here. The applied rows go once the page applies the empty filters.
+    setShownRows((shown) => ({ and: shown.and.filter(isCompleteFilter), or: shown.or.filter(isCompleteFilter) }));
+    onChange([], []);
   }
 
   return (
@@ -438,8 +462,8 @@ function FilterPanel({ meta, filters, orFilters, onChange, onClose }: FilterPane
               type="button"
               variant="ghost"
               className="text-sm"
-              disabled={!filters.length && !orFilters.length}
-              onClick={() => onChange([], [])}
+              disabled={!shownRows.and.length && !shownRows.or.length}
+              onClick={clearAll}
             >
               {tc('ui.filter.clearAll')}
             </Button>
@@ -451,6 +475,20 @@ function FilterPanel({ meta, filters, orFilters, onChange, onClose }: FilterPane
       </div>
     </SheetOrPopover>
   );
+}
+
+/** The rows to show once the applied filters changed. The panel's own change comes back
+ *  this way a moment after it is on screen: the rows stay as they are, so the row being
+ *  edited keeps its place and its focus. Any other change shows the applied filters, and
+ *  the incomplete rows after them. */
+function followApplied(shown: FilterTuple[], applied: FilterTuple[]): FilterTuple[] {
+  if (sameFilters(shown.filter(isCompleteFilter), applied)) return shown;
+  return [...applied, ...shown.filter((row) => !isCompleteFilter(row))];
+}
+
+/** Filters compare as the URL carries them. */
+function sameFilters(a: FilterTuple[], b: FilterTuple[]): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 /* ── Responsive container: bottom-sheet on mobile, popover card on desktop ──── */

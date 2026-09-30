@@ -85,8 +85,16 @@ export function effectiveFilters(
   return barActive ? uiTuples : mergeFilters(navTuples, uiTuples);
 }
 
+/** Whether a filter names a field and an operator. The engine refuses a filter without a
+ *  field name with 400, so only such a filter may reach the URL or a list request. */
+export function isCompleteFilter([field, op]: FilterTuple): boolean {
+  return field !== '' && op !== '';
+}
+
 /** Decode a `?f` / `?of` JSON tuple-array param. Malformed whole-param → [] + dev
- *  error; a single malformed tuple is dropped + dev error (never silently rewritten). */
+ *  error; a single malformed tuple is dropped + dev error (never silently rewritten).
+ *  A tuple without a field or an operator is malformed too: a link may carry one from
+ *  before the filter panel held such rows back. */
 export function parseFilterTuplesParam(raw: string | null | undefined): FilterTuple[] {
   if (!raw) return [];
   let parsed: unknown;
@@ -102,8 +110,12 @@ export function parseFilterTuplesParam(raw: string | null | undefined): FilterTu
   }
   const out: FilterTuple[] = [];
   for (const t of parsed) {
-    if (Array.isArray(t) && t.length === 3 && typeof t[0] === 'string' && typeof t[1] === 'string') {
-      out.push([t[0], t[1], t[2]]);
+    const tuple: FilterTuple | null =
+      Array.isArray(t) && t.length === 3 && typeof t[0] === 'string' && typeof t[1] === 'string'
+        ? [t[0], t[1], t[2]]
+        : null;
+    if (tuple && isCompleteFilter(tuple)) {
+      out.push(tuple);
     } else if (import.meta.env.DEV) {
       console.error('[filter-from-url] dropping malformed filter tuple:', t);
     }
