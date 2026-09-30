@@ -97,6 +97,8 @@ export function Breadcrumbs() {
   return <Trail crumbs={[homeCrumb, listCrumb, leaf]} />;
 }
 
+/** Below md the trail is the current page alone: beside the top bar's buttons a phone leaves it a
+ *  few pixels, where a crumb shrinks to nothing while a separator keeps its width. */
 function Trail({ crumbs }: { crumbs: Crumb[] }) {
   const tc = useChrome();
   return (
@@ -107,11 +109,11 @@ function Trail({ crumbs }: { crumbs: Crumb[] }) {
           return (
             <Fragment key={`${crumb.label}-${i}`}>
               {i > 0 && (
-                <li aria-hidden="true" className="shrink-0 text-textMuted">
+                <li aria-hidden="true" className="hidden shrink-0 text-textMuted md:block">
                   <ChevronRight className="h-4 w-4" />
                 </li>
               )}
-              <li className="min-w-0">
+              <li className={isLast ? 'min-w-0' : 'hidden min-w-0 md:block'}>
                 {crumb.to && !isLast ? (
                   <Link
                     to={crumb.to}
