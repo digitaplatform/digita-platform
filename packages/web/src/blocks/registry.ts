@@ -12,6 +12,7 @@ import { Signals } from "./marketing/Signals";
 import { CtaPanel } from "./marketing/CtaPanel";
 import { ContactDetails } from "./marketing/ContactDetails";
 import { Showcase } from "./marketing/Showcase";
+import { AppList } from "./AppList";
 import { PLUGIN_MANIFESTS } from "@/plugins";
 
 /** The heading every marketing section opens with. */
@@ -384,6 +385,31 @@ export const BLOCK_MANIFESTS: BlockManifest[] = [
       LEDE,
       { name: "plugin_id", label: "Plugin", type: "select", required: true, options: PLUGIN_MANIFESTS.map((plugin) => plugin.id) },
       { name: "caption", label: "Caption", type: "text" },
+    ],
+  },
+  {
+    type: "app_list",
+    name: "App list",
+    description: "One card per app of the tenant, each entering its app; on a demo tenant also signed in as the demo user.",
+    category: "content",
+    component: AppList,
+    props: [
+      EYEBROW,
+      HEADING,
+      LEDE,
+      {
+        name: "apps",
+        label: "App texts",
+        type: "list",
+        help: "The site's words for an app; an app of the tenant without them shows its name, and one the tenant does not run is not shown.",
+        itemFields: [
+          { name: "app", label: "App", type: "text", required: true, help: "Its name, as the tenant serves it at /<app>/." },
+          { name: "title", label: "Title", type: "text" },
+          { name: "description", label: "Description", type: "textarea" },
+        ],
+      },
+      { name: "link_label", label: "Link label", type: "text" },
+      { name: "demo_label", label: "Demo entry label", type: "text" },
     ],
   },
 ];

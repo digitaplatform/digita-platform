@@ -45,6 +45,10 @@ export interface ServerConfig extends Omit<PublicSiteConfig, "contactEnabled" | 
    *  visitor's expired session before it asks an app for their design. Explicitly OPTIONAL:
    *  null → no refresh, so a visitor whose access cookie expired sees the default. */
   authUrl: string | null;
+  /** Whether the tenant is a demo (DEMO_TENANT, "true" or "1" as the tenant's engines read it),
+   *  whose IdP signs a visitor in as its demo user with one click. Explicitly OPTIONAL: off when
+   *  unset. */
+  demoTenant: boolean;
   /** The tenant's session cookie suffix (AUTH_COOKIE_SUFFIX, sessionCookieNames). Explicitly
    *  OPTIONAL: null → the unsuffixed names. */
   authCookieSuffix: string | null;
@@ -66,6 +70,7 @@ export function getConfig(): ServerConfig {
     revalidateSecret: req("REVALIDATE_SECRET"),
     tenantApps: (process.env.TENANT_APPS ?? "").split(",").map((name) => name.trim()).filter(Boolean),
     authUrl: process.env.AUTH_URL ? noTrailing(process.env.AUTH_URL) : null,
+    demoTenant: process.env.DEMO_TENANT === "true" || process.env.DEMO_TENANT === "1",
     authCookieSuffix: process.env.AUTH_COOKIE_SUFFIX || null,
     translationsDir: req("TRANSLATIONS_DIR"),
     locales: getLocales(),
