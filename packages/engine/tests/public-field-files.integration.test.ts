@@ -66,8 +66,8 @@ import { SchemaMigrator } from "../src/core/database/schema-migrator.js";
 
 // A field that becomes `public: true` after files were uploaded to it: the boot's schema step
 // moves those files, and the URLs the rows hold, forward to public. A file of a private field,
-// a file no row holds, and a file of a private field that shares its name with a public one stay
-// private.
+// a file no row holds, a file of a private field that shares its name with a public one, and a
+// file that another row than its own copies into a public field stay private.
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
 let db: MongoDBService;
@@ -124,12 +124,13 @@ afterAll(async () => {
   await rm(env.UPLOAD_LOCAL_PATH, { recursive: true, force: true });
 }, 30000);
 
-async function upload(field: string, name: string, bytes: string): Promise<{ _id: string; file_url: string }> {
+async function upload(field: string, name: string, bytes: string, row?: string): Promise<{ _id: string; file_url: string }> {
   const boundary = "----digitaPublicFieldFiles";
   const part = (header: string, body: string | Buffer) => [Buffer.from(`--${boundary}\r\n${header}\r\n\r\n`), Buffer.from(body), Buffer.from("\r\n")];
   const payload = Buffer.concat([
     ...part(`content-disposition: form-data; name="attached_to_entity"`, "TestShopItem"),
     ...part(`content-disposition: form-data; name="attached_to_field"`, field),
+    ...(row ? part(`content-disposition: form-data; name="attached_to_name"`, row) : []),
     ...part(`content-disposition: form-data; name="file"; filename="${name}"\r\ncontent-type: application/pdf`, bytes),
     Buffer.from(`--${boundary}--\r\n`),
   ]);
@@ -148,16 +149,19 @@ const fileRow = (id: string) => db.findOne(DIGITA.COLLECTIONS.FILE, id, DIGITA.D
 
 describe("Files of a field that became public", () => {
   it("are public after the schema step, with the public URL in the File, the row and the Table cell", async () => {
-    const main = await upload("image", "main.pdf", "main picture");
-    const gallery = await upload("picture", "gallery.pdf", "gallery picture");
-    const scan = await upload("invoice_scan", "scan.pdf", "private scan");
-    // Attached to a public field by its uploader, but no row holds it.
-    const loose = await upload("image", "loose.pdf", "never saved to a row");
-    // Held by the private `receipts[].picture`, which shares its name with the public `images[].picture`.
-    const receipt = await upload("picture", "receipt.pdf", "private receipt");
+    const main = await upload("image", "main.pdf", "main picture", "ITEM-1");
+    const gallery = await upload("picture", "gallery.pdf", "gallery picture", "ITEM-1");
+    const scan = await upload("invoice_scan", "scan.pdf", "private scan", "ITEM-1");
+    // Uploaded for a public field of a row that does not hold it.
+    const loose = await upload("image", "loose.pdf", "never saved to a row", "ITEM-1");
+    // Uploaded for a public field, names no row, and another row's public cell holds it.
+    const unnamed = await upload("picture", "unnamed.pdf", "nobody's row");
+    // Held by the private `receipts[].picture` of its own row, which shares its name with the public
+    // `images[].picture`, and copied into a public cell of another row.
+    const receipt = await upload("picture", "receipt.pdf", "private receipt", "ITEM-1");
     // A boot stopped after the rows moved: the row holds the public URL, the File is still private.
-    const halfway = await upload("picture", "halfway.pdf", "moved row");
-    for (const file of [main, gallery, scan, loose, receipt, halfway]) {
+    const halfway = await upload("picture", "halfway.pdf", "moved row", "ITEM-2");
+    for (const file of [main, gallery, scan, loose, unnamed, receipt, halfway]) {
       expect(file.file_url).toBe(`/api/v1/file/${file._id}/download`);
       expect((await publicFile(file._id)).statusCode).toBe(404);
     }
@@ -168,7 +172,11 @@ describe("Files of a field that became public", () => {
     }, DIGITA.DATABASES.CORE);
     await db.insertOne("TestShopItem", {
       _id: "ITEM-2", doctype: "TestShopItem", docstatus: 0,
-      images: [{ _row_id: "r4", idx: 1, picture: `/api/v1/public/file/${halfway._id}` }],
+      images: [
+        { _row_id: "r4", idx: 1, picture: `/api/v1/public/file/${halfway._id}` },
+        { _row_id: "r5", idx: 2, picture: receipt.file_url },
+        { _row_id: "r6", idx: 3, picture: unnamed.file_url },
+      ],
     }, DIGITA.DATABASES.CORE);
 
     registry.register(shop(true));
@@ -193,11 +201,17 @@ describe("Files of a field that became public", () => {
     expect((await publicFile(scan._id)).statusCode).toBe(404);
     expect((await fileRow(scan._id))["is_private"]).toBe(true);
     expect(item["invoice_scan"]).toBe(scan.file_url);
-    for (const file of [loose, receipt]) {
+    for (const file of [loose, unnamed, receipt]) {
       expect((await publicFile(file._id)).statusCode).toBe(404);
       expect((await fileRow(file._id))["is_private"]).toBe(true);
     }
     expect(item["receipts"]).toEqual([{ _row_id: "r3", idx: 1, picture: receipt.file_url }]);
+    const other = (await db.findOne("TestShopItem", "ITEM-2", DIGITA.DATABASES.CORE)) as Record<string, unknown>;
+    expect(other["images"]).toEqual([
+      { _row_id: "r4", idx: 1, picture: `/api/v1/public/file/${halfway._id}` },
+      { _row_id: "r5", idx: 2, picture: receipt.file_url },
+      { _row_id: "r6", idx: 3, picture: unnamed.file_url },
+    ]);
   });
 
   it("changes nothing on a second run", async () => {
