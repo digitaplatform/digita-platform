@@ -9,15 +9,18 @@ import { reseedAppData, type ReseedDeps } from "./reseed-app-data.js";
 /**
  * The demo reset: the single `DemoReset` with its `long_running` action `reset`. As an action it
  * is what the Jobs page lists per app, schedules nightly and keeps a run record of. It wipes the
- * app's data, so it exists only on a tenant marked as a demo (DEMO_TENANT).
+ * app's data, so it exists only on a tenant marked as a demo (DEMO_TENANT), and there only on an
+ * app engine, never on a website engine (see `enableDemoReset`).
  */
 const DEMO_RESET = "DemoReset";
 /** The single's one row: the action route runs an action on a document. */
 const DEMO_RESET_ROW = "demo-reset";
 
 /**
- * Register the entity, its row and the action. The action runs the reseed route's own code with
- * the tiers this engine seeds at boot, so the app returns to the state a fresh boot seeds.
+ * Register the entity, its row and the action. The action runs the reseed route's own code: it
+ * wipes the app's data and loads the seed tiers this engine loads at boot, `seeds/` and, where the
+ * demo tier is on, `seeds-demo/`. It loads no site folder, which is where a website engine's pages
+ * come from, so a website engine must never get it.
  */
 export async function enableDemoReset(
   db: MongoDBService,
@@ -33,7 +36,11 @@ export async function enableDemoReset(
     is_single: true,
     naming: { strategy: "user_set" },
     fields: [],
-    actions: [{ action: "reset", label: "Reset app data", long_running: true, confirm: true }],
+    // `write`: no row below grants it, so only the Administrator passes, by the permission check's
+    // bypass. The action route itself asks only for read, which a DocShare of the row grants.
+    actions: [
+      { action: "reset", label: "Reset app data", long_running: true, confirm: true, requires_permission: "write" },
+    ],
     permissions: [{ role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1 }],
   } as EntityDefinition);
 

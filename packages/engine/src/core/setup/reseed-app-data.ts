@@ -11,28 +11,6 @@ import { createLogger } from "../logging/logger.js";
 
 const log = createLogger("reseed-app-data");
 
-/**
- * The destructive reseed of app data. Two modes:
- *
- *   "template" — wipes every app-db collection, re-runs reference JSON
- *     seeds (`<appDir>/<domain>/seeds/*.seed.json`), which include any
- *     mandatory is_single config the app declares.
- *
- *   "demo" — does the template mode AND also loads
- *     `<appDir>/<domain>/seeds-demo/*.seed.json`. Sets
- *     `Setting.is_first_run = false` at the end.
- *
- * Both modes are fully destructive. Reserved databases (`identity`,
- * `core`, `logs`) are preserved so the caller's session + UI chrome
- * survive. Every reseed starts from a clean slate — drift, half-applied
- * edits, stale orphan docs all vanish on each run.
- *
- * Demo seeds are pure JSON. Every demo doc carries its full payload
- * (incl. `_id`) and lands through the seed loader's insert mode. Any
- * transactional showcase (a submitted doc + its ledger / side-effect
- * chain) the operator wants beyond the seed data has to be clicked
- * through the UI like a real user.
- */
 export type ReseedMode = "template" | "demo";
 
 export interface ReseedDeps {
@@ -55,6 +33,28 @@ export interface ReseedSummary {
   rows_deleted: number;
 }
 
+/**
+ * The destructive reseed of app data. Two modes:
+ *
+ *   "template" — wipes every app-db collection, re-runs reference JSON
+ *     seeds (`<appDir>/<domain>/seeds/*.seed.json`), which include any
+ *     mandatory is_single config the app declares.
+ *
+ *   "demo" — does the template mode AND also loads
+ *     `<appDir>/<domain>/seeds-demo/*.seed.json`. Sets
+ *     `Setting.is_first_run = false` at the end.
+ *
+ * Both modes are fully destructive. Reserved databases (`identity`,
+ * `core`, `logs`) are preserved so the caller's session + UI chrome
+ * survive. Every reseed starts from a clean slate — drift, half-applied
+ * edits, stale orphan docs all vanish on each run.
+ *
+ * Demo seeds are pure JSON. Every demo doc carries its full payload
+ * (incl. `_id`) and lands through the seed loader's insert mode. Any
+ * transactional showcase (a submitted doc + its ledger / side-effect
+ * chain) the operator wants beyond the seed data has to be clicked
+ * through the UI like a real user.
+ */
 export async function reseedAppData(mode: ReseedMode, deps: ReseedDeps): Promise<ReseedSummary> {
   const { db, registry, translationService, appDirs } = deps;
   const domainDirs = deps.getDomainDirs();

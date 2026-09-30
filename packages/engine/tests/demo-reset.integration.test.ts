@@ -1,7 +1,7 @@
 import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 
 // The env mock of site-scope.integration.test.ts, with the demo tenant setting and both seed
-// tiers. One mocked module serves both boots below: each sets DEMO_TENANT before it boots.
+// tiers. One mocked module serves every boot below: each sets its own settings before it boots.
 vi.mock("../src/core/config/env.js", () => {
   return { env: {
     NODE_ENV: "test", APP_VERSION: "0.1.0", SERVICE_NAME: "digita-test", PORT: 0, HOST: "127.0.0.1",
@@ -96,24 +96,38 @@ let replSet: MongoMemoryReplSet;
 let fixtureRoot: string;
 const booted: { app: FastifyInstance; db: MongoDBService }[] = [];
 
-async function boot(demoTenant: boolean): Promise<{
+interface Boot {
   app: FastifyInstance;
   db: MongoDBService;
   registry: EntityRegistry;
   admin: Record<string, string>;
   member: Record<string, string>;
-}> {
-  (env as { DEMO_TENANT: boolean }).DEMO_TENANT = demoTenant;
-  (env as { APP_DIRS: string[] }).APP_DIRS = [fixtureRoot];
+}
+
+/** One engine on the shared database: a demo tenant or not, a website engine or not, with or
+ *  without the demo tier. */
+async function boot(settings: { demoTenant: boolean; siteId?: string; seedDemo?: boolean }): Promise<Boot> {
+  Object.assign(env, {
+    DEMO_TENANT: settings.demoTenant,
+    SITE_ID: settings.siteId ?? "",
+    SEED_DEMO_DATA_ON_BOOT: settings.seedDemo ?? true,
+    APP_DIRS: [fixtureRoot],
+  });
   const { authn, sign } = await buildTestAuth();
   const { app, db, startup, registry } = await createApp({ authn });
   await startup();
   await app.ready();
   booted.push({ app, db });
-  const bearer = async (roles: string[]) => ({
-    authorization: `Bearer ${await sign({ sub: "u@test", email: "u@test", roles })}`,
+  const bearer = async (email: string, roles: string[]) => ({
+    authorization: `Bearer ${await sign({ sub: email, email, roles })}`,
   });
-  return { app, db, registry, admin: await bearer(["Administrator"]), member: await bearer(["System User"]) };
+  return {
+    app,
+    db,
+    registry,
+    admin: await bearer("admin@test", ["Administrator"]),
+    member: await bearer("member@test", ["System User"]),
+  };
 }
 
 beforeAll(async () => {
@@ -131,16 +145,34 @@ afterAll(async () => {
   await replSet.stop();
 }, 30000);
 
+/** The demo reset is not there: no definition, and a call answers as one on an unknown entity. */
+async function expectNoDemoReset({ app, registry, admin }: Boot): Promise<void> {
+  expect(registry.has("DemoReset")).toBe(false);
+  const meta = await app.inject({ method: "GET", url: "/api/v1/meta/DemoReset", headers: admin });
+  expect(meta.statusCode).toBe(404);
+  const reset = await app.inject({ method: "POST", url: RESET, headers: admin, payload: {} });
+  const unknown = await app.inject({ method: "POST", url: "/api/v1/resource/NoSuchEntity/x/action/reset", headers: admin, payload: {} });
+  expect(reset.statusCode).toBe(unknown.statusCode);
+  expect(reset.json().error?.code).toBe(unknown.json().error?.code);
+}
+
+/** What an earlier boot of a demo app engine stored is gone. */
+async function expectStoredDemoResetRemoved({ db }: Boot): Promise<void> {
+  expect(await db.findOne(DIGITA.COLLECTIONS.ENTITY, "DemoReset", DIGITA.DATABASES.CORE)).toBeNull();
+  expect(await db.listCollections(DIGITA.DATABASES.CORE)).not.toContain("DemoReset");
+}
+
+// The describes run in order on one database: each boot that removes the entity follows one that
+// stored it.
 describe("the demo reset on a demo tenant", () => {
-  let app: FastifyInstance;
-  let admin: Record<string, string>;
-  let member: Record<string, string>;
+  let engine: Boot;
 
   beforeAll(async () => {
-    ({ app, admin, member } = await boot(true));
+    engine = await boot({ demoTenant: true });
   }, 60000);
 
   it("is a task of the Jobs page: a single with a long-running action", async () => {
+    const { app, admin } = engine;
     const meta = await app.inject({ method: "GET", url: "/api/v1/meta/DemoReset", headers: admin });
     expect(meta.statusCode).toBe(200);
     expect(meta.json().data).toMatchObject({ is_single: true, actions: [{ action: "reset", long_running: true }] });
@@ -151,6 +183,7 @@ describe("the demo reset on a demo tenant", () => {
   });
 
   it("gives a changed demo document its seeded values back and drops a visitor's document", async () => {
+    const { app, admin } = engine;
     const changed = await app.inject({
       method: "PUT", url: "/api/v1/resource/WorkOrder/WO-1", headers: admin, payload: { customer: "A visitor" },
     });
@@ -175,7 +208,24 @@ describe("the demo reset on a demo tenant", () => {
   });
 
   it("refuses a caller who is no Administrator and leaves the data as it is", async () => {
+    const { app, admin, member } = engine;
     await app.inject({ method: "PUT", url: "/api/v1/resource/WorkOrder/WO-1", headers: admin, payload: { customer: "Kept" } });
+    const reset = await app.inject({ method: "POST", url: RESET, headers: member, payload: {} });
+    expect(reset.statusCode).toBe(403);
+    const order = await app.inject({ method: "GET", url: "/api/v1/resource/WorkOrder/WO-1", headers: admin });
+    expect(order.json().data.customer).toBe("Kept");
+  });
+
+  it("refuses a caller its row is shared with, who may read it but not reset", async () => {
+    const { app, admin, member } = engine;
+    const share = await app.inject({
+      method: "POST", url: "/api/v1/resource/DocShare", headers: admin,
+      payload: { entity: "DemoReset", document_name: "demo-reset", shared_with: "member@test", can_read: 1 },
+    });
+    expect(share.statusCode).toBe(201);
+    // The share works: the caller reads the row, which the action route also asks for.
+    const row = await app.inject({ method: "GET", url: "/api/v1/resource/DemoReset/demo-reset", headers: member });
+    expect(row.statusCode).toBe(200);
     const reset = await app.inject({ method: "POST", url: RESET, headers: member, payload: {} });
     expect(reset.statusCode).toBe(403);
     const order = await app.inject({ method: "GET", url: "/api/v1/resource/WorkOrder/WO-1", headers: admin });
@@ -183,35 +233,59 @@ describe("the demo reset on a demo tenant", () => {
   });
 });
 
-describe("the demo reset on a tenant that is no demo", () => {
-  let app: FastifyInstance;
-  let db: MongoDBService;
-  let registry: EntityRegistry;
-  let admin: Record<string, string>;
+describe("the demo reset on a website engine of a demo tenant", () => {
+  let engine: Boot;
 
-  // The same database the demo boot above stored the entity in: the case of a tenant whose
-  // demo setting was switched off.
+  // A reset loads the seed tiers, never the site folder a website engine seeds at boot, so it
+  // would leave the site without its pages.
   beforeAll(async () => {
-    ({ app, db, registry, admin } = await boot(false));
+    engine = await boot({ demoTenant: true, siteId: "show" });
   }, 60000);
 
   it("does not exist, and a call answers as for any unknown entity", async () => {
-    expect(registry.has("DemoReset")).toBe(false);
-    const meta = await app.inject({ method: "GET", url: "/api/v1/meta/DemoReset", headers: admin });
-    expect(meta.statusCode).toBe(404);
+    await expectNoDemoReset(engine);
+  });
+
+  it("removes the definition and the row a demo app engine stored", async () => {
+    await expectStoredDemoResetRemoved(engine);
+  });
+});
+
+describe("the demo reset of an app that seeds only the reference tier", () => {
+  let engine: Boot;
+
+  beforeAll(async () => {
+    engine = await boot({ demoTenant: true, seedDemo: false });
+  }, 60000);
+
+  it("returns the app to the reference tier alone", async () => {
+    const { app, admin } = engine;
+    await app.inject({ method: "PUT", url: "/api/v1/resource/WorkshopSetting/workshop", headers: admin, payload: { hourly_rate: 99 } });
     const reset = await app.inject({ method: "POST", url: RESET, headers: admin, payload: {} });
-    const unknown = await app.inject({ method: "POST", url: "/api/v1/resource/NoSuchEntity/x/action/reset", headers: admin, payload: {} });
-    expect(reset.statusCode).toBe(unknown.statusCode);
-    expect(reset.json().error?.code).toBe(unknown.json().error?.code);
+    expect(reset.statusCode).toBe(200);
+    expect(reset.json().data.result).toMatchObject({ done: true, result: { mode: "template" } });
+    const setting = await app.inject({ method: "GET", url: "/api/v1/resource/WorkshopSetting/workshop", headers: admin });
+    expect(setting.json().data.hourly_rate).toBe(120);
+    // The demo tier is not loaded again: its work order is gone with the wipe.
+    const order = await app.inject({ method: "GET", url: "/api/v1/resource/WorkOrder/WO-1", headers: admin });
+    expect(order.statusCode).toBe(404);
+  });
+});
+
+describe("the demo reset on a tenant that is no demo", () => {
+  let engine: Boot;
+
+  // The database a demo boot above stored the entity in: the case of a tenant whose demo setting
+  // was switched off.
+  beforeAll(async () => {
+    engine = await boot({ demoTenant: false });
+  }, 60000);
+
+  it("does not exist, and a call answers as for any unknown entity", async () => {
+    await expectNoDemoReset(engine);
   });
 
   it("removes the definition and the row the demo boot stored", async () => {
-    expect(await db.findOne(DIGITA.COLLECTIONS.ENTITY, "DemoReset", DIGITA.DATABASES.CORE)).toBeNull();
-    expect(await db.listCollections(DIGITA.DATABASES.CORE)).not.toContain("DemoReset");
-  });
-
-  it("leaves the app's data as it is", async () => {
-    const order = await app.inject({ method: "GET", url: "/api/v1/resource/WorkOrder/WO-1", headers: admin });
-    expect(order.json().data.customer).toBe("Kept");
+    await expectStoredDemoResetRemoved(engine);
   });
 });
