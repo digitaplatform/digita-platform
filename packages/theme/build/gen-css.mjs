@@ -258,7 +258,8 @@ ${DARK_BAND_SELECTOR} { background-color: var(--color-bg); color: var(--color-te
    DESIGN- and MODE-agnostic on purpose (paper is always light, in every design
    AND in dark mode). This is the ONE deliberate exception to the per-design token
    rule — do NOT "fix" them to follow the active design; that would break print
-   fidelity. Consumed only by the report designer's canvas chrome. */
+   fidelity. Consumed by the report designer's canvas chrome and by the pad of a
+   Signature field, the paper a person signs on. */
 :root {
   --color-paper: #FFFFFF;
   --color-paper-ink: #1F1D1A;

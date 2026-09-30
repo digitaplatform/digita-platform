@@ -39,7 +39,8 @@ export const FIELD_CLASS = CONTROL_BASE + ` min-h-[${CONTROL_H}]`;
  *  the textarea's own min-h. Use ONLY on multi-line <textarea> consumers. */
 export const TEXTAREA_CLASS = CONTROL_BASE + ' resize-y min-h-[5.5rem] max-h-[20rem]';
 
-/** Compose aria-describedby from the optional description + error ids. */
-export function describedBy(describedById?: string, errorId?: string): string | undefined {
-  return [describedById, errorId].filter(Boolean).join(' ') || undefined;
+/** Compose aria-describedby from the optional ids of what describes a control: a hint, its
+ *  description, its error. */
+export function describedBy(...ids: (string | undefined)[]): string | undefined {
+  return ids.filter(Boolean).join(' ') || undefined;
 }
