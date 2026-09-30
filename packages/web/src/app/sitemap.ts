@@ -9,7 +9,9 @@ export const dynamic = "force-dynamic";
  *  not answer fails the sitemap instead of emptying it: a crawler that reads an empty sitemap takes
  *  every page for gone. */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const pages = await listPages();
+  // A page marked no_index is neither listed nor named as an alternate: its head tells crawlers to
+  // leave it out, so the sitemap must not send them to it.
+  const pages = (await listPages()).filter((p) => !p.no_index);
 
   // group siblings by translation_group for hreflang alternates
   const byGroup = new Map<string, typeof pages>();
