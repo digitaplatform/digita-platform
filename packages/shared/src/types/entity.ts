@@ -937,7 +937,7 @@ export interface FormLayoutConfig {
    * "flat"   — never auto-tab; sections stay stacked cards on one page.
    */
   layout?: "auto" | "tabbed" | "flat";
-  /** Data-field count at/above which "auto" tabs the form. Default 16. */
+  /** Data-field count at/above which "auto" tabs the form. Default 12. */
   tabify?: number;
   /**
    * Sections with fewer data fields than this merge into the previous tab

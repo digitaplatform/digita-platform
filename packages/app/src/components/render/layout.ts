@@ -164,6 +164,8 @@ const AUTHORING_BREAKS: ReadonlySet<string> = new Set(['TabBreak', 'ColumnBreak'
 /** Non-data decorations — not counted toward the tab/merge thresholds. */
 const DECORATION: ReadonlySet<string> = new Set(['Heading', 'HTML']);
 
+// FormLayoutConfig in @digitaplatform/shared states these defaults to the author of an app, who
+// decides from them whether a form tabs; tests/form-tabify-default.test.ts holds its comments to them.
 const DEFAULT_TABIFY = 12;
 const DEFAULT_MIN_TAB_FIELDS = 3;
 
