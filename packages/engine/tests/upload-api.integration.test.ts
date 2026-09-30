@@ -1049,6 +1049,44 @@ describe("Upload API Integration", () => {
       expect(row["attached_to_name"]).toBeUndefined();
       expect((await downloadAs(ownerToken, foreign._id)).statusCode).toBe(403);
     });
+
+    it("binds no upload of another user when an Administrator saves the record that names it", async () => {
+      // The owner names a colleague's loose upload in their own book; an Administrator, who may
+      // write every File, then saves the book as the app does, with every field.
+      const foreign = await uploadAsApp(salesToken, "letter", "%PDF sales-owned letter, admin save");
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/v1/resource/TestBook",
+        headers: authHeaders(ownerToken),
+        payload: { title: "Persuasion", letter: foreign.file_url },
+      });
+      expect(created.statusCode).toBe(201);
+      const book = created.json().data as { _id: string };
+      const saved = await app.inject({
+        method: "PUT",
+        url: `/api/v1/resource/TestBook/${book._id}`,
+        headers: authHeaders(authToken),
+        payload: { title: "Persuasion, approved", letter: foreign.file_url },
+      });
+      expect(saved.statusCode).toBe(200);
+
+      const row = (await db.findOne(DIGITA.COLLECTIONS.FILE, foreign._id, "core")) as Record<string, unknown>;
+      expect(row["attached_to_name"]).toBeUndefined();
+      expect((await downloadAs(ownerToken, foreign._id)).statusCode).toBe(403);
+    });
+
+    it("binds the Administrator's own upload when the Administrator saves (innocent case)", async () => {
+      const own = await uploadAsApp(authToken, "letter", "%PDF admin-owned letter");
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/v1/resource/TestBook",
+        headers: authHeaders(authToken),
+        payload: { title: "Sanditon", letter: own.file_url },
+      });
+      expect(created.statusCode).toBe(201);
+      const row = (await db.findOne(DIGITA.COLLECTIONS.FILE, own._id, "core")) as Record<string, unknown>;
+      expect(row["attached_to_name"]).toBe(created.json().data._id);
+    });
   });
 
   describe("public attachment fields (field.public opt-in)", () => {

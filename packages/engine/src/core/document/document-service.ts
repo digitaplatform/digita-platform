@@ -2598,6 +2598,11 @@ export class DocumentService {
       session,
     );
     for (const file of unattached) {
+      // Only the uploader's own save binds a file. An Administrator may write every File, so the
+      // write grant alone would let an Administrator's save of a record bind a colleague's loose
+      // upload that the record's owner named in it, and open it to that owner.
+      const uploader = file["owner"];
+      if (uploader !== user.email && uploader !== user._id) continue;
       if (!(await this.permissionChecker.hasPermission(user, DIGITA.COLLECTIONS.FILE, "write", file)).allowed) continue;
       await this.db.updateOne(
         DIGITA.COLLECTIONS.FILE,
