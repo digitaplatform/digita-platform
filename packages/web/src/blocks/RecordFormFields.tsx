@@ -44,8 +44,9 @@ interface RecordFormFieldsProps {
   entity: string;
   fields: RecordFormField[];
   texts: RecordFormTexts;
-  /** When the server rendered the page, in its clock. Sent back unchanged, so the route's fill-time
-   *  check compares the server's clock with itself, never with the browser's. */
+  /** When the server rendered the page, in its clock. The form sends it back unchanged, so the
+   *  route's fill-time check measures a person's time from the server's render, not from the
+   *  browser's clock. A program that sends a number of its own passes the check. */
   renderedAt: number;
 }
 

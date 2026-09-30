@@ -56,8 +56,9 @@ interface ContactPanelProps {
   bookingUrl?: string;
   /** The privacy page in the visitor's locale. */
   privacyHref: string;
-  /** When the server rendered the page, in its clock. Sent back unchanged, so the route's fill-time
-   *  check compares the server's clock with itself, never with the browser's. */
+  /** When the server rendered the page, in its clock. The sheet sends it back unchanged, so the
+   *  route's fill-time check measures a person's time from the server's render, not from the
+   *  browser's clock. A program that sends a number of its own passes the check. */
   renderedAt: number;
 }
 

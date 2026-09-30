@@ -8,8 +8,9 @@ import { RecordFormFields } from "./RecordFormFields";
 /**
  * A form that creates one record of the entity its props name, through the Guest create of the
  * engine that holds it (src/app/api/record/route.ts). It draws nothing without an entity or a
- * visible field, and nothing when it names a tenant app whose engine the site does not know, so
- * no visitor fills in a form that cannot arrive.
+ * visible field, and nothing when it names a tenant app whose engine the site does not know
+ * (ENGINE_URLS), whose posts would find no engine. A form whose entity or fields the Guest row does
+ * not open still draws, and the route refuses its posts with 403.
  */
 export function RecordForm({ props, locale }: { props?: P; locale: Locale }) {
   const entity = s(props, "entity");

@@ -48,10 +48,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const { status, code } = await createRecord(engineUrl, record.entity, record.values, post.visitor);
     if (status >= 200 && status < 300) return answer(200, { ok: true });
     // The public create answers 403 when the entity grants Guest no create, 404 when the engine
-    // holds no such entity, and 400 BAD_REQUEST for a key the Guest row does not let Guest set:
-    // each is the form's own refusal, never the visitor's input.
+    // holds no such entity, and 400 BAD_REQUEST for a key the Guest row does not let Guest set.
+    // Each says the post names an entity or a field Guest may not create, whether a record form
+    // names it or the visitor wrote it into the post, and neither case is a value to correct.
     if (status === 403 || status === 404 || (status === 400 && code === "BAD_REQUEST")) {
-      console.error(`[digita-web] the engine refused the ${record.entity} create of a record form: HTTP ${status} ${code ?? ""}`);
+      console.error(`[digita-web] the engine refused a ${record.entity} create a visitor sent: HTTP ${status} ${code ?? ""}`);
       return answer(403, { ok: false, message: "The form may not create this record" });
     }
     if (status === 400 || status === 413) return answer(400, { ok: false, message: "Invalid request" });
