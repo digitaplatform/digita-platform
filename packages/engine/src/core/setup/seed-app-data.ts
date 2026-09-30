@@ -56,7 +56,12 @@ interface Collected {
  *
  * Two modes:
  *  - `insert` (default): skip rows whose `_id` already exists. The reference and demo
- *    tiers use it, so a runtime edit survives every boot. Nothing is deleted.
+ *    tiers use it, so a runtime edit survives every boot. Nothing is deleted. One
+ *    exception layers the tiers: a row whose `_id` an earlier seed dir of the same call
+ *    also carries (the demo company's values for the reference tier's neutral settings)
+ *    sets its fields on the stored row while the seed still owns it (`owner` and
+ *    `modified_by` are `system`); a row a person changed stays. Both tiers must load in
+ *    one call for this, the earlier first.
  *  - `upsert-delete`: first the rows of `site` that the seed does not carry are deleted
  *    when the seed itself wrote them and no person changed them since (`owner` and
  *    `modified_by` are `system`, as this loader writes them); a row a person created or
@@ -259,8 +264,14 @@ export async function seedAppData(
   }
 
   // ── Pass 4: insert (non-destructive, chunked); upsert-delete replaces existing rows ──
+  // The ids of every entity that the files already written carry: a later file's row of
+  // such an id layers its fields on the stored row in insert mode.
+  const carriedByEarlierFiles = new Map<string, Set<string>>();
   for (const { entity, rows } of collected) {
-    await insertRows(db, entity, rows, mode === "insert" ? "insert" : "upsert");
+    const carried = carriedByEarlierFiles.get(entity.name) ?? new Set<string>();
+    await insertRows(db, entity, rows, mode === "insert" ? "insert" : "upsert", carried);
+    for (const row of rows) carried.add(toIdString(row.__seedId ?? String(row["_id"])));
+    carriedByEarlierFiles.set(entity.name, carried);
   }
 
   // ── Pass 4b: retry the deletes a stored row blocked, now that the seed rewrote its rows ──
@@ -422,6 +433,7 @@ async function insertRows(
   entity: EntityDefinition,
   rows: CollectedRow[],
   mode: "insert" | "upsert",
+  carriedByEarlierFiles: Set<string>,
 ): Promise<void> {
   const target = entity.database;
   let inserted = 0;
@@ -462,7 +474,30 @@ async function insertRows(
     // there.
     const existing = await db.findOne(entity.name, idString, target);
     if (existing && mode === "insert") {
-      skipped++;
+      if (!carriedByEarlierFiles.has(idString) || !seedWrote(existing)) {
+        skipped++;
+        continue;
+      }
+      // A later tier's row sets its fields on the row the seed still owns. The write is
+      // pinned on the seed identity, so a person's save that lands after the read above
+      // keeps its values.
+      const changes = serializeRowForStorage(entity, rowData);
+      carryRowIds(changes, existing);
+      injectRowIds(changes);
+      if (Object.entries(changes).every(([key, value]) => deepEqual(value, existing[key]))) {
+        unchanged++;
+        continue;
+      }
+      const written = await db.updateOne(
+        entity.name,
+        idString,
+        { ...changes, modified_by: SEED_IDENTITY, modified: now },
+        target,
+        undefined,
+        { owner: SEED_IDENTITY, modified_by: SEED_IDENTITY },
+      );
+      if (written) updated++;
+      else skipped++;
       continue;
     }
     if (existing) {

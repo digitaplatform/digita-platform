@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdtemp, writeFile, rm } from "fs/promises";
+import { mkdir, mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 
@@ -22,13 +22,16 @@ vi.mock("../src/core/config/env.js", () => ({
   },
 }));
 
+import type { FastifyInstance } from "fastify";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import type { DocumentService } from "../src/core/document/document-service.js";
 import type { NamingService } from "../src/core/document/naming-service.js";
+import type { TranslationService } from "../src/core/i18n/translation-service.js";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { DeleteBlockedError, NotFoundError } from "../src/core/document/document-service.js";
 import { seedAppData } from "../src/core/setup/seed-app-data.js";
+import { registerAdminReseedRoutes } from "../src/core/api/admin-reseed-router.js";
 
 const page: EntityDefinition = {
   name: "WebPage",
@@ -66,6 +69,20 @@ const menu: EntityDefinition = {
       label: "Items",
       child_fields: [{ fieldname: "page", fieldtype: "Link", label: "Page", options: "WebPage" }],
     },
+  ],
+  permissions: [],
+} as unknown as EntityDefinition;
+
+/** An app's single settings: a neutral row in `seeds/`, the demo company's values in `seeds-demo/`. */
+const shopSetting: EntityDefinition = {
+  name: "ShopSetting",
+  module: "test",
+  database: "app",
+  is_single: true,
+  fields: [
+    { fieldname: "company_name", fieldtype: "Data", label: "Company name" },
+    { fieldname: "hourly_rate", fieldtype: "Currency", label: "Hourly rate" },
+    { fieldname: "quote_threshold", fieldtype: "Int", label: "Quote threshold" },
   ],
   permissions: [],
 } as unknown as EntityDefinition;
@@ -123,8 +140,17 @@ function mockDb(initial: Record<string, unknown>[]) {
       refuseDuplicateSlug(id, data);
       stored.set(id, { ...data, _id: stored.get(id)?._id ?? id });
     }),
-    updateOne: vi.fn(async () => {}),
+    // $set, and only while the stored row still holds `expected`, as the real updateOne does.
+    updateOne: vi.fn(
+      async (_coll: string, id: string, changes: Record<string, unknown>, _target: string, _session: unknown, expected: Record<string, unknown> = {}) => {
+        const doc = stored.get(id);
+        if (!doc || !Object.entries(expected).every(([k, v]) => doc[k] === v)) return false;
+        stored.set(id, { ...doc, ...changes });
+        return true;
+      },
+    ),
     deleteMany: vi.fn(async () => 0),
+    listAppDatabases: vi.fn(() => [{ name: "app" }]),
     getNextSequence: vi.fn(async () => 1),
     setSequenceValue: vi.fn(async () => {}),
     setSequenceFloor: vi.fn(async () => {}),
@@ -136,6 +162,7 @@ function registry() {
   const reg = new EntityRegistry();
   reg.register(page);
   reg.register(menu);
+  reg.register(shopSetting);
   return reg;
 }
 
@@ -379,3 +406,128 @@ describe("seedAppData upsert-delete mode", () => {
   });
 });
 
+
+describe("seedAppData tiers in insert mode", () => {
+  // An app dir with both tiers, loaded as the boot loads them: `seeds/` before `seeds-demo/`.
+  let app: string;
+  const neutral = { _id: "shop", company_name: "Workshop", quote_threshold: 150 };
+  const demoCompany = { _id: "shop", company_name: "Veloluck Velo AG", hourly_rate: 120 };
+  /** The reference tier's row as this loader stored it on an earlier boot. */
+  const storedNeutral = {
+    ...neutral,
+    doctype: "ShopSetting",
+    docstatus: 0,
+    owner: "system",
+    creation: new Date("2026-01-01T00:00:00Z"),
+    modified_by: "system",
+    modified: new Date("2026-01-01T00:00:00Z"),
+  };
+  const bothTiers = () => [join(app, "seeds"), join(app, "seeds-demo")];
+  const seedTiers = (db: MongoDBService, dirs: string[] = bothTiers()) =>
+    seedAppData(db, registry(), {} as NamingService, dirs);
+
+  beforeEach(async () => {
+    app = await mkdtemp(join(tmpdir(), "seed-tiers-"));
+    await mkdir(join(app, "seeds"));
+    await mkdir(join(app, "seeds-demo"));
+    await writeFile(join(app, "seeds", "ShopSetting.seed.json"), JSON.stringify([neutral]));
+    await writeFile(join(app, "seeds-demo", "ShopSetting.seed.json"), JSON.stringify([demoCompany]));
+  });
+  afterEach(async () => {
+    await rm(app, { recursive: true, force: true });
+  });
+
+  it("lands the demo tier's values on the row the reference tier writes in the same load", async () => {
+    const { db, stored } = mockDb([]);
+    await seedTiers(db);
+    // The planted defect this test guards: the demo row skipped because the reference row exists.
+    expect(stored.get("shop")).toMatchObject({
+      company_name: "Veloluck Velo AG",
+      hourly_rate: 120,
+      quote_threshold: 150,
+      owner: "system",
+      modified_by: "system",
+    });
+  });
+
+  it("updates a standing tenant's row the reference tier wrote on an earlier boot, keeping creation", async () => {
+    const { db, stored } = mockDb([storedNeutral]);
+    await seedTiers(db);
+    const shop = stored.get("shop")!;
+    expect(shop).toMatchObject({ company_name: "Veloluck Velo AG", hourly_rate: 120, quote_threshold: 150 });
+    expect(shop.owner).toBe("system");
+    expect(shop.modified_by).toBe("system");
+    expect(shop.creation).toEqual(storedNeutral.creation);
+    expect(shop.modified).not.toEqual(storedNeutral.modified);
+  });
+
+  it("keeps the values of a row a person saved after the seed wrote it", async () => {
+    const saved = { ...storedNeutral, company_name: "Meier Velos", modified_by: "admin@example.com" };
+    const { db, stored } = mockDb([saved]);
+    await seedTiers(db);
+    // The planted defect this test guards: a later tier that overwrites a person's save.
+    expect(db.updateOne).not.toHaveBeenCalled();
+    expect(db.upsertOne).not.toHaveBeenCalled();
+    expect(stored.get("shop")).toEqual(saved);
+  });
+
+  it("keeps the values of a person who saves the row while the seed runs", async () => {
+    const { db, stored } = mockDb([storedNeutral]);
+    // The person's save lands right after the demo tier, the second tier to read the row, read it
+    // as seed-owned.
+    let reads = 0;
+    (db.findOne as ReturnType<typeof vi.fn>).mockImplementation(async (_coll: string, id: string) => {
+      const doc = stored.get(id) ?? null;
+      if (doc && ++reads === 2) stored.set("shop", { ...storedNeutral, company_name: "Meier Velos", modified_by: "admin@example.com" });
+      return doc;
+    });
+    await seedTiers(db);
+    // The planted defect this test guards: a write that trusts the read made before it.
+    expect(stored.get("shop")).toMatchObject({ company_name: "Meier Velos", modified_by: "admin@example.com" });
+    expect(stored.get("shop")).not.toHaveProperty("hourly_rate");
+    // The demo tier's count says it wrote nothing.
+    const counts = logSpy.info.mock.calls.filter(([fields]) => fields?.entity === "ShopSetting").map(([fields]) => fields);
+    expect(counts.at(-1)).toMatchObject({ updated: 0, skipped: 1 });
+  });
+
+  it("writes nothing once the stored row carries the demo tier's values", async () => {
+    const { db, stored } = mockDb([storedNeutral]);
+    await seedTiers(db);
+    const landed = { ...stored.get("shop")! };
+    vi.clearAllMocks();
+    await seedTiers(db);
+    // The planted defect this test guards: a loader that rewrites the row on every boot.
+    expect(db.updateOne).not.toHaveBeenCalled();
+    expect(db.insertMany).not.toHaveBeenCalled();
+    expect(stored.get("shop")).toEqual(landed);
+  });
+
+  it("never lets a tier that loads alone change a row it carries", async () => {
+    const landed = { ...storedNeutral, ...demoCompany };
+    const { db, stored } = mockDb([landed]);
+    // The reference tier alone, as a boot with the demo tier switched off loads it.
+    await seedTiers(db, [join(app, "seeds")]);
+    // The planted defect this test guards: every seed-owned row following its seed, which puts
+    // the neutral company back over the demo company.
+    expect(db.updateOne).not.toHaveBeenCalled();
+    expect(stored.get("shop")).toEqual(landed);
+  });
+
+  it("lands the demo tier's values through the demo reseed", async () => {
+    const { db, stored } = mockDb([]);
+    let reseed: ((request: unknown, reply: unknown) => Promise<unknown>) | undefined;
+    const fastify = { post: (_path: string, handler: typeof reseed) => (reseed = handler) } as unknown as FastifyInstance;
+    registerAdminReseedRoutes(fastify, "/api/v1", {
+      db,
+      registry: registry(),
+      translationService: {} as TranslationService,
+      appDirs: [app],
+      getDomainDirs: () => [],
+    });
+    const reply = { code: vi.fn(() => reply), send: vi.fn() };
+    await reseed!({ user: { email: "admin@example.com", roles: ["Administrator"] }, body: { mode: "demo" } }, reply);
+    expect(reply.code).not.toHaveBeenCalled();
+    // The planted defect this test guards: a reseed that loads each tier on its own.
+    expect(stored.get("shop")).toMatchObject({ company_name: "Veloluck Velo AG", hourly_rate: 120, quote_threshold: 150 });
+  });
+});

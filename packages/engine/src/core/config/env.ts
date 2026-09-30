@@ -434,7 +434,8 @@ export const env = {
   REVALIDATE_SECRET: getEnv("REVALIDATE_SECRET", ""),
 
   // Dev convenience (opt-in): seed app data at boot, auto/non-destructive (skip
-  // rows whose _id already exists). Two INDEPENDENT tiers, both OFF by default —
+  // rows whose _id already exists, except a demo row over a seed-owned reference
+  // row, which it updates). Two INDEPENDENT tiers, both OFF by default —
   // production seeds ONLY via POST /api/v1/admin/reseed (destructive reset path).
   //   SEED_APP_DATA_ON_BOOT  → reference tier (<appDir>/<domain>/seeds/)
   //   SEED_DEMO_DATA_ON_BOOT → demo tier      (<appDir>/<domain>/seeds-demo/)

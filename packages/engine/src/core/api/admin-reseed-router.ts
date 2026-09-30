@@ -32,7 +32,7 @@ const log = createLogger("admin-reseed-router");
  * edits, stale orphan docs all vanish on each run.
  *
  * Demo seeds are pure JSON. Every demo doc carries its full payload
- * (incl. `_id`) and lands via a single `db.insertMany` per file. Any
+ * (incl. `_id`) and lands through the seed loader's insert mode. Any
  * transactional showcase (a submitted doc + its ledger / side-effect
  * chain) the operator wants beyond the seed data has to be clicked
  * through the UI like a real user.
@@ -137,26 +137,22 @@ async function performReseed(
     }
   }
 
-  // 3. Re-run reference JSON seeds.
-  const referenceDirs = [
+  // 3. Re-run reference JSON seeds and, in demo mode, the `seeds-demo` JSON files after
+  // them. Both modes are pure-data: no scripted scenario builder, no per-doctype hooks.
+  // Both tiers load in one call, as at boot: only then does a demo row of an `_id` the
+  // reference tier carries (a single's demo company) update the reference row.
+  const seedDirs = [
     ...appDirs.map((d) => join(d, "seeds")),
     ...domainDirs.map((d) => join(d.root, "seeds")),
   ];
-  await seedAppData(db, registry, new NamingService(db), referenceDirs);
-  await seedDataTranslations(db, registry, translationService, referenceDirs);
-
-  // 4. Demo mode: also load `seeds-demo` JSON files. Both modes are
-  // pure-data: no scripted scenario builder, no per-doctype hooks.
-  // Demo seeds carry every field they need (incl. _id) so a single
-  // bulk-insert per file is the entire reseed.
   if (mode === "demo") {
-    const demoDirs = [
+    seedDirs.push(
       ...appDirs.map((d) => join(d, "seeds-demo")),
       ...domainDirs.map((d) => join(d.root, "seeds-demo")),
-    ];
-    await seedAppData(db, registry, new NamingService(db), demoDirs);
-    await seedDataTranslations(db, registry, translationService, demoDirs);
+    );
   }
+  await seedAppData(db, registry, new NamingService(db), seedDirs);
+  await seedDataTranslations(db, registry, translationService, seedDirs);
 
   // is_first_run flag: demo mode flips it off (no further setup
   // expected); template mode keeps it on so the wizard's Done step

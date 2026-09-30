@@ -607,10 +607,12 @@ export async function createApp(
     //                                fiscal calendar, nav, mandatory singles)
     //       SEED_DEMO_DATA_ON_BOOT → demo tier (`seeds-demo/`: customers, products,
     //                                sample documents)
-    //     Reference is loaded before demo (demo rows reference reference data). Both
+    //     Reference is loaded before demo, in one call (demo rows reference reference
+    //     data, and a demo row of an `_id` the reference tier carries updates that row
+    //     while the seed still owns it). Both
     //     default OFF → production never auto-seeds (reseed-only). Runs before
     //     RoleRegistry.load() so seeded app roles are present. Always auto/non-
-    //     destructive — fills an empty DB, skips existing rows; reset = reseed API.
+    //     destructive — fills an empty DB, skips other existing rows; reset = reseed API.
     if (env.SEED_APP_DATA_ON_BOOT || env.SEED_DEMO_DATA_ON_BOOT) {
       const seedDirs: string[] = [];
       if (env.SEED_APP_DATA_ON_BOOT) {

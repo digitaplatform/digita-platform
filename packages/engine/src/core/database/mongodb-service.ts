@@ -455,7 +455,8 @@ export class MongoDBService {
 
   /**
    * `expected` pins stored values the write builds on: a row that no longer
-   * holds them, because a save landed in between, is left as it is.
+   * holds them, because a save landed in between, is left as it is. Answers
+   * whether a row matched, so a caller can count only what it wrote.
    */
   async updateOne(
     collectionName: string,
@@ -464,14 +465,15 @@ export class MongoDBService {
     target: DatabaseTarget,
     session?: ClientSession,
     expected: Record<string, unknown> = {},
-  ): Promise<void> {
+  ): Promise<boolean> {
     const updateDoc: UpdateFilter<Document> = { $set: changes };
-    await this.collection(collectionName, target).updateOne(
+    const result = await this.collection(collectionName, target).updateOne(
       { _id: toIdStorage(id), ...expected } as unknown as Filter<Document>,
       updateDoc,
       { session },
     );
     log.debug({ collection: collectionName, db: target, id }, "Document updated");
+    return result.matchedCount > 0;
   }
 
   /**
