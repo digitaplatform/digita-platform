@@ -97,7 +97,8 @@ export class LinkSearchService {
         filters: Object.keys(mongoFilter).length > 0 ? [mongoFilter] : [],
         fields: masksStoredRows ? undefined : fetchFields,
         limit,
-        order_by: `${displayField} asc`,
+        // A hidden title must not rank the rows either.
+        order_by: `${showsTitle ? displayField : "_id"} asc`,
       },
       entity.database,
     );
@@ -149,10 +150,11 @@ export class LinkSearchService {
     return this.permissionChecker.isPickerTitleVisible(user, entityName, displayField) || isFieldAllowed(displayField, allowed);
   }
 
-  /** The search fields a query may match on: those the user may filter on, and the
-   *  display field when the result shows it anyway. */
+  /** The search fields a query may match on: those the user may filter on, the display
+   *  field when the result shows it anyway, and otherwise the id the result shows instead. */
   private searchableFields(searchFields: string[], displayField: string, allowed: Set<string>, showsTitle: boolean): string[] {
-    return searchFields.filter((field) => (field === displayField ? showsTitle : isFieldAllowed(field, allowed)));
+    const fields = searchFields.filter((field) => (field === displayField ? showsTitle : isFieldAllowed(field, allowed)));
+    return showsTitle || fields.includes("_id") ? fields : [...fields, "_id"];
   }
 
   /**
@@ -211,7 +213,8 @@ export class LinkSearchService {
         // expand. The result row count caps at `limit` anyway.
         fields: masksStoredRows ? undefined : ["_id", displayField, targetPath],
         limit, // parents fetched
-        order_by: `${displayField} asc`,
+        // A hidden title must not rank the rows either.
+        order_by: `${showsTitle ? displayField : "_id"} asc`,
       },
       entity.database,
     );

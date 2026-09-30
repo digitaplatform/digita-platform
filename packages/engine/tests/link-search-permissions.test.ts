@@ -66,10 +66,25 @@ const contract: EntityDefinition = {
   permissions: [{ role: "Portal", level: 0, select: 1, read: 1, fields: ["code"] }],
 } as unknown as EntityDefinition;
 
+// The same role on an entity that searches its title only: the id the picker shows is what it matches and sorts on.
+const tender: EntityDefinition = {
+  name: "tender",
+  module: "test",
+  database: "app",
+  naming: { strategy: "user_set" },
+  title_field: "title",
+  fields: [
+    { fieldname: "title", fieldtype: "Data", label: "Title", idx: 1 },
+    { fieldname: "code", fieldtype: "Data", label: "Code", idx: 2 },
+  ],
+  permissions: [{ role: "Portal", level: 0, select: 1, read: 1, fields: ["code"] }],
+} as unknown as EntityDefinition;
+
 const entities: Record<string, EntityDefinition> = {
   customer,
   privatenote: privateNote,
   contract,
+  tender,
 };
 
 const registry = {
@@ -146,6 +161,14 @@ describe("LinkSearchService — RBAC", () => {
     const passedQuery = db.find.mock.calls[0]![1] as { filters: Record<string, unknown>[] };
     expect(JSON.stringify(passedQuery.filters)).not.toContain('"title"');
     expect(JSON.stringify(passedQuery.filters)).toContain('"code"');
+  });
+
+  it("matches and sorts on the id it shows where the title is hidden", async () => {
+    const { svc, db } = makeService([{ _id: "TEN-7", title: "Secret merger" }]);
+    expect(await svc.search("tender", "TEN-7", portalUser)).toEqual([{ _id: "TEN-7", display: "TEN-7" }]);
+    const passedQuery = db.find.mock.calls[0]![1] as { filters: Record<string, unknown>[]; order_by: string };
+    expect(passedQuery.filters).toEqual([{ $or: [{ _id: { $regex: "TEN-7", $options: "i" } }] }]);
+    expect(passedQuery.order_by).toBe("_id asc");
   });
 
   it("shows and matches the title where the row names it", async () => {
