@@ -172,9 +172,12 @@ function stageOne(section, id, version) {
   // identity (accent + fonts + lockup family + colour world + graphics +
   // monogram + wordmark) into the inventory record; the host applies it via
   // applySignature(). No entry / url / integrity — nothing is fetched beyond
-  // these inlined fields.
+  // these inlined fields. The manifest's `name` becomes the record's `title`:
+  // it is the name the same signature shows when a host imports its package,
+  // and without it the signature menu lists the id.
   if (manifest.type === 'signature') {
     const identity = {};
+    if (typeof manifest.name === 'string' && manifest.name.length > 0) identity.title = manifest.name;
     for (const key of ['accent', 'fonts', 'family', 'logoUrl', 'monogram', 'wordmark', 'colors', 'graphics']) {
       if (manifest[key] !== undefined) identity[key] = manifest[key];
     }

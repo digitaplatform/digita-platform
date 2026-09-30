@@ -37,6 +37,9 @@ export interface PluginInventoryEntry {
   entry?: string;
   integrity?: string;
   url?: string;
+  /** signature only: the name its package carries. It names the signature in the
+   *  app unless the app's composition gives a `title` of its own. */
+  title?: string;
   /** signature only: identity config inlined in the inventory (a signature is
    *  pure config — no artifact beyond these fields). A thin signature carries
    *  accent + fonts (+ monogram); a FULL signature also carries the brand colour
@@ -119,7 +122,7 @@ export function joinCompositionWithInventory(
       }
       sources.push({
         id: entry.id,
-        title: entry.title,
+        title: entry.title ?? staged.title,
         type: staged.type,
         url: staged.url,
         // signature only: identity config rides the inventory entry itself —

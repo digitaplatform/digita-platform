@@ -35,18 +35,28 @@ function stageSignature(manifest: { id: string } & Record<string, unknown>): Plu
   return inventory.plugins[0]!;
 }
 
-// What gen-signature of digita-plugins-free writes into a signature package's dist/digita-plugin.json.
+// What gen-signature of digita-plugins-free writes into a signature package's dist/digita-plugin.json:
+// `name` is the Signature's own name, `displayName` the store's.
 const aurora = {
   id: 'aurora',
   type: 'signature',
   tier: 'free',
   sdk: '^0.1.0',
-  displayName: 'Aurora',
+  displayName: 'Aurora for the store',
   name: 'Aurora',
   accent: '#123456',
 };
 
 describe('the staging tool', () => {
+  it("stages a signature manifest's name as the record's title", () => {
+    expect(stageSignature(aurora)).toMatchObject({ id: 'aurora', type: 'signature', title: 'Aurora' });
+  });
+
+  it('stages no title for a signature manifest without a name, so the menu keeps the id', () => {
+    // JSON leaves an undefined key out, so the manifest on disk carries no name.
+    expect(stageSignature({ ...aurora, name: undefined })).not.toHaveProperty('title');
+  });
+
   it("stages a signature manifest's family", () => {
     expect(stageSignature({ ...aurora, family: 'aurora' })).toMatchObject({
       id: 'aurora',
