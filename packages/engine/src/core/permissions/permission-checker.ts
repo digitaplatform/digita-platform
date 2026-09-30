@@ -442,12 +442,12 @@ export class PermissionChecker {
    *  search and sort `entityName` on: the entity's declared fields + Table child
    *  fields for a reader of every level, otherwise getFilterableFields; + the
    *  identity fields, and `owner` and `modified_by` where every row the list answers
-   *  shows them, as a user without read rows sees them too (P-SEC/R7). */
+   *  shows them: always where no read row names `fields` (P-SEC/R7). */
   getFilterAllowlist(user: UserContext, entityName: string): Set<string> {
     const entity = this.registry.get(entityName);
     const filterable = this.getFilterableFields(user, entityName);
     const reads = entity.permissions.filter((perm) => !!perm.read && user.roles.includes(perm.role));
-    const showsOperatorFields = reads.length === 0 || opensOnEveryListedRow(reads, (row) => !row.fields);
+    const showsOperatorFields = !reads.some((row) => row.fields) || opensOnEveryListedRow(reads, (row) => !row.fields);
     const operatorFields = filterable === null || showsOperatorFields ? OPERATOR_FIELDS : [];
     return new Set<string>([
       ...(filterable ?? [

@@ -113,6 +113,22 @@ describe("PermissionChecker — fields on a permission row", () => {
     expect(checker.isPickerTitleVisible(clerk, "Item", "title")).toBe(false);
   });
 
+  it("keeps owner filterable where no row names fields, for a role that reads only its own rows above level 0", () => {
+    const checker = checkerFor([{ role: "Clerk", level: 0, select: 1 }, { role: "Clerk", level: 1, read: 1, if_owner: true }]);
+    expect(checker.getReadableFields(clerk, "Item", { _id: "I-1", owner: "other@test" })!.has("owner")).toBe(true);
+    expect(checker.getReadableFields(clerk, "Item", { _id: "I-2", owner: "c@test" })!.has("owner")).toBe(true);
+    expect(checker.getFilterAllowlist(clerk, "Item").has("owner")).toBe(true);
+  });
+
+  it("filters every level-0 field and owner through two gated level-0 rows without fields", () => {
+    const checker = checkerFor([
+      { role: "Clerk", level: 0, select: 1, read: 1, if_owner: true },
+      { role: "Clerk", level: 0, select: 1, read: 1, condition: "eval:doc.title=='x'" },
+    ]);
+    const allowed = checker.getFilterAllowlist(clerk, "Item");
+    expect([allowed.has("title"), allowed.has("owner"), allowed.has("margin")]).toEqual([true, true, false]);
+  });
+
   it("lets a row that holds on every row open its fields to a list, and no gated row add to them", () => {
     const checker = checkerFor([
       { role: "Clerk", level: 0, select: 1, read: 1, fields: ["title"] },
