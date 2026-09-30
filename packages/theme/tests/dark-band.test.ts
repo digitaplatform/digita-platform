@@ -28,6 +28,37 @@ function styleRules(css: string): { selectors: string[]; style: CSSStyleDeclarat
 
 const DARK = /\.dark(?![\w-])/;
 
+/** A selector's specificity as [ids, classes, types], after Selectors Level 4; `:where()` weighs nothing. */
+function specificity(selector: string): number[] {
+  const total = [0, 0, 0];
+  let i = 0;
+  while (i < selector.length) {
+    const rest = selector.slice(i);
+    const fn = /^:(where|is|not|has)\(/.exec(rest);
+    if (fn) {
+      let depth = 1;
+      let end = fn[0].length;
+      for (; depth; end++) depth += rest[end] === '(' ? 1 : rest[end] === ')' ? -1 : 0;
+      if (fn[1] !== 'where') {
+        const args = rest.slice(fn[0].length, end - 1).split(/,(?![^(]*\))/).map(specificity);
+        const heaviest = args.reduce((a, b) => ((a[0]! - b[0]! || a[1]! - b[1]! || a[2]! - b[2]!) >= 0 ? a : b));
+        heaviest.forEach((n, k) => (total[k]! += n));
+      }
+      i += end;
+      continue;
+    }
+    const token = /^(?:#[\w-]+|\.[\w-]+|\[[^\]]*\]|::?[\w-]+(?:\([^)]*\))?|[a-zA-Z][\w-]*|[\s\S])/.exec(rest)![0];
+    if (token[0] === '#') total[0]!++;
+    else if (token[0] === '.' || token[0] === '[' || (token[0] === ':' && token[1] !== ':')) total[1]!++;
+    else if (token.startsWith('::') || /^[a-zA-Z]/.test(token)) total[2]!++;
+    i += token.length;
+  }
+  return total;
+}
+
+/** The band twin the step gives one `.dark` selector. */
+const twinOf = (selector: string) => addDarkBandSelectors(`${selector} {}`).split(',\n')[1]!.replace(/ \{\}$/, '');
+
 describe('addDarkBandSelectors', () => {
   it('PLANTED DEFECT: gives a token block and a descendant rule their band twin', () => {
     const css = ':root[data-design="x"].dark {\n  --a: 1;\n}\n.dark [data-ui="card"] { color: red; }\n';
@@ -70,10 +101,20 @@ describe('theme.css flips inside a dark band', () => {
   });
 
   it('carries the band twin of every .dark selector in the same rule', () => {
-    const missing = darkSelectors
-      .filter(({ s, r }) => !r.selectors.includes(addDarkBandSelectors(`${s} {}`).split(',\n')[1]!.replace(/ \{\}$/, '')))
-      .map(({ s }) => s);
+    const missing = darkSelectors.filter(({ s, r }) => !r.selectors.includes(twinOf(s))).map(({ s }) => s);
     expect(missing).toEqual([]);
+  });
+
+  it('PLANTED DEFECT: the specificity count tells a band selector heavier than .dark from .dark', () => {
+    expect(specificity('[data-block][data-variant="dark"] a')).not.toEqual(specificity('.dark a'));
+    expect(specificity(`${BAND} a`)).toEqual(specificity('.dark a'));
+  });
+
+  it("gives every twin its original's specificity, so a twin wins and loses the ties its original does", () => {
+    const unequal = darkSelectors
+      .filter(({ s }) => specificity(twinOf(s)).join() !== specificity(s).join())
+      .map(({ s }) => `${s} ${specificity(s)} / ${twinOf(s)} ${specificity(twinOf(s))}`);
+    expect(unequal).toEqual([]);
   });
 
   it('gives the band color-scheme dark, so light-dark() colors take their dark side there', () => {
@@ -89,7 +130,7 @@ describe('theme.css flips inside a dark band', () => {
 
   it('never matches outside a band: the band is the subject or an ancestor of every twin', () => {
     const twins = rules.flatMap((r) => r.selectors.filter((s) => s.includes(BAND)));
-    const escaped = BAND.replace(/[[\]]/g, '\\$&');
+    const escaped = BAND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const shape = new RegExp(`^(?::root\\S*\\s)?${escaped}(?:\\s|$)`);
     expect(twins.filter((s) => !shape.test(s))).toEqual([]);
     const { window } = new JSDOM(

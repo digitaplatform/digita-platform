@@ -97,7 +97,7 @@ describe("the locale layout", () => {
       .replace(/&quot;/g, '"')
       .replace(/&#x27;/g, "'")
       .replace(/&amp;/g, "&");
-    const band = /<style>:root \[data-block\]\[data-variant="dark"\] \{ ([^}]*) \}<\/style>/.exec(html);
+    const band = /<style>:root \[data-variant="dark"\]:where\(\[data-block\]\) \{ ([^}]*) \}<\/style>/.exec(html);
     // A layout without the band rule leaves the band to the design's dark tokens; this goes red then.
     expect(band).not.toBeNull();
     const inline = style.split(";").filter((d) => d.startsWith("--"));
