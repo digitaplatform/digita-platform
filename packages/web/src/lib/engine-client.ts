@@ -20,7 +20,7 @@ type Tuple = [string, string, unknown];
 
 async function query<T>(
   doctype: string,
-  params: { filters?: Tuple[]; fields?: string[]; page_size?: number },
+  params: { filters?: Tuple[]; fields?: string[]; page_size?: number; page?: number; order_by?: string },
   tags: string[],
 ): Promise<T[]> {
   const { engineUrl, revalidateSeconds } = getConfig();
@@ -28,6 +28,8 @@ async function query<T>(
   if (params.filters) qs.set("filters", JSON.stringify(params.filters));
   if (params.fields) qs.set("fields", JSON.stringify(params.fields));
   if (params.page_size) qs.set("page_size", String(params.page_size));
+  if (params.page) qs.set("page", String(params.page));
+  if (params.order_by) qs.set("order_by", params.order_by);
   const url = `${engineUrl}/api/v1/public/resource/${doctype}?${qs.toString()}`;
   try {
     const res = await fetch(url, { next: { revalidate: revalidateSeconds, tags } });
@@ -72,21 +74,30 @@ export async function listPages(locale?: string): Promise<WebPage[]> {
     ["status", "=", "published"],
   ];
   if (locale) filters.push(["locale", "=", locale]);
-  return query<WebPage>(
-    "WebPage",
-    {
-      filters,
-      fields: ["_id", "slug", "locale", "nav_label", "title", "translation_group", "modified"],
-      page_size: 200,
-    },
-    [`web:pages:${site}`],
-  );
+  // The engine clamps page_size to 200 and fills every page but the last, so a short page is the end.
+  // A unique order keeps offset paging from skipping or repeating a row that shares its sort value.
+  const pageSize = 200;
+  const pages: WebPage[] = [];
+  for (let page = 1; ; page++) {
+    const rows = await query<WebPage>(
+      "WebPage",
+      {
+        filters,
+        fields: ["_id", "slug", "locale", "nav_label", "title", "translation_group", "modified"],
+        page_size: pageSize,
+        page,
+        order_by: "_id asc",
+      },
+      [`web:pages:${site}`],
+    );
+    pages.push(...rows);
+    if (rows.length < pageSize) return pages;
+  }
 }
 
 /** The published pages per locale, as slugs, for the language menu (offeredLocales says why).
- *  ponytail: listPages reads one page of at most 200 rows; a site beyond that needs a filtered
- *  query per locale or pagination here. This entry and a page's own entry expire on their own
- *  TTLs, so for up to REVALIDATE_SECONDS after a publish the two can disagree. */
+ *  This entry and a page's own entry expire on their own TTLs, so for up to REVALIDATE_SECONDS
+ *  after a publish the two can disagree. */
 export async function listPublishedSlugs(): Promise<Record<string, string[]>> {
   const slugs: Record<string, string[]> = {};
   for (const page of await listPages()) (slugs[page.locale] ??= []).push(page.slug);
