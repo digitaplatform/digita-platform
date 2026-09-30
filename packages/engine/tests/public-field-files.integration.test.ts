@@ -54,7 +54,9 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
 
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import type { FastifyInstance } from "fastify";
-import { rm } from "fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
 import { DIGITA } from "@digitaplatform/shared";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { env } from "../src/core/config/env.js";
@@ -62,17 +64,19 @@ import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import type { EntityRegistry } from "../src/core/entity/entity-registry.js";
-import { SchemaMigrator } from "../src/core/database/schema-migrator.js";
+import { publishFilesOfPublicFields } from "../src/core/storage/public-field-files.js";
 
-// A field that becomes `public: true` after files were uploaded to it: the boot's schema step
-// moves those files, and the URLs the rows hold, forward to public. A file of a private field,
-// a file no row holds, a file of a private field that shares its name with a public one, and a
-// file that another row than its own copies into a public field stay private.
+// A field that becomes `public: true` after files were uploaded to it: a boot step moves those
+// files, and the URLs their rows hold, forward to public. A file of a private field, a file no row
+// holds, a file of a private field that shares its name with a public one, a file that another row
+// than its own copies into a public field, and a colleague's upload that names no row stay private.
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
 let db: MongoDBService;
 let registry: EntityRegistry;
+let ta: Awaited<ReturnType<typeof buildTestAuth>>;
 let adminToken: string;
+let appDir: string;
 
 const shop = (isPublic: boolean): EntityDefinition =>
   ({
@@ -106,7 +110,8 @@ const shop = (isPublic: boolean): EntityDefinition =>
 beforeAll(async () => {
   replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   (env as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
-  const ta = await buildTestAuth();
+  ta = await buildTestAuth();
+  appDir = await mkdtemp(join(tmpdir(), "digita-public-field-files-app-"));
   const booted = await createApp({ authn: ta.authn });
   app = booted.app;
   db = booted.db;
@@ -122,9 +127,10 @@ afterAll(async () => {
   await db.disconnect();
   await replSet.stop();
   await rm(env.UPLOAD_LOCAL_PATH, { recursive: true, force: true });
+  await rm(appDir, { recursive: true, force: true });
 }, 30000);
 
-async function upload(field: string, name: string, bytes: string, row?: string): Promise<{ _id: string; file_url: string }> {
+async function upload(field: string, name: string, bytes: string, row?: string, token = adminToken): Promise<{ _id: string; file_url: string }> {
   const boundary = "----digitaPublicFieldFiles";
   const part = (header: string, body: string | Buffer) => [Buffer.from(`--${boundary}\r\n${header}\r\n\r\n`), Buffer.from(body), Buffer.from("\r\n")];
   const payload = Buffer.concat([
@@ -137,7 +143,7 @@ async function upload(field: string, name: string, bytes: string, row?: string):
   const res = await app.inject({
     method: "POST",
     url: "/api/v1/upload",
-    headers: { authorization: `Bearer ${adminToken}`, "content-type": `multipart/form-data; boundary=${boundary}` },
+    headers: { authorization: `Bearer ${token}`, "content-type": `multipart/form-data; boundary=${boundary}` },
     payload,
   });
   expect(res.statusCode, res.body).toBe(201);
@@ -145,10 +151,27 @@ async function upload(field: string, name: string, bytes: string, row?: string):
 }
 
 const publicFile = (id: string) => app.inject({ method: "GET", url: `/api/v1/public/file/${id}` });
+
+/** A second engine on the same database, whose app directory declares the fields public: the start
+ *  that runs every boot step in the order the engine runs them. */
+async function bootWithPublicFields(): Promise<void> {
+  await mkdir(join(appDir, "entities"), { recursive: true });
+  await writeFile(join(appDir, "entities", "TestShopItem.entity.json"), JSON.stringify(shop(true)));
+  const appDirs = env.APP_DIRS;
+  (env as { APP_DIRS: string[] }).APP_DIRS = [appDir];
+  const next = await createApp({ authn: ta.authn });
+  try {
+    await next.startup();
+  } finally {
+    await next.app.close();
+    await next.db.disconnect();
+    (env as { APP_DIRS: string[] }).APP_DIRS = appDirs;
+  }
+}
 const fileRow = (id: string) => db.findOne(DIGITA.COLLECTIONS.FILE, id, DIGITA.DATABASES.CORE) as Promise<Record<string, unknown>>;
 
 describe("Files of a field that became public", () => {
-  it("are public after the schema step, with the public URL in the File, the row and the Table cell", async () => {
+  it("are public after the boot step, with the public URL in the File, the row and the Table cell", async () => {
     const main = await upload("image", "main.pdf", "main picture", "ITEM-1");
     const gallery = await upload("picture", "gallery.pdf", "gallery picture", "ITEM-1");
     const scan = await upload("invoice_scan", "scan.pdf", "private scan", "ITEM-1");
@@ -180,7 +203,7 @@ describe("Files of a field that became public", () => {
     }, DIGITA.DATABASES.CORE);
 
     registry.register(shop(true));
-    await new SchemaMigrator(db).migrate(registry.get("TestShopItem"));
+    await publishFilesOfPublicFields(db, registry.getAll());
 
     for (const file of [main, gallery, halfway]) {
       const res = await publicFile(file._id);
@@ -217,8 +240,64 @@ describe("Files of a field that became public", () => {
   it("changes nothing on a second run", async () => {
     const before = await db.findManyByFilter(DIGITA.COLLECTIONS.FILE, { attached_to_entity: "TestShopItem" }, DIGITA.DATABASES.CORE);
     const itemsBefore = await db.findManyByFilter("TestShopItem", {}, DIGITA.DATABASES.CORE);
-    await new SchemaMigrator(db).migrate(registry.get("TestShopItem"));
+    await publishFilesOfPublicFields(db, registry.getAll());
     expect(await db.findManyByFilter(DIGITA.COLLECTIONS.FILE, { attached_to_entity: "TestShopItem" }, DIGITA.DATABASES.CORE)).toEqual(before);
     expect(await db.findManyByFilter("TestShopItem", {}, DIGITA.DATABASES.CORE)).toEqual(itemsBefore);
+  });
+});
+
+describe("The first start after the upgrade that makes the fields public", () => {
+  let colleagueFile: { _id: string; file_url: string };
+  let merchantFile: { _id: string; file_url: string };
+
+  beforeAll(async () => {
+    registry.register(shop(false));
+    const colleagueToken = await ta.sign({ sub: "colleague@digita.local", email: "colleague@digita.local", roles: ["System User"] });
+    const merchantToken = await ta.sign({ sub: "merchant@digita.local", email: "merchant@digita.local", roles: ["System User"] });
+    // A colleague's private upload that names no row; an attacker wrote its URL into a public cell of
+    // their own row, a row written before a save refused a file its saver may not read.
+    colleagueFile = await upload("picture", "colleague.pdf", "colleague's private picture", undefined, colleagueToken);
+    await db.insertOne("TestShopItem", {
+      _id: "ITEM-3", doctype: "TestShopItem", docstatus: 0, owner: "attacker@digita.local",
+      images: [{ _row_id: "r7", idx: 1, picture: colleagueFile.file_url, caption: "planted" }],
+    }, DIGITA.DATABASES.CORE);
+    // The planted innocent case: a merchant's own upload in their own row, saved before a save named
+    // its document.
+    merchantFile = await upload("image", "merchant.pdf", "merchant's picture", undefined, merchantToken);
+    await db.insertOne("TestShopItem", {
+      _id: "ITEM-4", doctype: "TestShopItem", docstatus: 0, owner: "merchant@digita.local", image: merchantFile.file_url,
+    }, DIGITA.DATABASES.CORE);
+
+    // An Administrator, who may write every File, saves the attacker's row as the app does.
+    registry.register(shop(true));
+    const saved = await app.inject({
+      method: "PUT",
+      url: "/api/v1/resource/TestShopItem/ITEM-3",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { images: [{ _row_id: "r7", idx: 1, picture: colleagueFile.file_url, caption: "approved" }] },
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+
+    // The database the upgrade meets has not yet attached its legacy loose uploads.
+    await db.deleteOne("_migrations", "attach-legacy-loose-files", DIGITA.DATABASES.CORE);
+    await bootWithPublicFields();
+  }, 60000);
+
+  it("keeps private a colleague's upload that an Administrator's save of another user's row names", async () => {
+    expect((await publicFile(colleagueFile._id)).statusCode).toBe(404);
+    const stored = await fileRow(colleagueFile._id);
+    expect(stored["is_private"]).toBe(true);
+    expect(stored["attached_to_name"]).toBeUndefined();
+  });
+
+  it("publishes a legacy upload its uploader's row holds in a public field, at the start that attaches it", async () => {
+    const res = await publicFile(merchantFile._id);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe("merchant's picture");
+    const stored = await fileRow(merchantFile._id);
+    expect(stored["attached_to_name"]).toBe("ITEM-4");
+    expect(stored["is_private"]).toBe(false);
+    const item = (await db.findOne("TestShopItem", "ITEM-4", DIGITA.DATABASES.CORE)) as Record<string, unknown>;
+    expect(item["image"]).toBe(`/api/v1/public/file/${merchantFile._id}`);
   });
 });
