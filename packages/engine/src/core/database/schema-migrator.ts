@@ -5,6 +5,7 @@ import { IndexManager } from "./index-manager.js";
 import { env } from "../config/env.js";
 import { createLogger } from "../logging/logger.js";
 import { encryptPassword, passwordFieldPaths } from "../entity/password-cipher.js";
+import { FILE_FIELD_TYPES } from "../storage/file-cleanup.js";
 
 const log = createLogger("schema-migrator");
 
@@ -94,8 +95,65 @@ export class SchemaMigrator {
     await this.initializeSequence(entity);
 
     await this.encryptStoredPasswords(entity);
+    await this.publishFilesOfPublicFields(entity);
 
     return result;
+  }
+
+  /**
+   * Move the files of an attach field declared `public: true` forward to public. A file uploaded
+   * while the field was private is a private `File` with the private URL, and the entity's rows
+   * hold that URL; afterwards the `File` is public with the public URL, and so is every row and
+   * Table cell of the field. The rows move first, so a boot stopped in between finds the `File`
+   * still private and completes it; a public `File` is never read again, so the step runs on
+   * every boot and changes nothing once every file has moved.
+   */
+  private async publishFilesOfPublicFields(entity: EntityDefinition): Promise<void> {
+    const header = entity.fields.filter((f) => f.public === true && FILE_FIELD_TYPES.has(f.fieldtype));
+    const cells = entity.fields.flatMap((table) =>
+      table.fieldtype === "Table"
+        ? (table.child_fields ?? [])
+            .filter((f) => f.public === true && FILE_FIELD_TYPES.has(f.fieldtype))
+            .map((f) => [table.fieldname, f.fieldname] as const)
+        : [],
+    );
+    const names = [...new Set([...header.map((f) => f.fieldname), ...cells.map(([, f]) => f)])];
+    if (names.length === 0) return;
+
+    const files = await this.db.findManyByFilter(
+      DIGITA.COLLECTIONS.FILE,
+      { attached_to_entity: entity.name, attached_to_field: { $in: names }, is_private: { $ne: false } },
+      DIGITA.DATABASES.CORE,
+    );
+    const rows = this.db.collection(entity.name, entity.database);
+    for (const file of files) {
+      const id = file["_id"] as string;
+      const publicUrl = `${env.API_PREFIX}/public/file/${id}`;
+      const privateUrl = file["file_url"];
+      if (typeof privateUrl === "string" && privateUrl !== publicUrl) {
+        for (const f of header) {
+          await rows.updateMany({ [f.fieldname]: privateUrl }, { $set: { [f.fieldname]: publicUrl } });
+        }
+        for (const [table, f] of cells) {
+          await rows.updateMany(
+            { [`${table}.${f}`]: privateUrl },
+            { $set: { [`${table}.$[cell].${f}`]: publicUrl } },
+            { arrayFilters: [{ [`cell.${f}`]: privateUrl }] },
+          );
+        }
+      }
+      await this.db.updateOne(
+        DIGITA.COLLECTIONS.FILE,
+        id,
+        {
+          is_private: false,
+          file_url: publicUrl,
+          ...(typeof file["thumbnail_key"] === "string" ? { thumbnail_url: `${publicUrl}?thumb=1` } : {}),
+        },
+        DIGITA.DATABASES.CORE,
+      );
+    }
+    if (files.length) log.info({ entity: entity.name, files: files.length }, "Files of public fields made public");
   }
 
   /**
