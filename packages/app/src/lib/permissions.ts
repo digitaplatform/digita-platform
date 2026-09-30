@@ -1,4 +1,4 @@
-import type { EntityDefinition, EntityPermission } from '@digitaplatform/shared';
+import type { EntityDefinition, EntityPermission, FieldDefinition } from '@digitaplatform/shared';
 import { SYSTEM_ROLES, canGrantActionTo } from '@digitaplatform/shared';
 import type { SessionUser } from '@/types';
 import { evaluateExpr } from '@/lib/expression';
@@ -128,4 +128,40 @@ export function writableLevelPredicate(
     if (roles.has(p.role) && p.write === 1) levels.add(p.level ?? 0);
   }
   return (level: number) => levels.has(level);
+}
+
+/**
+ * A predicate over a field (its name and `perm_level`): true when the user may read it, as the
+ * engine decides which fields a read answers (PermissionChecker.getReadableFields). A read row of
+ * one of the user's roles opens the fields of its level, or only those its `fields` names, where
+ * its gates admit the record; for a Table child, the row must open the Table. Where no row
+ * grants read on the record, a share admitted it, and level 0 shows. Without a record, as for a
+ * list, a row's gates are not judged: they differ from row to row.
+ */
+export function readableFieldPredicate(
+  entity: RecordRules,
+  user: SessionUser | null | undefined,
+  record?: Record<string, unknown>,
+): (fieldname: string, level: number) => boolean {
+  if (!user) return () => false;
+  if (isAdministrator(user)) return () => true;
+  // The engine sends a caller outside the internal audience only the fields it may read, and
+  // no rows to judge them by.
+  if ((entity.permissions ?? []).length === 0) return () => true;
+  const rows: Pick<EntityPermission, 'level' | 'fields'>[] = (entity.permissions ?? []).filter(
+    (p) => p.read === 1 && user.roles.includes(p.role) && (!record || rowAdmits(p, user, record)),
+  );
+  if (record && !hasRecordPermission(entity, user, 'read', record)) rows.push({ level: 0 });
+  return (fieldname, level) => rows.some((row) => row.level === level && (!row.fields || row.fields.includes(fieldname)));
+}
+
+/** The child fields of a Table the user may read. Like the engine, a Table whose children all
+ *  sit at level 0 shows every child to whoever may read the Table. */
+export function readableChildFields(
+  table: FieldDefinition,
+  canReadField: (fieldname: string, level: number) => boolean,
+): FieldDefinition[] {
+  const children = table.child_fields ?? [];
+  if (!children.some((c) => (c.perm_level ?? 0) > 0)) return children;
+  return children.filter((c) => canReadField(table.fieldname, c.perm_level ?? 0));
 }

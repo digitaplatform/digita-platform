@@ -33,6 +33,8 @@ export interface FieldEvalContext {
   isNew: boolean;
   /** perm-level write predicate (Administrator → always true). */
   canWriteLevel: (level: number) => boolean;
+  /** Read predicate over a field's name and perm-level, for a stored record. */
+  canReadField?: (fieldname: string, level: number) => boolean;
   /** Whole-form lock (e.g. submitted + no edit perm). */
   formDisabled?: boolean;
 }
@@ -64,6 +66,14 @@ export function evaluateField(field: FieldDefinition, ctx: FieldEvalContext): Fi
     } else {
       required = r.value;
     }
+  }
+
+  // The engine sends a stored record without the fields the user may not read, so an empty
+  // control would read as "no value". The field is left out, and not required: the engine
+  // keeps its stored value on save.
+  if (ctx.canReadField && !ctx.canReadField(field.fieldname, field.perm_level ?? 0)) {
+    visible = false;
+    required = false;
   }
 
   const isComputed = ctx.computedSet.has(field.fieldname);

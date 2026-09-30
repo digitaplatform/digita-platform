@@ -23,7 +23,13 @@ import {
   deriveAllowOnSubmitSet,
   type FieldStateMap,
 } from '@/lib/evaluate-field';
-import { writableLevelPredicate, hasEntityPermission, hasRecordPermission } from '@/lib/permissions';
+import {
+  writableLevelPredicate,
+  readableFieldPredicate,
+  readableChildFields,
+  hasEntityPermission,
+  hasRecordPermission,
+} from '@/lib/permissions';
 import { toUiMessages, unwrap, type UiMessage } from '@/lib/api-result';
 import { ApiClientError } from '@/lib/errors';
 import { useSessionStore } from '@/stores/session';
@@ -256,6 +262,21 @@ function RecordForm({
   // The engine refuses the whole save of a stored record without `write` on it, which a
   // workflow state may also strip, so the form locks and offers no Save.
   const writeRefused = !isNew && !hasRecordPermission(meta, user, 'write', initial);
+  // Only a stored record arrives without the fields the user may not read; the form leaves
+  // them out, and each grid its unreadable child columns.
+  const canReadField = useMemo(
+    () => (isNew ? undefined : readableFieldPredicate(meta, user, initial)),
+    [isNew, meta, user, initial],
+  );
+  const formFields = useMemo(
+    () =>
+      canReadField
+        ? meta.fields.map((f) =>
+            f.fieldtype === 'Table' && f.child_fields ? { ...f, child_fields: readableChildFields(f, canReadField) } : f,
+          )
+        : meta.fields,
+    [meta, canReadField],
+  );
   const hasTable = useMemo(() => meta.fields.some((f) => f.fieldtype === 'Table'), [meta]);
 
   // Live required resolver via a ref → the zod schema instance stays stable.
@@ -301,11 +322,12 @@ function RecordForm({
       allowOnSubmitSet,
       isNew,
       canWriteLevel,
+      canReadField,
       formDisabled: writeRefused,
     });
     stateRef.current = map;
     return map;
-  }, [watched, meta, computedSet, frozenSet, allowOnSubmitSet, docstatus, isNew, canWriteLevel, writeRefused, user]);
+  }, [watched, meta, computedSet, frozenSet, allowOnSubmitSet, docstatus, isNew, canWriteLevel, canReadField, writeRefused, user]);
 
   // Overlay the "updating…" flag on computed fields while a preview is in flight.
   const renderState = useMemo(() => {
@@ -648,7 +670,7 @@ function RecordForm({
       >
         <FormRenderer
           entity={entity}
-          fields={meta.fields}
+          fields={formFields}
           form={meta.form}
           doc={watched}
           fieldState={renderState}
