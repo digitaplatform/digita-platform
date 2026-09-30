@@ -450,7 +450,7 @@ export async function createApp(
     });
     registerActivityLogRoutes(scope, env.API_PREFIX, activityLogService, documentService);
     registerAuditLogRoutes(scope, env.API_PREFIX, versionService, registry);
-    registerImportExportRoutes(scope, env.API_PREFIX, importService, exportService, permissionChecker, registry);
+    registerImportExportRoutes(scope, env.API_PREFIX, importService, exportService, permissionChecker, registry, revalidateNotifier);
     registerUploadRoutes(scope, env.API_PREFIX, db, storage, registry, permissionChecker);
     registerSidebarRoutes(
       scope,

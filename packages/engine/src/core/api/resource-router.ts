@@ -239,7 +239,9 @@ export function registerResourceRoutes(
       const ctx = new ResponseContext();
 
       const doc = await documentService.copyDoc(doctype, name, getUser(request), ctx);
-      return reply.code(201).send(successResponse(documentService.toReadableJSON(doctype, doc, getUser(request)), ctx.getMessages()));
+      const json = documentService.toReadableJSON(doctype, doc, getUser(request));
+      emitChange("insert", doctype, (json as Record<string, unknown>)["_id"]);
+      return reply.code(201).send(successResponse(json, ctx.getMessages()));
     },
   );
 

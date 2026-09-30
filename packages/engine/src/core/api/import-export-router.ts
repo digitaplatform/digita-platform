@@ -8,6 +8,7 @@ import { decodeCsvRows } from "../import-export/csv-codec.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { UserContext } from "../permissions/types.js";
+import type { RevalidateNotifier } from "./revalidate-notifier.js";
 import { isStoredFieldType } from "../entity/field-types.js";
 import { BadRequestError } from "../view/view-engine.js";
 import { env } from "../config/env.js";
@@ -25,6 +26,7 @@ export function registerImportExportRoutes(
   exportService: ExportService,
   permissionChecker: PermissionChecker,
   registry: EntityRegistry,
+  revalidateNotifier: RevalidateNotifier,
 ): void {
   // Import documents from a JSON `rows` body OR a `csv` string (parsed +
   // type-decoded server-side, D2). Per-row permission is enforced by
@@ -84,6 +86,7 @@ export function registerImportExportRoutes(
     await permissionChecker.check(user, doctype, "import");
 
     const report = await importService.importData(doctype, rows, user, mode, ctx);
+    if (!report.dry_run && report.inserted + report.updated > 0) revalidateNotifier.notify(doctype);
     return reply.send(successResponse(report, ctx.getMessages()));
   });
 

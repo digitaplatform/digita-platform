@@ -66,7 +66,7 @@ import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 const APP_BASENAME = "digita-revalidate-fixture";
 const DB = `${APP_BASENAME}_content`;
 const RES = "/api/v1/resource";
-const ADMIN = { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 };
+const ADMIN = { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, import: 1 };
 const GUEST_READ = { role: "Guest", level: 0, select: 1, read: 1 };
 
 async function writeJson(path: string, data: unknown): Promise<void> {
@@ -85,6 +85,12 @@ async function writeFixture(): Promise<string> {
   });
   await writeJson(join(entities, "WebPage.entity.json"), {
     name: "WebPage", module: "web", database: DB, naming: { strategy: "user_set" },
+    fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
+    permissions: [ADMIN, GUEST_READ],
+  });
+  // A copy needs a name the engine makes, which a user_set entity lacks.
+  await writeJson(join(entities, "WebBlock.entity.json"), {
+    name: "WebBlock", module: "web", database: DB, naming: { strategy: "system" },
     fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
     permissions: [ADMIN, GUEST_READ],
   });
@@ -159,7 +165,7 @@ afterAll(async () => {
 describe("the renderer's cache purge", () => {
   it("is posted once at boot, after the site seed, with the tag of every entity Guest may read", () => {
     expect(purges[0]).toMatchObject({ secret: "shared-secret" });
-    expect([...purges[0]!.tags].sort()).toEqual(["entity:WebPage", "entity:WebSite"]);
+    expect([...purges[0]!.tags].sort()).toEqual(["entity:WebBlock", "entity:WebPage", "entity:WebSite"]);
   });
 
   it("PLANTED DEFECT: is posted with the entity's tag after a create, an update and a delete commit", async () => {
@@ -175,6 +181,39 @@ describe("the renderer's cache purge", () => {
     const deleted = await app.inject({ method: "DELETE", url: `${RES}/WebPage/p1`, headers: bearer() });
     expect(deleted.statusCode).toBe(200);
     expect(await purgesAfter(++seen)).toEqual([{ secret: "shared-secret", tags: ["entity:WebPage"], storedTitle: undefined }]);
+  });
+
+  it("is posted with the entity's tag after a copy and an import commit", async () => {
+    let seen = purges.length;
+    const created = await app.inject({ method: "POST", url: `${RES}/WebBlock`, headers: bearer(), payload: { title: "Source" } });
+    expect(created.statusCode).toBe(201);
+    await purgesAfter(++seen);
+    const source = (JSON.parse(created.body) as { data: { _id: string } }).data._id;
+
+    const copied = await app.inject({ method: "POST", url: `${RES}/WebBlock/${source}/copy`, headers: bearer() });
+    expect(copied.statusCode).toBe(201);
+    expect((await purgesAfter(++seen))[0]!.tags).toEqual(["entity:WebBlock"]);
+
+    const imported = await app.inject({
+      method: "POST", url: "/api/v1/import/WebPage", headers: bearer(),
+      payload: { mode: "insert", rows: [{ _id: "p1", title: "Imported" }] },
+    });
+    expect(imported.statusCode).toBe(200);
+    expect(await purgesAfter(++seen)).toEqual([{ secret: "shared-secret", tags: ["entity:WebPage"], storedTitle: "Imported" }]);
+    await app.inject({ method: "DELETE", url: `${RES}/WebPage/p1`, headers: bearer() });
+    await purgesAfter(++seen);
+  });
+
+  it("PLANTED INNOCENT: is not posted for an import that only validates", async () => {
+    const seen = purges.length;
+    const validated = await app.inject({
+      method: "POST", url: "/api/v1/import/WebPage", headers: bearer(),
+      payload: { mode: "validate", rows: [{ _id: "p9", title: "Checked" }] },
+    });
+    expect(validated.statusCode).toBe(200);
+    // A save of a readable entity afterwards is the first post the renderer sees.
+    await app.inject({ method: "PUT", url: `${RES}/WebSite/site-a`, headers: bearer(), payload: { site_name: "Site A1" } });
+    expect((await purgesAfter(seen + 1))[0]!.tags).toEqual(["entity:WebSite"]);
   });
 
   it("PLANTED INNOCENT: is not posted for a save of an entity Guest may not read", async () => {
@@ -210,7 +249,7 @@ describe("a website engine's start-up", () => {
       const result = await createApp({ authn: (await buildTestAuth()).authn });
       try {
         await expect(result.startup()).rejects.toThrow(
-          /^Missing required environment variable: REVALIDATE_URL \((WebSite|WebPage) grants Guest read\)$/,
+          /^Missing required environment variable: REVALIDATE_URL \((WebSite|WebPage|WebBlock) grants Guest read\)$/,
         );
       } finally {
         await result.app.close();
