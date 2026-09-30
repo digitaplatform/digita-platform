@@ -1,4 +1,4 @@
-import type { EntityDefinition, ActionDefinition, TransitionDefinition, SubmittedPatch } from "@digitaplatform/shared";
+import type { EntityDefinition, ActionDefinition, TransitionDefinition, SubmittedPatch, DeclaredClientError } from "@digitaplatform/shared";
 import { LAYOUT_FIELD_TYPES, DIGITA, DocStatus } from "@digitaplatform/shared";
 import { calculateChanges, deepEqual, type FieldChange } from "./change-tracker.js";
 import type { DocumentServiceDeps } from "./service-deps.js";
@@ -73,6 +73,24 @@ export class ActionHandlerMissingError extends Error {
   ) {
     super(`No handler registered for action "${actionName}" on ${doctype}`);
     this.name = "ActionHandlerMissingError";
+  }
+}
+
+/**
+ * Raised when an action's `show_if` is false for the document and the user: the
+ * record page does not offer it, so the route refuses it too. It declares its
+ * 409 and message key the way a hook's business-rule error does.
+ */
+export class ActionNotAvailableError extends Error implements DeclaredClientError {
+  readonly statusCode = 409;
+  readonly code = "ACTION_NOT_AVAILABLE";
+  readonly messageKey = "action_not_available";
+  readonly params: Record<string, string>;
+
+  constructor(doctype: string, documentName: string, action: ActionDefinition) {
+    super(`Action "${action.action}" is not available on ${doctype} ${documentName}: its show_if is false`);
+    this.name = "ActionNotAvailableError";
+    this.params = { action: action.label };
   }
 }
 
@@ -1978,6 +1996,9 @@ export class DocumentService {
     // cancel or updateSubmitted joins this transaction.
     return this.db.withTransaction(async (session) => {
       const doc2 = await this.loadDocInternal(doctype, name);
+      if (!this.actionRunner.isShown(action, doc2, user)) {
+        throw new ActionNotAvailableError(doctype, name, action);
+      }
       return this.hookRunner.runAction(doctype, actionName, doc2, ctx, session, user, params, extraServices);
     });
   }

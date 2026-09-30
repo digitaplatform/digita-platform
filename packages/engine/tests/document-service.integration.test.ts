@@ -825,6 +825,21 @@ describe("Available actions (ActionRunner)", () => {
     expect(labels).not.toContain("approve");
     expect(labels).toContain("always");
   });
+
+  it("refuses to run an action whose show_if does not match the doc", async () => {
+    const doc = await docService.insert("Actionable", { status: "Done" }, adminUser);
+    await expect(docService.runAction("Actionable", doc._id, "approve", adminUser)).rejects.toMatchObject({
+      name: "ActionNotAvailableError",
+      statusCode: 409,
+      messageKey: "action_not_available",
+      params: { action: "Approve" },
+    });
+  });
+
+  it("runs an action whose show_if matches the doc", async () => {
+    const doc = await docService.insert("Actionable", { status: "Draft" }, adminUser);
+    await expect(docService.runAction("Actionable", doc._id, "approve", adminUser)).resolves.toBeUndefined();
+  });
 });
 
 // ── C1: enumeration paths honor a per-doc read `condition` ──────────────────

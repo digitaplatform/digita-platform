@@ -16,7 +16,13 @@ vi.mock("../src/core/config/env.js", () => ({
 }));
 
 import { globalErrorHandler } from "../src/core/api/middleware/error-handler.js";
-import { NotFoundError, ValidationFailedError, ConcurrentModificationError, DeleteBlockedError } from "../src/core/document/document-service.js";
+import {
+  NotFoundError,
+  ValidationFailedError,
+  ConcurrentModificationError,
+  DeleteBlockedError,
+  ActionNotAvailableError,
+} from "../src/core/document/document-service.js";
 import { PermissionDeniedError } from "../src/core/permissions/permission-checker.js";
 import { DocStatusError } from "../src/core/document/docstatus-engine.js";
 import {
@@ -531,6 +537,17 @@ describe("globalErrorHandler – declared client error (statusCode 4xx)", () => 
 
     expect(reply.statusCode).toBe(429);
     expect(reply.sentData.error.code).toBe("RATE_LIMITED");
+  });
+
+  it("answers an action whose show_if is false with 409 and action_not_available", () => {
+    const error = new ActionNotAvailableError("Loan", "L-1", { action: "placeHold", label: "Place hold" });
+    const reply = mockReply();
+
+    globalErrorHandler(error, mockRequest(), reply);
+
+    expect(reply.statusCode).toBe(409);
+    expect(reply.sentData.error.code).toBe("ACTION_NOT_AVAILABLE");
+    expect(reply.sentData.messages[0]).toMatchObject({ text: "action_not_available", params: { action: "Place hold" } });
   });
 });
 

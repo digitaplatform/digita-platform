@@ -24,14 +24,7 @@ export class ActionRunner {
     const available: ActionDefinition[] = [];
 
     for (const action of entity.actions) {
-      // Check show_if
-      if (action.show_if) {
-        const show = evaluateExpression(action.show_if, {
-          doc: doc._data,
-          user: user as Record<string, unknown>,
-        });
-        if (!show) continue;
-      }
+      if (!this.isShown(action, doc, user)) continue;
 
       // Check permission
       if (action.requires_permission) {
@@ -48,5 +41,14 @@ export class ActionRunner {
     }
 
     return available;
+  }
+
+  /**
+   * Whether the action's `show_if` holds for this document and user. Listing and
+   * running an action both ask here, so an action the record page hides cannot run.
+   */
+  isShown(action: ActionDefinition, doc: BaseDocument, user: UserContext): boolean {
+    if (!action.show_if) return true;
+    return evaluateExpression(action.show_if, { doc: doc._data, user: user as Record<string, unknown> });
   }
 }
