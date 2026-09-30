@@ -994,6 +994,26 @@ describe("Upload API Integration", () => {
       return app.inject({ method: "GET", url: `/api/v1/file/${fileId}/download`, headers: authHeaders(token) });
     }
 
+    /** A book as a row written before a save refused foreign files: the Administrator, who may
+     *  read every file, creates it, and it is handed to the owner as its owner. */
+    async function plantBook(ownerTokenOfRow: string, payload: Record<string, unknown>) {
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/v1/resource/TestBook",
+        headers: authHeaders(authToken),
+        payload,
+      });
+      expect(created.statusCode).toBe(201);
+      const id = created.json().data._id as string;
+      const ownerEmail = ownerTokenOfRow === ownerToken ? "owner@digita.local" : "sales@digita.local";
+      await db.updateOne("TestBook", id, { owner: ownerEmail }, "core");
+      return created;
+    }
+
+    async function fileCount() {
+      return db.count(DIGITA.COLLECTIONS.FILE, [], "core");
+    }
+
     it("lets a reader of a new book open the files uploaded before its first save", async () => {
       const letter = await uploadAsApp(ownerToken, "letter", "%PDF new-book letter");
       const scan = await uploadAsApp(ownerToken, "scan", "%PDF new-book scan");
@@ -1035,7 +1055,7 @@ describe("Upload API Integration", () => {
       expect((await downloadAs(salesToken, copyLetterId)).statusCode).toBe(200);
     });
 
-    it("leaves another user's upload unattached, so its readers stay the File grant's", async () => {
+    it("refuses a save that names another user's upload, so it stays unattached and theirs", async () => {
       const foreign = await uploadAsApp(salesToken, "letter", "%PDF sales-owned letter");
       const created = await app.inject({
         method: "POST",
@@ -1043,7 +1063,7 @@ describe("Upload API Integration", () => {
         headers: authHeaders(ownerToken),
         payload: { title: "Emma", letter: foreign.file_url },
       });
-      expect(created.statusCode).toBe(201);
+      expect(created.statusCode).toBe(403);
 
       const row = (await db.findOne(DIGITA.COLLECTIONS.FILE, foreign._id, "core")) as Record<string, unknown>;
       expect(row["attached_to_name"]).toBeUndefined();
@@ -1053,13 +1073,10 @@ describe("Upload API Integration", () => {
     it("binds no upload of another user when an Administrator saves the record that names it", async () => {
       // The owner names a colleague's loose upload in their own book; an Administrator, who may
       // write every File, then saves the book as the app does, with every field.
+      // A save of the owner's cannot name it any more; the book is planted as a row written
+      // before that refusal existed.
       const foreign = await uploadAsApp(salesToken, "letter", "%PDF sales-owned letter, admin save");
-      const created = await app.inject({
-        method: "POST",
-        url: "/api/v1/resource/TestBook",
-        headers: authHeaders(ownerToken),
-        payload: { title: "Persuasion", letter: foreign.file_url },
-      });
+      const created = await plantBook(ownerToken, { title: "Persuasion", letter: foreign.file_url });
       expect(created.statusCode).toBe(201);
       const book = created.json().data as { _id: string };
       const saved = await app.inject({
@@ -1073,6 +1090,47 @@ describe("Upload API Integration", () => {
       const row = (await db.findOne(DIGITA.COLLECTIONS.FILE, foreign._id, "core")) as Record<string, unknown>;
       expect(row["attached_to_name"]).toBeUndefined();
       expect((await downloadAs(ownerToken, foreign._id)).statusCode).toBe(403);
+    });
+
+    it("refuses to copy a book that names a file the copier may not read, and clones nothing", async () => {
+      const foreign = await uploadAsApp(salesToken, "letter", "%PDF sales-owned letter, copy");
+      const planted = await plantBook(ownerToken, { title: "Mansfield Park", letter: foreign.file_url });
+      const before = await fileCount();
+      const copied = await app.inject({
+        method: "POST",
+        url: `/api/v1/resource/TestBook/${planted.json().data._id}/copy`,
+        headers: authHeaders(ownerToken),
+      });
+      expect(copied.statusCode).toBe(403);
+      expect(await fileCount()).toBe(before);
+    });
+
+    it("deletes no foreign file when a save clears the field that names it", async () => {
+      const foreign = await uploadAsApp(salesToken, "letter", "%PDF sales-owned letter, clear");
+      const planted = await plantBook(ownerToken, { title: "Lady Susan", letter: foreign.file_url });
+      const cleared = await app.inject({
+        method: "PUT",
+        url: `/api/v1/resource/TestBook/${planted.json().data._id}`,
+        headers: authHeaders(ownerToken),
+        payload: { letter: null },
+      });
+      expect(cleared.statusCode).toBe(200);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(await db.findOne(DIGITA.COLLECTIONS.FILE, foreign._id, "core")).not.toBeNull();
+      expect((await downloadAs(salesToken, foreign._id)).statusCode).toBe(200);
+    });
+
+    it("binds a user's own upload when the token's sub is an id, not the email", async () => {
+      const idToken = await ta.sign({ sub: "user-id-0042", email: "owner@digita.local", roles: ["System User"] });
+      const letter = await uploadAsApp(idToken, "letter", "%PDF id-token letter");
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/v1/resource/TestBook",
+        headers: authHeaders(idToken),
+        payload: { title: "The Watsons", letter: letter.file_url },
+      });
+      expect(created.statusCode).toBe(201);
+      expect((await downloadAs(salesToken, letter._id)).statusCode).toBe(200);
     });
 
     it("binds the Administrator's own upload when the Administrator saves (innocent case)", async () => {

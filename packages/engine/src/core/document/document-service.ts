@@ -25,6 +25,7 @@ import { entityHasAnySnapshot, entityHasAnyFreeze } from "../snapshot/snapshot-r
 import { resolveStatusIndicator } from "../status/status-resolver.js";
 import type { StoragePort } from "../storage/storage-port.js";
 import { collectAttachFileIds, deleteFileRefCounted, cleanupDocumentAttachments, parseFileId, FILE_FIELD_TYPES } from "../storage/file-cleanup.js";
+import { mayReadFile } from "../storage/file-access.js";
 import {
   buildMongoFilter,
   assertFieldAllowed,
@@ -1042,6 +1043,8 @@ export class DocumentService {
       doc.creation = now;
       doc.modified = now;
 
+      await this.assertAttachFilesReadable(entity, doc._data, new Set(), user, session);
+
       // Store in DB
       await this.db.insertOne(entity.name, doc.toMongo(), entity.database, session);
       await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
@@ -1121,7 +1124,7 @@ export class DocumentService {
     // Snapshot attach-field file ids BEFORE the merge — so a save that clears or
     // replaces a file can delete the now-orphaned File (reference-counted) once
     // it commits.
-    const attachFilesBefore = this.storage ? collectAttachFileIds(entity.fields, doc._data) : [];
+    const attachFilesBefore = collectAttachFileIds(entity.fields, doc._data);
 
     // Permission check (skipped on transition path — see options doc above)
     if (!options.skipWritePermCheck) {
@@ -1324,6 +1327,8 @@ export class DocumentService {
       doc.modified = new Date();
       doc.modified_by = user.email;
 
+      await this.assertAttachFilesReadable(entity, doc._data, new Set(attachFilesBefore), user, session);
+
       // Save to DB
       await this.db.updateOne(
         entity.name,
@@ -1377,6 +1382,7 @@ export class DocumentService {
         this.db.afterCommit(session, async () => {
           for (const fileId of orphans) {
             try {
+              if (!(await this.isFileOfDocument(fileId, doctype, name, user))) continue;
               await deleteFileRefCounted(this.db, storage, fileId);
             } catch (err) {
               log.warn({ doctype, name, fileId, err }, "Attachment cleanup failed on update");
@@ -2523,6 +2529,8 @@ export class DocumentService {
       const src = await this.db.findOne(DIGITA.COLLECTIONS.FILE, srcId, DIGITA.DATABASES.CORE);
       if (!src) return undefined; // legacy/missing File doc → leave the ref as-is
       const s = src as Record<string, unknown>;
+      // A file the copier may not read is not cloned: the ref stays, and the insert refuses it.
+      if (!(await mayReadFile(this.fileAccess(), user, s))) return undefined;
       const seq = await this.db.getNextSequence(
         DIGITA.COLLECTIONS.FILE,
         "naming_seq",
@@ -2582,6 +2590,46 @@ export class DocumentService {
    * attached to this one, when the user may write that File row, which is the
    * grant that lets a user set `attached_to_name` through the resource API.
    */
+  private fileAccess() {
+    return { db: this.db, registry: this.registry, permissionChecker: this.permissionChecker };
+  }
+
+  /**
+   * Refuse a save that newly names a file the saver may not read. File ids are sequential, so
+   * without this a user could name any file in a record and read it through a copy's clone, or
+   * delete it by clearing the field again. A ref the save keeps from the stored row passes.
+   */
+  private async assertAttachFilesReadable(
+    entity: EntityDefinition,
+    data: Record<string, unknown>,
+    before: Set<string>,
+    user: UserContext,
+    session: import("mongodb").ClientSession,
+  ): Promise<void> {
+    const added = collectAttachFileIds(entity.fields, data).filter((fileId) => !before.has(fileId));
+    if (added.length === 0) return;
+    const files = await this.db.find(
+      DIGITA.COLLECTIONS.FILE,
+      { filters: [{ _id: { $in: added } }] },
+      DIGITA.DATABASES.CORE,
+      session,
+    );
+    for (const file of files) {
+      if (!(await mayReadFile(this.fileAccess(), user, file as Record<string, unknown>))) {
+        throw new PermissionDeniedError(user.email, DIGITA.COLLECTIONS.FILE, "read");
+      }
+    }
+  }
+
+  /** Whether a file a save removed may be deleted: it was bound to this document, or it is the
+   *  saver's own loose upload. Any other file stays, whoever named it here. */
+  private async isFileOfDocument(fileId: string, doctype: string, name: string, user: UserContext): Promise<boolean> {
+    const file = (await this.db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE)) as Record<string, unknown> | null;
+    if (!file) return false;
+    if (file["attached_to_name"]) return file["attached_to_entity"] === doctype && file["attached_to_name"] === name;
+    return file["owner"] === user.email || file["owner"] === user._id;
+  }
+
   private async attachFilesToDocument(
     entity: EntityDefinition,
     name: string,

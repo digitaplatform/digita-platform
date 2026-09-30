@@ -8,7 +8,6 @@ import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
 import { env } from "../config/env.js";
-import { readStoredRow } from "../entity/field-types.js";
 import { successResponse, errorResponse } from "./response-model.js";
 import { createLogger } from "../logging/logger.js";
 import { FileNotFoundInStorageError, type StoragePort } from "../storage/storage-port.js";
@@ -19,6 +18,7 @@ import {
 } from "../storage/file-cleanup.js";
 import { isValidStoragePath, STORAGE_PATH_RULE } from "../storage/storage-path.js";
 import { isThumbnailable, makeThumbnail } from "../storage/thumbnail.js";
+import { mayReadFile } from "../storage/file-access.js";
 
 const log = createLogger("upload-router");
 
@@ -647,35 +647,9 @@ export function registerUploadRoutes(
     // AND the caller may read THAT doc (with its own if_owner/condition/scope).
     const fileDoc = doc as Record<string, unknown>;
     const actor = request.user ?? GUEST_USER;
-    const fileRead = await permissionChecker.hasPermission(actor, FILE_ENTITY, "read", fileDoc);
-    if (!fileRead.allowed) {
-      let parentGrants = false;
-      const parentEntity = fileDoc["attached_to_entity"];
-      const parentName = fileDoc["attached_to_name"];
-      if (
-        typeof parentEntity === "string" &&
-        parentEntity &&
-        typeof parentName === "string" &&
-        parentName &&
-        registry.has(parentEntity)
-      ) {
-        const parentDefinition = registry.get(parentEntity);
-        const parentDoc = await db.findOne(parentEntity, parentName, parentDefinition.database);
-        if (parentDoc) {
-          // Judged on the row getDoc reads, so a condition sees the same values there and here.
-          const parentRead = await permissionChecker.hasPermission(
-            actor,
-            parentEntity,
-            "read",
-            readStoredRow(parentDefinition, parentDoc as Record<string, unknown>),
-          );
-          parentGrants = parentRead.allowed;
-        }
-      }
-      if (!parentGrants) {
-        // Preserve the original 403 (throws) via the global error handler.
-        await permissionChecker.check(actor, FILE_ENTITY, "read", fileDoc);
-      }
+    if (!(await mayReadFile({ db, registry, permissionChecker }, actor, fileDoc))) {
+      // Preserve the original 403 (throws) via the global error handler.
+      await permissionChecker.check(actor, FILE_ENTITY, "read", fileDoc);
     }
 
     // `?thumb=1` serves the generated PNG thumbnail when one exists; otherwise the
