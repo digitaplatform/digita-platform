@@ -7,6 +7,8 @@ import { useChrome } from '@/lib/chrome-i18n';
 interface LinkEntryInputProps {
   /** The child Link field whose target + search config drive the picker. */
   linkField: FieldDefinition;
+  /** The owning record: a `$doc.<field>` token in the link's target_filters reads its field. */
+  doc?: Record<string, unknown>;
   /** Called with the picked row id (and its display text, when known); the
    *  caller appends a line and starts inline entry. */
   onPick: (id: string, display?: string) => void;
@@ -22,7 +24,7 @@ interface LinkEntryInputProps {
  * appends a line and the grid starts inline detail entry. The minimum query length
  * is `search_min_chars` (default 1).
  */
-export function LinkEntryInput({ linkField, onPick, inputRef, testId }: LinkEntryInputProps) {
+export function LinkEntryInput({ linkField, doc, onPick, inputRef, testId }: LinkEntryInputProps) {
   const tc = useChrome();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -58,6 +60,7 @@ export function LinkEntryInput({ linkField, onPick, inputRef, testId }: LinkEntr
         open={open}
         onClose={() => setOpen(false)}
         linkField={linkField}
+        doc={doc}
         initialQuery={query}
         onPick={(id, display) => {
           onPick(id, display);
