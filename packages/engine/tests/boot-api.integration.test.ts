@@ -136,6 +136,31 @@ describe("Boot API Integration", () => {
       expect(body.data.locale.code).toBe("de");
     });
 
+    it("keeps each demo visitor's region on their own session, never on the demo user they share (#313)", async () => {
+      // The shared demo user holds a region row, as one an earlier visitor would have left.
+      await db.insertOne(
+        DIGITA.COLLECTIONS.USER_PREFERENCE,
+        { _id: "demo-locale", owner: "demo@show.test", pref_key: "locale", value: JSON.stringify({ format_locale: "fr-CH", timezone: "Asia/Tokyo" }) },
+        DIGITA.DATABASES.CORE,
+      );
+      const visitor = (extra: Record<string, unknown>) =>
+        sign({ sub: "demo@show.test", email: "demo@show.test", roles: ["System User"], language: "de", extra: { demo: true, ...extra } });
+      const boot = async (token: string) =>
+        (await app.inject({ method: "GET", url: "/api/v1/boot", headers: { authorization: `Bearer ${token}` } })).json().data;
+
+      const chose = await boot(await visitor({ format_locale: "de-CH", timezone: "Europe/Zurich" }));
+      const other = await boot(await visitor({}));
+
+      expect(chose.user.demo).toBe(true);
+      expect([chose.locale.format_locale, chose.locale.timezone]).toEqual(["de-CH", "Europe/Zurich"]);
+      expect([other.locale.format_locale, other.locale.timezone]).toEqual(["de", null]);
+
+      // A person who is no demo visitor keeps their stored region, and /boot names no demo.
+      const own = await boot(await sign({ sub: "demo@show.test", email: "demo@show.test", roles: ["System User"], language: "de" }));
+      expect(own.user.demo).toBeUndefined();
+      expect([own.locale.format_locale, own.locale.timezone]).toEqual(["fr-CH", "Asia/Tokyo"]);
+    });
+
     it("names the text direction of each language it offers", async () => {
       await db.insertOne(
         DIGITA.COLLECTIONS.LANGUAGE,

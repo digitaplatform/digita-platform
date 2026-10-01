@@ -52,7 +52,7 @@ describe("the locale the engine resolves", () => {
     });
     await resolver.initialize();
 
-    const locale = await resolver.resolve(undefined, "de", undefined);
+    const locale = await resolver.resolve({ language: "de" });
 
     for (const field of FORMAT_FIELDS) expect(locale).not.toHaveProperty(field);
     expect(locale).toEqual({ code: "de", fallback: "en", direction: "ltr", format_locale: "de", timezone: null });
@@ -62,7 +62,7 @@ describe("the locale the engine resolves", () => {
     const resolver = resolverWithLanguages({});
     await resolver.initialize();
 
-    const locale = await resolver.resolve(undefined, "fr", undefined);
+    const locale = await resolver.resolve({ language: "fr" });
 
     for (const field of FORMAT_FIELDS) expect(locale).not.toHaveProperty(field);
     expect(locale).toEqual({ code: "fr", fallback: "en", direction: "ltr", format_locale: "fr", timezone: null });

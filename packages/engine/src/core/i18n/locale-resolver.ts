@@ -27,6 +27,22 @@ interface UserLocalePref {
 const trimmed = (v: unknown): string | undefined =>
   typeof v === "string" && v.trim() ? v : undefined;
 
+/** The verified caller as the locale needs it; every other token claim rides along. */
+export interface LocaleUser {
+  email?: string;
+  language?: string;
+  [claim: string]: unknown;
+}
+
+/**
+ * A demo session's format and timezone, from its token claims: every visitor signs in as the
+ * same demo user, so a preference stored on that user would be every visitor's. The language
+ * already comes from the session through the token's language claim.
+ */
+function sessionLocalePref(user: LocaleUser): UserLocalePref {
+  return { format_locale: trimmed(user["format_locale"]), timezone: trimmed(user["timezone"]) };
+}
+
 export class LocaleResolver {
   private enabledLanguages: Set<string> | null = null;
   private languageCache: Map<string, Record<string, unknown>> = new Map();
@@ -65,14 +81,15 @@ export class LocaleResolver {
    * token language → Accept-Language → system default. On top, the per-user
    * preference supplies the BCP-47 format_locale (region) + timezone, which are
    * independent of the UI language (so "German UI, Swiss formatting" works).
+   * A demo session (`demo: true` claim) never reads the shared user's preference.
    */
-  async resolve(
-    userEmail?: string,
-    userLanguage?: string,
-    acceptLanguageHeader?: string,
-  ): Promise<ResolvedLocale> {
-    const pref = userEmail ? await this.getUserLocalePref(userEmail) : null;
-    const language = await this.pickLanguage(pref?.language, userLanguage, acceptLanguageHeader);
+  async resolve(user: LocaleUser | undefined, acceptLanguageHeader?: string): Promise<ResolvedLocale> {
+    const pref = !user?.email
+      ? null
+      : user["demo"] === true
+        ? sessionLocalePref(user)
+        : await this.getUserLocalePref(user.email);
+    const language = await this.pickLanguage(pref?.language, user?.language, acceptLanguageHeader);
     const base = await this.buildLocale(language);
     return {
       ...base,

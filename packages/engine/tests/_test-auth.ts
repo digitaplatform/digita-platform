@@ -20,6 +20,8 @@ export async function buildTestAuth(appName?: string): Promise<{
     language?: string;
     typ?: string;
     tiers?: string[];
+    /** Any further claim the IdP signs, such as a demo session's `demo` and its locale. */
+    extra?: Record<string, unknown>;
   }) => Promise<string>;
 }> {
   const { privateKey, publicKey } = await generateKeyPair("RS256", { extractable: true });
@@ -34,6 +36,7 @@ export async function buildTestAuth(appName?: string): Promise<{
     language?: string;
     typ?: string;
     tiers?: string[];
+    extra?: Record<string, unknown>;
   }): Promise<string> =>
     new SignJWT({
       typ: claims.typ ?? "access",
@@ -46,6 +49,7 @@ export async function buildTestAuth(appName?: string): Promise<{
       // issue a token without a tier). Pass tiers:[] for the fail-closed/no-grant
       // path or ["external"] for the external audience.
       [AUDIENCE_CLAIM]: claims.tiers ?? ["internal"],
+      ...claims.extra,
     })
       .setProtectedHeader({ alg: "RS256", kid: "test" })
       .setSubject(claims.sub)

@@ -91,11 +91,7 @@ export function registerBootRoutes(
     const canEnter = Object.fromEntries(
       (["anonymous", "external", "internal"] as Audience[]).map((t) => [t, canEnterAudience(t, grants)]),
     );
-    const locale = await localeResolver.resolve(
-      user?.email,
-      user?.language,
-      request.headers["accept-language"] as string,
-    );
+    const locale = await localeResolver.resolve(user ?? undefined, request.headers["accept-language"] as string);
 
     // Get available languages
     const languages = await db.find(
@@ -134,6 +130,8 @@ export function registerBootRoutes(
               roles: user.roles,
               // Audience-set carried on identity (mirrors the token claim).
               tiers: user.tiers,
+              // A demo session keeps its own locale on its IdP session, not on the shared user.
+              ...(user["demo"] === true ? { demo: true } : {}),
             }
           : null,
         // Audience (ADR-A1…A3): the caller's grant-set, the app's per-tier

@@ -14,6 +14,9 @@ import type { SessionUser } from '@/types';
 export interface UpdateProfileRequest {
   full_name?: string;
   language?: string;
+  /** A demo session's region and timezone, kept on its IdP session; "" clears one. */
+  format_locale?: string;
+  timezone?: string;
 }
 export interface ChangePasswordRequest {
   current_password: string;

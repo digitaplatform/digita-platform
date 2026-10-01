@@ -17,6 +17,7 @@ import { appUrl } from '@/lib/appBase';
 import { useThemeStore } from '@/stores/theme';
 import { useI18nStore } from '@/stores/i18n';
 import { setUserPreference } from '@/services/userPreference';
+import { updateProfile } from '@/services/account';
 
 type SessionStatus = 'loading' | 'authenticated' | 'anonymous';
 
@@ -136,7 +137,8 @@ interface SessionState {
    *  display timezone — independent of the UI language, so "German UI, Swiss
    *  formatting" works. Stored under the UserPreference "locale" key (a JSON
    *  string, since the engine value field is Text; the locale resolver parses it
-   *  on the next boot) so the choice roams cross-device. Applied to the in-memory
+   *  on the next boot) so the choice roams cross-device; a demo session keeps it on
+   *  its IdP session instead, since every visitor shares the demo user. Applied to the in-memory
    *  locale at once, so every Intl formatter refreshes without a reboot. An empty
    *  format_locale falls back to the UI language (mirrors the engine resolver). */
   setLocaleFormat: (formatLocale: string | null, timezone: string | null) => Promise<void>;
@@ -250,10 +252,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const cur = get().locale;
     const fmt = formatLocale && formatLocale.trim() ? formatLocale.trim() : null;
     const tz = timezone && timezone.trim() ? timezone.trim() : null;
-    // Persist as a JSON STRING — UserPreference.value is a Text field and the
-    // engine locale resolver JSON.parses it. Null fields fall back server-side
-    // (format_locale → UI language, timezone → none).
-    await setUserPreference('locale', JSON.stringify({ format_locale: fmt, timezone: tz }));
+    if (get().user?.demo) {
+      // Every visitor shares the demo user, so the pick stays on this visitor's IdP session,
+      // and the refreshed token carries it to the engine's next /boot.
+      await updateProfile({ format_locale: fmt ?? '', timezone: tz ?? '' });
+      await attemptRefresh();
+    } else {
+      // Persist as a JSON STRING — UserPreference.value is a Text field and the
+      // engine locale resolver JSON.parses it. Null fields fall back server-side
+      // (format_locale → UI language, timezone → none).
+      await setUserPreference('locale', JSON.stringify({ format_locale: fmt, timezone: tz }));
+    }
     set({
       locale: {
         ...(cur ?? { code: document.documentElement.lang || 'en' }),
