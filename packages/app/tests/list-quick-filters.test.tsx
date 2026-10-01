@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
@@ -28,6 +28,7 @@ const BOOK = {
     { fieldname: 'in_stock', fieldtype: 'Check', label: 'In stock', in_standard_filter: true },
     { fieldname: 'publisher', fieldtype: 'Link', label: 'Publisher', target: 'Publisher', in_standard_filter: true },
     { fieldname: 'year', fieldtype: 'Int', label: 'Year', in_standard_filter: true },
+    { fieldname: 'due_at', fieldtype: 'Datetime', label: 'Due at', in_standard_filter: true },
     { fieldname: 'pages', fieldtype: 'Int', label: 'Pages' },
   ],
   permissions: [],
@@ -57,9 +58,10 @@ vi.mock('@/components/overlay/DialogHost', () => ({
   useDialogHost: () => ({ confirm: vi.fn(), toast: vi.fn() }),
 }));
 vi.mock('@/lib/chrome-i18n', () => ({ useChrome: () => (k: string) => k }));
+const LOCALE = { code: 'en', format_locale: 'en-GB', timezone: 'Europe/Zurich' };
 vi.mock('@/stores/session', () => ({
-  useSessionStore: (sel: (s: { user: { roles: string[] }; locale: undefined }) => unknown) =>
-    sel({ user: { roles: ['Librarian'] }, locale: undefined }),
+  useSessionStore: (sel: (s: { user: { roles: string[] }; locale: typeof LOCALE }) => unknown) =>
+    sel({ user: { roles: ['Librarian'] }, locale: LOCALE }),
 }));
 vi.mock('@/stores/i18n', () => ({
   useI18nStore: (sel: (s: Record<string, unknown>) => unknown) =>
@@ -226,6 +228,23 @@ describe('the quick filters of a list', () => {
 
     await waitFor(() => expect(urlFilters(router)).toEqual([]));
     expect(title).toHaveValue('');
+  });
+
+  it('filter a Datetime field by the instant of the wall time typed in the zone of the person', async () => {
+    const router = renderList('/Book');
+    await waitFor(() => expect(getList).toHaveBeenCalled());
+
+    fireEvent.change(within(quickFilters()).getByLabelText('Due at'), { target: { value: '2026-07-02T09:00' } });
+
+    await waitFor(() => expect(urlFilters(router)).toEqual([['due_at', '=', '2026-07-02T07:00:00.000Z']]));
+  });
+
+  it('show an applied Datetime filter on the wall clock of the person', async () => {
+    const applied = [['due_at', '=', '2026-07-02T07:00:00.000Z']];
+    renderList(`/Book?f=${encodeURIComponent(JSON.stringify(applied))}`);
+    await waitFor(() => expect(lastRequestedFilters()).toEqual(applied));
+
+    expect(within(quickFilters()).getByLabelText('Due at')).toHaveValue('2026-07-02T09:00');
   });
 
   it('are not drawn for an entity that flags no field', async () => {

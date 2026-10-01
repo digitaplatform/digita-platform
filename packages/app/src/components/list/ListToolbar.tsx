@@ -19,7 +19,7 @@ import { useChrome } from '@/lib/chrome-i18n';
 import { useSessionStore } from '@/stores/session';
 import { useI18nStore } from '@/stores/i18n';
 import { useSearchLink } from '@/hooks/useSearchLink';
-import { formatNumber } from '@/lib/format';
+import { formatNumber, fromDatetimeInput, toDatetimeInput } from '@/lib/format';
 import { isCompleteFilter, type FilterTuple } from '@/lib/filter-from-url';
 import {
   chooseFilterInputType,
@@ -575,12 +575,20 @@ function QuickTypedFilter({
   onValue: (value: unknown) => void;
 }) {
   const inputType = chooseFilterInputType(field.fieldtype);
-  const appliedText = value == null ? '' : String(value);
+  const timezone = useSessionStore((s) => s.locale?.timezone);
+  // A Datetime is typed on the wall clock of the person's time zone and filters by its UTC
+  // instant, the value the form stores; the engine reads a time without a zone as UTC.
+  const appliedText = inputType === 'datetime-local' ? toDatetimeInput(value, timezone) : value == null ? '' : String(value);
   const [draft, setDraft] = useState(appliedText);
   useEffect(() => setDraft(appliedText), [appliedText]);
   useEffect(() => {
     if (draft === appliedText) return;
-    const timer = setTimeout(() => onValue(inputType === 'number' && draft !== '' ? Number(draft) : draft), 300);
+    const typedValue = (): unknown => {
+      if (inputType === 'number' && draft !== '') return Number(draft);
+      if (inputType === 'datetime-local') return fromDatetimeInput(draft, timezone) ?? '';
+      return draft;
+    };
+    const timer = setTimeout(() => onValue(typedValue()), 300);
     return () => clearTimeout(timer);
     // Only the text being typed restarts the pause: the callback is new on every render of
     // the list, and the applied text catches up with the draft once it is applied.

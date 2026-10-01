@@ -3,7 +3,9 @@ import { Trash2 } from 'lucide-react';
 import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
 import { Input, Select, IconButton, Combobox } from '@digitaplatform/components';
 import { useI18nStore } from '@/stores/i18n';
+import { useSessionStore } from '@/stores/session';
 import { useChrome } from '@/lib/chrome-i18n';
+import { fromDatetimeInput, toDatetimeInput } from '@/lib/format';
 import { useSearchLink } from '@/hooks/useSearchLink';
 import { FIELD_CLASS } from '@/controls/control-styles';
 import type { FilterTuple } from '@/lib/filter-from-url';
@@ -206,10 +208,15 @@ export function MultiValueInput({
 }
 
 function ValueControl({ meta, field, arity, value, tOption, tc, onValue }: ValueControlProps) {
+  const timezone = useSessionStore((s) => s.locale?.timezone);
   if (!field) return null;
   const ft = field.fieldtype;
   const numeric = ['Int', 'Float', 'Currency', 'Percent', 'Rating', 'Duration'].includes(ft);
   const inputType = ft === 'Date' ? 'date' : ft === 'Datetime' ? 'datetime-local' : ft === 'Time' ? 'time' : numeric ? 'number' : ft === 'Color' ? 'color' : 'text';
+  // A Datetime is typed on the wall clock of the person's time zone and filters by its UTC
+  // instant, the value the form stores; the engine reads a time without a zone as UTC.
+  const shownText = (v: unknown) => (ft === 'Datetime' ? toDatetimeInput(v, timezone) : v == null ? '' : String(v));
+  const typedValue = (text: string) => (ft === 'Datetime' ? (fromDatetimeInput(text, timezone) ?? '') : castScalar(text, numeric));
 
   // presence → set / not set toggle.
   if (arity === 'presence') {
@@ -251,8 +258,8 @@ function ValueControl({ meta, field, arity, value, tOption, tc, onValue }: Value
           className="flex-1"
           aria-label={tc('ui.filter.rangeLow')}
           placeholder={tc('ui.filter.rangeLow')}
-          value={arr[0] == null ? '' : String(arr[0])}
-          onChange={(e) => onValue([castScalar(e.target.value, numeric), arr[1] ?? ''])}
+          value={shownText(arr[0])}
+          onChange={(e) => onValue([typedValue(e.target.value), arr[1] ?? ''])}
         />
         <span className="text-textMuted">–</span>
         <Input
@@ -260,8 +267,8 @@ function ValueControl({ meta, field, arity, value, tOption, tc, onValue }: Value
           className="flex-1"
           aria-label={tc('ui.filter.rangeHigh')}
           placeholder={tc('ui.filter.rangeHigh')}
-          value={arr[1] == null ? '' : String(arr[1])}
-          onChange={(e) => onValue([arr[0] ?? '', castScalar(e.target.value, numeric)])}
+          value={shownText(arr[1])}
+          onChange={(e) => onValue([arr[0] ?? '', typedValue(e.target.value)])}
         />
       </div>
     );
@@ -351,8 +358,8 @@ function ValueControl({ meta, field, arity, value, tOption, tc, onValue }: Value
       type={inputType}
       aria-label={tc('ui.filter.value')}
       placeholder={placeholder}
-      value={value == null ? '' : String(value)}
-      onChange={(e) => onValue(castScalar(e.target.value, numeric))}
+      value={shownText(value)}
+      onChange={(e) => onValue(typedValue(e.target.value))}
     />
   );
 }
