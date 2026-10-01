@@ -118,6 +118,8 @@ export function Select({
   const typeahead = useRef<{ q: string; t: number }>({ q: '', t: 0 });
   const baseId = useId();
   const listId = `${baseId}-list`;
+  // Without an id of the caller's, the label still needs one to name the trigger.
+  const triggerId = id ?? baseId;
 
   // The selected label comes from the FULL list; navigation runs over the
   // currently-visible (optionally filtered) `view`.
@@ -253,7 +255,7 @@ export function Select({
       id={listId}
       role="listbox"
       aria-label={ariaLabel}
-      aria-labelledby={ariaLabelledby ?? id}
+      aria-labelledby={ariaLabelledby ?? triggerId}
       className="max-h-60 overflow-auto py-1"
     >
       {view.map((o, i) => {
@@ -297,7 +299,7 @@ export function Select({
   return (
     <div className={cn(label ? 'flex flex-col gap-1.5' : wrapperClassName ? '' : 'contents', wrapperClassName)}>
       {label && (
-        <label htmlFor={id} data-ui="field-label" className="text-xs font-medium text-textMuted">
+        <label htmlFor={triggerId} data-ui="field-label" className="text-xs font-medium text-textMuted">
           {label}
         </label>
       )}
@@ -306,7 +308,7 @@ export function Select({
         ref={triggerRef}
         data-ui="select-trigger"
         type="button"
-        id={id}
+        id={triggerId}
         name={name}
         // While searchable + open the filter input is the combobox; keep the trigger a
         // plain button to avoid two comboboxes owning one listbox.
