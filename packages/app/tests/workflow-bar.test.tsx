@@ -242,4 +242,49 @@ describe('WorkflowBar (generic, meta-driven)', () => {
     cleanup();
     expect(renderBar(m, { status: 'draft', docstatus: 0, ready: true }).queryByText('Send')).not.toBeNull();
   });
+
+  it('Administrator is offered a transition whose condition does not hold, as the engine takes it', () => {
+    const m = meta({
+      transitions: [
+        { from: 'draft', to: 'sent', action: 'Send', allowed_roles: ['Editor'], condition: 'doc.ready == true' },
+      ],
+    });
+    user = { roles: ['Administrator'] };
+    expect(renderBar(m, { status: 'draft', docstatus: 0, ready: false }).queryByText('Send')).not.toBeNull();
+    cleanup();
+    user = { roles: ['Editor'] };
+    expect(renderBar(m, { status: 'draft', docstatus: 0, ready: false }).queryByText('Send')).toBeNull();
+  });
+
+  // The engine judges the condition against the stored record and the token, which hold more
+  // than the read-filtered record and the session user.
+  it('offers a transition whose condition reads a field the user may not read', () => {
+    const m = meta({
+      transitions: [
+        {
+          from: 'sent',
+          to: 'paid',
+          action: 'Mark paid',
+          allowed_roles: ['Editor'],
+          condition: 'doc.amount_paid >= doc.amount_total',
+        },
+      ],
+    });
+    expect(renderBar(m, { status: 'sent', docstatus: 0, amount_total: 100 }).queryByText('Mark paid')).not.toBeNull();
+    cleanup();
+    const shown = { status: 'sent', docstatus: 0, amount_total: 100, amount_paid: 40 };
+    expect(renderBar(m, shown).queryByText('Mark paid')).toBeNull();
+  });
+
+  it('offers a transition whose condition reads a token claim the session does not carry', () => {
+    const m = meta({
+      transitions: [
+        { from: 'draft', to: 'sent', action: 'Send', allowed_roles: ['Editor'], condition: "user.branch == 'North'" },
+      ],
+    });
+    expect(renderBar(m, { status: 'draft', docstatus: 0 }).queryByText('Send')).not.toBeNull();
+    cleanup();
+    user = { roles: ['Editor'], branch: 'South' } as typeof user;
+    expect(renderBar(m, { status: 'draft', docstatus: 0 }).queryByText('Send')).toBeNull();
+  });
 });
