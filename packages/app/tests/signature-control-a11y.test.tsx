@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // A keyboard or screen reader user keeps their place in a Signature field: Clear hands the focus to
 // the pad instead of dropping it on the page, the image view carries the control id the field label
-// points at, and each Clear says which field it clears.
+// points at and is named by that label, and each Clear says which field it clears.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -99,7 +99,7 @@ function BareControl({ value }: { value: unknown }) {
 }
 
 const pad = () => screen.getByRole('img', { name: 'Customer signature' });
-const storedImage = () => screen.getByRole('img', { name: 'ui.signature.alt' });
+const storedImage = () => screen.getByAltText('ui.signature.alt');
 
 function drawStroke(canvas: HTMLElement) {
   fireEvent.pointerDown(canvas, { pointerId: 1, button: 0, clientX: 10, clientY: 20 });
@@ -177,6 +177,28 @@ describe('the image view carries the control id', () => {
     expect(storedImage()).toHaveAttribute('id', 'sig');
   });
 
+  it('names the image of a stored signature by the field label', () => {
+    render(<Field initial={STORED} />);
+    expect(storedImage()).toHaveAccessibleName('Customer signature');
+  });
+
+  it('names the image of a read-only field by the field label as well', () => {
+    render(<Field initial={STORED} state={{ ...STATE, readOnly: true }} />);
+    expect(storedImage()).toHaveAccessibleName('Customer signature');
+  });
+
+  it('tells the images of two signature fields on one form apart', () => {
+    render(
+      <>
+        <Field initial={STORED} />
+        <Field id="drv" label="Driver signature" initial={STORED} />
+      </>,
+    );
+    expect(screen.getAllByAltText('ui.signature.alt').map((image) => image.id)).toEqual(['sig', 'drv']);
+    expect(document.getElementById('sig')).toHaveAccessibleName('Customer signature');
+    expect(document.getElementById('drv')).toHaveAccessibleName('Driver signature');
+  });
+
   it('keeps the id on the pad, and on one element only (innocent case)', () => {
     render(<Field />);
     expect(pad()).toHaveAttribute('id', 'sig');
@@ -215,7 +237,7 @@ describe('Clear names the field it clears', () => {
     const user = userEvent.setup();
     render(<Field initial={STORED} />);
     await user.click(screen.getByRole('button'));
-    expect(screen.queryByRole('img', { name: 'ui.signature.alt' })).toBeNull();
+    expect(screen.queryByAltText('ui.signature.alt')).toBeNull();
     expect(pad()).toBeInTheDocument();
   });
 });

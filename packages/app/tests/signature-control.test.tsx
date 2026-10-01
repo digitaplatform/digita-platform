@@ -103,8 +103,10 @@ function Form({ initial, onChange }: { initial?: string; onChange: (next: unknow
   );
 }
 
-const pad = () => screen.getByRole('img', { name: 'Customer signature' });
-const queryPad = () => screen.queryByRole('img', { name: 'Customer signature' });
+// The stored image is named by the field label as well, so the pad is the canvas of that name.
+const padName = (name: string, element: Element) => name === 'Customer signature' && element instanceof HTMLCanvasElement;
+const pad = () => screen.getByRole('img', { name: padName });
+const queryPad = () => screen.queryByRole('img', { name: padName });
 const clearButton = () => screen.queryByRole('button', { name: 'ui.action.clear Customer signature' });
 
 function drawStroke(canvas: HTMLElement, pointerId = 1) {
@@ -216,12 +218,12 @@ describe('SignatureControl on an editable field', () => {
   it('shows a stored signature as its image, and Clear gives the pad to sign again', () => {
     const onChange = vi.fn();
     render(<Form initial={STORED} onChange={onChange} />);
-    expect(screen.getByRole('img', { name: 'ui.signature.alt' })).toHaveAttribute('src', STORED);
+    expect(screen.getByAltText('ui.signature.alt')).toHaveAttribute('src', STORED);
     expect(queryPad()).toBeNull();
 
     fireEvent.click(clearButton()!);
     expect(onChange).toHaveBeenLastCalledWith(undefined);
-    expect(screen.queryByRole('img', { name: 'ui.signature.alt' })).toBeNull();
+    expect(screen.queryByAltText('ui.signature.alt')).toBeNull();
     drawStroke(pad());
     expect(onChange).toHaveBeenLastCalledWith(drawnImage(1));
   });
@@ -239,7 +241,7 @@ describe('SignatureControl on an editable field', () => {
     expect(clearButton()).toBeNull();
 
     rerender(<Signature value={STORED} onChange={onChange} />);
-    expect(screen.getByRole('img', { name: 'ui.signature.alt' })).toHaveAttribute('src', STORED);
+    expect(screen.getByAltText('ui.signature.alt')).toHaveAttribute('src', STORED);
     expect(queryPad()).toBeNull();
   });
 
@@ -252,7 +254,7 @@ describe('SignatureControl on an editable field', () => {
     rerender(<Signature value={drawnImage(1)} state={{ ...STATE, readOnly: true }} onChange={onChange} />);
     expect(queryPad()).toBeNull();
     rerender(<Signature value={drawnImage(1)} onChange={onChange} />);
-    expect(screen.getByRole('img', { name: 'ui.signature.alt' })).toHaveAttribute('src', drawnImage(1));
+    expect(screen.getByAltText('ui.signature.alt')).toHaveAttribute('src', drawnImage(1));
     expect(queryPad()).toBeNull();
     expect(clearButton()).not.toBeNull();
   });
@@ -288,7 +290,7 @@ describe('SignatureControl on a read-only field', () => {
 
   it('shows the stored image and offers no pad and no Clear', () => {
     render(<Signature value={STORED} state={readOnly} />);
-    expect(screen.getByRole('img', { name: 'ui.signature.alt' })).toHaveAttribute('src', STORED);
+    expect(screen.getByAltText('ui.signature.alt')).toHaveAttribute('src', STORED);
     expect(queryPad()).toBeNull();
     expect(clearButton()).toBeNull();
   });

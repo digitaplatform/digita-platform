@@ -55,8 +55,11 @@ export default function SignatureControl({
     padRef.current?.focus();
   });
 
-  // The id is the one the field label points at, in the image view as on the pad.
-  const image = stored && <img id={controlId} src={stored} alt={tc('ui.signature.alt')} className={IMAGE_CLASS} />;
+  // The id is the one the field label points at, in the image view as on the pad. A label's `for`
+  // names no image, so the image names itself by the label, which tells two signature fields apart.
+  const image = stored && (
+    <img id={controlId} aria-labelledby={labelId} src={stored} alt={tc('ui.signature.alt')} className={IMAGE_CLASS} />
+  );
   if (state.readOnly) return image || <span className="text-sm text-textMuted">{tc('ui.signature.empty')}</span>;
 
   const clearId = `${controlId}-clear`;
