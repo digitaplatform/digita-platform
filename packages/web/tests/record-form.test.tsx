@@ -50,7 +50,7 @@ const booking = {
 const render = (props: Record<string, unknown>) => {
   const Block = getBlockComponent("record_form");
   if (!Block) throw new Error("record_form is not registered");
-  return renderToStaticMarkup(<Block props={props} locale="en" />);
+  return renderToStaticMarkup(<Block props={props} locale="en" site={null} />);
 };
 
 let root: Root | null = null;

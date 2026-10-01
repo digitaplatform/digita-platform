@@ -123,6 +123,8 @@ describe('/_design gallery', () => {
     expect(missing).toEqual([]);
   });
 
+  // It opens every overlay of the kit in jsdom: about 3 s alone, and the suite's other workers and
+  // parallel test runs on the machine stretch that past the 5 s default, so it declares 30 s.
   it('lists beside its groups every data-ui hook the kit emits, once every overlay was opened', async () => {
     signIn(['Administrator']);
     const user = userEvent.setup();
@@ -149,5 +151,5 @@ describe('/_design gallery', () => {
     const missing = expected.filter((hook) => !listed.has(hook));
     expect(expected.length).toBeGreaterThanOrEqual(82);
     expect(missing).toEqual([]);
-  });
+  }, 30_000);
 });

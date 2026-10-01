@@ -60,7 +60,7 @@ describe("the block renderer", () => {
       { type: "richtext", theme_variant: "dark", props: { heading: "Dark", body: "In the band." } },
       { type: "richtext", props: { heading: "Light", body: "Beside the band." } },
     ] as Block[];
-    document.body.innerHTML = renderToStaticMarkup(createElement(BlockRenderer, { blocks, locale: "en" }));
+    document.body.innerHTML = renderToStaticMarkup(createElement(BlockRenderer, { blocks, locale: "en", site: null }));
     const bands = Array.from(document.querySelectorAll(DARK_BAND_SELECTOR), (e) => e.querySelector("h2, h3")?.textContent);
     expect(bands).toEqual(["Dark"]);
   });

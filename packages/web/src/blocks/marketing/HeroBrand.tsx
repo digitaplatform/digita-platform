@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Locale } from "@/i18n/config";
+import type { WebSite } from "@/lib/types";
 import { resolvePlugin } from "@/plugins";
 import { Actions, Eyebrow, type P, Section, list, readAction, s, texts } from "./shared";
 
@@ -13,15 +14,19 @@ const LAYOUT =
  * The opening section of a site: headline, lede and calls to action beside the site's figure.
  * `visual` names the plugin that draws the figure and gets the block's props; `none` or an id no
  * plugin carries draws none. `data-rain` lets the tokens of `rain` fall behind the section.
+ * A block that names no atmosphere takes the site's, so every page of the site opens the same.
  */
-export function HeroBrand({ props, locale }: { props?: P; locale: Locale }) {
+export function HeroBrand({ props, locale, site }: { props?: P; locale: Locale; site?: WebSite | null }) {
   const heading = s(props, "heading");
   if (!heading) return null;
   const Figure = resolvePlugin(s(props, "visual") || undefined);
   const lede = s(props, "lede");
+  // The site's atmosphere is read through the same accessors as the block's, so an unusable value
+  // draws nothing and never throws.
+  const atmosphereSource = s(props, "atmosphere") ? props : { atmosphere: site?.hero_atmosphere, rain: site?.hero_rain };
   return (
     <div className="relative isolate overflow-hidden">
-      {s(props, "atmosphere") === "data-rain" && <DataRain columns={list(props, "rain").map((column) => texts(column, "tokens"))} />}
+      {s(atmosphereSource, "atmosphere") === "data-rain" && <DataRain columns={list(atmosphereSource, "rain").map((column) => texts(column, "tokens"))} />}
       <Section>
         <div className={LAYOUT}>
           <div className="flex flex-col gap-7">

@@ -25,7 +25,7 @@ async function render(env: Record<string, string | undefined>, blockProps: Recor
   const { getBlockComponent } = await import("../src/blocks/registry");
   const Block = getBlockComponent("app_list");
   if (!Block) throw new Error("app_list is not registered");
-  return renderToStaticMarkup(<Block props={blockProps} locale={locale} />);
+  return renderToStaticMarkup(<Block props={blockProps} locale={locale} site={null} />);
 }
 
 const cards = (html: string) => [...html.matchAll(/<li[^>]*>(.*?)<\/li>/g)].map((match) => match[1]!);
