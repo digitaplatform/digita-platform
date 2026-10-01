@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Badge, Button, Card } from '@digitaplatform/components';
 import { ApiClientError } from '@/lib/errors';
+import { TranslationsLoadError } from '@/stores/i18n';
 import { ErrorBlock } from '@/components/status';
 import { useSessionStore } from '@/stores/session';
 import { useChrome } from '@/lib/chrome-i18n';
@@ -40,6 +41,7 @@ export default function AccountPage() {
   const locale = useSessionStore((s) => s.locale);
   const defaultCurrency = useSessionStore((s) => s.settings?.default_currency);
   const setLocaleFormat = useSessionStore((s) => s.setLocaleFormat);
+  const resetLocale = useSessionStore((s) => s.resetLocale);
 
   const profileM = useProfileUpdate();
   const passwordM = usePasswordChange();
@@ -66,7 +68,22 @@ export default function AccountPage() {
     // survive a reload. The /auth/profile write persists it server-side too.
     if (body.language && body.language !== (user.language ?? undefined)) switchLanguage(body.language);
     profileM.mutate(body, {
-      onSuccess: () => dialog.toast(tc('ui.account.profile.saved'), 'success'),
+      onSuccess: () => {
+        dialog.toast(tc('ui.account.profile.saved'), 'success');
+        // A cleared language leaves this device's own pick in force; forget it too.
+        if (body.language === '') {
+          resetLocale().catch((e: unknown) =>
+            dialog.toast(
+              e instanceof TranslationsLoadError
+                ? tc('ui.lang.textsNotLoaded', {
+                    language: languages.find((l) => l.code === e.language)?.native_name ?? e.language,
+                  })
+                : tc('ui.status.somethingWrong'),
+              'error',
+            ),
+          );
+        }
+      },
     });
   };
 
