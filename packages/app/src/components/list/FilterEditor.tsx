@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
 import { Input, Select, IconButton, Combobox } from '@digitaplatform/components';
@@ -163,16 +163,20 @@ interface ValueControlProps {
 /**
  * Comma-separated multi-value entry (`in` / `not in`). Keeps the RAW typed text
  * in local state so a trailing comma isn't erased by an `arr.join`→split→filter
- * round-trip on every keystroke (H17). The parsed array is still emitted live;
- * the display re-syncs from the external value only while the field isn't focused.
+ * round-trip on every keystroke (H17). The parsed array is applied once typing
+ * pauses, as a quick filter's typed value is: each applied value rewrites the URL
+ * and sends a list request. The display re-syncs from the external value only
+ * while the field isn't focused.
  */
 export function MultiValueInput({
+  id,
   arr,
   numeric,
   ariaLabel,
   placeholder,
   onValue,
 }: {
+  id?: string;
   arr: unknown[];
   numeric: boolean;
   ariaLabel: string;
@@ -182,11 +186,14 @@ export function MultiValueInput({
   const joined = arr.join(', ');
   const [focused, setFocused] = useState(false);
   const [text, setText] = useState(joined);
+  const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     if (!focused) setText(joined);
   }, [joined, focused]);
+  useEffect(() => () => clearTimeout(pending.current), []);
   return (
     <Input
+      id={id}
       type="text"
       aria-label={ariaLabel}
       placeholder={placeholder}
@@ -194,13 +201,19 @@ export function MultiValueInput({
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       onChange={(e) => {
-        setText(e.target.value);
-        onValue(
-          e.target.value
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean)
-            .map((s) => castScalar(s, numeric)),
+        const typed = e.target.value;
+        setText(typed);
+        clearTimeout(pending.current);
+        pending.current = setTimeout(
+          () =>
+            onValue(
+              typed
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .map((s) => castScalar(s, numeric)),
+            ),
+          300,
         );
       }}
     />
