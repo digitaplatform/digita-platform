@@ -31,6 +31,9 @@ const META = {
   permissions: [
     { role: 'Demo', level: 0, select: 1, read: 1 },
     { role: 'Sales Manager', level: 0, select: 1, read: 1, create: 1, write: 1, delete: 1 },
+    { role: 'Creator', level: 0, select: 1, read: 1, create: 1 },
+    { role: 'Writer', level: 0, select: 1, read: 1, write: 1 },
+    { role: 'Deleter', level: 0, select: 1, read: 1, delete: 1 },
   ],
 } as unknown as EntityDefinition;
 const TREE: TreeConfig = { parent_field: 'parent', label_field: 'name' };
@@ -58,6 +61,18 @@ describe('the actions of the tree view', () => {
     renderAs(['Demo']);
     expect(screen.getByText('Retail')).toBeInTheDocument();
     for (const entry of ENTRIES) expect(screen.queryByText(entry, { exact: false }) ?? screen.queryByLabelText(entry)).toBeNull();
+  });
+
+  // Each right opens its own entries only: a gate that asks the wrong right shows up in one row.
+  const shown = () => ENTRIES.filter((entry) => (screen.queryByText(entry, { exact: false }) ?? screen.queryByLabelText(entry)) !== null);
+
+  it.each([
+    ['Creator', ['ui.tree.addRoot', 'ui.tree.addChild']],
+    ['Writer', ['ui.tree.move']],
+    ['Deleter', ['ui.action.delete']],
+  ])('offers a role with one right, %s, only the entries of that right', (role, expected) => {
+    renderAs([role]);
+    expect(shown()).toEqual(expected);
   });
 
   it('offers each of them to a role that may create, write and delete', () => {
