@@ -1,8 +1,10 @@
+import type { KeyboardEvent } from 'react';
+import DOMPurify from 'dompurify';
 import type { FieldControlProps } from '@/controls/types';
 import { TEXTAREA_CLASS, describedBy } from '@/controls/control-styles';
 
-/** Multi-line text (also the alias target for TextEditor/Code/Markdown until rich
- *  variants exist, and for SmallText with fewer rows). */
+/** Multi-line text (also the alias target for TextEditor until its rich variant
+ *  exists, and for SmallText with fewer rows). */
 export default function TextControl({
   field,
   value,
@@ -30,4 +32,171 @@ export default function TextControl({
       onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
     />
   );
+}
+
+/** Code: the plain text in a monospace area that does not wrap or check spelling, so
+ *  columns line up, and Enter starts the next line at the indentation of the current one. */
+export function CodeControl({
+  field,
+  value,
+  state,
+  onChange,
+  controlId,
+  labelId,
+  describedById,
+  errorId,
+}: FieldControlProps) {
+  const emit = (text: string) => onChange(text === '' ? undefined : text);
+  return (
+    <textarea
+      data-ui="input"
+      id={controlId}
+      rows={6}
+      className={`${TEXTAREA_CLASS} font-mono`}
+      wrap="off"
+      spellCheck={false}
+      aria-labelledby={labelId}
+      aria-describedby={describedBy(describedById, errorId)}
+      aria-required={state.required || undefined}
+      aria-invalid={state.invalid || undefined}
+      readOnly={state.readOnly}
+      placeholder={field.placeholder}
+      value={value == null ? '' : String(value)}
+      onKeyDown={(e) => continueIndentation(e, emit)}
+      onChange={(e) => emit(e.target.value)}
+    />
+  );
+}
+
+function continueIndentation(e: KeyboardEvent<HTMLTextAreaElement>, emit: (text: string) => void): void {
+  if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.nativeEvent.isComposing) return;
+  const box = e.currentTarget;
+  if (box.readOnly) return;
+  const lineStart = box.value.lastIndexOf('\n', box.selectionStart - 1) + 1;
+  const indentation = /^[ \t]*/.exec(box.value.slice(lineStart, box.selectionStart))![0];
+  if (!indentation) return;
+  e.preventDefault();
+  box.setRangeText(`\n${indentation}`, box.selectionStart, box.selectionEnd, 'end');
+  emit(box.value);
+}
+
+/** Markdown: the source in a text area, as stored, with its rendered preview below, so a
+ *  person sees the result of the markup they type. */
+export function MarkdownControl(props: FieldControlProps) {
+  const source = props.value == null ? '' : String(props.value);
+  return (
+    <div className="flex flex-col gap-2">
+      <TextControl {...props} />
+      <div
+        data-ui="markdown-preview"
+        className={`${PREVIEW_CLASS} ${RICH_TEXT_CLASS}`}
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderMarkdown(source), { ADD_ATTR: ['target'] }) }}
+      />
+    </div>
+  );
+}
+
+const PREVIEW_CLASS = 'min-h-[5.5rem] max-h-[20rem] overflow-y-auto rounded-input border border-border bg-subtle px-3 py-2.5';
+
+/** The base styles reset headings, lists and links to plain text, so rich content
+ *  gets its own. */
+const RICH_TEXT_CLASS =
+  'text-sm text-textMain [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold ' +
+  '[&_h3]:font-semibold [&_h4]:font-semibold [&_h5]:font-semibold [&_h6]:font-semibold ' +
+  '[&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 ' +
+  '[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-textMuted ' +
+  '[&_code]:font-mono [&_code]:text-xs [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-surface [&_pre]:p-2 ' +
+  '[&_a]:text-primary-600 [&_a]:underline [&_hr]:my-3 [&_hr]:border-border';
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Spans inside one block. Code spans and links are set aside first, so the emphasis
+ *  rules never reach into their text or address. */
+function renderInline(text: string): string {
+  const setAside: string[] = [];
+  const keep = (html: string) => `\uE000${setAside.push(html) - 1}\uE000`;
+  const html = escapeHtml(text)
+    .replace(/`([^`]+)`/g, (_, code: string) => keep(`<code>${code}</code>`))
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label: string, href: string) =>
+      keep(`<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`),
+    )
+    .replace(/\*\*(.+?)\*\*|(?<!\w)__(.+?)__(?!\w)/g, (_, starred?: string, underscored?: string) => `<strong>${starred ?? underscored}</strong>`)
+    .replace(/\*(.+?)\*|(?<!\w)_(.+?)_(?!\w)/g, (_, starred?: string, underscored?: string) => `<em>${starred ?? underscored}</em>`)
+    .replace(/~~(.+?)~~/g, '<del>$1</del>')
+    .replace(/ {2,}\n/g, '<br>\n');
+  const restore = (part: string): string => part.replace(/\uE000(\d+)\uE000/g, (_, index: string) => restore(setAside[Number(index)]!));
+  return restore(html);
+}
+
+const FENCE = /^\s*(`{3,}|~{3,})/;
+const HEADING = /^(#{1,6})\s+(.*?)\s*#*\s*$/;
+const RULE = /^\s*([-*_])(\s*\1){2,}\s*$/;
+const QUOTE = /^\s*>/;
+const LIST_ITEM = /^\s*([-*+]|\d+[.)])\s+(.*)$/;
+
+function startsBlock(line: string): boolean {
+  return FENCE.test(line) || HEADING.test(line) || RULE.test(line) || QUOTE.test(line) || LIST_ITEM.test(line);
+}
+
+/** The HTML of the common Markdown blocks (headings, paragraphs, flat lists, quotes, fenced
+ *  code, rules) and spans (strong, emphasis, code, links, strikethrough). Raw HTML in the
+ *  source is escaped, so it shows as the text the person typed. */
+function renderMarkdown(source: string): string {
+  const lines = source.replace(/\r\n?/g, '\n').split('\n');
+  const blocks: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i]!;
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
+    const fence = FENCE.exec(line);
+    if (fence) {
+      const code: string[] = [];
+      for (i++; i < lines.length && !lines[i]!.trimStart().startsWith(fence[1]!); i++) code.push(lines[i]!);
+      i++;
+      blocks.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+      continue;
+    }
+    const heading = HEADING.exec(line);
+    if (heading) {
+      const level = heading[1]!.length;
+      blocks.push(`<h${level}>${renderInline(heading[2]!)}</h${level}>`);
+      i++;
+      continue;
+    }
+    if (RULE.test(line)) {
+      blocks.push('<hr>');
+      i++;
+      continue;
+    }
+    if (QUOTE.test(line)) {
+      const quoted: string[] = [];
+      for (; i < lines.length && QUOTE.test(lines[i]!); i++) quoted.push(lines[i]!.replace(/^\s*>\s?/, ''));
+      blocks.push(`<blockquote>${renderMarkdown(quoted.join('\n'))}</blockquote>`);
+      continue;
+    }
+    const first = LIST_ITEM.exec(line);
+    if (first) {
+      const ordered = /\d/.test(first[1]!);
+      const items: string[] = [];
+      for (; i < lines.length; i++) {
+        const item = LIST_ITEM.exec(lines[i]!);
+        if (item && /\d/.test(item[1]!) === ordered) items.push(item[2]!);
+        else if (!item && /^\s+\S/.test(lines[i]!)) items[items.length - 1] += `\n${lines[i]!.trim()}`;
+        else break;
+      }
+      const tag = ordered ? 'ol' : 'ul';
+      const start = ordered ? parseInt(first[1]!, 10) : 1;
+      blocks.push(`<${tag}${start !== 1 ? ` start="${start}"` : ''}>${items.map((t) => `<li>${renderInline(t)}</li>`).join('')}</${tag}>`);
+      continue;
+    }
+    const paragraph: string[] = [];
+    for (; i < lines.length && lines[i]!.trim() && !startsBlock(lines[i]!); i++) paragraph.push(lines[i]!);
+    blocks.push(`<p>${renderInline(paragraph.join('\n'))}</p>`);
+  }
+  return blocks.join('\n');
 }
