@@ -4,7 +4,6 @@ import type {
   DigitaPlugin,
   FrontendPlugin,
   LayoutConfig,
-  PluginManifestEntry,
   PluginSource,
   SignaturePlugin,
 } from '@digitaplatform/plugins';
@@ -35,10 +34,6 @@ export function registerPlugin(plugin: FrontendPlugin): void {
 export function setLockedPlugins(ids: string[]): void {
   locked.clear();
   for (const id of ids) locked.add(id);
-}
-
-export function isPluginLocked(id: string): boolean {
-  return locked.has(id);
 }
 
 // Dev only: load PREMIUM plugin implementations from their sibling-repo SOURCE so
@@ -120,7 +115,7 @@ async function resolvePlugin(source: PluginSource): Promise<DigitaPlugin | null>
   if (source.type === 'signature') {
     // A signature is pure CONFIG — no module to import, no CSS to inject, no
     // URL needed. The inventory/source entry itself carries everything the
-    // handler applies (accent + fonts + logoUrl).
+    // handler applies.
     return {
       type: 'signature',
       id: source.id,
@@ -128,7 +123,6 @@ async function resolvePlugin(source: PluginSource): Promise<DigitaPlugin | null>
       accent: source.accent,
       fonts: source.fonts,
       family: source.family,
-      logoUrl: source.logoUrl,
       monogram: source.monogram,
       wordmark: source.wordmark,
       colors: source.colors,
@@ -169,25 +163,11 @@ export async function loadPlugins(sources: PluginSource[]): Promise<void> {
   );
 }
 
-/** Legacy manifest loader — entries whose `url` is a component ESM bundle (the
- *  pre-inventory engine shape). Kept working for back-compat; delegates to the
- *  typed path as component plugins. */
-export async function loadPluginsFromManifest(entries: PluginManifestEntry[]): Promise<void> {
-  await loadPlugins(entries.map((e) => ({ id: e.id, title: e.title, type: 'component' as const, url: e.url })));
-}
-
 // Placement: which plugin fills which template region. Backed by a reactive store
 // (usePluginLayoutStore) so the shell re-renders when it's (re)loaded — e.g. after
 // an in-app login (see the store's doc comment).
 export function setLayoutConfig(config: LayoutConfig): void {
   usePluginLayoutStore.getState().setLayout(config);
-}
-export function getLayoutConfig(): LayoutConfig {
-  return usePluginLayoutStore.getState().layout;
-}
-export function getRegionPlugin(region: string): FrontendPlugin | undefined {
-  const id = usePluginLayoutStore.getState().layout.regions[region];
-  return id ? loaded.get(id) : undefined;
 }
 
 /**

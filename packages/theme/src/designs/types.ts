@@ -64,9 +64,4 @@ export interface Design {
    *  settle at one height. Omitted → the platform scale (scales.controlHeight). A
    *  design's own idiom goes here (44pt, 48dp). */
   controlHeight?: string;
-
-  /** Optional density-scale overrides (the --density-* triples). */
-  density?: Partial<
-    Record<'comfortable' | 'compact' | 'spacious', { pad: string; gap: string; row: string }>
-  >;
 }

@@ -18,20 +18,6 @@ export interface FrontendPlugin {
   component: ComponentType;
 }
 
-/** The expected shape of a dynamically-imported plugin ESM module. */
-export interface PluginModule {
-  default?: FrontendPlugin;
-  plugin?: FrontendPlugin;
-}
-
-/** One entry of the plugin manifest the engine serves (GET /api/v1/plugins). */
-export interface PluginManifestEntry {
-  id: string;
-  /** URL of the plugin's ESM bundle, loaded at runtime via import(). */
-  url: string;
-  title?: string;
-}
-
 /**
  * Placement config — maps each template region id to a plugin id. The template
  * (a TemplateDefinition, resolved by `template` via the host's template
@@ -46,7 +32,7 @@ export interface LayoutConfig {
 // ─── Typed plugin contract (v2, additive) ─────────────────────────────────
 // A plugin declares its TYPE (how the host integrates it) and its TIER (whether a
 // tenant may use it) — orthogonal axes. These are added ALONGSIDE the legacy
-// FrontendPlugin / PluginManifestEntry above; consumers migrate incrementally.
+// FrontendPlugin above; consumers migrate incrementally.
 
 /** How the host integrates a plugin — the discriminator every stage dispatches on.
  *  Reserved values are declared now, handled when the first plugin of that type ships. */
@@ -96,58 +82,18 @@ export interface SignaturePlugin {
   fonts?: { display?: string; sans?: string; mono?: string };
   /** The family word of a lockup system (`<family> ● <product>`); absent, the wordmark is the brand. */
   family?: string;
-  logoUrl?: string;
   /** Inline SVG brand mark (self-contained, `fill="currentColor"`). */
   monogram?: string;
   /** Inline SVG wide wordmark lockup (self-contained). */
   wordmark?: string;
   /** Brand COLOUR WORLD: semantic token (bg, surface, textMain, …) → {light,dark}. */
   colors?: Record<string, SignatureValue>;
-  /** Decorative BACKGROUND layers (grid, glow, band, card, panel) → {light,dark}. */
+  /** Decorative BACKGROUND layers the host paints (grid, glow, card, panel) → {light,dark}. */
   graphics?: Record<string, SignatureValue>;
 }
 
 /** The discriminated set of runtime plugin objects — grows one member per type. */
 export type DigitaPlugin = ComponentPlugin | DesignPlugin | SignaturePlugin;
-
-/** The `digita` manifest a plugin package ships (package.json block + dist/digita-plugin.json).
- *  Read by the build-time staging step and validated in CI. */
-export interface PluginPackageManifest {
-  /** Stable slug — drives folder, package name @digitaplatform/<id>, served path, manifest id. */
-  id: string;
-  type: PluginType;
-  tier: PluginTier;
-  /** Semver range of @digitaplatform/plugins this artifact was built against. */
-  sdk: string;
-  /** Primary artifact inside dist/ (component: the ESM file, design: the CSS
-   *  file). OPTIONAL for signatures — they are pure config with no artifact. */
-  entry?: string;
-  displayName: string;
-  /** design only: the value written to data-design-variant (component-variant CSS layer). */
-  variant?: string;
-  /** Premium only: which offer/SKU sells it. */
-  sku?: string;
-}
-
-/** One entry of the TYPED per-tenant manifest the engine serves — coexists with the
- *  legacy PluginManifestEntry during migration. */
-export type TypedPluginManifestEntry =
-  | { type: 'component'; id: string; version: string; tier: PluginTier; title?: string; url: string }
-  | { type: 'design'; id: string; version: string; tier: PluginTier; title?: string; designId: string; variant: string; cssUrl: string }
-  | {
-      type: 'signature';
-      id: string;
-      version: string;
-      tier: PluginTier;
-      title?: string;
-      accent?: string;
-      fonts?: { display?: string; sans?: string; mono?: string };
-      logoUrl?: string;
-      monogram?: string;
-      wordmark?: string;
-      colors?: Record<string, SignatureValue>;
-      graphics?: Record<string, SignatureValue>;
-    };
 
 /** Runtime narrowing guard for a dynamically-imported module's plugin export. */
 export function isDigitaPlugin(v: unknown): v is DigitaPlugin {

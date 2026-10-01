@@ -21,9 +21,9 @@ import { getRuntimeSignature } from './runtime-registry.js';
  *     those roles (the Material input frame, the minimal secondary hover) takes the
  *     brand's tones while the design keeps the control's shape and states;
  *   - decorative background layers as `--sig-<key>-l` / `--sig-<key>-d` CSS values
- *     (grid, glow, band, card, panel) the shell backdrop paints. url()/gradients
- *     can't use light-dark(), so each ships an explicit light + dark value the
- *     consumer resolves via the `.dark` class.
+ *     (grid, glow, card, panel) the host paints. url()/gradients can't use
+ *     light-dark(), so each ships an explicit light + dark value the consumer
+ *     resolves via the `.dark` class.
  */
 export interface SignatureValue {
   /** The value used in light mode. */
@@ -59,8 +59,9 @@ export interface Signature {
  *  surface-container ramp composes from them and refuses any other form. */
   colors?: Record<string, SignatureValue>;
   /** Decorative BACKGROUND layers: key → {light,dark} CSS value (gradient/colour).
-   *  Written as `--sig-<key>-l` / `--sig-<key>-d`; the shell backdrop composes
-   *  them. Keys: grid, glow, band, card, panel. */
+   *  Written as `--sig-<key>-l` / `--sig-<key>-d` for the keys the host paints:
+   *  grid and glow (the shell backdrop), card (a card) and panel (the sign-in
+   *  page). Any other key is written nowhere. */
   graphics?: Record<string, SignatureValue>;
 }
 
@@ -101,7 +102,9 @@ const SIGNATURE_COLOR_TOKENS = [
   'borderStrong',
   ...SURFACE_CONTAINER_ROLES,
 ] as const;
-const SIGNATURE_GRAPHIC_KEYS = ['grid', 'glow', 'band', 'card', 'panel'] as const;
+// The graphics the host paints. A signature writes no other: a var nothing paints
+// shows nothing, and the teardown then clears exactly what was written.
+const SIGNATURE_GRAPHIC_KEYS = ['grid', 'glow', 'card', 'panel'] as const;
 
 /** Remove every signature-owned var + the data-signature stamp (clean teardown). */
 export function resetSignature(target: HTMLElement = document.documentElement): void {
@@ -148,7 +151,9 @@ export function signatureStyle(s: Signature): IdentityStyle {
     }
   }
   if (s.graphics) {
-    for (const [key, value] of Object.entries(s.graphics)) {
+    for (const key of SIGNATURE_GRAPHIC_KEYS) {
+      const value = s.graphics[key];
+      if (!value) continue;
       style.properties[`--sig-${key}-l`] = value.light;
       style.properties[`--sig-${key}-d`] = value.dark;
     }
