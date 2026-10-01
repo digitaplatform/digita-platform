@@ -220,6 +220,12 @@ describe("Boot API Integration", () => {
       expect((await branding()).default_signature).toBe("veloluck-workbench");
     });
 
+    it("relays no allow_user_template_override, which nothing reads, even from a row that still holds it", async () => {
+      const branding = async () => (await app.inject({ method: "GET", url: "/api/v1/boot" })).json().data.branding;
+      await db.updateOne("BrandingSetting", "branding", { allow_user_template_override: false }, "core");
+      expect(await branding()).not.toHaveProperty("allow_user_template_override");
+    });
+
     it("relays BrandingSetting.web_default_signature to an anonymous caller, and none while it is unset", async () => {
       const branding = async () => (await app.inject({ method: "GET", url: "/api/v1/boot" })).json().data.branding;
       await db.updateOne("BrandingSetting", "branding", { web_default_signature: null }, "core");

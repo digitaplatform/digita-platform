@@ -28,8 +28,7 @@
     { "fieldname": "login_background", "fieldtype": "AttachImage", "label": "Login Background", "public": true, "idx": 14 },
 
     { "fieldname": "sb_user_options", "fieldtype": "SectionBreak", "label": "User Options", "idx": 15 },
-    { "fieldname": "allow_user_template_override", "fieldtype": "Check", "label": "Allow user template override", "default": true, "idx": 16 },
-    { "fieldname": "allow_user_theme_mode", "fieldtype": "Check", "label": "Allow user light/dark choice", "default": true, "idx": 17 }
+    { "fieldname": "allow_user_theme_mode", "fieldtype": "Check", "label": "Allow user light/dark choice", "default": true, "idx": 16 }
   ],
   "permissions": [
     { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1 },

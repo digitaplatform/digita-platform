@@ -13,6 +13,7 @@ vi.mock('@/components/layout/LanguageSwitcher', () => ({
 }));
 
 import { Topbar } from '@/components/layout/Topbar';
+import { useThemeStore } from '@/stores/theme';
 
 describe('Topbar', () => {
   it('offers the mode control and no signature picker', () => {
@@ -20,5 +21,13 @@ describe('Topbar', () => {
 
     expect(screen.getByRole('button', { name: 'ui.theme.toggle' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'ui.signature.label' })).toBeNull();
+  });
+
+  it('offers no light/dark choice while the tenant allows none', () => {
+    useThemeStore.getState().setBranding({ allow_user_theme_mode: false });
+    render(<Topbar />);
+
+    expect(screen.queryByRole('button', { name: 'ui.theme.toggle' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'ui.density.label' })).toBeTruthy();
   });
 });
