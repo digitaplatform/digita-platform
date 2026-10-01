@@ -87,6 +87,16 @@ describe('hasRecordPermission and the gates of a row', () => {
     const north = { ...reception, branch: 'North' } as unknown as SessionUser;
     expect(hasRecordPermission(meta, north, 'delete', { branch: 'North' })).toBe(true);
   });
+
+  it('admits through a scoped row where the session holds a list for the scope, by any of its members', () => {
+    const meta = workOrder({
+      permissions: [{ role: 'Reception', level: 0, delete: 1, scope: { field: 'branch', user_field: 'branches' } }],
+    });
+    const twoBranches = { ...reception, branches: ['North', 'South'] } as unknown as SessionUser;
+    expect(hasRecordPermission(meta, twoBranches, 'delete', { branch: 'South' })).toBe(true);
+    expect(hasRecordPermission(meta, twoBranches, 'delete', { branch: ['East', 'North'] })).toBe(true);
+    expect(hasRecordPermission(meta, twoBranches, 'delete', { branch: 'East' })).toBe(false);
+  });
 });
 
 // The engine sends a caller outside the internal audience no permission rows (/meta strips them),
