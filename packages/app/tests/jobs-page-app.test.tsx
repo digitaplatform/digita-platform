@@ -262,6 +262,28 @@ describe('the Jobs page of a tenant with several apps', () => {
   });
 });
 
+// A tenant with one app sees the page as before the jobs service named apps: no picker, its own
+// engine's tasks; a scheduled job names the one app, which is the default the service runs it on.
+describe('the Jobs page of a tenant with one app', () => {
+  beforeEach(() => {
+    routes['/api/v1/apps'] = () => json({ apps: ['erp'], default: 'erp' });
+  });
+
+  it("lists this app's tasks without a picker and schedules a job that names the app", async () => {
+    renderJobs();
+    expect(await screen.findByTestId('row:sendDunning')).toBeInTheDocument();
+    expect(screen.queryByTestId('jobs-app')).toBeNull();
+    fireEvent.click(screen.getByTestId('action:task-schedule-sendDunning'));
+    await screen.findByRole('dialog');
+    fireEvent.change(screen.getByLabelText(/^Target document/), { target: { value: 'c1' } });
+    fireEvent.change(screen.getByLabelText(/^Cron/), { target: { value: '0 3 * * *' } });
+    fireEvent.click(screen.getByTestId('action:job-save'));
+
+    await waitFor(() => expect(saves).toHaveLength(1));
+    expect(saves[0]).toMatchObject({ method: 'POST', path: '/api/v1/jobs', body: { action: 'sendDunning', app: 'erp' } });
+  });
+});
+
 // Editing a saved job on a page where an app is chosen: PUT replaces the job, so the body carries
 // what the dialog does not show as the job has it, and the toast tells what the save did.
 describe('editing a saved job of the chosen app', () => {
