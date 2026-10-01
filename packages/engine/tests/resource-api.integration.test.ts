@@ -634,7 +634,7 @@ describe("Resource API Integration", () => {
 
     // The engine also keeps an Administrator's undeclared keys, so the PUT above passes without
     // the declaration; the form only offers the field when the meta names it.
-    it("the meta of BrandingSetting offers default_signature as a Select of the delivered signatures", async () => {
+    it("the meta of BrandingSetting offers default_signature as a Select of the app's signatures", async () => {
       const res = await app.inject({ method: "GET", url: "/api/v1/meta/BrandingSetting", headers: authHeaders() });
       expect(res.statusCode).toBe(200);
       expect(res.json().data.fields).toContainEqual(

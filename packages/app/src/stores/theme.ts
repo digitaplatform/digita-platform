@@ -19,6 +19,10 @@ import {
   type Density,
 } from '@digitaplatform/theme';
 import { signature as digitaSignature } from '@digitaplatform/digita';
+import { signature as simetrixSignature } from '@digitaplatform/simetrix';
+import { signature as veloluckLakeside } from '@digitaplatform/veloluck-lakeside';
+import { signature as veloluckPrecise } from '@digitaplatform/veloluck-precise';
+import { signature as veloluckWorkbench } from '@digitaplatform/veloluck-workbench';
 import { nextMode } from '@digitaplatform/components';
 import { getUserPreference, setUserPreference } from '@/services/userPreference';
 
@@ -60,13 +64,17 @@ interface ThemeState {
 // flash; localStorage is the fast device-local default until the server prefs roam
 // in. The branding follows when /boot answers (setBranding).
 //
-// digita is the platform's own signature, shipped as a free plugin BUNDLED into
-// the host at build (like usermenu) — NOT network-delivered. It is registered
-// before the stored id is applied, so getSignature('digita') resolves its full
-// brand world on the very first paint, including the pre-login screen, with no
-// flash and no dependency on the authenticated plugin composition. Alternate /
-// premium signatures still arrive later via the composition.
-const initial = bootIdentity({ signatures: [digitaSignature] });
+// The five looks the website renderer bundles (packages/web/src/lib/identity.ts)
+// ship BUNDLED into the host at build too (like usermenu), NOT network-delivered,
+// so a tenant's BrandingSetting.default_signature can name any of them: digita,
+// the platform's own, simetrix, and the three Veloluck looks. They are registered
+// before the stored id is applied, so each resolves its full brand world on the
+// very first paint, including the pre-login screen, with no flash and no
+// dependency on the authenticated plugin composition. Other signatures still
+// arrive later via the composition.
+const initial = bootIdentity({
+  signatures: [digitaSignature, simetrixSignature, veloluckWorkbench, veloluckLakeside, veloluckPrecise],
+});
 
 // The signature a person sees, by one rule: their own pick, stored in this browser
 // (where a pick roamed from UserPreference is written too), if this app offers it;

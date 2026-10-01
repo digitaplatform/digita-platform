@@ -22,12 +22,24 @@ importers:
       '@digitaplatform/shared':
         specifier: workspace:*
         version: link:../shared
+      '@digitaplatform/simetrix':
+        specifier: ^0.3.0
+        version: 0.3.2
       '@digitaplatform/theme':
         specifier: workspace:*
         version: link:../theme
       '@digitaplatform/usermenu':
         specifier: ^0.3.0
         version: 0.3.0(@digitaplatform/components@packages+components)(@digitaplatform/plugins@packages+plugins+sdk)(lucide-react@0.562.0(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react-router-dom@7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-router@7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
+      '@digitaplatform/veloluck-lakeside':
+        specifier: ^0.3.7
+        version: 0.3.7
+      '@digitaplatform/veloluck-precise':
+        specifier: ^0.3.7
+        version: 0.3.7
+      '@digitaplatform/veloluck-workbench':
+        specifier: ^0.3.7
+        version: 0.3.7
       '@hookform/resolvers':
         specifier: 3.9.1
         version: 3.9.1(react-hook-form@7.81.0(react@19.2.7))
