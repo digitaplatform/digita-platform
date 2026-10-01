@@ -68,4 +68,42 @@ describe('the branding a tenant sets', () => {
     expect(store.getState().mode).toBe('system');
     expect(root().classList.contains('dark')).toBe(false);
   });
+
+  it("paints a locked tenant's first frame in the system mode, though a dark mode is stored", async () => {
+    let store = await loadThemeStore();
+    store.getState().setBranding({ allow_user_theme_mode: false });
+    localStorage.setItem('digita-app:theme-mode', 'dark');
+
+    store = await loadThemeStore();
+    expect(store.getState().mode).toBe('system');
+    expect(root().classList.contains('dark')).toBe(false);
+  });
+
+  it('stores no roamed mode while the tenant allows no light/dark choice', async () => {
+    const store = await loadThemeStore();
+    store.getState().setBranding({ allow_user_theme_mode: false });
+    services.getUserPreference.mockImplementation(async (key: string) => (key === 'ui.theme_mode' ? 'dark' : undefined));
+    await store.getState().loadRemotePrefs();
+    expect(localStorage.getItem('digita-app:theme-mode')).toBeNull();
+  });
+
+  it("gives a person's own mode back at once when the tenant lifts the lock", async () => {
+    localStorage.setItem('digita-app:theme-mode', 'dark');
+    const store = await loadThemeStore();
+    store.getState().setBranding({ allow_user_theme_mode: false });
+    expect(store.getState().mode).toBe('system');
+
+    store.getState().setBranding({ allow_user_theme_mode: true });
+    expect(store.getState().mode).toBe('dark');
+    expect(root().classList.contains('dark')).toBe(true);
+  });
+
+  it('changes no mode under the lock, not even from the design showcase', async () => {
+    const store = await loadThemeStore();
+    store.getState().setBranding({ allow_user_theme_mode: false });
+    store.getState().setMode('dark');
+    expect(store.getState().mode).toBe('system');
+    expect(localStorage.getItem('digita-app:theme-mode')).toBeNull();
+    expect(services.setUserPreference).not.toHaveBeenCalled();
+  });
 });

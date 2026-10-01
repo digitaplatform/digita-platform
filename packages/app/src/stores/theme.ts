@@ -9,6 +9,7 @@ import {
   bootIdentity,
   getRuntimeSignature,
   resolveInitialDensity,
+  resolveInitialMode,
   storeIdentityPreferences,
   DEFAULT_SIGNATURE_ID,
   IDENTITY_PREFERENCE_KEYS,
@@ -36,6 +37,10 @@ const TEMPLATE_KEY = 'digita-app:template';
 // tenant share the origin and may wear different looks, so each app caches its own
 // under its base path.
 const SIGNATURE_CACHE_KEY = `digita-app:signature-cache${APP_BASE_PATH}`;
+
+// Whether this app's tenant allows no light/dark choice, cached like the signature, so the first
+// paint before /boot answers follows the system mode instead of a mode this browser stored.
+const MODE_LOCK_CACHE_KEY = `digita-app:mode-lock${APP_BASE_PATH}`;
 
 interface ThemeState {
   mode: ThemeMode;
@@ -86,7 +91,14 @@ interface ThemeState {
 const initial = bootIdentity({
   signatures: [digitaSignature, simetrixSignature, veloluckWorkbench, veloluckLakeside, veloluckPrecise],
   signature: localStorage.getItem(SIGNATURE_CACHE_KEY) ?? undefined,
+  mode: localStorage.getItem(MODE_LOCK_CACHE_KEY) !== null ? 'system' : undefined,
 });
+
+/** Whether the tenant allows no light/dark choice: its branding says so once /boot answered,
+ *  the cache before. */
+function isModeLocked(branding: BootBranding | null): boolean {
+  return branding ? branding.allow_user_theme_mode === false : localStorage.getItem(MODE_LOCK_CACHE_KEY) !== null;
+}
 
 // The signature everyone sees, by one rule: once /boot answered, the tenant's
 // BrandingSetting.default_signature if this app offers it; before that, the look
@@ -131,6 +143,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   templateOverride: localStorage.getItem(TEMPLATE_KEY),
   branding: null,
   setMode: (mode) => {
+    if (isModeLocked(get().branding)) return;
     localStorage.setItem(MODE_STORAGE_KEY, mode);
     applyMode(mode);
     set({ mode });
@@ -168,13 +181,14 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   // back over it: a person's own density, else the tenant's. A tenant that allows
   // no light/dark choice puts everyone on the system mode.
   setBranding: (branding) => {
-    const isModeLocked = branding.allow_user_theme_mode === false;
-    if (isModeLocked) applyMode('system');
-    set({
-      branding,
-      density: resolveInitialDensity(undefined, branding.density),
-      ...(isModeLocked ? { mode: 'system' as const } : {}),
-    });
+    const wasModeLocked = isModeLocked(get().branding);
+    const isNowModeLocked = isModeLocked(branding);
+    if (isNowModeLocked) localStorage.setItem(MODE_LOCK_CACHE_KEY, 'locked');
+    else localStorage.removeItem(MODE_LOCK_CACHE_KEY);
+    // Under the lock everyone follows the system mode; when it lifts, a person's own mode returns.
+    const mode = isNowModeLocked ? 'system' : wasModeLocked ? resolveInitialMode() : get().mode;
+    if (mode !== get().mode || isNowModeLocked !== wasModeLocked) applyMode(mode);
+    set({ branding, density: resolveInitialDensity(undefined, branding.density), mode });
     showFavicon(branding.favicon ? appUrl(branding.favicon) : faviconUrl);
     get().reapplySignature();
   },
@@ -185,8 +199,10 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         getUserPreference(IDENTITY_PREFERENCE_KEYS.density),
         getUserPreference(IDENTITY_PREFERENCE_KEYS.design),
       ]);
-      const stored = storeIdentityPreferences({ mode, density, design });
-      if (stored.mode && get().branding?.allow_user_theme_mode !== false) {
+      // Under the lock a roamed mode is not kept, or it would paint the next load's first frame.
+      const isLocked = isModeLocked(get().branding);
+      const stored = storeIdentityPreferences({ mode: isLocked ? undefined : mode, density, design });
+      if (stored.mode) {
         applyMode(stored.mode);
         set({ mode: stored.mode });
       }
