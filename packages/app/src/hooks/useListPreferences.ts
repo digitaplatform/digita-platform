@@ -14,11 +14,12 @@ import { useSessionStore } from '@/stores/session';
 const truthy = (v: unknown) => v === 1 || v === true;
 
 /**
- * Saved views for an entity. The engine read is broad (so shared views are
- * visible); this hook applies the precise visibility rule — a view is visible
- * when it's mine, shared with everyone, or shared with one of my roles / my
- * email. Write/delete are owner-only server-side; `canEdit` mirrors that for the
- * UI. `defaultView` resolves my default first, then the org default.
+ * Saved views for an entity. The engine answers a person only the views they may
+ * read: their own, those shared with everyone, and those shared with one of their
+ * roles or their email. An Administrator reads every view, so this hook applies
+ * the same rule, and the picker offers an Administrator what anyone else sees.
+ * Write/delete are owner-only server-side; `canEdit` mirrors that for the UI.
+ * `defaultView` resolves my default first, then the org default.
  */
 export function useListPreferences(entity: string | undefined) {
   const qc = useQueryClient();

@@ -129,4 +129,14 @@ describe("the visibility of a saved view", () => {
   it("lists every view to an Administrator", async () => {
     expect(await listIds(adminTok)).toHaveLength(6);
   });
+
+  it("lets a person who reads a shared view neither change nor delete it", async () => {
+    const url = "/api/v1/resource/ListPreference/shared-user";
+    const changed = await app.inject({ method: "PUT", url, headers: bearer(readerTok), payload: { view_name: "taken over" } });
+    expect(changed.statusCode).toBe(403);
+    const deleted = await app.inject({ method: "DELETE", url, headers: bearer(readerTok) });
+    expect(deleted.statusCode).toBe(403);
+    const kept = await app.inject({ method: "GET", url, headers: bearer(ownerTok) });
+    expect(kept.json().data.view_name).toBe("shared-user");
+  });
 });
