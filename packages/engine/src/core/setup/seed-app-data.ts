@@ -190,16 +190,16 @@ export async function seedAppData(
         continue;
       }
 
-      // Idempotency lint for auto_increment: a re-run regenerates fresh string
-      // IDs and double-inserts. `system` naming is exempt — its idempotency comes
-      // from the business_key unique index, not from a stable _id.
-      if (entity.naming?.strategy === "auto_increment") {
+      // Idempotency lint for auto_increment: without a business key a re-run
+      // regenerates fresh string IDs and double-inserts. With one, a row takes the
+      // _id of the stored row of its business key (Pass 2), as `system` rows do.
+      if (entity.naming?.strategy === "auto_increment" && !businessKeyFields(entity).length) {
         const missing = rows.reduce((n, r) => (r["_id"] == null ? n + 1 : n), 0);
         if (missing > 0) {
           log.warn(
             { file: join(dir, file), entity: entity.name, rows_without_id: missing, total_rows: rows.length },
             "seed file is NOT idempotent: auto_increment entity has rows without explicit _id — " +
-              "a re-run will create duplicates. Add an explicit _id or use `system` naming + a business_key.",
+              "a re-run will create duplicates. Add an explicit _id or a business_key.",
           );
         }
       }
@@ -209,8 +209,13 @@ export async function seedAppData(
   }
 
   // ── Pass 2: assign _ids + build the business-key → _id index ────────
-  // bkIndex: entityName -> (businessKeyValue -> idString)
+  // bkIndex: entityName -> (businessKeyValue -> idString). The stored rows are indexed
+  // first, so a seed row whose business key a stored row holds takes that row's _id:
+  // a Link to it names a row that exists, and a row whose insert would collide on the
+  // business key never lends an id nobody stores. The `bkFields.length` guard keeps
+  // bk-less fixtures away from `find` (the guards suite mocks a db without it).
   const bkIndex = new Map<string, Map<string, string>>();
+  const bkResolver = new BkResolver(registry, db);
   for (const { entity, rows } of collected) {
     const prefix = entity.naming?.prefix ?? "";
     const padLength = entity.naming?.pad_length ?? 5;
@@ -218,10 +223,25 @@ export async function seedAppData(
     const isSystem = entity.naming?.strategy === "system";
     const isExpression = entity.naming?.strategy === "expression";
 
-    // Pre-reserve an auto_increment range for rows lacking an explicit _id.
+    const bkFields = businessKeyFields(entity);
+    let idx: Map<string, string> | undefined;
+    if (bkFields.length) {
+      idx = bkIndex.get(entity.name);
+      if (!idx) {
+        idx = new Map();
+        await bkResolver.indexEntity(entity, idx);
+        bkIndex.set(entity.name, idx);
+      }
+    }
+    const knownId = (row: CollectedRow): string | undefined => {
+      const bk = idx ? businessKeyOf(row, bkFields) : undefined;
+      return bk === undefined ? undefined : idx!.get(bk);
+    };
+
+    // Pre-reserve an auto_increment range for rows lacking both an explicit and a known _id.
     let nextSeq = 0;
     if (isAutoInc) {
-      const need = rows.filter((r) => r["_id"] == null).length;
+      const need = rows.filter((r) => r["_id"] == null && knownId(r) === undefined).length;
       if (need > 0) {
         nextSeq = await db.getNextSequence(entity.name, "naming_seq", entity.database);
         if (need > 1) {
@@ -230,13 +250,12 @@ export async function seedAppData(
       }
     }
 
-    const bkFields = businessKeyFields(entity);
-    const idx = bkFields.length ? (bkIndex.get(entity.name) ?? new Map()) : undefined;
-    if (idx) bkIndex.set(entity.name, idx);
-
     for (const row of rows) {
+      const known = knownId(row);
       if (row["_id"] != null) {
         row.__seedId = String(row["_id"]);
+      } else if (known !== undefined) {
+        row.__seedId = known;
       } else if (isSystem) {
         row.__seedId = new ObjectId(); // native system id (see id-codec / docs/guides/id-concept.md)
       } else if (isExpression) {
@@ -247,22 +266,11 @@ export async function seedAppData(
         nextSeq++;
       }
 
-      if (idx && row.__seedId != null) {
+      if (idx && row.__seedId != null && known === undefined) {
         const bk = businessKeyOf(row, bkFields);
         if (bk !== undefined) idx.set(bk, toIdString(row.__seedId));
       }
     }
-  }
-
-  // Also index already-seeded rows so references can resolve against targets that
-  // exist in the DB from a previous run (non-destructive top-up). Shared with the
-  // import pipeline via BkResolver.indexEntity (same targeted-projection pattern +
-  // `!idx.has(bk)` precedence). The `!bkFields.length` guard stays HERE so bk-less
-  // fixtures never reach indexEntity (the guards suite mocks a db without `find`).
-  const bkResolver = new BkResolver(registry, db);
-  for (const { entity } of collected) {
-    if (!businessKeyFields(entity).length) continue;
-    await bkResolver.indexEntity(entity, bkIndex.get(entity.name)!);
   }
 
   // ── Pass 3: resolve Link references by business key ─────────────────
