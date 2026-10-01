@@ -67,7 +67,7 @@ export function AddViaLinkSearch({
     <SearchDialog
       open={open}
       onClose={onClose}
-      title={tc('ui.link.searchEntity', { entity: linkField.target ?? '' })}
+      title={tc('ui.link.searchField', { field: linkField.label })}
       query={query}
       onQueryChange={setQuery}
       columns={columns.map((key) => ({
