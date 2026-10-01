@@ -11,7 +11,7 @@ import { toIdString } from "./id-codec.js";
 import { DocStatusEngine, DocStatusError } from "./docstatus-engine.js";
 import { validateEntityDataZod } from "../entity/entity-validator-zod.js";
 import { ZodSchemaBuilder } from "../entity/zod-schema-builder.js";
-import { IllegalTransitionError } from "../workflow/workflow-engine.js";
+import { IllegalTransitionError, stateLabel } from "../workflow/workflow-engine.js";
 import { getFieldTypeHandler, isStoredFieldType, FieldValueError, readStoredRow } from "../entity/field-types.js";
 import { foreignPasswordValue } from "../entity/password-cipher.js";
 import { copyDocumentData } from "./copy-service.js";
@@ -444,15 +444,26 @@ export class DocumentService {
     const doc = new BaseDocument(doctype, raw as Record<string, unknown>);
     doc._data = readStoredRow(entity, doc._data);
 
+    await this.assertRowReadable(entity, doctype, name, user, doc._data);
+    return doc;
+  }
+
+  /** The row-level part of `getDoc`'s read check, on a row already loaded. */
+  private async assertRowReadable(
+    entity: EntityDefinition,
+    doctype: string,
+    name: string,
+    user: UserContext,
+    data: Record<string, unknown>,
+  ): Promise<void> {
     // Permission check on specific document (owner, condition, scope)
-    await this.assertReadAccess(user, doctype, name, doc._data);
+    await this.assertReadAccess(user, doctype, name, data);
 
     // Role-visibility (e.g. Workspace): a role-restricted document the user may not
     // see is reported as not-found (same as RBAC elsewhere — don't leak its shape).
-    if (!isRoleVisible(entity, user, doc._data)) {
+    if (!isRoleVisible(entity, user, data)) {
       throw new NotFoundError(doctype, name);
     }
-    return doc;
   }
 
   async getDoc(
@@ -2052,15 +2063,23 @@ export class DocumentService {
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
     const workflowField = entity.workflow_field ?? "status";
-    const doc = await this.loadDocInternal(doctype, name, sessionOverride);
     const hasWorkflow = !!this.workflowEngine?.hasWorkflow(entity);
+    // The workflow's judgement stands in for the write check, but not for the read check:
+    // a row the user may not read is answered as a read of it would be.
+    if (hasWorkflow) await this.assertReadAccess(user, doctype, name);
+    const doc = await this.loadDocInternal(doctype, name, sessionOverride);
+    if (hasWorkflow) await this.assertRowReadable(entity, doctype, name, user, doc._data);
+
+    // Without a workflow the move is a write, so the write check answers first: the refusal
+    // below names the record's state, which a caller who may not write must not learn.
+    if (!hasWorkflow) await this.permissionChecker.check(user, doctype, "write", doc._data);
 
     // The workflow judges only a target that names a state other than the current one, and
     // its judgement is what stands in for the write check; a move to no state or to the
     // current one would write without it.
     const from = doc._data[workflowField] as string | undefined;
     if (typeof toState !== "string" || toState === "" || (hasWorkflow && toState === from)) {
-      throw new IllegalTransitionError(entity.name, from, String(toState), "not_declared");
+      throw new IllegalTransitionError(entity.name, from, stateLabel(toState), "not_declared");
     }
 
     if (entity.is_submittable && doc.docstatus === DocStatus.Submitted) {
