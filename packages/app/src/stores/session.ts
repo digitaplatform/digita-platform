@@ -129,6 +129,9 @@ interface SessionState {
    *  choice, mark the document lang so the engine resolves it via Accept-Language, and
    *  take the formats and the text direction the engine resolves for it. */
   setLocale: (code: string) => Promise<void>;
+  /** Forget this device's language pick and take the language a fresh boot resolves,
+   *  with its texts, as App does at boot. */
+  resetLocale: () => Promise<void>;
   /** Persist + apply the region formatting locale (BCP-47, e.g. "de-CH") and the
    *  display timezone — independent of the UI language, so "German UI, Swiss
    *  formatting" works. Stored under the UserPreference "locale" key (a JSON
@@ -220,6 +223,25 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const locale = resolveLocale(code, get().locale, get().languages);
     set({ locale });
     document.documentElement.dir = locale.direction ?? 'ltr';
+  },
+
+  resetLocale: async () => {
+    try {
+      localStorage.removeItem(LOCALE_STORAGE_KEY);
+    } catch {
+      /* storage that cannot be reached holds no pick: getStoredLocale reads null too */
+    }
+    // The old language is still the document's and would go out as Accept-Language;
+    // the boot below must send what a fresh page load sends.
+    document.documentElement.lang = '';
+    const { resolved, data } = await pickBootLocale(() => get().bootstrap());
+    // The data texts need a sign-in, so a visitor takes the chrome texts alone, as App does.
+    if (data?.user) {
+      await useI18nStore.getState().load(resolved);
+    } else {
+      document.documentElement.lang = resolved;
+      useI18nStore.setState({ locale: resolved });
+    }
   },
 
   setLocaleFormat: async (formatLocale, timezone) => {
