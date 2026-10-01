@@ -150,7 +150,6 @@ export interface FieldDefinition {
   // Link-specific
   target?: string;
   target_display?: string;
-  target_search?: string[];
   target_filters?: Record<string, unknown>;
   /**
    * On `Link`: when set, the link points at a row INSIDE a
