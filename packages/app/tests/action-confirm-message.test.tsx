@@ -55,7 +55,7 @@ describe('the confirm of an action', () => {
 
   it('says it in the tenant translation of those words', async () => {
     useI18nStore.setState({
-      translations: { 'action_confirm_message.WorkOrder.bookParts': 'Bucht die Teile dieses Auftrags aus dem Lager.' },
+      translations: { 'action.WorkOrder.bookParts.confirm_message': 'Bucht die Teile dieses Auftrags aus dem Lager.' },
     });
 
     const dialog = await openConfirm(bookParts);
