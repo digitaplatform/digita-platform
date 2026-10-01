@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { searchLinks, type LinkSearchResult } from '@/services/resource';
 import { qk } from '@/lib/query-keys';
 
@@ -15,6 +15,9 @@ export function useSearchLink(params: {
   fields?: string[];
   limit?: number;
   enabled?: boolean;
+  /** While the answer to a new query is on its way, `data` keeps the rows of the previous one and
+   *  `isPlaceholderData` is true, so a picker dialog never empties between two answers. */
+  keepPreviousRows?: boolean;
 }) {
   const q = params.q.trim();
   const enabled = (params.enabled ?? true) && !!params.entity;
@@ -25,6 +28,7 @@ export function useSearchLink(params: {
       c: params.fields ?? null,
     }),
     enabled,
+    placeholderData: params.keepPreviousRows ? keepPreviousData : undefined,
     staleTime: 30_000,
     queryFn: async () => {
       const res = await searchLinks(params.entity!, {

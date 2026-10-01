@@ -60,6 +60,7 @@ export function AddViaLinkSearch({
     filters: resolveLinkFilters(linkField.target_filters, doc),
     fields: columns,
     enabled: open,
+    keepPreviousRows: true,
   });
 
   return (
@@ -81,6 +82,7 @@ export function AddViaLinkSearch({
       getRowId={(r) => r._id}
       onPick={(r) => onPick(r._id, r.display)}
       loading={results.isLoading}
+      stale={results.isPlaceholderData}
       searchPlaceholder={tc('ui.list.search')}
       emptyLabel={tc('ui.select.noResults')}
       loadingLabel={tc('ui.link.searching')}

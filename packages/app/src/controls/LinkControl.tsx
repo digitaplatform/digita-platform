@@ -51,6 +51,7 @@ export default function LinkControl({
   const [inputFocused, setInputFocused] = useState(false);
   // tree mode (hierarchical picker) state.
   const [treeOpen, setTreeOpen] = useState(false);
+  const [treeRowsWanted, setTreeRowsWanted] = useState(false);
   const [treeQuery, setTreeQuery] = useState('');
   const keptTreeExpandedIds = useUiStore((s) => (field.target ? s.treePickerExpandedIds[field.target] : undefined));
   const setTreePickerExpandedIds = useUiStore((s) => s.setTreePickerExpandedIds);
@@ -96,8 +97,9 @@ export default function LinkControl({
   // labels from the target meta; rows carry those column values.
   const targetMeta = useMeta(field.target);
   const treeCfg = targetMeta.data?.tree;
-  // Whole (small) tree loaded once the dialog opens, scoped by the resolved filters
-  // AND auto-scoped by the tree's own partition (`tree.group_by`, e.g. `domain`):
+  // Whole (small) tree loaded once a person moves to the field or into it, so its rows stand in
+  // the picker when it opens, while a form a person only looks at loads none of it; scoped by the
+  // resolved filters AND auto-scoped by the tree's own partition (`tree.group_by`, e.g. `domain`):
   // a self-referential parent field on a partitioned tree must only offer nodes in
   // the SAME partition (picking a "sales" group's parent shows only the sales
   // forest, not all four domains interleaved). Explicit target_filters win.
@@ -113,7 +115,7 @@ export default function LinkControl({
   ) {
     treeFilters[treeGroupBy] = partitionValue;
   }
-  const treeList = useList(treeCfg && treeOpen ? field.target : undefined, {
+  const treeList = useList(treeCfg && (treeOpen || treeRowsWanted) ? field.target : undefined, {
     filters: Object.entries(treeFilters).map(([k, v]) => [k, '=', v] as [string, string, unknown]),
     page_size: 2000,
   });
@@ -135,6 +137,7 @@ export default function LinkControl({
     filters: resolvedFilters,
     fields: searchColumns,
     enabled: dialogOpen,
+    keepPreviousRows: true,
   });
   const dialogRows = (dialogResults.data ?? []).map((r) => ({
     _id: r._id,
@@ -211,7 +214,7 @@ export default function LinkControl({
     }
     return (
       <>
-        <div className="relative">
+        <div className="relative" onPointerEnter={() => setTreeRowsWanted(true)} onFocus={() => setTreeRowsWanted(true)}>
           <Input
             id={controlId}
             type="text"
@@ -264,6 +267,7 @@ export default function LinkControl({
           onClose={() => setTreeOpen(false)}
           title={tc('ui.link.searchEntity', { entity: field.target ?? '' })}
           size="lg"
+          height="fill"
         >
           <Input
             autoFocus
@@ -279,6 +283,7 @@ export default function LinkControl({
             nodes={nodes}
             selectedId={hasValue ? String(value) : null}
             query={treeQuery}
+            className="min-h-0 max-h-full flex-1"
             disabledIds={disabledIds}
             emptyLabel={treeList.isLoading ? tc('ui.link.searching') : tc('ui.select.noResults')}
             // Groups open on a tap of their name and stay pickable: the tree's own parent field picks groups.
@@ -393,6 +398,7 @@ export default function LinkControl({
             select({ _id: r._id, display: String(r.display ?? r._id) });
           }}
           loading={dialogResults.isLoading}
+          stale={dialogResults.isPlaceholderData}
           searchPlaceholder={tc('ui.list.search')}
           emptyLabel={tc('ui.select.noResults')}
           loadingLabel={tc('ui.link.searching')}
