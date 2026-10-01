@@ -97,6 +97,16 @@ describe('the Markdown control', () => {
     expect(preview().querySelector('a')?.getAttribute('href') ?? '').not.toContain('javascript');
   });
 
+  it('renders a heading line full of spaces before a # at once', async () => {
+    const spaces = ' '.repeat(4000);
+    const started = performance.now();
+    drawField('Markdown', `# a${spaces}#x\n\n## closed ##`);
+    await screen.findByLabelText('Body');
+    expect(performance.now() - started).toBeLessThan(2000);
+    expect(preview().querySelector('h1')!.textContent).toBe(`a${spaces}#x`);
+    expect(preview().querySelector('h2')!.textContent).toBe('closed');
+  });
+
   it('keeps snake_case words as they are', async () => {
     drawField('Markdown', 'the field qr_payload_text stays');
     await screen.findByLabelText('Body');
