@@ -133,22 +133,19 @@ export function localizeSummary(s: EntitySummary, t: Dict): EntitySummary {
   };
 }
 
-type TField = (entity: string, field: string, fallback?: string) => string;
-
 /**
  * The texts of what a view returns. A view's result names no entity for its values, so its texts
- * key by the view, as a form's texts key by its entity: a section like a Table field of the view,
- * `field.<view>.<section>`, and a value like a child field of that Table,
- * `field.<view>.<section>.<key>`. The store's `tField` reads a key without a text as words, so a
- * panel never prints a key of a result as it is.
+ * key by the view, in a family of their own so a view is never read as an entity: a section by
+ * `view.<view>.<section>` and a value by `view.<view>.<section>.<key>`. A key without a text reads
+ * as words, so a panel never prints a key of a result as it is.
  */
-export function viewSectionLabel(tField: TField, view: string, section: string): string {
-  return tField(view, section);
+export function viewSectionLabel(t: Dict, view: string, section: string): string {
+  return t[`view.${view}.${section}`] ?? humanize(section);
 }
 
 /** The text of one value of a view's section; see viewSectionLabel. */
-export function viewValueLabel(tField: TField, view: string, section: string, key: string): string {
-  return tField(`${view}.${section}`, key);
+export function viewValueLabel(t: Dict, view: string, section: string, key: string): string {
+  return t[`view.${view}.${section}.${key}`] ?? humanize(key);
 }
 
 /** Localize a workspace: its name and the texts of its cards. The keys name the workspace by its

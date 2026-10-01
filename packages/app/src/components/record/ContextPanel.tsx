@@ -111,11 +111,11 @@ function FieldContext({
  *  table of the first columns; null/empty → skipped entirely. A heading and a label
  *  are the texts of the view's section and key, never the keys themselves. */
 function Section({ view, name, data }: { view: string; name: string; data: ViewSectionData }) {
-  const tField = useI18nStore((s) => s.tField);
+  const translations = useI18nStore((s) => s.translations);
   if (data == null || (Array.isArray(data) && data.length === 0)) return null;
 
-  const heading = viewSectionLabel(tField, view, name);
-  const label = (key: string) => viewValueLabel(tField, view, name, key);
+  const heading = viewSectionLabel(translations, view, name);
+  const label = (key: string) => viewValueLabel(translations, view, name, key);
 
   if (Array.isArray(data)) {
     const cols = Object.keys(data[0] ?? {}).slice(0, 3);

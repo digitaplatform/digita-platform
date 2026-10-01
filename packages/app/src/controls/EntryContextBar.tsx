@@ -28,7 +28,7 @@ export function EntryContextBar({
   row: Doc;
   doc: Doc;
 }) {
-  const tField = useI18nStore((s) => s.tField);
+  const translations = useI18nStore((s) => s.translations);
   const [result, setResult] = useState<ViewResult | null>(null);
   const ticketRef = useRef(0);
 
@@ -75,7 +75,7 @@ export function EntryContextBar({
       if (v == null || typeof v === 'object') continue;
       pairs.push({
         id: `${section}.${k}`,
-        label: viewValueLabel(tField, view, section, k),
+        label: viewValueLabel(translations, view, section, k),
         value: typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v),
       });
     }
