@@ -24,6 +24,17 @@ function isAuthFlowUrl(url: string): boolean {
   return AUTH_FLOW_PREFIXES.some((p) => url.includes(p));
 }
 
+// A 401 that answers the request itself, not an expired access cookie: a refresh
+// would only repeat it and then send the page to the login. An `unauthorized` 401
+// on the same route is still an expired session.
+const ANSWER_401: { prefix: string; error: string }[] = [
+  { prefix: '/api/v1/auth/password', error: 'invalid_current_password' },
+];
+function isAnswer401(url: string, body: unknown): boolean {
+  const error = typeof body === 'object' && body !== null ? (body as Record<string, unknown>)['error'] : undefined;
+  return ANSWER_401.some((a) => url.includes(a.prefix) && error === a.error);
+}
+
 type QueryParams = Record<string, string | number | boolean | undefined | null>;
 
 function buildQueryString(params?: QueryParams): string {
@@ -124,6 +135,8 @@ async function request<T>(method: string, url: string, opts: RequestOptions = {}
   let response = await exec();
 
   if (response.status === 401 && !isAuthFlowUrl(url)) {
+    const body = await parseBody(response);
+    if (isAnswer401(url, body)) throw toApiError(401, body);
     const refreshed = await attemptRefresh();
     if (refreshed) response = await exec();
     if (response.status === 401) {
