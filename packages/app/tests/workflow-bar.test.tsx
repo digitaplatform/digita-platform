@@ -143,7 +143,10 @@ describe('WorkflowBar (generic, meta-driven)', () => {
 
   it("offers no Amend on another user's cancelled document where amend needs ownership", () => {
     user = { _id: 'u-ann', email: 'ann@example.com', roles: ['Editor'] };
-    const m = meta({ is_submittable: true, permissions: [{ role: 'Editor', level: 0, amend: 1, if_owner: true }] });
+    const m = meta({
+      is_submittable: true,
+      permissions: [{ role: 'Editor', level: 0, amend: 1, create: 1, if_owner: true }],
+    });
     expect(renderBar(m, { docstatus: 2, owner: 'bob@example.com' }).container.firstChild).toBeNull();
     cleanup();
     expect(renderBar(m, { docstatus: 2, owner: 'ann@example.com' }).queryByText('ui.workflow.amend')).not.toBeNull();
@@ -157,11 +160,24 @@ describe('WorkflowBar (generic, meta-driven)', () => {
     expect(renderBar(m, { docstatus: 1 }).queryByText('ui.workflow.cancel')).not.toBeNull();
   });
 
-  it('cancelled doc (docstatus 2) with amend permission: shows Amend', () => {
-    const m = meta({ is_submittable: true, permissions: [{ role: 'Editor', level: 0, amend: 1 }] });
+  it('cancelled doc (docstatus 2) with amend and create permission: shows Amend', () => {
+    const m = meta({ is_submittable: true, permissions: [{ role: 'Editor', level: 0, amend: 1, create: 1 }] });
     user = { roles: ['Editor'] };
     const { queryByText } = renderBar(m, { docstatus: 2 });
     expect(queryByText('ui.workflow.amend')).not.toBeNull();
+  });
+
+  // An amend inserts a new draft, so the engine refuses it without create.
+  it('cancelled doc with amend but without create permission: renders nothing (Amend hidden)', () => {
+    const m = meta({ is_submittable: true, permissions: [{ role: 'Editor', level: 0, amend: 1 }] });
+    user = { roles: ['Editor'] };
+    const { container } = renderBar(m, { docstatus: 2 });
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('cancelled doc of an entity whose permission rows the engine withheld: shows Amend', () => {
+    user = { roles: ['Editor'] };
+    expect(renderBar(meta({ is_submittable: true }), { docstatus: 2 }).queryByText('ui.workflow.amend')).not.toBeNull();
   });
 
   it('cancelled doc without amend permission: renders nothing (Amend hidden)', () => {
