@@ -105,6 +105,59 @@ export function formatDatetime(value: unknown, locale: string | undefined, timez
   return new Intl.DateTimeFormat(loc(locale), o).format(d);
 }
 
+/** The wall clock of an instant in a time zone (the runtime's own zone when none). */
+function wallClock(instant: Date, timezone: string | null | undefined): Record<string, number> {
+  const o: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hourCycle: 'h23',
+  };
+  if (timezone) o.timeZone = timezone;
+  const parts: Record<string, number> = {};
+  for (const p of new Intl.DateTimeFormat('en-US', o).formatToParts(instant)) {
+    if (p.type !== 'literal') parts[p.type] = Number(p.value);
+  }
+  return parts;
+}
+
+/** How far a time zone's wall clock runs ahead of UTC at an instant, in milliseconds. */
+function zoneOffset(instant: number, timezone: string | null | undefined): number {
+  const w = wallClock(new Date(instant), timezone);
+  const wall = Date.UTC(w.year!, w.month! - 1, w.day!, w.hour!, w.minute!, w.second!);
+  return wall - Math.floor(instant / 1000) * 1000;
+}
+
+/** A stored Datetime as the `YYYY-MM-DDTHH:mm` text of a `datetime-local` input, on the
+ *  wall clock of the person's time zone, so the form shows the time `formatDatetime`
+ *  shows in the list. A value that is no instant is shown as it is. */
+export function toDatetimeInput(value: unknown, timezone: string | null | undefined): string {
+  if (isBlank(value)) return '';
+  const d = value instanceof Date ? value : new Date(String(value));
+  if (isNaN(d.getTime())) return String(value);
+  const w = wallClock(d, timezone);
+  const pad = (n: number | undefined) => String(n).padStart(2, '0');
+  return `${String(w.year).padStart(4, '0')}-${pad(w.month)}-${pad(w.day)}T${pad(w.hour)}:${pad(w.minute)}`;
+}
+
+/** The UTC instant (ISO with its `Z`) of a `datetime-local` text read on the wall clock
+ *  of the person's time zone; undefined for an empty or unreadable text. A wall time a
+ *  clock change repeats resolves to its later instant; one it skips moves forward by the
+ *  size of the change, as the clock on the wall does. */
+export function fromDatetimeInput(text: string, timezone: string | null | undefined): string | undefined {
+  const m = /^(\d{4,})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(text);
+  if (!m) return undefined;
+  const [year, month, day, hour, minute, second] = m.slice(1).map((n) => Number(n ?? 0));
+  const wall = Date.UTC(year!, month! - 1, day!, hour!, minute!, second!);
+  const first = wall - zoneOffset(wall, timezone);
+  // The offset read at the wall time taken as UTC is hours away from the instant itself,
+  // so a clock change between them gives the wrong one: read it again at the first guess.
+  return new Date(wall - zoneOffset(first, timezone)).toISOString();
+}
+
 /** Percent — the value is already a percentage number (e.g. 42.5 → "42.5 %"),
  *  not a 0–1 ratio, so the number is locale-formatted and a "%" appended. */
 export function formatPercent(value: unknown, locale: string | undefined, precision = 2): string {
