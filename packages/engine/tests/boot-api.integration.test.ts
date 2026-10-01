@@ -51,6 +51,7 @@ import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
+import { DIGITA } from "@digitaplatform/shared";
 
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
@@ -133,6 +134,24 @@ describe("Boot API Integration", () => {
       const body = res.json();
       expect(body.data.user.language).toBe("de");
       expect(body.data.locale.code).toBe("de");
+    });
+
+    it("names the text direction of each language it offers", async () => {
+      await db.insertOne(
+        DIGITA.COLLECTIONS.LANGUAGE,
+        { _id: "ar", name: "Arabic", native_name: "العربية", enabled: true, direction: "rtl" },
+        DIGITA.DATABASES.CORE,
+      );
+      try {
+        const res = await app.inject({ method: "GET", url: "/api/v1/boot" });
+
+        expect(res.statusCode).toBe(200);
+        const languages = res.json().data.available_languages as { code: string; direction: string }[];
+        expect(languages.find((l) => l.code === "ar")?.direction).toBe("rtl");
+        expect(languages.find((l) => l.code === "en")?.direction).toBe("ltr");
+      } finally {
+        await db.deleteOne(DIGITA.COLLECTIONS.LANGUAGE, "ar", DIGITA.DATABASES.CORE);
+      }
     });
 
     it("surfaces the token's `tiers` audience-set and the canEnter verdict (ADR-A1)", async () => {

@@ -41,7 +41,7 @@ function offerLanguages(setLocale: (code: string) => Promise<void>) {
 describe('a language switch', () => {
   it('shows a switch that failed', async () => {
     offerLanguages(vi.fn(async () => {
-      throw new Error('Language read failed');
+      throw new Error('texts unreachable');
     }));
     render(<LanguageSwitcher />);
     fireEvent.click(screen.getByText('de'));

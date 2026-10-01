@@ -16,9 +16,7 @@ import { redirectToIdpLogin } from '@/lib/authConfig';
 import { appUrl } from '@/lib/appBase';
 import { useThemeStore } from '@/stores/theme';
 import { useI18nStore } from '@/stores/i18n';
-import { getUserPreference, setUserPreference } from '@/services/userPreference';
-import { getDoc } from '@/services/resource';
-import { unwrap } from '@/lib/api-result';
+import { setUserPreference } from '@/services/userPreference';
 
 type SessionStatus = 'loading' | 'authenticated' | 'anonymous';
 
@@ -78,36 +76,22 @@ export async function pickBootLocale(
   return { resolved: resolveBootLocale(data?.locale?.code, initial), data };
 }
 
-/** The fields of a Language row the engine copies into the locale it resolves. */
-type LanguageRow = Pick<BootLocale, 'direction' | 'date_format' | 'number_format'>;
-
 /**
  * The locale the engine resolves for `code`, so a language switch formats and lays out the
- * page as the next boot would. A signed-in user gets the engine's LocaleResolver rule: the
- * direction and formats of the Language row, the format_locale of the user's own "locale"
- * preference, else the language itself, and the timezone they already have. A visitor has
- * no profile language and no preference, so the engine resolves the Accept-Language a new
- * boot sends, which names `code` once its texts have loaded.
+ * page as the next boot would: the direction of the language as /boot offers it, the
+ * person's own region, else the language itself, and the timezone they already have. It
+ * reads no Language row or preference, because a person whose roles grant neither switches
+ * too. A format_locale equal to the current language follows the language, as the region
+ * card reads it, since a region the person picks always names its country.
  */
-async function resolveLocale(code: string, signedIn: boolean, current: BootLocale | null): Promise<BootLocale> {
-  if (!signedIn) return { ...unwrap(await getBoot()).locale, code };
-  const [language, preference] = await Promise.all([
-    getDoc<LanguageRow>('Language', code).then(unwrap),
-    getUserPreference('locale'),
-  ]);
-  // Stored as a JSON string, as setLocaleFormat writes it and the engine reads it.
-  const own =
-    typeof preference === 'string' && preference.trim()
-      ? (JSON.parse(preference) as { format_locale?: string | null }).format_locale?.trim()
-      : undefined;
+function resolveLocale(code: string, current: BootLocale | null, languages: BootLanguage[]): BootLocale {
+  const own = current?.format_locale && current.format_locale !== current.code ? current.format_locale : undefined;
   return {
     ...current,
     code,
     // The engine's LocaleResolver reads a Language row without a direction as left to right.
-    direction: language.direction ?? 'ltr',
-    date_format: language.date_format,
-    number_format: language.number_format,
-    format_locale: own || code,
+    direction: languages.find((l) => l.code === code)?.direction ?? 'ltr',
+    format_locale: own ?? code,
   };
 }
 
@@ -233,7 +217,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       document.documentElement.lang = code;
       useI18nStore.setState({ locale: code });
     }
-    const locale = await resolveLocale(code, signedIn, get().locale);
+    const locale = resolveLocale(code, get().locale, get().languages);
     set({ locale });
     document.documentElement.dir = locale.direction ?? 'ltr';
   },
