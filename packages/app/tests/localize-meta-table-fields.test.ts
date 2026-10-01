@@ -5,7 +5,7 @@ import { localizeMeta } from '@/lib/localize-meta';
 /**
  * A child field of a Table is keyed by its table first, `field.<Entity>.<table>.<field>` for its
  * label and `description.<Entity>.<table>.<field>` for its help text, so two tables can name a
- * column alike and still read differently. The key without the table stays for the apps that wrote
+ * column the same and still read differently. The key without the table stays for the apps that wrote
  * it, and a child without either key keeps the label the entity file writes.
  */
 
@@ -81,6 +81,37 @@ describe('localizeMeta child fields of a table', () => {
   it('keeps the written label and help text of a column without any key', () => {
     expect(column('lines', 'remark').label).toBe('Remark');
     expect(column('lines', 'unit').fieldtype).toBe('Data');
+  });
+
+  it('keys a column of a table inside a table by both tables', () => {
+    const nested = {
+      name: 'Booking',
+      label: 'Booking',
+      fields: [
+        {
+          fieldname: 'lines',
+          fieldtype: 'Table',
+          label: 'Lines',
+          child_fields: [
+            {
+              fieldname: 'parts',
+              fieldtype: 'Table',
+              label: 'Parts',
+              child_fields: [{ fieldname: 'unit', fieldtype: 'Data', label: 'Unit' }],
+            },
+          ],
+        },
+      ],
+    } as unknown as EntityDefinition;
+
+    const parts = localizeMeta(nested, {
+      'field.Booking.lines.parts': 'Teile',
+      'field.Booking.lines.parts.unit': 'Teileeinheit',
+      'field.Booking.unit': 'Einheit',
+    }).fields[0]!.child_fields![0]!;
+
+    expect(parts.label).toBe('Teile');
+    expect(parts.child_fields![0]!.label).toBe('Teileeinheit');
   });
 
   it('does not take the text of a child field for the table that holds it', () => {

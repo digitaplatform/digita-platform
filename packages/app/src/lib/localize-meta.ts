@@ -24,8 +24,8 @@ import type { EntitySummary } from '@/types';
 
 type Dict = Record<string, string>;
 
-/** A child field keys by its table first, so two tables may name a column alike and read differently,
- *  and then by its name alone, which is the key the apps wrote before a table could be named. */
+/** A child field keys by its table first, so two tables may name a column the same and still read
+ *  differently, and then by its name alone, the key an app wrote before the table was part of it. */
 function localizeField(entity: string, f: FieldDefinition, t: Dict, table?: string): FieldDefinition {
   const text = (family: string) =>
     (table ? t[`${family}.${entity}.${table}.${f.fieldname}`] : undefined) ?? t[`${family}.${entity}.${f.fieldname}`];
