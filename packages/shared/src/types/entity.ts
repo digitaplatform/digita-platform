@@ -889,8 +889,6 @@ export interface HookDefinitions {
    * The returned value is sent back to the FE inside ApiResponse.data.
    */
   actions?: Record<string, string>;
-  has_permission?: string;
-  on_list_load?: string;
 }
 
 // ─── Entity Definition (top-level) ───────────────────────
