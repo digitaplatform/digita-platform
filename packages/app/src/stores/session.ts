@@ -222,10 +222,18 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } catch {
       /* private mode / quota — non-fatal */
     }
+    const signedIn = get().status === 'authenticated';
     // Loads the backend translations for this locale + sets document.lang (which
     // the api client sends as Accept-Language → the engine resolves it on boot).
-    await useI18nStore.getState().load(code);
-    const locale = await resolveLocale(code, get().status === 'authenticated', get().locale);
+    // The data texts need a sign-in, so a visitor switches the chrome texts alone,
+    // as App does at boot.
+    if (signedIn) {
+      await useI18nStore.getState().load(code);
+    } else {
+      document.documentElement.lang = code;
+      useI18nStore.setState({ locale: code });
+    }
+    const locale = await resolveLocale(code, signedIn, get().locale);
     set({ locale });
     document.documentElement.dir = locale.direction ?? 'ltr';
   },

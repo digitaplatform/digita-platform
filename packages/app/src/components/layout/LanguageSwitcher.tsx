@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Globe } from 'lucide-react';
 import { LanguageMenu } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
+import { TranslationsLoadError } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useProfileUpdate } from '@/hooks/useAccount';
 import { useDialogHost } from '@/components/overlay/DialogHost';
@@ -35,7 +36,7 @@ export function LanguageSwitcher({ onChosen }: { onChosen?: (code: string) => vo
         icon={<Globe className="h-5 w-5" aria-hidden="true" />}
         languages={languages.map((l) => ({ code: l.code, label: `${l.flag_emoji ? `${l.flag_emoji} ` : ''}${l.native_name}` }))}
         onSelect={(code) => {
-          setLocale(code).catch(() => setFailure(failureText()));
+          setLocale(code).catch((error: unknown) => setFailure(failureText(error, code)));
           onChosen?.(code);
         }}
       />
@@ -44,10 +45,15 @@ export function LanguageSwitcher({ onChosen }: { onChosen?: (code: string) => vo
   );
 }
 
-/** The text that tells a person their language switch failed. */
-function useSwitchFailureText(): () => string {
+/** The text that tells a person their language switch failed: texts that did not load
+ *  name their language, so the person learns the page is not translated. */
+function useSwitchFailureText(): (error: unknown, code: string) => string {
   const tc = useChrome();
-  return () => tc('ui.status.somethingWrong');
+  const languages = useSessionStore((s) => s.languages);
+  return (error, code) =>
+    error instanceof TranslationsLoadError
+      ? tc('ui.lang.textsNotLoaded', { language: languages.find((l) => l.code === code)?.native_name ?? code })
+      : tc('ui.status.somethingWrong');
 }
 
 /** Shows a failed switch as a toast. It mounts only once a switch failed, so the switcher
@@ -75,7 +81,7 @@ export function useSwitchLanguage(): (code: string) => void {
   const failureText = useSwitchFailureText();
   const dialog = useDialogHost();
   return (code) => {
-    setLocale(code).catch(() => dialog.toast(failureText(), 'error'));
+    setLocale(code).catch((error: unknown) => dialog.toast(failureText(error, code), 'error'));
   };
 }
 
