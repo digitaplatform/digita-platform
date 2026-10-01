@@ -23,6 +23,8 @@ vi.mock('@/services/resource', () => ({
             { _id: 'R-1', at_date: '2026-06-01', amount: 500 },
             { _id: 'R-2', at_date: '2026-05-01', amount: 400 },
           ],
+          // A `link` section answers the linked row: its values, a nested value among them.
+          customer: { _id: 'C-9', name: 'Acme AG', city: 'Arth', balance: 120.5, address: { street: 'Speichenweg 12' } },
           empty_one: null,
         },
       },
@@ -76,6 +78,15 @@ describe('ContextPanel', () => {
     expect(await screen.findByText('Owner context')).toBeInTheDocument();
     expect(screen.getByText(/1200/)).toBeInTheDocument(); // aggregate key/value
     expect(screen.getByText('R-1')).toBeInTheDocument(); // list row
+  });
+
+  it('draws a link section as the linked row: its values, not its nested values, under a heading', async () => {
+    render(<ContextPanel entity="Widget" meta={META} doc={{ owner: 'O-1' }} />);
+    expect(await screen.findByText('Acme AG')).toBeInTheDocument();
+    expect(screen.getByText('Customer')).toBeInTheDocument(); // the section key as words
+    expect(screen.getByText('Arth')).toBeInTheDocument();
+    expect(screen.getByText('120.50')).toBeInTheDocument(); // a fraction to two decimals
+    expect(screen.queryByText('Speichenweg 12')).not.toBeInTheDocument();
   });
 
   it('re-fetches when the field value changes', async () => {
