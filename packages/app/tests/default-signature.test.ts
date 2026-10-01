@@ -183,13 +183,15 @@ describe('the signature a person sees', () => {
     expect(drawn()).toBe('harbor-yard');
   });
 
-  it('without a tenant default, digita stays', async () => {
+  it('without a tenant default, digita stays, also over a look cached before the tenant dropped it', async () => {
+    localStorage.setItem(CACHE_KEY, 'veloluck-lakeside');
     const app = await loadApp({});
     await app.bootstrap();
     await app.loadAppComposition('internal');
 
     expect(app.useThemeStore.getState().signature).toBe('digita');
     expect(drawn()).toBe('digita');
+    expect(localStorage.getItem(CACHE_KEY)).toBe('digita');
   });
 });
 

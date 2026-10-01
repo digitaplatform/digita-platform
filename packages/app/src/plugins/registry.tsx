@@ -91,7 +91,7 @@ const integrateHandlers: IntegrateHandlers = {
   // data-design — a signature COMPOSES on top of whatever design skin is active,
   // so flipping the design keeps the signature and vice versa. Registered here;
   // the theme store draws the signature again after composition, so a delivered
-  // pick or tenant default lands its full world.
+  // tenant default lands its full world.
   signature: (plugin: SignaturePlugin) => registerDeliveredSignature(plugin),
 };
 

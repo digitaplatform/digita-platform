@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { MODE_CYCLE, SegmentedControl, Select } from '@digitaplatform/components';
 import { getRuntimeSignatures, subscribeRuntimeSignatures, type Density, type ThemeMode } from '@digitaplatform/theme';
 import { useThemeStore } from '@/stores/theme';
@@ -13,15 +13,18 @@ import pluginsLock from '../../../../../plugins.lock.json';
 const LOCKED_DESIGN_IDS = [...Object.keys(pluginsLock.free), ...Object.keys(pluginsLock.premium)];
 
 /**
- * The showcase's control bar. Every control writes through the theme store, the
- * same path the top bar menus take, so the page shows exactly what the app shows
- * and the choice roams like any other identity preference.
+ * The showcase's control bar. Design, mode and density write through the theme
+ * store, the same path the top bar menus take, so the page shows exactly what the
+ * app shows and the choice roams like any other identity preference. A signature
+ * is the tenant's, so it is only previewed here, until the showcase closes.
  */
 export function DesignControls() {
   const tc = useChrome();
   const { design, mode, density, signature, setDesign, setMode, setDensity, previewSignature } = useThemeStore();
   const designs = useDesignList();
   const signatures = useSyncExternalStore(subscribeRuntimeSignatures, getRuntimeSignatures, getRuntimeSignatures);
+  // The tenant's look comes back when the showcase closes, so a preview never follows the reviewer.
+  useEffect(() => () => useThemeStore.getState().reapplySignature(), []);
 
   const designOptions = [
     ...designs.map((d) => ({ value: d.id, label: d.name })),
@@ -34,12 +37,13 @@ export function DesignControls() {
 
   return (
     <div className="flex flex-wrap items-end gap-4">
-      {/* The controls write the reviewer's own preferences: the theme store persists them and
-          roams them to every device, exactly as the user menu does. Said on screen, so a review
-          that cycles through every design does not leave the account on the last one by surprise. */}
+      {/* Design, mode and density write the reviewer's own preferences: the theme store persists
+          them and roams them to every device, as the top bar menus do. Said on screen, so a
+          review that cycles through every design does not leave the account on the last one by
+          surprise. */}
       <p className="basis-full text-sm text-textMuted">
-        These controls change your own design, mode, density and signature, on every device; set them
-        back when you are done.
+        These controls change your own design, mode and density, on every device; set them back when
+        you are done. A signature is only previewed here: the tenant's look returns when you leave.
       </p>
       <div className="w-56">
         <Select
