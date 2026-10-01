@@ -49,14 +49,18 @@ export interface JobInput {
   doc: string;
   action: string;
   /**
-   * Sent whenever the page has an app to name: PUT replaces the job, so a body without `app` moves
-   * it to the default engine. Absent where the page has no app to name: the jobs service names
-   * none, or this app is served at the root (ownApp).
+   * A new job and the run of a task name the app the page shows, and an edit names the job's own
+   * app: PUT replaces the job, so a body without `app` moves it to the default engine. Absent where
+   * there is no app to name: the jobs service names none, this app is served at the root (ownApp),
+   * or the edited job has none.
    */
   app?: string;
   params?: Record<string, unknown>;
   schedule?: { cron: string } | null;
   enabled?: boolean;
+  /** PUT replaces the job, so an edit sends back the limits it does not change; absent, the service resets them. */
+  timeout_minutes?: number;
+  max_attempts?: number;
 }
 
 /** The apps of the tenant the jobs service drives (sorted), and the one a job without `app` runs on. */

@@ -180,8 +180,9 @@ export default function JobsPage() {
     }
   };
 
-  // Until the saved jobs are read, no task can say it has none.
-  const renderSavedJobs = (list: JobDef[]) =>
+  // Until the saved jobs are read, no task can say it has none. Only a job under its task can be
+  // edited: the dialog builds the params from the task's definition.
+  const renderSavedJobs = (list: JobDef[], task?: JobTask) =>
     list.length === 0 ? (
       jobsQ.isSuccess && <div className="text-caption text-textMuted">{tc('ui.jobs.noSchedules')}</div>
     ) : (
@@ -202,6 +203,11 @@ export default function JobsPage() {
                 <Button variant="secondary" onClick={() => void runSavedJob(j)} {...tid.action('job-run-now')}>
                   {tc('ui.jobs.runNow')}
                 </Button>
+                {task && (
+                  <Button variant="secondary" onClick={() => setDialog({ task, mode: 'schedule', job: j })} {...tid.action('job-edit')}>
+                    {tc('ui.jobs.edit')}
+                  </Button>
+                )}
                 <Button variant="danger" onClick={() => void removeJob(j)}>
                   {tc('ui.action.delete')}
                 </Button>
@@ -262,7 +268,7 @@ export default function JobsPage() {
                   </div>
                 )}
               </div>
-              {renderSavedJobs(jobsForTask(t))}
+              {renderSavedJobs(jobsForTask(t), t)}
             </div>
           ))}
           {ungrouped.length > 0 && (
@@ -479,7 +485,9 @@ function JobConfigDialog({
     queryFn: async () => String(unwrap(await appEngine.single(app, task.entity))._id ?? ''),
   });
   const effectiveDoc = task.isSingle ? (singleDocQ.data ?? '') : doc;
-  const valid = !!effectiveDoc && (!isSchedule || (!!cron.trim() && !!name.trim()));
+  // A new schedule needs its cron. An edited job may go without one and is then run by hand only,
+  // as the cron field's hint says.
+  const valid = !!effectiveDoc && (!isSchedule || (!!name.trim() && (!!job || !!cron.trim())));
 
   const submit = async () => {
     setSaving(true);
@@ -493,9 +501,18 @@ function JobConfigDialog({
           action: task.action,
           app: app ?? undefined,
           params,
-          schedule: { cron: cron.trim() },
+          schedule: cron.trim() ? { cron: cron.trim() } : null,
         };
-        if (job) await jobsApi.update(job._id, body);
+        // PUT replaces the job: what the dialog does not show goes back as the job has it, the app
+        // included, so an edit never moves a job to the engine the page happens to show.
+        if (job)
+          await jobsApi.update(job._id, {
+            ...body,
+            app: job.app,
+            enabled: job.enabled,
+            timeout_minutes: job.timeout_minutes,
+            max_attempts: job.max_attempts,
+          });
         else await jobsApi.create(body);
         toast(tc('ui.jobs.scheduleSaved'), 'success');
       } else {
