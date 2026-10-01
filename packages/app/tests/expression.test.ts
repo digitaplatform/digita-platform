@@ -58,6 +58,15 @@ describe('evaluateExpr', () => {
     void r;
   });
 
+  it('reports the text it could not read after a whole expression, instead of dropping it', () => {
+    // Only "On" would be compared, so "doc.status == On hold" would be false for every status.
+    for (const expr of ['doc.status == On hold', 'doc.status == Zurückgestellt', 'doc.status == Pre-paid', "doc.status == 'Open' and doc.member", "doc.status === 'Open'"]) {
+      expect(evaluateExpr(expr, scope({ status: 'On hold' })).error, expr).toBeDefined();
+    }
+    expect(evaluateExpr("doc.status == 'Open'  ", scope({ status: 'Open' }))).toEqual({ value: true });
+    expect(evaluateExpr("doc.status == 'On hold'", scope({ status: 'On hold' }))).toEqual({ value: true });
+  });
+
   it('evaluateSafe degrades errors to true', () => {
     expect(evaluateSafe('(doc.x', scope({ x: 1 }))).toBe(true);
     expect(evaluateSafe('doc.active', scope({ active: false }))).toBe(false);

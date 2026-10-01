@@ -235,7 +235,12 @@ export function evaluateExpr(expr: string, scope: EvalScope): EvalResult {
 
   try {
     const lex = new Lexer(src);
-    return { value: isTruthy(parseOr(lex, scope)) };
+    const value = isTruthy(parseOr(lex, scope));
+    // A word the grammar cannot take ends the parse early, so `doc.status == On hold` would
+    // compare "On" alone; text left over means the expression was not read.
+    lex.skipWs();
+    if (!lex.done()) throw new Error(`unexpected "${src.slice(lex.pos())}" at ${lex.pos()}`);
+    return { value };
   } catch (e) {
     return { value: false, error: e instanceof Error ? e.message : String(e) };
   }
