@@ -74,12 +74,19 @@ export function scopeValueMatches(docValue: unknown, userValue: unknown): boolea
  * Previously multiple scoped roles were AND-ed (and same-field scopes
  * overwrote each other), which was wrong (too restrictive / last-wins).
  */
+/** Both filters: merged flat, unless they constrain the same key, where a flat merge would drop one. */
+function andFilters(filters: Record<string, unknown>, condition: Record<string, unknown>): Record<string, unknown> {
+  return Object.keys(condition).some((key) => key in filters) ? { $and: [filters, condition] } : { ...filters, ...condition };
+}
+
 export function applyScopeFilters(
   entity: EntityDefinition,
   user: UserContext,
   existingFilters: Record<string, unknown>,
 ): Record<string, unknown> {
-  // Administrator sees everything.
+  // A personal entity's rows are their owner's alone, for every role.
+  if (entity.personal) existingFilters = andFilters(existingFilters, { owner: user.email });
+  // Administrator sees everything else.
   if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) {
     return existingFilters;
   }
@@ -128,12 +135,7 @@ export function applyScopeFilters(
   // Single condition → merge flat, unless it constrains a key the caller's filters do: a
   // flat merge would replace the caller's condition, so the two AND instead. Multiple →
   // OR them (union across roles), AND-combined with any pre-existing filters.
-  if (conditions.length === 1) {
-    const condition = conditions[0]!;
-    return Object.keys(condition).some((key) => key in existingFilters)
-      ? { $and: [existingFilters, condition] }
-      : { ...existingFilters, ...condition };
-  }
+  if (conditions.length === 1) return andFilters(existingFilters, conditions[0]!);
   const scopeOr = { $or: conditions };
   return Object.keys(existingFilters).length > 0
     ? { $and: [existingFilters, scopeOr] }

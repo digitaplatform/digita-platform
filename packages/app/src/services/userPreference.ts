@@ -1,12 +1,9 @@
 import { getList, createDoc, updateDoc } from '@/services/resource';
-import { useSessionStore } from '@/stores/session';
 
 /**
- * Generic per-user key-value preference (UserPreference entity). One row per
- * (owner, pref_key) — upsert by lookup. Every lookup filters on the signed-in
- * person as owner: the engine scopes a System User to their own rows, but lets
- * an Administrator list every person's, so the key alone would find another
- * person's row.
+ * Generic per-user key-value preference (UserPreference entity). The entity is
+ * personal: the engine answers every role, an Administrator included, only the
+ * caller's own rows. One row per (owner, pref_key) — upsert by lookup.
  */
 export interface UserPreferenceDoc {
   _id: string;
@@ -16,13 +13,8 @@ export interface UserPreferenceDoc {
 }
 
 function findOwnRow(key: string) {
-  const owner = useSessionStore.getState().user?.email;
-  if (!owner) throw new Error(`No signed-in person owns the preference ${key}`);
   return getList<UserPreferenceDoc>('UserPreference', {
-    filters: [
-      ['owner', '=', owner],
-      ['pref_key', '=', key],
-    ],
+    filters: [['pref_key', '=', key]],
     page_size: 1,
   });
 }

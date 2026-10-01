@@ -1043,6 +1043,10 @@ export interface EntityDefinition {
    *  enforces this on list/read (Administrator bypasses). Generic — any entity may
    *  opt in (e.g. Workspace → "roles"). */
   role_visibility_field?: string;
+  /** Each row belongs to its `owner` alone: the engine lists, reads, changes and deletes a row only
+   *  for its owner, for every role, an Administrator included. For a person's own settings, such
+   *  as UserPreference, which no one else may see or overwrite. */
+  personal?: boolean;
 
   // Change tracking
   track_changes?: boolean;
