@@ -278,6 +278,33 @@ describe('editing a saved job of the chosen app', () => {
     await screen.findByRole('dialog');
   }
 
+  // The job's app left the tenant, so the job shows under the chosen app; the edit must not move it there.
+  it("keeps the job's own app, enabled and limits in the PUT body, not the chosen app", async () => {
+    const leftApp: JobDef = { ...scheduledSweep, app: 'old-site' };
+    routes['/api/v1/jobs'] = () => json({ jobs: [savedDunning, leftApp] });
+    await editSweep();
+    fireEvent.change(screen.getByLabelText(/^Cron/), { target: { value: '0 4 * * *' } });
+    fireEvent.click(screen.getByTestId('action:job-save'));
+
+    await waitFor(() => expect(saves).toHaveLength(1));
+    expect(saves[0]).toEqual({
+      method: 'PUT',
+      path: '/api/v1/jobs/j1',
+      body: {
+        name: 'Delete expired contact requests',
+        entity: 'WebSite',
+        doc: 'simetrix',
+        action: 'deleteExpiredContactRequests',
+        app: 'old-site',
+        params: {},
+        schedule: { cron: '0 4 * * *' },
+        enabled: false,
+        timeout_minutes: 15,
+        max_attempts: 7,
+      },
+    });
+  });
+
   it('says the schedule is saved when the cron changes', async () => {
     await editSweep();
     fireEvent.change(screen.getByLabelText(/^Cron/), { target: { value: '0 4 * * *' } });
