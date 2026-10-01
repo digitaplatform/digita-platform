@@ -3,6 +3,7 @@ import { DIGITA, FILE_FIELD_TYPES as FILE_URL_FIELD_TYPES } from "@digitaplatfor
 import type { FilterEntry } from "../database/mongodb-service.js";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { StoragePort } from "./storage-port.js";
+import { deleteImageVariants, hasImageVariants } from "./image-variants.js";
 import { createLogger } from "../logging/logger.js";
 
 const log = createLogger("file-cleanup");
@@ -104,6 +105,7 @@ export async function deleteFileRefCounted(
     if (refs <= 1) {
       try {
         await storage.delete(blobKey);
+        if (hasImageVariants(doc["file_type"] as string | undefined)) await deleteImageVariants(storage, blobKey);
       } catch (err) {
         log.warn(
           { fileId, blobKey, err },
@@ -135,18 +137,22 @@ export async function deleteFileRefCounted(
 /**
  * Delete a blob only when NO File doc references its key (reference count 0).
  * Used by the replace path after the doc has been repointed at the new key.
- * Best-effort.
+ * `fileType` is the blob's own type, which says whether width variants of it can
+ * exist. Best-effort.
  */
 export async function deleteBlobIfUnreferenced(
   db: MongoDBService,
   storage: StoragePort,
   key: string,
   refField: "storage_key" | "thumbnail_key" = "storage_key",
+  fileType?: string,
 ): Promise<void> {
   const refs = await db.count(FILE, [[refField, "=", key]] as FilterEntry[], CORE);
   if (refs > 0) return;
   try {
     await storage.delete(key);
+    // The width variants are made of the blob and share its reference count.
+    if (refField === "storage_key" && hasImageVariants(fileType)) await deleteImageVariants(storage, key);
   } catch (err) {
     log.warn({ key, refField, err }, "Failed to delete unreferenced blob — orphan left behind");
   }

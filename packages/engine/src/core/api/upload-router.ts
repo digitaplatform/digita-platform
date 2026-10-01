@@ -596,7 +596,7 @@ export function registerUploadRoutes(
     // 3. Reference-counted delete of the old object — removed only when no other
     //    File doc still points at it (a dedup'd shared blob is kept).
     if (oldKey && oldKey !== newKey) {
-      await deleteBlobIfUnreferenced(db, storage, oldKey);
+      await deleteBlobIfUnreferenced(db, storage, oldKey, "storage_key", (doc as Record<string, unknown>)["file_type"] as string | undefined);
     }
     // The doc now points at the new thumbnail, so the OLD thumbnail blob (which
     // used to leak on every replace) is deleted when no other File doc references it.

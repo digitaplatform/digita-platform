@@ -10,6 +10,7 @@ import type { UserContext } from "../permissions/types.js";
 import { listQueryFrom } from "./list-query.js";
 import { FileNotFoundInStorageError, type StoragePort } from "../storage/storage-port.js";
 import { resolveStorageKey } from "../storage/file-cleanup.js";
+import { IMAGE_VARIANT_WIDTHS, ensureImageVariant, hasImageVariants, parseVariantWidth, variantFormatFor } from "../storage/image-variants.js";
 import { isSafeInlineType, contentDisposition } from "./upload-router.js";
 import { ResponseContext } from "./response-context.js";
 import { successResponse, errorResponse } from "./response-model.js";
@@ -18,10 +19,6 @@ import { BadRequestError } from "../view/view-engine.js";
 import { parseBodyLimit } from "./http-options.js";
 
 const log = createLogger("public-router");
-
-/** The widths a public image is served at (`?w=`), for the breakpoints a page's srcset names. A
- *  fixed set bounds the work and storage each image can cost. */
-export const IMAGE_VARIANT_WIDTHS = [320, 640, 960, 1280, 1920] as const;
 
 /** Identity for an anonymous request: the built-in "Guest" role. An entity is
  *  reachable here ONLY if it grants Guest read/select in its own permissions. */
@@ -248,10 +245,10 @@ export function registerPublicRoutes(
           ),
         );
 
-    // A width outside the set is refused before anything is read. Until variants are made, a width
-    // of the set is answered with the original.
-    const width = (request.query as Record<string, unknown> | undefined)?.["w"];
-    if (width !== undefined && !(IMAGE_VARIANT_WIDTHS as readonly number[]).some((w) => String(w) === width)) {
+    // A width outside the set is refused before anything is read.
+    const rawWidth = (request.query as Record<string, unknown> | undefined)?.["w"];
+    const width = parseVariantWidth(rawWidth);
+    if (rawWidth !== undefined && width === null) {
       return reply
         .code(400)
         .send(
@@ -278,15 +275,32 @@ export function registerPublicRoutes(
     const key = wantThumb ? (doc["thumbnail_key"] as string) : resolveStorageKey(doc);
     if (!key) return notFound();
 
+    // A width of the set is answered with a variant of a raster image; any other file has no width
+    // to scale to and is answered as it is.
+    const variantFormat =
+      width !== null && !wantThumb && hasImageVariants(doc["file_type"] as string | undefined)
+        ? variantFormatFor(request.headers.accept)
+        : null;
+
     let result;
+    let variant: string | null = null;
     try {
-      result = await storage.getStream(key);
+      if (width !== null && variantFormat) variant = await ensureImageVariant(storage, key, width, variantFormat);
+      result = await storage.getStream(variant ?? key);
     } catch (err) {
       if (err instanceof FileNotFoundInStorageError) {
         log.warn({ id, key, backend: storage.backend }, "public file doc exists but blob missing");
         return notFound();
       }
       throw err;
+    }
+
+    if (variant) {
+      reply.header("content-type", `image/${variantFormat}`);
+      reply.header("vary", "Accept");
+      if (result.contentLength !== undefined) reply.header("content-length", result.contentLength);
+      reply.header("content-disposition", contentDisposition("inline", `w${width}.${variantFormat}`));
+      return reply.send(result.stream);
     }
 
     if (wantThumb) {
