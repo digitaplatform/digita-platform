@@ -1,6 +1,6 @@
 import { Send, Ban, FileEdit } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type { EntityDefinition, TransitionDefinition } from '@digitaplatform/shared';
+import type { EntityDefinition } from '@digitaplatform/shared';
 import { Button } from '@digitaplatform/components';
 import { evaluateExpr } from '@/lib/expression';
 import { resolveWorkflowField } from '@/lib/workflow-field';
@@ -71,8 +71,8 @@ export function WorkflowBar({
 
   // A transition without an action shows its target state in the text the state badge uses, so a
   // button and the badge name a state in the same words. An action arrives translated, from localizeMeta.
-  const stateLabel = (state: string) => (wf ? tOption(meta.name, wf, state) : state);
-  const transitionLabel = (tr: TransitionDefinition) => tr.action || stateLabel(tr.to);
+  // resolveWorkflowField names a field whenever the entity declares transitions, so wf is set here.
+  const transitionButtons = wf ? transitions.map((tr) => ({ tr, state: tOption(meta.name, wf, tr.to) })) : [];
 
   // The engine refuses Submit and Cancel without the `submit` / `cancel` bit on this document.
   const canSubmit = !!meta.is_submittable && docstatus === 0 && hasRecordPermission(meta, user, 'submit', doc);
@@ -124,7 +124,7 @@ export function WorkflowBar({
       {disabled && (
         <span className="text-xs text-textMuted">{tc('ui.workflow.saveFirst')}</span>
       )}
-      {transitions.map((tr) => (
+      {transitionButtons.map(({ tr, state }) => (
         <Button
           key={`${tr.from}->${tr.to}`}
           type="button"
@@ -134,11 +134,11 @@ export function WorkflowBar({
           onClick={() => {
             const move = () => transM.mutateAsync({ name, to: tr.to });
             void (tr.confirm
-              ? confirmThen(tc('ui.workflow.transitionConfirm', { state: stateLabel(tr.to) }), move)
+              ? confirmThen(tc('ui.workflow.transitionConfirm', { state }), move)
               : run(move));
           }}
         >
-          {transitionLabel(tr)}
+          {tr.action || state}
         </Button>
       ))}
       {canCancel && (
