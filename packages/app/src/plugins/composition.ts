@@ -48,8 +48,8 @@ export async function loadAppComposition(
       setLockedPlugins(lockedIds);
       await loadPlugins(sources);
       // Delivered signatures are now registered in the theme's runtime registry;
-      // re-apply the active signature so a delivered default (e.g. digita) lands
-      // its full brand world over the boot-time fallback.
+      // draw the signature again, so a delivered pick or tenant default lands its
+      // full brand world over the boot-time fallback.
       useThemeStore.getState().reapplySignature();
       if (res.data.layout) {
         layout = res.data.layout;

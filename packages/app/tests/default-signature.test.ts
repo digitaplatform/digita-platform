@@ -113,6 +113,7 @@ describe('the signature a person starts on', () => {
   it('a pick the app does not offer falls to the tenant default, not to digita', async () => {
     localStorage.setItem(SIGNATURE_KEY, 'aurora');
     const app = await loadApp({ default_signature: 'veloluck-workbench' });
+    expect(app.useThemeStore.getState().signature).toBe('digita');
     await app.bootstrap();
     await app.loadAppComposition('internal');
 
@@ -128,6 +129,17 @@ describe('the signature a person starts on', () => {
     app.useThemeStore.getState().setSignature('veloluck-workbench');
     expect(localStorage.getItem(SIGNATURE_KEY)).toBeNull();
     expect(services.setUserPreference).not.toHaveBeenCalled();
+  });
+
+  it('clicking the look drawn over a pick the app does not offer stores the click, so that pick never returns', async () => {
+    localStorage.setItem(SIGNATURE_KEY, 'aurora');
+    const app = await loadApp({ default_signature: 'veloluck-workbench' });
+    await app.bootstrap();
+    await app.loadAppComposition('internal');
+
+    app.useThemeStore.getState().setSignature('veloluck-workbench');
+    expect(localStorage.getItem(SIGNATURE_KEY)).toBe('veloluck-workbench');
+    expect(services.setUserPreference).toHaveBeenCalledWith('ui.signature', 'veloluck-workbench');
   });
 
   it('a pick in the menu is stored and drawn, and wins over the tenant default', async () => {

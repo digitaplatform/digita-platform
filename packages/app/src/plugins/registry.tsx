@@ -90,8 +90,8 @@ const integrateHandlers: IntegrateHandlers = {
   // layer (inline --color-primary-* / --font-* vars). CRITICAL: it never touches
   // data-design — a signature COMPOSES on top of whatever design skin is active,
   // so flipping the design keeps the signature and vice versa. Registered here;
-  // the theme store re-applies the ACTIVE signature after composition, so a
-  // delivered default lands its full world.
+  // the theme store draws the signature again after composition, so a delivered
+  // pick or tenant default lands its full world.
   signature: (plugin: SignaturePlugin) => registerDeliveredSignature(plugin),
 };
 

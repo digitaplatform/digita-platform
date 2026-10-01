@@ -123,8 +123,10 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   },
   setSignature: (id) => {
     // Picking the signature already drawn stores nothing, so a person who never
-    // picked one keeps following the tenant's default when it changes.
-    if (id === get().signature) return;
+    // picked one keeps following the tenant's default when it changes. A stored
+    // pick the app does not offer is replaced, or it would return once delivered.
+    const stored = localStorage.getItem(SIGNATURE_STORAGE_KEY);
+    if (id === get().signature && (stored === null || stored === id)) return;
     localStorage.setItem(SIGNATURE_STORAGE_KEY, id);
     get().reapplySignature();
     void setUserPreference(IDENTITY_PREFERENCE_KEYS.signature, id).catch(() => {});

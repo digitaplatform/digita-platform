@@ -631,6 +631,16 @@ describe("Resource API Integration", () => {
       expect((await put(authToken)).statusCode).toBe(200);
       expect((await db.findOne("BrandingSetting", "branding", "core"))?.["default_signature"]).toBe("veloluck-workbench");
     });
+
+    // The engine also keeps an Administrator's undeclared keys, so the PUT above passes without
+    // the declaration; the form only offers the field when the meta names it.
+    it("the meta of BrandingSetting offers default_signature as a Select of the delivered signatures", async () => {
+      const res = await app.inject({ method: "GET", url: "/api/v1/meta/BrandingSetting", headers: authHeaders() });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.fields).toContainEqual(
+        expect.objectContaining({ fieldname: "default_signature", fieldtype: "Select", options_source: "signatures" }),
+      );
+    });
   });
 
   // ─── PHASE 3: default_workspace resolution + meta navigable ──────
