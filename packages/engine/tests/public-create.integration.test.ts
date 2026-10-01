@@ -52,9 +52,9 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
 
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import type { FastifyInstance } from "fastify";
-import { mkdir, writeFile, rm } from "fs/promises";
+import { mkdir, mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
-import { join } from "path";
+import { dirname, join } from "path";
 import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
@@ -72,8 +72,8 @@ async function writeJson(path: string, data: unknown): Promise<void> {
 }
 
 async function writeFixture(): Promise<string> {
-  const appDir = join(tmpdir(), APP_BASENAME);
-  await rm(appDir, { recursive: true, force: true });
+  // A folder of its own per run, because parallel runs in other worktrees build the same app name.
+  const appDir = join(await mkdtemp(join(tmpdir(), "digita-public-create-")), APP_BASENAME);
   const entities = join(appDir, "content", "entities");
   await writeJson(join(entities, "WebSite.entity.json"), {
     name: "WebSite", module: "web", database: DB, naming: { strategy: "user_set" }, title_field: "site_name",
@@ -169,7 +169,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await app?.close();
   await db?.disconnect();
-  await rm(fixtureRoot, { recursive: true, force: true });
+  await rm(dirname(fixtureRoot), { recursive: true, force: true });
   await replSet?.stop();
 }, 30000);
 
