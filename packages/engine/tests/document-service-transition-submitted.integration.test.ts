@@ -66,7 +66,8 @@ function orderEntity(name: string, sideEffects?: Record<string, unknown>): Entit
       { from: "draft", to: "confirmed", action: "confirm", allowed_roles: [] },
       { from: "confirmed", to: "delivered", action: "deliver", allowed_roles: ["Sales Manager"], ...(sideEffects ? { side_effects: { set: sideEffects } } : {}) },
     ],
-    permissions: [fullPerms],
+    // A transition is judged on a row the user may read, as a read is.
+    permissions: [fullPerms, ...["Sales Manager", "Clerk"].map((role) => ({ role, level: 0, select: 1, read: 1 }))],
   } as unknown as EntityDefinition;
 }
 

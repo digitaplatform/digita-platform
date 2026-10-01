@@ -166,6 +166,33 @@ async function stored(entity: string, name: string): Promise<Record<string, unkn
   return (await db.findOne(entity, name, "app")) as Record<string, unknown> | null;
 }
 
+describe("a transition of a row the caller may not read", () => {
+  it.each([
+    ["an owner rule", "owner", "admin", { title: "Theirs" }],
+    ["a condition", "reader", "admin", { title: "Hidden" }],
+    ["role visibility", "owner", "owner", { title: "Mine", visible_to: ["Elsewhere"] }],
+  ])("is answered as a read when %s hides the row, and the state stays", async (_case, who, creator, data) => {
+    const name = await create("GuardedFlow", creator, data);
+    const read = await call("GET", who, `GuardedFlow/${name}`);
+    expect(read.statusCode).toBeGreaterThanOrEqual(403);
+    expect(read.statusCode).toBeLessThan(500);
+
+    const res = await call("POST", who, `GuardedFlow/${name}/transition`, { to: "published" });
+    expect(res.statusCode).toBe(read.statusCode);
+    expect(res.json().error?.code).toBe(read.json().error?.code);
+    expect((await stored("GuardedFlow", name))?.["status"]).toBe("draft");
+  });
+
+  it.each([
+    ["the owner of the row", "owner", "owner", { title: "Mine" }],
+    ["a reader whose condition admits the row", "reader", "admin", { title: "Open" }],
+  ])("moves for %s", async (_case, who, creator, data) => {
+    const name = await create("GuardedFlow", creator, data);
+    expect((await call("POST", who, `GuardedFlow/${name}/transition`, { to: "published" })).statusCode).toBe(200);
+    expect((await stored("GuardedFlow", name))?.["status"]).toBe("published");
+  });
+});
+
 describe("an update of the workflow field", () => {
   it.each([
     ["no state", null],
@@ -192,5 +219,43 @@ describe("an update of the workflow field", () => {
     const name = await create("GuardedFlow", "admin", { title: "Page" });
     expect((await call("PUT", "editor", `GuardedFlow/${name}`, { status: "published" })).statusCode).toBe(200);
     expect((await stored("GuardedFlow", name))?.["status"]).toBe("published");
+  });
+});
+
+describe("a transition to a target that is not a state name", () => {
+  it.each([
+    ["an object", "GuardedFlow", { toString: 1 }],
+    ["an array", "GuardedFlow", ["published"]],
+    ["a number", "GuardedFlow", 7],
+    ["an object", "PlainStatus", { toString: 1 }],
+  ])("refuses %s on %s as an undeclared transition, and the state stays", async (_case, entity, to) => {
+    const name = await create(entity, "admin", { title: "Page", status: "draft" });
+    const res = await call("POST", "editor", `${entity}/${name}/transition`, { to });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error?.code).toBe("ILLEGAL_TRANSITION");
+    expect((await stored(entity, name))?.["status"]).toBe("draft");
+  });
+});
+
+describe("a transition to no state of an entity without a workflow", () => {
+  it("is refused by the write check to a caller who may not write, without the record's state", async () => {
+    const name = await create("PlainStatus", "admin", { title: "Page", status: "draft" });
+    const res = await call("POST", "reader", `PlainStatus/${name}/transition`, { to: null });
+    expect(res.statusCode).toBe(403);
+    expect(res.body).not.toContain("draft");
+    expect((await stored("PlainStatus", name))?.["status"]).toBe("draft");
+  });
+
+  it("is refused to a caller who may write, as a move to no state", async () => {
+    const name = await create("PlainStatus", "admin", { title: "Page", status: "draft" });
+    const res = await call("POST", "editor", `PlainStatus/${name}/transition`, { to: null });
+    expect(res.statusCode).toBe(409);
+    expect((await stored("PlainStatus", name))?.["status"]).toBe("draft");
+  });
+
+  it("still moves the status for a caller who may write", async () => {
+    const name = await create("PlainStatus", "admin", { title: "Page", status: "draft" });
+    expect((await call("POST", "editor", `PlainStatus/${name}/transition`, { to: "published" })).statusCode).toBe(200);
+    expect((await stored("PlainStatus", name))?.["status"]).toBe("published");
   });
 });
