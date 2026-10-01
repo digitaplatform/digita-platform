@@ -364,8 +364,8 @@ for (const [key] of Object.entries(TINT_PALETTES)) {
 //    digita-plugins-free stays its one source. Its dist/minimal.css opens with
 //    two :root[data-design="minimal"] token blocks; they are dropped here, since
 //    the default's tokens are the :root and .dark blocks above (applyDesign
-//    never stamps the attribute for the default) and the plugin's copy carries
-//    the values of its own release, not this theme's. The premium variant
+//    never stamps the attribute for the default), painted from the same
+//    release's design. The premium variant
 //    layers (ios/material/editorial/fluent) ship only inside their
 //    design-plugin CSS artifacts, never here. ──
 const BASE_VARIANT_CSS = readFileSync(join(here, 'variants', 'base.css'), 'utf8').trimEnd();
@@ -401,7 +401,7 @@ for (const f of [
 
 // ── Equality guard — re-baselined for the PLUGIN-DELIVERY FLIP: the bare
 //    :root/.dark is now painted by MINIMAL (the only BAKED design and the free
-//    default; zinc neutral, values verbatim from src/designs/minimal). The
+//    default; zinc neutral, values verbatim from @digitaplatform/minimal). The
 //    --color-primary-* / container entries are UNCHANGED from the ADR-V2 tint
 //    decoupling: the bare-:root default primary stays the BLUE default tint =
 //    synthesizeRamp('#007AFF') (container roles: ramp 100/900 light, 800/100
@@ -413,12 +413,12 @@ for (const f of [
 const EXPECTED = {
   light: {
     '--color-bg': '#FFFFFF', '--color-surface': '#FFFFFF', '--color-subtle': '#F4F4F5', '--color-border': '#E4E4E7',
-    '--color-border-strong': '#D4D4D8', '--color-bg-hover': '#F4F4F5', '--color-surface-glass': 'rgba(255,255,255,0.72)',
+    '--color-border-strong': '#D4D4D8', '--color-bg-hover': '#FAFAFA', '--color-surface-glass': 'rgba(255,255,255,0.72)',
     '--color-surface-container-lowest': '#FFFFFF', '--color-surface-container-low': '#FAFAFA', '--color-surface-container': '#F6F6F7',
     '--color-surface-container-high': '#F4F4F5', '--color-surface-container-highest': '#EFEFF1',
-    '--color-text-main': '#09090B', '--color-text-muted': '#71717A',
-    '--color-error': '#DC2626', '--color-error-light': '#FEF2F2', '--color-warning': '#D97706', '--color-warning-light': '#FFFBEB',
-    '--color-success': '#16A34A', '--color-success-light': '#F0FDF4', '--color-info': '#2563EB', '--color-info-light': '#EFF6FF',
+    '--color-text-main': '#09090B', '--color-text-muted': '#6B6B74',
+    '--color-error': '#B91C1C', '--color-error-light': '#FEF2F2', '--color-warning': '#B45309', '--color-warning-light': '#FFFBEB',
+    '--color-success': '#15803D', '--color-success-light': '#F0FDF4', '--color-info': '#2563EB', '--color-info-light': '#EFF6FF',
     '--color-on-primary': '#021535', '--color-primary-hover': '#1f8aff', '--color-on-error': '#FFFFFF', '--color-scrim': 'rgba(9,9,11,0.06)', '--control-h': '2.625rem',
     '--color-primary-container': '#cfe6ff', '--color-on-primary-container': '#002f74',
     '--color-primary-50': '#e9f5ff', '--color-primary-100': '#cfe6ff', '--color-primary-200': '#a4cdff', '--color-primary-300': '#6badff',
@@ -433,7 +433,7 @@ const EXPECTED = {
     '--color-text-main': '#FAFAFA', '--color-text-muted': '#A1A1AA',
     '--color-error': '#F87171', '--color-error-light': 'rgba(220,38,38,0.15)', '--color-warning': '#FBBF24', '--color-warning-light': 'rgba(217,119,6,0.15)',
     '--color-success': '#4ADE80', '--color-success-light': 'rgba(22,163,74,0.15)', '--color-info': '#60A5FA', '--color-info-light': 'rgba(37,99,235,0.15)',
-    '--color-on-primary': '#021535', '--color-primary-hover': '#1f8aff', '--color-on-error': '#FFFFFF', '--color-scrim': 'rgba(9,9,11,0.85)',
+    '--color-on-primary': '#021535', '--color-primary-hover': '#1f8aff', '--color-on-error': '#09090B', '--color-scrim': 'rgba(9,9,11,0.85)',
     '--color-primary-container': '#003b87', '--color-on-primary-container': '#cfe6ff',
     '--color-primary-50': '#e9f5ff', '--color-primary-100': '#cfe6ff', '--color-primary-200': '#a4cdff', '--color-primary-300': '#6badff',
     '--color-primary-400': '#0d87ff', '--color-primary-500': '#006ed3', '--color-primary-600': '#007aff', '--color-primary-700': '#00499d',
