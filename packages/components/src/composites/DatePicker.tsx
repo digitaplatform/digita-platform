@@ -24,8 +24,9 @@ import { Popover } from '../primitives/Popover.js';
  *
  * Keyboard: opening puts the focus on the selected day (today without one). The arrow keys move it
  * a day or a week, Home and End to the ends of the week, PageUp and PageDown a month (with Shift a
- * year), across the edges of the month; Enter picks. Tab and Shift+Tab wrap inside the open panel. A
- * panel that held the focus hands it back to the trigger when it closes.
+ * year), across the edges of the month; Enter picks. Tab and Shift+Tab wrap inside the open panel,
+ * except in a Table grid cell, whose editor takes Tab (not Shift+Tab) to commit the cell and move on.
+ * A panel that held the focus hands it back to the trigger when it closes.
  *
  * Value contract: 'YYYY-MM-DD' string or undefined (matches DateControl).
  * Week starts Monday (format-locale follow-up: derive from Intl.Locale).
