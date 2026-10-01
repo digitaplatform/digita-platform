@@ -51,4 +51,33 @@ describe('DateControl clears a set date', () => {
     const cleared = onChange.mock.calls[0]![0];
     expect(stripForSave(meta, { due: cleared }, { due: '2026-09-28' })).toEqual({ due: null });
   });
+
+  it('sends a defaulted Date cleared on a new record and on a new row as null, so the engine keeps it empty (#227)', () => {
+    const meta = {
+      name: 'Loan',
+      fields: [
+        { ...FIELD, default: '__today__' },
+        { fieldname: 'note', fieldtype: 'Data', label: 'Note', default: 'eval:doc.due' },
+        {
+          fieldname: 'lines',
+          fieldtype: 'Table',
+          label: 'Lines',
+          child_fields: [
+            { fieldname: 'product', fieldtype: 'Data', label: 'Product' },
+            { fieldname: 'line_date', fieldtype: 'Date', label: 'Line Date', default: '__today__' },
+          ],
+        },
+      ],
+    } as unknown as EntityDefinition;
+
+    expect(
+      stripForSave(meta, { due: undefined, note: undefined, lines: [{ _row_id: 'n1', product: 'P', line_date: undefined }] }),
+    ).toEqual({ due: null, note: undefined, lines: [{ _row_id: 'n1', product: 'P', line_date: null }] });
+
+    // On an existing record only the row the stored record does not hold is new.
+    const stored = { due: null, lines: [{ _row_id: 's1', product: 'P' }] };
+    expect(
+      stripForSave(meta, { due: undefined, lines: [{ _row_id: 's1', product: 'P' }, { _row_id: 'n2', line_date: undefined }] }, stored),
+    ).toEqual({ due: undefined, lines: [{ _row_id: 's1', product: 'P' }, { _row_id: 'n2', line_date: null }] });
+  });
 });

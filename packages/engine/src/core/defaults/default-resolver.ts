@@ -41,7 +41,7 @@ export function resolveDefaults(
  * defaults every row via resolveDefaults; update() skipped defaults entirely, so
  * a line added during a later edit received no __today__/__user__/eval default,
  * unlike the identical line at insert. Header fields and existing rows are left
- * untouched — only unset fields on brand-new rows are filled.
+ * untouched — only missing fields on brand-new rows are filled.
  */
 export function applyNewChildRowDefaults(
   entity: EntityDefinition,
@@ -86,14 +86,9 @@ function applyFieldDefaults(
     if (LAYOUT_FIELD_TYPES.includes(field.fieldtype)) continue;
     if (field.default === undefined) continue;
 
-    // Only apply default if field is not already set.
-    if (
-      target[field.fieldname] !== undefined &&
-      target[field.fieldname] !== null &&
-      target[field.fieldname] !== ""
-    ) {
-      continue;
-    }
+    // A default fills only a value that is missing or "". An explicit null is a
+    // person's clear and means empty on purpose, so it outranks the default.
+    if (target[field.fieldname] !== undefined && target[field.fieldname] !== "") continue;
 
     // `eval:` defaults are expressions evaluated against the row/doc-in-progress.
     // evaluateExpressionValue strips the prefix and safe-defaults to null.

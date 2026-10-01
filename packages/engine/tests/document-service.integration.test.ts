@@ -1434,6 +1434,53 @@ describe("Child-row defaults on the UPDATE path (parity with insert)", () => {
   });
 });
 
+describe("A person's explicit clear outranks a field default (#227)", () => {
+  const clearEntity = makeEntity({
+    name: "ClearDoc",
+    fields: [
+      { fieldname: "due", fieldtype: "Date" as const, label: "Due", default: "__today__" },
+      {
+        fieldname: "lines",
+        fieldtype: "Table" as const,
+        label: "Lines",
+        child_fields: [
+          { fieldname: "product", fieldtype: "Data" as const, label: "Product" },
+          { fieldname: "line_date", fieldtype: "Date" as const, label: "Line Date", default: "__today__" },
+        ],
+      },
+    ],
+  });
+
+  beforeAll(async () => {
+    registry.register(clearEntity);
+    await db.ensureCollection("ClearDoc", "app");
+  });
+
+  it("stores null for a defaulted Date cleared on a new record and a new row, and the default where the value is missing", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const created = await docService.insert(
+      "ClearDoc",
+      { due: null, lines: [{ product: "P-1", line_date: null }, { product: "P-2" }] },
+      adminUser,
+    );
+    const raw0 = (await db.findOne("ClearDoc", created._id, "app")) as Record<string, unknown>;
+    expect(raw0["due"]).toBeNull();
+    const rows0 = raw0["lines"] as Record<string, unknown>[];
+    expect(rows0[0]!["line_date"]).toBeNull();
+    expect(String(rows0[1]!["line_date"]).slice(0, 10)).toBe(today);
+
+    await docService.update(
+      "ClearDoc",
+      created._id,
+      { lines: [...rows0, { product: "P-3", line_date: null }] },
+      adminUser,
+    );
+    const raw1 = (await db.findOne("ClearDoc", created._id, "app")) as Record<string, unknown>;
+    const added = (raw1["lines"] as Record<string, unknown>[]).find((r) => r["product"] === "P-3")!;
+    expect(added["line_date"]).toBeNull();
+  });
+});
+
 describe("A Table cell's read_only_depends_on locks the cell on update", () => {
   const clerk: UserContext = { _id: "loan-clerk", email: "loan-clerk@test.local", roles: ["LoanClerk"], full_name: "Clerk" };
 

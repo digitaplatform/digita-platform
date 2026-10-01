@@ -3,8 +3,8 @@ import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
 import { buildZodSchema } from '@/lib/schema-from-meta';
 
 /**
- * The engine applies an `eval:` default only to a field that holds nothing, null or an
- * empty string. A whitespace-only value counts as a value there, so the engine skips the
+ * The engine applies an `eval:` default only to a field that holds nothing or an empty
+ * string. A whitespace-only value or a null counts as a value there, so the engine skips the
  * default and then refuses the required field. The form must refuse it inline instead.
  */
 const note: FieldDefinition = {
@@ -33,6 +33,10 @@ function issuePaths(data: Record<string, unknown>): string[] {
 describe('a required field with an eval: default on insert', () => {
   it('refuses a whitespace-only value inline', () => {
     expect(issuePaths({ note: '   ' })).toEqual(['note']);
+  });
+
+  it('refuses a null inline, which the engine keeps as a clear (#227)', () => {
+    expect(issuePaths({ note: null })).toEqual(['note']);
   });
 
   it('leaves an empty value to the engine for its default', () => {

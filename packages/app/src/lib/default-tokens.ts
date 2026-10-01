@@ -7,7 +7,7 @@ type DefaultUser = { email?: string; full_name?: string } | null;
  * newly-created row/doc carries the real value instead of the literal token.
  *
  * Mirrors the engine's resolveMagicDefault (core/defaults/default-resolver.ts). The
- * engine fills a default only where the value arrives empty, so a token seeded here
+ * engine fills a default only where the value is missing or "", so a token seeded here
  * as text would be saved as text. An `eval:` default returns `undefined`.
  */
 export function resolveDefaultToken(raw: unknown, user?: DefaultUser): unknown {
