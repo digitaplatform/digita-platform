@@ -34,8 +34,8 @@ export default function TextControl({
 }
 
 /** TextEditor: the stored HTML drawn as formatted text and edited in place, so a person
- *  never sees or types tags; it stores HTML. Both the shown and the stored HTML keep only
- *  RICH_TEXT, because pasted content brings scripts and handlers along. */
+ *  never sees or types tags; it stores HTML. The HTML loaded into the box and the HTML it
+ *  stores keep formatting only (RICH_TEXT). */
 export function TextEditorControl({
   value,
   state,
@@ -63,7 +63,7 @@ export function TextEditorControl({
       role="textbox"
       aria-multiline="true"
       contentEditable={!state.readOnly}
-      suppressContentEditableWarning
+      tabIndex={0}
       className={`${TEXTAREA_CLASS} overflow-y-auto ${RICH_TEXT_CLASS}`}
       aria-labelledby={labelId}
       aria-describedby={describedBy(describedById, errorId)}

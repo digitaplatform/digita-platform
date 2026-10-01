@@ -126,11 +126,32 @@ describe('the TextEditor control', () => {
     expect(onFieldChange).toHaveBeenLastCalledWith('terms', html);
   });
 
-  it('refuses editing while it is read-only', async () => {
+  it('keeps only formatting: no form control, frame or style of a stored or pasted value', async () => {
+    const planted = '<p style="position:fixed">terms</p><form action="/x"><input name="a"><button>Save</button></form><iframe src="/x"></iframe>';
+    const { onFieldChange } = drawField(planted);
+    const box = await screen.findByLabelText('Terms');
+    expect(box.querySelector('input, button, form, iframe, [style]')).toBeNull();
+    expect(box).toHaveTextContent('terms');
+    typeHtml(box, planted);
+    expect(onFieldChange).toHaveBeenLastCalledWith('terms', '<p>terms</p>Save');
+  });
+
+  it('keeps the content it emitted while the person types, so the caret stays', async () => {
+    drawField('<p>a</p>');
+    const box = await screen.findByLabelText('Terms');
+    box.innerHTML = '<p>a <i>new</i></p>';
+    const typed = box.querySelector('i');
+    fireEvent.input(box);
+    // The form handed the emitted value back; the node the person typed is still there.
+    expect(box.querySelector('i')).toBe(typed);
+  });
+
+  it('refuses editing while it is read-only, and can still be reached by keyboard', async () => {
     drawField('<p>locked</p>', { readOnly: true });
     const box = await screen.findByLabelText('Terms');
     expect(box).toHaveAttribute('contenteditable', 'false');
     expect(box).toHaveAttribute('aria-readonly', 'true');
+    expect(box).toHaveAttribute('tabindex', '0');
     expect(box).toHaveTextContent('locked');
   });
 
