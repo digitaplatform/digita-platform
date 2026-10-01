@@ -160,15 +160,36 @@ function buildFieldSchema(field: FieldDefinition): ZodTypeAny {
   let s = baseForType(field);
   s = applyStringConstraints(s, field);
   s = applyNumberConstraints(s, field);
-  if (!field.required) s = s.nullable().optional();
-  return s;
+  // Mirrors the engine: the blank check runs before the type rules, so a blank value gets
+  // only field_required, also in a Table cell, which no required resolver covers.
+  if (field.required) return z.unknown().refine((v) => !isEmptyValue(field, v), 'field_required').pipe(s);
+  return s.nullable().optional();
 }
 
-/** Mirrors the engine: an unticked Check and a Rating of 0 are no value, so a required one refuses them. */
+/** Mirrors the engine: whitespace, an unticked Check and a Rating of 0 are no value, so a required one refuses them. */
 function isEmptyValue(field: FieldDefinition, v: unknown): boolean {
   if (field.fieldtype === 'Check' && (v === false || v === 0)) return true;
   if (field.fieldtype === 'Rating' && Number(v) === 0) return true;
-  return v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
+  return v === null || v === undefined || (typeof v === 'string' && v.trim() === '') || (Array.isArray(v) && v.length === 0);
+}
+
+/**
+ * The message a field shows at its control, from the form's error for that field. A Table's
+ * errors arrive per row and cell, and the grid draws no message per cell, so the Table shows
+ * the first one.
+ */
+export function fieldErrorMessage(error: unknown): string | undefined {
+  const own = (error as { message?: unknown } | undefined)?.message;
+  if (typeof own === 'string') return own;
+  if (!Array.isArray(error)) return undefined;
+  for (const row of error) {
+    if (!row || typeof row !== 'object') continue;
+    for (const cell of Object.values(row)) {
+      const message = (cell as { message?: unknown } | undefined)?.message;
+      if (typeof message === 'string') return message;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -200,7 +221,8 @@ export function buildZodSchema(
 
   return base.superRefine((data, ctx) => {
     for (const f of entity.fields) {
-      if (!isStored(f.fieldtype) || f.fieldtype === 'Table' || isFilledOnInsert(f)) continue;
+      // A statically required field is refused by its own schema already.
+      if (!isStored(f.fieldtype) || f.fieldtype === 'Table' || f.required || isFilledOnInsert(f)) continue;
       if (requiredResolver(f.fieldname) && isEmptyValue(f, (data as Record<string, unknown>)[f.fieldname])) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: [f.fieldname], message: 'field_required' });
       }

@@ -12,7 +12,7 @@ import { useDocument, useSingle, useCreate, useUpdate, useDeleteDoc } from '@/ho
 import { usePreview } from '@/hooks/usePreview';
 import { getDoc, getSingle } from '@/services/resource';
 import { qk } from '@/lib/query-keys';
-import { buildZodSchema } from '@/lib/schema-from-meta';
+import { buildZodSchema, fieldErrorMessage } from '@/lib/schema-from-meta';
 import { buildDefaults } from '@/lib/default-tokens';
 import { mergePreviewRows, RECOMPUTE_OVERRIDES_KEY } from '@/lib/merge-preview-rows';
 import { resolveFetchFromTargets } from '@/lib/resolve-fetch-from';
@@ -364,10 +364,10 @@ function RecordForm({
 
   const errors = useMemo(() => {
     const out: Record<string, string> = {};
-    const rhf = form.formState.errors as Record<string, { message?: string }>;
+    const rhf = form.formState.errors as Record<string, unknown>;
     for (const k of Object.keys(rhf)) {
-      const m = rhf[k]?.message;
-      if (m) out[k] = t(String(m));
+      const m = fieldErrorMessage(rhf[k]);
+      if (m) out[k] = t(m);
     }
     return out;
   }, [form.formState.errors, t]);

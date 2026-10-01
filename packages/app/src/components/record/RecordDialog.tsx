@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import type { EntityDefinition } from '@digitaplatform/shared';
 import { BaseDialog, Button, FormSkeleton } from '@digitaplatform/components';
 import { useDocument, useCreate, useUpdate } from '@/hooks/useDocument';
-import { buildZodSchema } from '@/lib/schema-from-meta';
+import { buildZodSchema, fieldErrorMessage } from '@/lib/schema-from-meta';
 import { buildDefaults } from '@/lib/default-tokens';
 import {
   sweepFieldStates,
@@ -177,10 +177,10 @@ function RecordDialogForm({
 
   const errors = useMemo(() => {
     const out: Record<string, string> = {};
-    const rhf = form.formState.errors as Record<string, { message?: string }>;
+    const rhf = form.formState.errors as Record<string, unknown>;
     for (const k of Object.keys(rhf)) {
-      const m = rhf[k]?.message;
-      if (m) out[k] = t(String(m));
+      const m = fieldErrorMessage(rhf[k]);
+      if (m) out[k] = t(m);
     }
     return out;
   }, [form.formState.errors, t]);
