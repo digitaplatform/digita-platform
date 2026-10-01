@@ -20,6 +20,7 @@ import type { EntityDefinition } from "@digitaplatform/shared";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { isValidStoragePath } from "../src/core/storage/storage-path.js";
+import { catalogAppDir } from "./_catalog-apps.js";
 
 function entity(opts: Partial<EntityDefinition> & { name: string }): EntityDefinition {
   return {
@@ -200,14 +201,13 @@ describe("EntityRegistry.auditAttachStoragePaths (boot lint)", () => {
   });
 
   it("the real loaded entity tree is clean: every Attach entity declares storage_path", async () => {
-    // Regression net for the engine's own definitions. The erp app now lives in
-    // the separate digita-catalog repo — include it when checked out as a sibling
-    // (local / integration), skip it in engine-only CI (the erp tree is audited
-    // by digita-catalog' own CI). The engine-entity audit always runs.
+    // Regression net for the engine's own definitions, and for the workshop app of the
+    // digita-catalog repo when it is checked out as a sibling (local / integration); engine-only
+    // CI audits the engine's entities alone.
     const reg = new EntityRegistry();
     await reg.loadAll("./src/entities");
-    const erp = "../../../digita-catalog/erp";
-    if (existsSync(erp)) await reg.loadAll(erp);
+    const workshop = catalogAppDir("../../../digita-catalog", "workshop");
+    if (existsSync(workshop)) await reg.loadAll(workshop);
     expect(reg.auditAttachStoragePaths()).toEqual([]);
   });
 });
