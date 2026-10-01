@@ -31,6 +31,21 @@ export class IllegalTransitionError extends Error {
 }
 
 /**
+ * A requested target for an error message. A request body can carry any JSON value, and
+ * `String()` throws on an object whose `toString` is not a function.
+ */
+export function stateLabel(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return "(none)";
+  return `(${Array.isArray(value) ? "array" : typeof value})`;
+}
+
+/** No state at all: a record whose workflow field is empty sits in none. */
+function isNoState(value: unknown): boolean {
+  return value === undefined || value === null || value === "";
+}
+
+/**
  * First-class state-machine engine.
  *
  * Schema model:
@@ -219,6 +234,27 @@ export class WorkflowEngine {
       return t; // accepted
     }
     throw new IllegalTransitionError(entity.name, fromValue, toValue, lastFailure);
+  }
+
+  /**
+   * Judge a write of the workflow field the way `transition()` judges a move. Returns null
+   * when the value keeps the current state, so a save may send the field back unchanged.
+   * Any other value must be a declared state reached by a transition the user may take;
+   * a value that is no state name at all is refused like an undeclared move, since a
+   * record left in no state has slipped out of the workflow that guards it.
+   */
+  judgeFieldWrite(
+    entity: EntityDefinition,
+    doc: Record<string, unknown>,
+    value: unknown,
+    user: UserContext,
+  ): { from: string | undefined; to: string; transition: TransitionDefinition | undefined } | null {
+    const from = doc[this.getWorkflowField(entity)] as string | undefined;
+    if (value === from || (isNoState(value) && isNoState(from))) return null;
+    if (typeof value !== "string") {
+      throw new IllegalTransitionError(entity.name, from, stateLabel(value), "not_declared");
+    }
+    return { from, to: value, transition: this.validateTransition(entity, doc, from, value, user) };
   }
 
   /**
