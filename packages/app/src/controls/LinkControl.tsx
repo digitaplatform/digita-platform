@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Input, SearchDialog, BaseDialog, TreeView, Combobox, cn } from '@digitaplatform/components';
 import type { TreeViewNode, ComboboxOption } from '@digitaplatform/components';
+import type { TreeConfig } from '@digitaplatform/shared';
 import type { FieldControlProps } from '@/controls/types';
 import { FIELD_CLASS, describedBy } from '@/controls/control-styles';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useSearchLink } from '@/hooks/useSearchLink';
 import { useMeta } from '@/hooks/useMeta';
 import { resolveLinkFilters } from '@/lib/link-filters';
+import { toUiMessages } from '@/lib/api-result';
 import { useList } from '@/hooks/useList';
 import { useUiStore } from '@/stores/ui';
+import { useI18nStore } from '@/stores/i18n';
 
 /**
  * Link lookup control on the shared [[Combobox]] (inline mode) — one keyboard
@@ -16,8 +19,9 @@ import { useUiStore } from '@/stores/ui';
  * submit mid-lookup), Tab picks and moves on, Escape closes only the popup.
  * Every pick (all three modes) calls BOTH onChange and onCommit — the grid's
  * entry-flow advance depends on the commit. The current value's display comes
- * from the doc's denormalized `_link_titles`; selecting stores the target `_id`
- * (composite `<parent>::<row_id>` for sub-rows). Read-only → plain display text.
+ * from the doc's denormalized `_link_titles`, and for a tree node from its path
+ * (useTreePath); selecting stores the target `_id` (composite
+ * `<parent>::<row_id>` for sub-rows). Read-only → plain display text.
  */
 export default function LinkControl({
   field,
@@ -32,6 +36,7 @@ export default function LinkControl({
   errorId,
 }: FieldControlProps) {
   const tc = useChrome();
+  const t = useI18nStore((s) => s.t);
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [open, setOpen] = useState(false);
@@ -112,6 +117,12 @@ export default function LinkControl({
     filters: Object.entries(treeFilters).map(([k, v]) => [k, '=', v] as [string, string, unknown]),
     page_size: 2000,
   });
+  const treeLabelField = treeCfg?.label_field ?? targetMeta.data?.title_field ?? '_id';
+  // A tree node shows its path from the root: by its own name, groups of the same name under
+  // different parents look alike.
+  const treePath = useTreePath(field.target, treeCfg, treeLabelField, hasValue ? String(value) : '');
+  const fieldDisplay = treeCfg && treePath.labels?.length ? treePath.labels.join(' › ') : currentDisplay;
+  const pathFailure = treePath.error ? toUiMessages(treePath.error, t)[0]?.text : undefined;
   const searchColumns = field.search_columns ?? targetMeta.data?.search_fields ?? [];
   const colDefs = searchColumns.map((key) => ({
     key,
@@ -141,8 +152,9 @@ export default function LinkControl({
         // edge. cn's tailwind-merge lets these override FIELD_CLASS's border-border.
         className={cn(FIELD_CLASS, 'bg-subtle border-transparent shadow-none dark:border-borderStrong')}
         aria-labelledby={labelId}
+        title={pathFailure}
       >
-        {currentDisplay || '—'}
+        {fieldDisplay || '—'}
       </div>
     );
   }
@@ -158,13 +170,12 @@ export default function LinkControl({
 
   // ---- tree mode: target entity declares a tree → pick from the hierarchy ----
   if (treeCfg) {
-    const labelField = treeCfg.label_field ?? targetMeta.data?.title_field ?? '_id';
     const parentField = treeCfg.parent_field;
     const nodes: TreeViewNode[] = (treeList.data?.rows ?? []).map((r) => {
       const parent = r[parentField];
       return {
         id: String(r._id),
-        label: String(r[labelField] ?? r._id),
+        label: String(r[treeLabelField] ?? r._id),
         parentId: parent != null && parent !== '' ? String(parent) : null,
       };
     });
@@ -213,7 +224,8 @@ export default function LinkControl({
             aria-invalid={state.invalid || undefined}
             readOnly
             placeholder={field.placeholder ?? tc('ui.link.searchEntity', { entity: field.target ?? '' })}
-            value={currentDisplay}
+            value={fieldDisplay}
+            title={pathFailure}
             // Open on CLICK or explicit keys only — never onFocus: the dialog's
             // focus-restore lands here on close, and an onFocus-open turned
             // every close into an immediate reopen (un-dismissable dialog).
@@ -419,6 +431,58 @@ export default function LinkControl({
       clearLabel={tc('ui.action.clear')}
     />
   );
+}
+
+/**
+ * The labels of a tree node and of its ancestors, root first: undefined until the topmost one is
+ * loaded. The engine has no endpoint for a node's ancestors, and a form must not load the whole
+ * tree for one field, so the path comes from the target's list one level at a time: a request
+ * names the ids found so far (`_id in`), and the topmost row's parent field names the next id.
+ * A parent the list does not return, deleted or hidden from the person, ends the path, as the
+ * tree picker then shows its child as a root.
+ */
+function useTreePath(
+  entity: string | undefined,
+  tree: TreeConfig | undefined,
+  labelField: string,
+  nodeId: string,
+): { labels?: string[]; error: unknown } {
+  const [chain, setChain] = useState<{ nodeId: string; ids: string[] }>({ nodeId: '', ids: [] });
+  // The ids found for another node name nothing of this one's path.
+  const ids = useMemo(() => (chain.nodeId === nodeId ? chain.ids : [nodeId]), [chain, nodeId]);
+  const parentField = tree?.parent_field ?? '';
+  const list = useList(tree && nodeId ? entity : undefined, {
+    filters: [['_id', 'in', ids]],
+    fields: [parentField, labelField],
+    page_size: ids.length,
+  });
+
+  let labels: string[] | undefined;
+  let nextId: string | undefined;
+  // Rows kept from the previous request name the path of fewer ids, or of another node.
+  if (tree && nodeId && list.data && !list.isPlaceholderData) {
+    const byId = new Map(list.data.rows.map((r) => [String(r._id), r]));
+    const found: string[] = [];
+    const seen = new Set<string>();
+    for (let id: string | null = nodeId; id && !seen.has(id); ) {
+      seen.add(id);
+      const row = byId.get(id);
+      if (!row) {
+        if (!ids.includes(id)) nextId = id;
+        break;
+      }
+      found.unshift(String(row[labelField] ?? row._id));
+      const parent = row[parentField];
+      id = parent != null && parent !== '' ? String(parent) : null;
+    }
+    if (!nextId) labels = found;
+  }
+
+  useEffect(() => {
+    if (nextId) setChain({ nodeId, ids: [...ids, nextId] });
+  }, [nextId, nodeId, ids]);
+
+  return { labels, error: list.error };
 }
 
 function SearchIcon() {
