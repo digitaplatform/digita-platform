@@ -1,8 +1,5 @@
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { DIGITA } from "@digitaplatform/shared";
-import { createLogger } from "../logging/logger.js";
-
-const log = createLogger("document-share-service");
 
 export interface DocumentShare {
   _id?: string;
@@ -13,57 +10,11 @@ export interface DocumentShare {
   can_read: boolean;
   can_share: boolean;
   expires_at?: Date;
-  notify: boolean;
   creation?: Date;
 }
 
 export class DocumentShareService {
   constructor(private db: MongoDBService) {}
-
-  async share(share: DocumentShare): Promise<void> {
-    const _id = `${share.entity}:${share.document_name}:${share.shared_with}`;
-
-    const existing = await this.db.findOne(DIGITA.COLLECTIONS.DOC_SHARE, _id, DIGITA.DATABASES.IDENTITY);
-
-    if (existing) {
-      await this.db.updateOne(
-        DIGITA.COLLECTIONS.DOC_SHARE,
-        _id,
-        {
-          can_read: share.can_read,
-          can_share: share.can_share,
-          expires_at: share.expires_at,
-          modified: new Date(),
-        },
-        DIGITA.DATABASES.IDENTITY,
-      );
-    } else {
-      await this.db.insertOne(
-        DIGITA.COLLECTIONS.DOC_SHARE,
-        {
-          _id,
-          ...share,
-          creation: new Date(),
-          modified: new Date(),
-        },
-        DIGITA.DATABASES.IDENTITY,
-      );
-    }
-
-    log.info(
-      {
-        entity: share.entity,
-        document: share.document_name,
-        shared_with: share.shared_with,
-      },
-      "Document shared",
-    );
-  }
-
-  async unshare(entity: string, documentName: string, sharedWith: string): Promise<void> {
-    const _id = `${entity}:${documentName}:${sharedWith}`;
-    await this.db.deleteOne(DIGITA.COLLECTIONS.DOC_SHARE, _id, DIGITA.DATABASES.IDENTITY);
-  }
 
   async getShares(entity: string, documentName: string): Promise<DocumentShare[]> {
     const docs = await this.db.find(
