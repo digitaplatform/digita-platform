@@ -20,7 +20,7 @@ import { projectFields } from "./project-fields.js";
 import { resolveDefaults, applyNewChildRowDefaults } from "../defaults/default-resolver.js";
 import { applyScopeFilters, applyRoleVisibilityFilter, isRoleVisible, readsThroughRoleList } from "../permissions/scope-filter.js";
 import { env } from "../config/env.js";
-import { PermissionDeniedError } from "../permissions/permission-checker.js";
+import { PermissionDeniedError, type PatchChange } from "../permissions/permission-checker.js";
 import { DocumentShareService } from "../permissions/document-share-service.js";
 import { entityHasAnySnapshot, entityHasAnyFreeze } from "../snapshot/snapshot-resolver.js";
 import { resolveStatusIndicator } from "../status/status-resolver.js";
@@ -1630,6 +1630,7 @@ export class DocumentService {
       for (const [f, delta] of Object.entries(patch.increment ?? {})) {
         doc.set(f, Number(doc.get(f) ?? 0) + Number(delta));
       }
+      const cellChanges: PatchChange[] = [];
 
       // Children — per-row set/increment, addressed by _row_id.
       for (const entry of patch.children ?? []) {
@@ -1652,8 +1653,13 @@ export class DocumentService {
             new: val ?? null,
           });
         }
+        const cellsBefore = Object.fromEntries(Object.keys(rowPatch).map((cf) => [cf, row[cf]]));
         doc.updateChildById(entry.table, entry.row_id, rowPatch);
         touchedTables.add(entry.table);
+        const rowAfter = doc.getChildById(entry.table, entry.row_id)!;
+        for (const cf of Object.keys(rowPatch)) {
+          cellChanges.push({ table: entry.table, row: rowAfter, field: cf, old: cellsBefore[cf], new: rowAfter[cf] });
+        }
       }
       // Normalize each touched table through serializeFields (mirror the draft
       // merge path). NOTE: the Table handler's toStorage encrypts a Password
@@ -1812,6 +1818,16 @@ export class DocumentService {
           doc.merge(sideEffects);
         }
       }
+
+      // The lock judges every field this save changes on the document it produces: the patch's
+      // own, a before_submitted_update hook's and a transition's side effects, and the cells of the
+      // rows the patch names. Declared computed targets are derived outputs, which update does not
+      // lock-check either.
+      const lockedFields = doc.getChangedFields().filter((f) => !computedTargets.has(f) && !touchedTables.has(f));
+      this.permissionChecker.assertPatchKeepsLocks(user, entity.name, doc._data, [
+        ...lockedFields.map((field) => ({ field, old: doc._original[field], new: doc.get(field) })),
+        ...cellChanges,
+      ]);
 
       // Closing band guardrail: a before_submitted_update hook that dirtied a
       // NON-band field aborts the tx here (construction guarantee). The allowed

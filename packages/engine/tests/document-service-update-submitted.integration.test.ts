@@ -1009,3 +1009,100 @@ describe("updateSubmitted — an attach cell of a Table in the band", () => {
     }
   });
 });
+
+// ─── read_only_depends_on on the patch path ─────────────────────────────────
+
+describe("updateSubmitted — a read_only_depends_on lock holds for a hook, a rule and a transition", () => {
+  // `note` and `counter` lock while `locked` is set; a line's `delivered` locks while its row is sealed.
+  function lockEntity(name = "LockDoc"): EntityDefinition {
+    return {
+      name,
+      module: "test",
+      database: "app" as const,
+      naming: { strategy: "auto_increment", prefix: "LK-", pad_length: 4 },
+      is_submittable: true,
+      track_changes: true,
+      fields: [
+        { fieldname: "title", fieldtype: "Data", label: "Title", required: true },
+        { fieldname: "locked", fieldtype: "Check", label: "Locked", allow_on_submit: true, default: 0 },
+        { fieldname: "note", fieldtype: "Data", label: "Note", allow_on_submit: true, read_only_depends_on: "eval:doc.locked==1" },
+        { fieldname: "counter", fieldtype: "Int", label: "Counter", allow_on_submit: true, default: 0, read_only_depends_on: "eval:doc.locked==1" },
+        {
+          fieldname: "lines",
+          fieldtype: "Table",
+          label: "Lines",
+          child_fields: [
+            { fieldname: "sealed", fieldtype: "Check", label: "Sealed" },
+            { fieldname: "delivered", fieldtype: "Float", label: "Delivered", allow_on_submit: true, default: 0, read_only_depends_on: "eval:doc.sealed==1" },
+          ],
+        },
+      ],
+      permissions: [fullPerms, viewerPerms],
+    } as unknown as EntityDefinition;
+  }
+
+  beforeEach(async () => {
+    registry.register(lockEntity("LockDoc"));
+    await db.ensureCollection("LockDoc", "app");
+  });
+
+  async function lockedDoc(): Promise<{ id: string; rowIds: string[] }> {
+    const id = await insertSubmitted("LockDoc", {
+      title: "Locked",
+      locked: 1,
+      note: "kept",
+      lines: [{ sealed: 0 }, { sealed: 1 }],
+    });
+    const raw = await db.findOne("LockDoc", id, "app");
+    return { id, rowIds: (raw?.["lines"] as Array<Record<string, unknown>>).map((r) => r["_row_id"] as string) };
+  }
+
+  // A hook settles a document as the user who triggered it, who may not write it (skipWritePermCheck).
+  const asHook = { skipWritePermCheck: true };
+
+  it("refuses a hook's change of a locked field, and of a locked counter, by an actor without write", async () => {
+    const { id } = await lockedDoc();
+    await expect(
+      docService.updateSubmitted("LockDoc", id, { set: { note: "changed" } }, viewer, undefined, asHook),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    await expect(
+      docService.updateSubmitted("LockDoc", id, { increment: { counter: 1 } }, viewer, undefined, asHook),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    const raw = await db.findOne("LockDoc", id, "app");
+    expect([raw?.["note"], raw?.["counter"]]).toEqual(["kept", 0]);
+  });
+
+  it("passes a patch that releases the lock in the same save, and the Administrator", async () => {
+    const { id } = await lockedDoc();
+    await docService.updateSubmitted("LockDoc", id, { set: { locked: 0, note: "released" } }, viewer, undefined, asHook);
+    expect((await db.findOne("LockDoc", id, "app"))?.["note"]).toBe("released");
+
+    const other = await lockedDoc();
+    await docService.updateSubmitted("LockDoc", other.id, { set: { note: "by admin" } }, admin);
+    expect((await db.findOne("LockDoc", other.id, "app"))?.["note"]).toBe("by admin");
+  });
+
+  it("judges a row patch on its own row: a locked cell is refused, a row beside a locked one passes", async () => {
+    const { id, rowIds } = await lockedDoc();
+    await docService.updateSubmitted(
+      "LockDoc",
+      id,
+      { children: [{ table: "lines", row_id: rowIds[0]!, increment: { delivered: 2 } }] },
+      viewer,
+      undefined,
+      asHook,
+    );
+    await expect(
+      docService.updateSubmitted(
+        "LockDoc",
+        id,
+        { children: [{ table: "lines", row_id: rowIds[1]!, increment: { delivered: 2 } }] },
+        viewer,
+        undefined,
+        asHook,
+      ),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    const lines = (await db.findOne("LockDoc", id, "app"))?.["lines"] as Array<Record<string, unknown>>;
+    expect(lines.map((l) => l["delivered"] ?? 0)).toEqual([2, 0]);
+  });
+});
