@@ -17,6 +17,8 @@ import { DesignMenu } from '@/components/layout/DesignMenu';
 export function Topbar({ showMenuButton = true }: { showMenuButton?: boolean }) {
   const mode = useThemeStore((s) => s.mode);
   const cycleMode = useThemeStore((s) => s.cycleMode);
+  // A tenant may keep everyone on the system mode (BrandingSetting.allow_user_theme_mode).
+  const canChooseMode = useThemeStore((s) => s.branding?.allow_user_theme_mode !== false);
   const setMobileNav = useUiStore((s) => s.setMobileNav);
   const setCommandPalette = useUiStore((s) => s.setCommandPalette);
   const tc = useChrome();
@@ -51,12 +53,14 @@ export function Topbar({ showMenuButton = true }: { showMenuButton?: boolean }) 
         <LanguageSwitcher onChosen={saveLanguage} />
         <DesignMenu />
         <DensityMenu />
-        <ModeButton
-          mode={mode}
-          onCycle={cycleMode}
-          label={tc('ui.theme.toggle')}
-          icons={{ light: <Sun className="h-5 w-5" />, dark: <Moon className="h-5 w-5" />, system: <Monitor className="h-5 w-5" /> }}
-        />
+        {canChooseMode ? (
+          <ModeButton
+            mode={mode}
+            onCycle={cycleMode}
+            label={tc('ui.theme.toggle')}
+            icons={{ light: <Sun className="h-5 w-5" />, dark: <Moon className="h-5 w-5" />, system: <Monitor className="h-5 w-5" /> }}
+          />
+        ) : null}
         <AppMenu />
       </div>
     </TopBar>

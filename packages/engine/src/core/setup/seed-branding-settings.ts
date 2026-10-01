@@ -27,7 +27,6 @@ export async function seedBrandingSettings(db: MongoDBService): Promise<void> {
         doctype: DIGITA.COLLECTIONS.BRANDING_SETTING,
         docstatus: 0,
         density: "comfortable",
-        allow_user_template_override: true,
         allow_user_theme_mode: true,
         owner: "system",
         modified_by: "system",

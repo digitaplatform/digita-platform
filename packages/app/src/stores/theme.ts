@@ -23,8 +23,9 @@ import { signature as veloluckLakeside } from '@digitaplatform/veloluck-lakeside
 import { signature as veloluckPrecise } from '@digitaplatform/veloluck-precise';
 import { signature as veloluckWorkbench } from '@digitaplatform/veloluck-workbench';
 import { nextMode } from '@digitaplatform/components';
+import faviconUrl from '@digitaplatform/theme/favicon.svg?no-inline';
 import { getUserPreference, setUserPreference } from '@/services/userPreference';
-import { APP_BASE_PATH } from '@/lib/appBase';
+import { APP_BASE_PATH, appUrl } from '@/lib/appBase';
 
 // The signature this app drew last in this browser, kept only as a CACHE so the first
 // paint, before /boot answers, wears the tenant's look instead of flashing digita. It
@@ -93,6 +94,16 @@ function drawnSignature(branding: BootBranding | null): string {
   return id && getRuntimeSignature(id) ? id : DEFAULT_SIGNATURE_ID;
 }
 
+// The page's icon: the tenant's favicon, else the platform's, which main.tsx puts in place at
+// start. One link element is kept, so a branding without a favicon puts the platform's back.
+function showFavicon(href: string): void {
+  const link =
+    document.head.querySelector<HTMLLinkElement>('link[rel="icon"]') ??
+    document.head.appendChild(Object.assign(document.createElement('link'), { rel: 'icon' }));
+  link.removeAttribute('type');
+  link.setAttribute('href', href);
+}
+
 // Apply signature `id`, then re-assert the tenant's branding on top: a tenant's
 // configured primary colour / fonts WIN over the signature's defaults, and the
 // per-user density is re-asserted too. Every store path that (re)applies the
@@ -143,9 +154,13 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   },
   // The branding may name another default signature, so the signature is drawn
   // again, and applySignatureLayered puts the tenant's overrides and the per-user
-  // density back over it.
+  // density back over it. A tenant that allows no light/dark choice puts everyone
+  // on the system mode.
   setBranding: (branding) => {
-    set({ branding });
+    const isModeLocked = branding.allow_user_theme_mode === false;
+    if (isModeLocked) applyMode('system');
+    set({ branding, ...(isModeLocked ? { mode: 'system' as const } : {}) });
+    showFavicon(branding.favicon ? appUrl(branding.favicon) : faviconUrl);
     get().reapplySignature();
   },
   loadRemotePrefs: async () => {
@@ -156,7 +171,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         getUserPreference(IDENTITY_PREFERENCE_KEYS.design),
       ]);
       const stored = storeIdentityPreferences({ mode, density, design });
-      if (stored.mode) {
+      if (stored.mode && get().branding?.allow_user_theme_mode !== false) {
         applyMode(stored.mode);
         set({ mode: stored.mode });
       }

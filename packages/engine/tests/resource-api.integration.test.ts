@@ -643,6 +643,11 @@ describe("Resource API Integration", () => {
         );
       }
     });
+
+    it("the meta of BrandingSetting offers no user template override, which no menu reads", async () => {
+      const res = await app.inject({ method: "GET", url: "/api/v1/meta/BrandingSetting", headers: authHeaders() });
+      expect(res.json().data.fields.map((f: { fieldname: string }) => f.fieldname)).not.toContain("allow_user_template_override");
+    });
   });
 
   // ─── PHASE 3: default_workspace resolution + meta navigable ──────

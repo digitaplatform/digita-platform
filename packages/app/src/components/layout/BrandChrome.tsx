@@ -38,6 +38,7 @@ export function BrandChrome({ side, collapsed, collapsible, onToggleCollapse, on
     <BrandMark
       name={appName}
       logoUrl={branding?.logo ? appUrl(branding.logo) : undefined}
+      logoDarkUrl={branding?.logo_dark ? appUrl(branding.logo_dark) : undefined}
       nameIsCustom={Boolean(branding?.app_name)}
       signature={getSignature(signatureId)}
       fill={fill}

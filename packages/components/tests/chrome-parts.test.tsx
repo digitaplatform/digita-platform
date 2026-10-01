@@ -29,6 +29,18 @@ describe('BrandMark', () => {
     rerender(<BrandMark name="acme" nameIsCustom />);
     expect(screen.getByText('A')).toBeInTheDocument();
   });
+
+  it("draws the tenant's dark logo in dark mode and the light one otherwise", () => {
+    const { container, rerender } = render(<BrandMark name="Acme" logoUrl="/logo.png" logoDarkUrl="/logo-dark.png" signature={signature} />);
+    const images = () => [...container.querySelectorAll('img')].map((img) => [img.getAttribute('src'), img.className]);
+    expect(images()).toEqual([
+      ['/logo.png', expect.stringContaining('dark:hidden')],
+      ['/logo-dark.png', expect.stringMatching(/\bhidden\b.*dark:block|dark:block.*\bhidden\b/)],
+    ]);
+    // A dark logo alone stands in for the light one, so no mode shows the monogram instead.
+    rerender(<BrandMark name="Acme" logoDarkUrl="/logo-dark.png" signature={signature} />);
+    expect(images().map(([src]) => src)).toEqual(['/logo-dark.png', '/logo-dark.png']);
+  });
 });
 
 describe('ModeButton', () => {
