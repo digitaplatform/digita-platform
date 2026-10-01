@@ -9,7 +9,8 @@ import type { EntitySummary } from '@/types';
  * help-text (`description`), action labels, the fields of an action's dialog
  * (`action_field.<Entity>.<action>.<field>`), workflow transition labels
  * (`transition.<Entity>.<action>`) and the labels of a record's links
- * (`link.<Entity>.<linked entity>.<link_field>`). A child field of a table also keys
+ * (`link.<Entity>.<linked entity>.<link_field>`, or that key followed by `.<written label>`
+ * to tell apart two links with the same entity and field). A child field of a table also keys
  * by its table (`field.<Entity>.<table>.<field>`, `description.<Entity>.<table>.<field>`).
  * What a view returns is no entity meta, so its texts key by the view: see `viewSectionLabel`.
  * Any future label field localizes by adding ONE line here — renderers read
@@ -84,11 +85,12 @@ export function localizeMeta(meta: EntityDefinition, t: Dict): EntityDefinition 
   }
   if (meta.links) {
     // A link has no id and its position moves when the links are reordered; the linked entity and the
-    // field that points back stay put, so they name its text. Two links alike in both share one text.
-    out.links = meta.links.map((link) => ({
-      ...link,
-      label: t[`link.${e}.${link.entity}.${link.link_field}`] ?? link.label,
-    }));
+    // field that points back stay put, so they name its text. Two links with the same entity and field
+    // differ by their `filters` alone, so the key that adds the written label tells them apart.
+    out.links = meta.links.map((link) => {
+      const key = `link.${e}.${link.entity}.${link.link_field}`;
+      return { ...link, label: t[`${key}.${link.label}`] ?? t[key] ?? link.label };
+    });
   }
   return out;
 }

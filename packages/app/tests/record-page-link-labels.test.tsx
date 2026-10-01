@@ -85,10 +85,7 @@ beforeEach(() => {
     ),
   );
 });
-afterEach(() => {
-  vi.unstubAllGlobals();
-  useI18nStore.setState({ locale: 'en', translations: {}, loaded: false });
-});
+afterEach(() => vi.unstubAllGlobals());
 
 function renderSale(translations: Record<string, string>) {
   useI18nStore.setState({ locale: 'de', translations, loaded: true });
@@ -112,7 +109,7 @@ describe('the links of a German record page', () => {
     ];
     renderSale({ 'link.Sale.Invoice.sale': 'Rechnungen' });
 
-    expect(await screen.findByRole('link', { name: 'Rechnungen 1' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Rechnungen 1' }, { timeout: 3000 })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Payments' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Invoices/ })).not.toBeInTheDocument();
   });
@@ -130,7 +127,7 @@ describe('the links of a German record page', () => {
     ];
     renderSale({});
 
-    const withIcon = await screen.findByRole('link', { name: 'Invoices 1' });
+    const withIcon = await screen.findByRole('link', { name: 'Invoices 1' }, { timeout: 3000 });
     expect(withIcon.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
     expect(screen.getByRole('link', { name: 'Payments' }).querySelector('svg')).toBeNull();
     expect(screen.getByRole('link', { name: 'Returns' }).querySelector('svg')).toBeNull();

@@ -5,7 +5,8 @@ import { localizeMeta } from '@/lib/localize-meta';
 /**
  * A link of a record page has no id, so its text keys by what names it and stays when the links are
  * reordered: the linked entity and the field that points back, `link.<Entity>.<linked entity>.<link_field>`.
- * A link without a key keeps the label the entity file writes.
+ * Two links that share both are told apart by that key followed by `.<written label>`, which wins over
+ * the shorter key. A link without a key keeps the label the entity file writes.
  */
 
 const INVOICES: LinkDefinition = { label: 'Invoices', entity: 'Invoice', link_field: 'sale', show_count: true, icon: 'file' };
@@ -46,6 +47,27 @@ describe('localizeMeta links', () => {
     const out = localizeMeta(saleWith([INVOICES, RETURNS]), t);
     expect(out.links![0]).toEqual({ ...INVOICES, label: 'Rechnungen' });
     expect(out.links![1]).toEqual({ ...RETURNS, label: 'Gutschriften' });
+  });
+
+  it('tells two links with the same entity and field apart by their written label', () => {
+    const open: LinkDefinition = { label: 'Open invoices', entity: 'Invoice', link_field: 'sale', filters: { status: 'open' } };
+    const paid: LinkDefinition = { label: 'Paid invoices', entity: 'Invoice', link_field: 'sale', filters: { status: 'paid' } };
+    const out = localizeMeta(saleWith([open, paid]), {
+      'link.Sale.Invoice.sale.Open invoices': 'Offene Rechnungen',
+      'link.Sale.Invoice.sale.Paid invoices': 'Bezahlte Rechnungen',
+      'link.Sale.Invoice.sale': 'Rechnungen',
+    });
+    expect(out.links!.map((link) => link.label)).toEqual(['Offene Rechnungen', 'Bezahlte Rechnungen']);
+  });
+
+  it('gives a link the text of the shorter key where no key adds its label', () => {
+    const open: LinkDefinition = { label: 'Open invoices', entity: 'Invoice', link_field: 'sale' };
+    const paid: LinkDefinition = { label: 'Paid invoices', entity: 'Invoice', link_field: 'sale' };
+    const out = localizeMeta(saleWith([open, paid]), {
+      'link.Sale.Invoice.sale.Paid invoices': 'Bezahlte Rechnungen',
+      'link.Sale.Invoice.sale': 'Rechnungen',
+    });
+    expect(out.links!.map((link) => link.label)).toEqual(['Rechnungen', 'Bezahlte Rechnungen']);
   });
 
   it('does not mutate the input meta', () => {
