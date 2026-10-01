@@ -47,6 +47,7 @@ function deps(rows: unknown[]) {
     deps: {
       db: { aggregate },
       registry,
+      tenantTimeZone: () => "UTC",
       permissionChecker: {
         check: vi.fn().mockResolvedValue(undefined),
         getReadableFieldsOnEveryRow: vi.fn(() => null), // an Administrator: every field readable

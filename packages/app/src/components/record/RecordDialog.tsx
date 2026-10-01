@@ -5,7 +5,7 @@ import type { EntityDefinition } from '@digitaplatform/shared';
 import { BaseDialog, Button, FormSkeleton } from '@digitaplatform/components';
 import { useDocument, useCreate, useUpdate } from '@/hooks/useDocument';
 import { buildZodSchema, fieldErrorMessage } from '@/lib/schema-from-meta';
-import { buildDefaults } from '@/lib/default-tokens';
+import { buildDefaults, tenantTimeZoneOf } from '@/lib/default-tokens';
 import {
   sweepFieldStates,
   deriveComputedSet,
@@ -63,11 +63,12 @@ export function RecordDialog({
   const tc = useChrome();
   const tEntity = useI18nStore((s) => s.tEntity);
   const user = useSessionStore((s) => s.user);
+  const timeZone = useSessionStore((s) => tenantTimeZoneOf(s.settings));
 
   const docQ = useDocument<Doc>(isNew ? undefined : entity, isNew ? undefined : name);
   // A caller's pre-fills (e.g. a tree node's parent and group partition) win over defaults.
   const initial: Doc | null = isNew
-    ? { docstatus: 0, ...buildDefaults(meta.fields, user), ...seed }
+    ? { docstatus: 0, ...buildDefaults(meta.fields, user, timeZone), ...seed }
     : (docQ.data ?? null);
 
   const title = isNew

@@ -13,7 +13,7 @@ import { usePreview } from '@/hooks/usePreview';
 import { getDoc, getSingle } from '@/services/resource';
 import { qk } from '@/lib/query-keys';
 import { buildZodSchema, fieldErrorMessage } from '@/lib/schema-from-meta';
-import { buildDefaults, resolveDefaultToken } from '@/lib/default-tokens';
+import { buildDefaults, seedsDefault, tenantTimeZoneOf } from '@/lib/default-tokens';
 import { mergePreviewRows, RECOMPUTE_OVERRIDES_KEY } from '@/lib/merge-preview-rows';
 import { resolveFetchFromTargets } from '@/lib/resolve-fetch-from';
 import {
@@ -109,6 +109,7 @@ export default function RecordPage() {
   const tc = useChrome();
   const tEntity = useI18nStore((s) => s.tEntity);
   const user = useSessionStore((s) => s.user);
+  const timeZone = useSessionStore((s) => tenantTimeZoneOf(s.settings));
 
   if (metaQ.isLoading) return <FormSkeleton fields={8} />;
   if (metaQ.isError || !metaQ.data) {
@@ -146,7 +147,7 @@ export default function RecordPage() {
   }
 
   const initial: Doc = isNew
-    ? { docstatus: 0, ...buildDefaults(metaQ.data.fields, user) }
+    ? { docstatus: 0, ...buildDefaults(metaQ.data.fields, user, timeZone) }
     : (loaded.data as Doc);
   if (!initial) return <LoadingBlock />;
 
@@ -189,7 +190,7 @@ function stripRow(row: Doc, clearedToNull: readonly string[]): Doc {
 
 /** The fields whose default the form seeds into a new record or row (an `eval:` default it cannot). */
 function seededDefaultFields(fields: readonly FieldDefinition[]): string[] {
-  return fields.filter((f) => resolveDefaultToken(f.default) !== undefined).map((f) => f.fieldname);
+  return fields.filter((f) => seedsDefault(f.default)).map((f) => f.fieldname);
 }
 
 /**
@@ -228,7 +229,7 @@ export function stripForSave(meta: EntityDefinition, values: Doc, original?: Doc
   for (const f of meta.fields) {
     const k = f.fieldname;
     if (drop.has(k) || tables.has(k) || !(k in values) || out[k] !== undefined) continue;
-    const cleared = original ? original[k] != null : resolveDefaultToken(f.default) !== undefined;
+    const cleared = original ? original[k] != null : seedsDefault(f.default);
     if (cleared) out[k] = null;
   }
   return out;

@@ -54,6 +54,7 @@ function makeDeps(opts: {
   return {
     db: { aggregate: vi.fn().mockResolvedValue(opts.rows ?? []) },
     registry: fakeRegistry,
+    tenantTimeZone: () => "UTC",
     permissionChecker: {
       check: vi.fn().mockResolvedValue(undefined),
       hasConditionalRowRead: vi.fn(() => false),
@@ -213,6 +214,7 @@ describe("runAggregateSection — field-level perm_level enforcement", () => {
     const deps = {
       db: { aggregate: vi.fn().mockResolvedValue([]) },
       registry: reg,
+      tenantTimeZone: () => "UTC",
       permissionChecker: {
         check: vi.fn().mockResolvedValue(undefined),
         hasConditionalRowRead: vi.fn(() => false),

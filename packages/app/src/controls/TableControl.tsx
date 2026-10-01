@@ -13,7 +13,7 @@ import type { FieldControlProps, FieldControlState } from '@/controls/types';
 import { useChrome } from '@/lib/chrome-i18n';
 import { fieldLabel } from '@/lib/localize-meta';
 import { useSessionStore } from '@/stores/session';
-import { buildDefaults } from '@/lib/default-tokens';
+import { buildDefaults, tenantTimeZoneOf } from '@/lib/default-tokens';
 import { sweepRowStates, type FieldStateMap } from '@/lib/evaluate-field';
 import { evalFormula } from '@/lib/grid-formula';
 import { parseClipboardGrid, applyPaste, type PasteColumn } from '@/lib/grid-paste';
@@ -137,6 +137,7 @@ export default function TableControl(props: FieldControlProps) {
   const tableId = useId();
   const tc = useChrome();
   const user = useSessionStore((s) => s.user);
+  const timeZone = useSessionStore((s) => tenantTimeZoneOf(s.settings));
 
   // Detail-dialog + add-via-search state (inline line entry). The search
   // data hooks live in <AddViaLinkSearch>, rendered only when add_via_link is set.
@@ -352,7 +353,7 @@ export default function TableControl(props: FieldControlProps) {
         return next;
       }),
     );
-  const makeRow = (): Row => ({ [ROW_ID_FIELD]: newRowId(), ...buildDefaults(cols, user) });
+  const makeRow = (): Row => ({ [ROW_ID_FIELD]: newRowId(), ...buildDefaults(cols, user, timeZone) });
   const addRow = () => onChange([...rows, makeRow()]);
   const removeRowById = (rowId: string) => onChange(rows.filter((r) => stableRowId(r) !== rowId));
   const duplicateRow = (rowId: string) => {

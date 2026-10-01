@@ -37,13 +37,13 @@ const loan = {
 } as unknown as EntityDefinition;
 
 function insertErrors(data: Record<string, unknown>): string[][] {
-  const filled = resolveDefaults(loan, data, "ann@example.com");
+  const filled = resolveDefaults(loan, data, { user: "ann@example.com", timeZone: "UTC" });
   return validateEntityDataZod(loan, filled, new ZodSchemaBuilder()).errors.map((e) => [e.field, e.message_key]);
 }
 
 describe("a required field with an eval: default on insert", () => {
   it("is filled from the expression and passes", () => {
-    expect(resolveDefaults(loan, { branch: "Zurich" }, "ann@example.com")["desk"]).toBe("Zurich");
+    expect(resolveDefaults(loan, { branch: "Zurich" }, { user: "ann@example.com", timeZone: "UTC" })["desk"]).toBe("Zurich");
     expect(insertErrors({ branch: "Zurich" })).toEqual([]);
   });
 

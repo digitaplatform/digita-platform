@@ -47,7 +47,7 @@ function makeDeps() {
     getReadableFieldsOnEveryRow: vi.fn().mockReturnValue(null),
     hasConditionalRowRead: vi.fn().mockReturnValue(false),
   };
-  return { documentService, db, registry, permissionChecker };
+  return { documentService, db, registry, permissionChecker, tenantTimeZone: () => "UTC" };
 }
 
 function makeView(overrides: Partial<ViewDefinition> = {}): ViewDefinition {

@@ -50,7 +50,7 @@ describe("resolveDefaults", () => {
     const result = resolveDefaults(
       entity,
       { lines: [{ product: "P-1" }, { product: "P-2", line_date: "2026-01-01" }] },
-      "op@x.io",
+      { user: "op@x.io", timeZone: "UTC" },
     );
     const rows = result["lines"] as Array<Record<string, unknown>>;
     // Unset row fields get the EXPANDED default (not the literal "__today__").
@@ -66,7 +66,7 @@ describe("resolveDefaults", () => {
   it("returns a shallow copy of data unchanged when entity has no fields", () => {
     const entity = makeEntity({ fields: [] });
     const data = { title: "Hello" };
-    const result = resolveDefaults(entity, data, "admin@example.com");
+    const result = resolveDefaults(entity, data, { user: "admin@example.com", timeZone: "UTC" });
     expect(result).toEqual({ title: "Hello" });
     expect(result).not.toBe(data); // must be a new object
   });
@@ -76,7 +76,7 @@ describe("resolveDefaults", () => {
       fields: [{ fieldname: "status", fieldtype: "Select", label: "Status", default: "Draft" }],
     });
     const data: Record<string, unknown> = {};
-    resolveDefaults(entity, data, "admin@example.com");
+    resolveDefaults(entity, data, { user: "admin@example.com", timeZone: "UTC" });
     expect("status" in data).toBe(false);
   });
 
@@ -86,7 +86,7 @@ describe("resolveDefaults", () => {
     const entity = makeEntity({
       fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect("title" in result).toBe(false);
   });
 
@@ -98,7 +98,7 @@ describe("resolveDefaults", () => {
         { fieldname: "status", fieldtype: "Select", label: "Status", default: "Draft" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.status).toBe("Draft");
   });
 
@@ -108,7 +108,7 @@ describe("resolveDefaults", () => {
         { fieldname: "priority", fieldtype: "Int", label: "Priority", default: 5 },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.priority).toBe(5);
   });
 
@@ -118,7 +118,7 @@ describe("resolveDefaults", () => {
         { fieldname: "is_active", fieldtype: "Check", label: "Is Active", default: 1 },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.is_active).toBe(1);
   });
 
@@ -128,7 +128,7 @@ describe("resolveDefaults", () => {
         { fieldname: "is_draft", fieldtype: "Check", label: "Is Draft", default: 0 },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.is_draft).toBe(0);
   });
 
@@ -140,7 +140,7 @@ describe("resolveDefaults", () => {
         { fieldname: "status", fieldtype: "Select", label: "Status", default: "Draft" },
       ],
     });
-    const result = resolveDefaults(entity, { status: "Active" }, "admin@example.com");
+    const result = resolveDefaults(entity, { status: "Active" }, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.status).toBe("Active");
   });
 
@@ -151,7 +151,7 @@ describe("resolveDefaults", () => {
       ],
     });
     // 0 is falsy but a value: only a missing value or "" takes the default.
-    const result = resolveDefaults(entity, { count: 0 }, "admin@example.com");
+    const result = resolveDefaults(entity, { count: 0 }, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.count).toBe(0);
   });
 
@@ -161,7 +161,7 @@ describe("resolveDefaults", () => {
         { fieldname: "status", fieldtype: "Select", label: "Status", default: "Draft" },
       ],
     });
-    const result = resolveDefaults(entity, { status: undefined }, "admin@example.com");
+    const result = resolveDefaults(entity, { status: undefined }, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.status).toBe("Draft");
   });
 
@@ -171,7 +171,7 @@ describe("resolveDefaults", () => {
         { fieldname: "status", fieldtype: "Select", label: "Status", default: "Draft" },
       ],
     });
-    const result = resolveDefaults(entity, { status: null }, "admin@example.com");
+    const result = resolveDefaults(entity, { status: null }, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.status).toBeNull();
   });
 
@@ -181,7 +181,7 @@ describe("resolveDefaults", () => {
         { fieldname: "status", fieldtype: "Select", label: "Status", default: "Draft" },
       ],
     });
-    const result = resolveDefaults(entity, { status: "" }, "admin@example.com");
+    const result = resolveDefaults(entity, { status: "" }, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.status).toBe("Draft");
   });
 
@@ -194,7 +194,7 @@ describe("resolveDefaults", () => {
         { fieldname: "title", fieldtype: "Data", label: "Title", default: "Hello" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect("sec" in result).toBe(false);
     expect(result.title).toBe("Hello");
   });
@@ -205,7 +205,7 @@ describe("resolveDefaults", () => {
         { fieldname: "col", fieldtype: "ColumnBreak", label: "Col", default: "x" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect("col" in result).toBe(false);
   });
 
@@ -215,7 +215,7 @@ describe("resolveDefaults", () => {
         { fieldname: "tab1", fieldtype: "TabBreak", label: "Tab", default: "y" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect("tab1" in result).toBe(false);
   });
 
@@ -225,7 +225,7 @@ describe("resolveDefaults", () => {
         { fieldname: "hdr", fieldtype: "Heading", label: "Header", default: "title" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect("hdr" in result).toBe(false);
   });
 
@@ -236,7 +236,7 @@ describe("resolveDefaults", () => {
         { fieldname: "amount", fieldtype: "Currency", label: "Amount", default: 0 },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect("html1" in result).toBe(false);
     // amount default is 0 (non-string) — it still gets applied
     expect(result.amount).toBe(0);
@@ -250,8 +250,18 @@ describe("resolveDefaults", () => {
         { fieldname: "date", fieldtype: "Date", label: "Date", default: "__today__" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.date).toBe(FIXED_DATE_ISO);
+  });
+
+  it("resolves __today__ to the day of the tenant's time zone", () => {
+    // At 00:30 in Zurich on 2026-09-30, UTC is still on the 29th.
+    vi.setSystemTime(new Date("2026-09-29T22:30:00Z"));
+    const entity = makeEntity({
+      fields: [{ fieldname: "date", fieldtype: "Date", label: "Date", default: "__today__" }],
+    });
+    expect(resolveDefaults(entity, {}, { user: "a@b.c", timeZone: "Europe/Zurich" }).date).toBe("2026-09-30");
+    expect(resolveDefaults(entity, {}, { user: "a@b.c", timeZone: "UTC" }).date).toBe("2026-09-29");
   });
 
   it("__today__ format is always YYYY-MM-DD (10 chars)", () => {
@@ -260,7 +270,7 @@ describe("resolveDefaults", () => {
         { fieldname: "posting_date", fieldtype: "Date", label: "Date", default: "__today__" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "user@example.com");
+    const result = resolveDefaults(entity, {}, { user: "user@example.com", timeZone: "UTC" });
     expect(typeof result.posting_date).toBe("string");
     expect((result.posting_date as string).length).toBe(10);
     expect((result.posting_date as string)).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -274,7 +284,7 @@ describe("resolveDefaults", () => {
         { fieldname: "created_at", fieldtype: "Datetime", label: "Created At", default: "__now__" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.created_at).toBeInstanceOf(Date);
   });
 
@@ -284,7 +294,7 @@ describe("resolveDefaults", () => {
         { fieldname: "ts", fieldtype: "Datetime", label: "Timestamp", default: "__now__" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect((result.ts as Date).toISOString()).toBe(FIXED_DATE.toISOString());
   });
 
@@ -296,7 +306,7 @@ describe("resolveDefaults", () => {
         { fieldname: "owner", fieldtype: "Data", label: "Owner", default: "__user__" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "jane@example.com");
+    const result = resolveDefaults(entity, {}, { user: "jane@example.com", timeZone: "UTC" });
     expect(result.owner).toBe("jane@example.com");
   });
 
@@ -306,7 +316,7 @@ describe("resolveDefaults", () => {
         { fieldname: "assigned_to", fieldtype: "Link", label: "Assigned To", default: "__user__" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "user-id-123");
+    const result = resolveDefaults(entity, {}, { user: "user-id-123", timeZone: "UTC" });
     expect(result.assigned_to).toBe("user-id-123");
   });
 
@@ -318,7 +328,7 @@ describe("resolveDefaults", () => {
         { fieldname: "full_name", fieldtype: "Data", label: "Full Name", default: "__username__" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com", "Alice Smith");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", userName: "Alice Smith", timeZone: "UTC" });
     expect(result.full_name).toBe("Alice Smith");
   });
 
@@ -328,7 +338,7 @@ describe("resolveDefaults", () => {
         { fieldname: "username", fieldtype: "Data", label: "Username", default: "__username__" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.username).toBe("admin@example.com");
   });
 
@@ -338,7 +348,7 @@ describe("resolveDefaults", () => {
         { fieldname: "username", fieldtype: "Data", label: "Username", default: "__username__" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com", undefined);
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.username).toBe("admin@example.com");
   });
 
@@ -350,7 +360,7 @@ describe("resolveDefaults", () => {
         { fieldname: "code", fieldtype: "Data", label: "Code", default: "__unknown_token__" },
       ],
     });
-    const result = resolveDefaults(entity, {}, "admin@example.com");
+    const result = resolveDefaults(entity, {}, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.code).toBe("__unknown_token__");
   });
 
@@ -365,7 +375,7 @@ describe("resolveDefaults", () => {
         { fieldname: "priority", fieldtype: "Int", label: "Priority", default: 3 },
       ],
     });
-    const result = resolveDefaults(entity, {}, "bob@example.com", "Bob");
+    const result = resolveDefaults(entity, {}, { user: "bob@example.com", userName: "Bob", timeZone: "UTC" });
     expect(result.status).toBe("Draft");
     expect(result.date).toBe(FIXED_DATE_ISO);
     expect(result.owner).toBe("bob@example.com");
@@ -379,7 +389,7 @@ describe("resolveDefaults", () => {
         { fieldname: "title", fieldtype: "Data", label: "Title", default: "Untitled" },
       ],
     });
-    const result = resolveDefaults(entity, { status: "Submitted" }, "admin@example.com");
+    const result = resolveDefaults(entity, { status: "Submitted" }, { user: "admin@example.com", timeZone: "UTC" });
     expect(result.status).toBe("Submitted"); // existing value preserved
     expect(result.title).toBe("Untitled");    // missing field gets default
   });
@@ -393,7 +403,7 @@ describe("resolveDefaults", () => {
     const result = resolveDefaults(
       entity,
       { status: "Active", extra_field: "preserved", another: 42 },
-      "admin@example.com",
+      { user: "admin@example.com", timeZone: "UTC" },
     );
     expect(result.extra_field).toBe("preserved");
     expect(result.another).toBe(42);
@@ -410,7 +420,7 @@ describe("resolveDefaults — eval: expression defaults", () => {
         { fieldname: "amount", fieldtype: "Currency", label: "Amount", default: "eval:doc.qty * doc.rate" },
       ],
     } as Partial<EntityDefinition>);
-    const result = resolveDefaults(e, { qty: 3, rate: 10 }, "admin@test.local");
+    const result = resolveDefaults(e, { qty: 3, rate: 10 }, { user: "admin@test.local", timeZone: "UTC" });
     expect(result.amount).toBe(30);
   });
 
@@ -421,7 +431,7 @@ describe("resolveDefaults — eval: expression defaults", () => {
         { fieldname: "amount", fieldtype: "Currency", label: "Amount", default: "eval:doc.qty * 2" },
       ],
     } as Partial<EntityDefinition>);
-    const result = resolveDefaults(e, { qty: 5, amount: 99 }, "admin@test.local");
+    const result = resolveDefaults(e, { qty: 5, amount: 99 }, { user: "admin@test.local", timeZone: "UTC" });
     expect(result.amount).toBe(99); // user-set value wins over the default
   });
 
@@ -429,7 +439,7 @@ describe("resolveDefaults — eval: expression defaults", () => {
     const e = makeEntity({
       fields: [{ fieldname: "x", fieldtype: "Data", label: "X", default: "eval:!@#$%" }],
     } as Partial<EntityDefinition>);
-    const result = resolveDefaults(e, {}, "admin@test.local");
+    const result = resolveDefaults(e, {}, { user: "admin@test.local", timeZone: "UTC" });
     expect(result.x).toBeNull();
   });
 });
