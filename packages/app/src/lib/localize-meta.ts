@@ -13,8 +13,9 @@ import type { EntitySummary } from '@/types';
  * to tell apart two links with the same entity and field). A child field of a table also keys
  * by its table (`field.<Entity>.<table>.<field>`, `description.<Entity>.<table>.<field>`).
  * What a view returns is no entity meta, so its texts key by the view: see `viewSectionLabel`.
- * Any future label field localizes by adding ONE line here — renderers read
- * already-localized meta and never build translation keys themselves.
+ * Any future label field localizes by adding ONE line here. A form, a table and a row or action
+ * dialog show the label of the meta they are given (`fieldLabel`), so the key chosen here, by the
+ * table or the action, is the text a person reads.
  *
  * Wired into `useMeta` / `useMetaCatalog` / `useActions` so it runs reactively on
  * the active locale. Select OPTION values are the one exception: an `options`
