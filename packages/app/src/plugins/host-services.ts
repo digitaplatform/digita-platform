@@ -3,6 +3,7 @@ import { api } from '@/services/api';
 import { useSessionStore } from '@/stores/session';
 import { useI18nStore } from '@/stores/i18n';
 import { useUiStore } from '@/stores/ui';
+import { REPORT_URL } from '@/lib/report-link';
 
 /**
  * Wire the host's runtime capabilities into the plugin SDK once at boot, so
@@ -14,5 +15,6 @@ export function installHostServices(): void {
     getUser: () => useSessionStore.getState().user,
     t: (key, params) => useI18nStore.getState().t(key, params),
     closeMobileNav: () => useUiStore.getState().setMobileNav(false),
+    reportDesignerUrl: REPORT_URL,
   });
 }

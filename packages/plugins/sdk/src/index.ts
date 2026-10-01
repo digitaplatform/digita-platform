@@ -212,6 +212,9 @@ export interface HostServices {
   t(key: string, params?: Record<string, string | number>): string;
   /** Ask the host to close any open mobile nav drawer (after navigation). */
   closeMobileNav(): void;
+  /** The report designer's address on this tenant and environment, as the host reaches the report
+   *  service: under the tenant's path or on its own subdomain. A menu entry links here. */
+  reportDesignerUrl: string;
 }
 
 let host: HostServices | null = null;
