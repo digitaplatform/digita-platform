@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { EntityDefinition, FieldDefinition, ViewResult, ViewSectionData } from '@digitaplatform/shared';
 import { Card, ErrorBlock, Spinner, cn, tableSkin } from '@digitaplatform/components';
 import { getView } from '@/services/resource';
+import { viewSectionLabel, viewValueLabel } from '@/lib/localize-meta';
 import { useI18nStore } from '@/stores/i18n';
 
 type Doc = Record<string, unknown>;
@@ -98,7 +99,7 @@ function FieldContext({
           {status === 'ready' &&
             result &&
             Object.entries(result.sections).map(([key, data]) => (
-              <Section key={key} name={key} data={data} />
+              <Section key={key} view={field.context_view!} name={key} data={data} />
             ))}
         </div>
       )}
@@ -107,16 +108,34 @@ function FieldContext({
 }
 
 /** Generic section rendering: one object → key/value rows; an array → a mini
- *  table of the first columns; null/empty → skipped entirely. */
-function Section({ name, data }: { name: string; data: ViewSectionData }) {
+ *  table of the first columns; null/empty → skipped entirely. A heading and a label
+ *  are the texts of the view's section and key, never the keys themselves. */
+function Section({ view, name, data }: { view: string; name: string; data: ViewSectionData }) {
+  const tField = useI18nStore((s) => s.tField);
   if (data == null || (Array.isArray(data) && data.length === 0)) return null;
+
+  const heading = viewSectionLabel(tField, view, name);
+  const label = (key: string) => viewValueLabel(tField, view, name, key);
 
   if (Array.isArray(data)) {
     const cols = Object.keys(data[0] ?? {}).slice(0, 3);
     return (
       <div className="min-w-0">
-        <div className={cn('mb-1 text-textMuted', tableSkin.headerCell)}>{name}</div>
+        <div className={cn('mb-1 text-textMuted', tableSkin.headerCell)}>{heading}</div>
         <table className="w-full text-xs">
+          <thead>
+            <tr>
+              {cols.map((c) => (
+                <th
+                  key={c}
+                  scope="col"
+                  className={cn('max-w-0 truncate pb-1 pr-2 text-left text-textMuted', tableSkin.headerCell)}
+                >
+                  {label(c)}
+                </th>
+              ))}
+            </tr>
+          </thead>
           <tbody>
             {data.slice(0, 5).map((row, i) => (
               <tr key={i} className={cn(tableSkin.row, 'last:border-b-0')}>
@@ -137,11 +156,11 @@ function Section({ name, data }: { name: string; data: ViewSectionData }) {
   if (entries.length === 0) return null;
   return (
     <div className="min-w-0">
-      <div className={cn('mb-1 text-textMuted', tableSkin.headerCell)}>{name}</div>
+      <div className={cn('mb-1 text-textMuted', tableSkin.headerCell)}>{heading}</div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
         {entries.map(([k, v]) => (
           <div key={k} className="contents">
-            <dt className="text-textMuted">{k}</dt>
+            <dt className="text-textMuted">{label(k)}</dt>
             <dd className="truncate text-right text-textMain tabular-nums">{formatValue(v)}</dd>
           </div>
         ))}

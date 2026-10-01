@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ViewResult } from '@digitaplatform/shared';
 import { getView } from '@/services/resource';
+import { viewValueLabel } from '@/lib/localize-meta';
+import { useI18nStore } from '@/stores/i18n';
 
 type Doc = Record<string, unknown>;
 
@@ -26,6 +28,7 @@ export function EntryContextBar({
   row: Doc;
   doc: Doc;
 }) {
+  const tField = useI18nStore((s) => s.tField);
   const [result, setResult] = useState<ViewResult | null>(null);
   const ticketRef = useRef(0);
 
@@ -62,14 +65,19 @@ export function EntryContextBar({
   if (!anchored || !result) return null;
 
   // Flatten every section into label:value pairs (aggregate rows and the
-  // first row of lists alike) — the strip is a one-liner by design.
-  const pairs: Array<[string, string]> = [];
-  for (const [, data] of Object.entries(result.sections)) {
+  // first row of lists alike) — the strip is a one-liner by design. A section
+  // names its pairs, because two sections may carry a key alike.
+  const pairs: Array<[string, string, string]> = [];
+  for (const [section, data] of Object.entries(result.sections)) {
     const rowData = Array.isArray(data) ? data[0] : data;
     if (!rowData) continue;
     for (const [k, v] of Object.entries(rowData)) {
       if (v == null || typeof v === 'object') continue;
-      pairs.push([k, typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v)]);
+      pairs.push([
+        `${section}.${k}`,
+        viewValueLabel(tField, view, section, k),
+        typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v),
+      ]);
     }
   }
   if (pairs.length === 0) return null;
@@ -79,9 +87,9 @@ export function EntryContextBar({
       data-testid="entry-context-bar"
       className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-card border border-border bg-subtle px-3 py-1.5 text-xs text-textMuted"
     >
-      {pairs.map(([k, v]) => (
-        <span key={k} className="whitespace-nowrap">
-          {k}: <span className="font-medium text-textMain tabular-nums">{v}</span>
+      {pairs.map(([id, label, v]) => (
+        <span key={id} className="whitespace-nowrap">
+          {label}: <span className="font-medium text-textMain tabular-nums">{v}</span>
         </span>
       ))}
     </div>

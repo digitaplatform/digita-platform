@@ -1,4 +1,6 @@
 import type { EntityReportLink } from '@digitaplatform/shared';
+import type { SessionUser } from '@/types';
+import { evaluateExpr } from '@/lib/expression';
 
 /**
  * Entity↔report links (metadata-driven print buttons): URL building and
@@ -39,16 +41,26 @@ export function reportLinkLabel(
   return translations[`report.${entity}.${link.report}`] ?? link.label;
 }
 
-/** Resolve `param_map` (report param -> doc field path) against the doc. */
+function readPath(doc: Doc, path: string): unknown {
+  let value: unknown = doc;
+  for (const seg of path.split('.')) {
+    value = (value as Doc | undefined)?.[seg];
+  }
+  return value;
+}
+
+/**
+ * Resolve `param_map` (report param -> doc field path) against the doc, and the link's `locale`
+ * path into the render's `locale`. An empty language sends none, so the definition's locale prints.
+ */
 export function resolveReportParams(link: EntityReportLink, doc: Doc): Record<string, string> {
   const params: Record<string, string> = {};
   for (const [param, path] of Object.entries(link.param_map ?? {})) {
-    let value: unknown = doc;
-    for (const seg of path.split('.')) {
-      value = (value as Doc | undefined)?.[seg];
-    }
+    const value = readPath(doc, path);
     if (value !== undefined && value !== null) params[param] = String(value);
   }
+  const locale = link.locale ? readPath(doc, link.locale) : undefined;
+  if (locale !== undefined && locale !== null && locale !== '') params['locale'] = String(locale);
   return params;
 }
 
@@ -59,38 +71,20 @@ export function reportRenderUrl(
   opts: { print?: boolean } = {},
 ): string {
   const query = new URLSearchParams({ format, ...params });
+  // The report service answers a csv export that names a locale with 400.
+  if (format === 'csv') query.delete('locale');
   if (opts.print) query.set('print', '1');
   return `${REPORT_URL}/api/v1/report/definitions/${encodeURIComponent(report)}/render?${query.toString()}`;
 }
 
 /**
- * Affordance-only show_if for report links: supports the eval subset the
- * shipped links use (`doc.field == literal`, `!=`, bare truthiness).
- * Unknown expressions fail OPEN — the engine/report service stays the
- * security boundary; this only hides obviously-inapplicable buttons.
+ * Affordance-only show_if for report links, read with the grammar of an action's show_if: the doc
+ * as `doc`, the signed-in user as `user`. A rule that does not parse fails OPEN — the report
+ * service stays the security boundary; this only hides obviously-inapplicable buttons.
  */
-export function reportLinkVisible(link: EntityReportLink, doc: Doc): boolean {
+export function reportLinkVisible(link: EntityReportLink, doc: Doc, user?: SessionUser | null): boolean {
   const expr = link.show_if?.replace(/^eval:/, '').trim();
   if (!expr) return true;
-  const m = /^doc\.([\w.]+)\s*(==|!=)\s*(.+)$/.exec(expr);
-  if (m) {
-    const [, path, op, rawLit] = m;
-    let value: unknown = doc;
-    for (const seg of (path as string).split('.')) {
-      value = (value as Doc | undefined)?.[seg];
-    }
-    const lit = (rawLit as string).trim().replace(/^['"]|['"]$/g, '');
-    const litValue: unknown = lit === 'true' ? true : lit === 'false' ? false : /^-?\d+(\.\d+)?$/.test(lit) ? Number(lit) : lit;
-    const equal = value === litValue || String(value) === String(litValue);
-    return op === '==' ? equal : !equal;
-  }
-  const bare = /^doc\.([\w.]+)$/.exec(expr);
-  if (bare) {
-    let value: unknown = doc;
-    for (const seg of (bare[1] as string).split('.')) {
-      value = (value as Doc | undefined)?.[seg];
-    }
-    return Boolean(value);
-  }
-  return true;
+  const result = evaluateExpr(expr, { doc, user: user ? (user as unknown as Doc) : undefined });
+  return result.error ? true : result.value;
 }
