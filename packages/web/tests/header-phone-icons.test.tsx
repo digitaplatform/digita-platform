@@ -4,6 +4,8 @@
 // so the test reads from the classes which elements a viewport shows, with Tailwind's breakpoints,
 // which the site's config and the theme preset keep.
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import defaultTheme from "tailwindcss/defaultTheme";
 import preset from "@digitaplatform/theme/preset";
@@ -239,5 +241,49 @@ describe("the top bar's icon links on a phone", () => {
   it("PLANTED INNOCENT: the fit check passes a bar that shows one icon from 380 px", () => {
     document.body.innerHTML = '<nav class="flex"><a aria-label="x" class="hidden min-[380px]:flex"></a></nav>';
     expect(overflowingWidths([320, 379, 380, 390])).toEqual([]);
+  });
+});
+
+describe("the phone's mode button", () => {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+  /** The header live in the document, with the phone's menu drawer opened. */
+  async function openDrawer() {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () =>
+      root.render(
+        <ConfigProvider value={siteConfig}>
+          <Header
+            locale="en"
+            defaultLocale="en"
+            site={site}
+            nav={{ _id: "header", site: "example", locale: "en", location: "header", items: ITEMS }}
+            family={null}
+            apps={[]}
+            brand={{ name: "example" }}
+            publishedSlugs={{ en: [""], de: [""] }}
+            enabledLocales={[]}
+          />
+        </ConfigProvider>,
+      ),
+    );
+    await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="openMenu"]')!.click());
+    return root;
+  }
+
+  it("PLANTED DEFECT: is one, and one language menu, with the menu drawer open: the bar shows both on a phone", async () => {
+    const root = await openDrawer();
+    expect(document.querySelector('[role="dialog"], [aria-modal="true"]')).not.toBeNull();
+    expect(shown('button[aria-label="toggleTheme"]', 390)).toHaveLength(1);
+    expect(shown('button[aria-label="language"]', 390)).toHaveLength(1);
+    await act(async () => root.unmount());
+  });
+
+  it("PLANTED INNOCENT: the drawer still holds the nav", async () => {
+    const root = await openDrawer();
+    expect(document.querySelector('[aria-modal="true"] nav[aria-label="navPrimary"], [role="dialog"] nav[aria-label="navPrimary"]')).not.toBeNull();
+    await act(async () => root.unmount());
   });
 });

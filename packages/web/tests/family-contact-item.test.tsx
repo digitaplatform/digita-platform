@@ -103,9 +103,7 @@ describe("the phone's menu drawer", () => {
         openLabel="Open menu"
         closeLabel="Close menu"
         comingLabel="coming"
-      >
-        {null}
-      </MobileNav>,
+      />,
     );
     await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Open menu"]')!.click());
   }

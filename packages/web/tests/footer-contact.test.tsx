@@ -123,9 +123,7 @@ const familyMenus = [
     name: "the family list of the phone menu",
     draw: (contactEnabled: boolean) =>
       drawOpened(
-        <MobileNav locale="en" items={[]} apps={[]} family={family} brand={{ name: "example" }} label="menu" navLabel="nav" openLabel="open" closeLabel="close" comingLabel="coming">
-          {null}
-        </MobileNav>,
+        <MobileNav locale="en" items={[]} apps={[]} family={family} brand={{ name: "example" }} label="menu" navLabel="nav" openLabel="open" closeLabel="close" comingLabel="coming" />,
         contactEnabled,
         "open",
       ),
