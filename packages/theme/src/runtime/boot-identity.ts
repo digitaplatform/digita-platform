@@ -32,6 +32,9 @@ export interface BootIdentityOptions {
    *  website's signature is the site's identity (its `theme`), the app's the tenant's look
    *  it drew last; neither is a choice of the visitor. */
   signature?: string;
+  /** The mode the page is drawn in, applied as it is; without one, the mode this browser
+   *  stored. The app passes `system` while its tenant allows no light/dark choice. */
+  mode?: ThemeMode;
   /** The tenant's branding, when the caller has it at boot (the website's server
    *  read it); the app applies it later, when /boot answers. */
   branding?: BrandingInput | null;
@@ -59,7 +62,7 @@ export function bootIdentity(options: BootIdentityOptions = {}): BootedIdentity 
   for (const signature of options.signatures ?? []) registerSignature(signature);
   const design = resolveInitialDesign();
   applyDesign(design, target);
-  const mode = resolveInitialMode();
+  const mode = options.mode ?? resolveInitialMode();
   if (options.followSystemMode === false) paintMode(mode, target);
   else applyMode(mode, target);
   const signature = options.signature ?? DEFAULT_SIGNATURE_ID;
