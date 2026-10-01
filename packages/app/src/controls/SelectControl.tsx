@@ -5,7 +5,8 @@ import type { FieldControlProps } from '@/controls/types';
 import { describedBy } from '@/controls/control-styles';
 import { resolveOptionSource } from '@/lib/option-sources';
 
-/** Exported so the tree editor's group_by choice offers the same choices as a Select field. */
+/** Shared so every reader of a Select field's declared options splits them alike. These are not
+ *  the choices SelectControl offers: it prefers options_source and drops empty options and repeats. */
 export function optionList(options: unknown): string[] {
   if (Array.isArray(options)) return options as string[];
   if (typeof options === 'string') return options.split('\n').map((s) => s.trim()).filter(Boolean);
