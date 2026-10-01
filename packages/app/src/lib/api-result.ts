@@ -35,7 +35,7 @@ export function toUiMessages(err: unknown, t: TFn): UiMessage[] {
   if (err instanceof ApiClientError && err.response) {
     const msgs = err.response.messages ?? [];
     if (msgs.length > 0) {
-      return msgs.map((m) => ({ type: m.type, text: t(m.text), path: m.path }));
+      return msgs.map((m) => ({ type: m.type, text: t(m.text, m.params), path: m.path }));
     }
     return [{ type: 'error', text: t(err.message) }];
   }

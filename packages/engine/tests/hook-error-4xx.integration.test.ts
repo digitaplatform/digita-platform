@@ -110,6 +110,16 @@ beforeAll(async () => {
       // reason surfaces to the client as a typed 422 instead of a generic 500.
       throw Object.assign(new Error("over_delivery_not_allowed"), { statusCode: 422 });
     }
+    if (mode === "appKey" || mode === "engineKey") {
+      // A refusal that names a text key: an app's own key, whose text the engine does not hold,
+      // or a key of the engine's own texts.
+      throw Object.assign(new Error("Pick the bike of Anna"), {
+        statusCode: 422,
+        field: "mode",
+        messageKey: mode === "appKey" ? "workshop.pick_bike" : "action_not_available",
+        params: mode === "appKey" ? { customer: "Anna" } : { action: "Place hold" },
+      });
+    }
     if (mode === "plain") {
       // A genuine, undeclared server fault — must still become a generic 500.
       throw new Error("unexpected boom");
@@ -153,6 +163,32 @@ describe("D2 — business-rule hook errors surface as typed 4xx (HTTP)", () => {
     // run through server-side i18n, so it carries the raw reason verbatim.
     expect(body.error.detail).toBe("over_delivery_not_allowed");
     expect(body.messages[0].text).toBe("over_delivery_not_allowed");
+  });
+
+  it("a refusal keyed by a text the engine does not hold keeps its key and params for the app's texts", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/resource/HookProbe",
+      headers: { ...authHeaders(), "accept-language": "de" },
+      payload: { mode: "appKey" },
+    });
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json().messages[0]).toMatchObject({ text: "workshop.pick_bike", path: "mode", params: { customer: "Anna" } });
+  });
+
+  it("a refusal keyed by an engine text arrives translated, without its params", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/resource/HookProbe",
+      headers: { ...authHeaders(), "accept-language": "de" },
+      payload: { mode: "engineKey" },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const message = res.json().messages[0];
+    expect(message.text).toBe("Place hold ist für dieses Dokument nicht verfügbar");
+    expect(message.params).toBeUndefined();
   });
 
   it("a validate hook throwing a PLAIN Error (no statusCode) → POST returns a generic 500", async () => {

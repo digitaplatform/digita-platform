@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { ActionDefinition } from '@digitaplatform/shared';
 import { Button } from '@digitaplatform/components';
-import { toUiMessages } from '@/lib/api-result';
+import { toUiMessages, type UiMessage } from '@/lib/api-result';
 import { useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
 import { resolveIcon } from '@/lib/icon-registry';
@@ -20,7 +20,8 @@ const VARIANT = { primary: 'primary', danger: 'danger', default: 'secondary' } a
  * Generic action buttons (entity.actions, already show_if + permission filtered by
  * the engine). A dialog action opens ActionDialog for its dialog_fields; the result
  * `{ created }` navigates to the spawned doc. Acts on the saved doc; disabled while
- * the form is dirty.
+ * the form is dirty. A refused dialog action keeps its dialog open with the reason,
+ * so the person corrects the input instead of typing it again.
  */
 export function ActionBar({
   entity,
@@ -40,10 +41,12 @@ export function ActionBar({
   const { data: actions } = useActions(entity, name);
   const runM = useRunAction(entity);
   const [pending, setPending] = useState<ActionDefinition | null>(null);
+  const [refusal, setRefusal] = useState<UiMessage[]>([]);
 
   if (!actions || actions.length === 0) return null;
 
-  const execute = async (action: ActionDefinition, body?: Doc) => {
+  /** Runs the action; a refusal goes to `onRefusal` when given, else to a toast. True on success. */
+  const execute = async (action: ActionDefinition, body?: Doc, onRefusal?: (messages: UiMessage[]) => void) => {
     try {
       const res = await runM.mutateAsync({ name, action: action.action, body });
       const result = res.result;
@@ -77,13 +80,18 @@ export function ActionBar({
       if (typeof result?.open_url === 'string') {
         window.open(appUrl(result.open_url), '_blank', 'noopener');
       }
+      return true;
     } catch (e) {
-      dialog.toast(toUiMessages(e, t)[0]?.text ?? tc('ui.status.somethingWrong'), 'error');
+      const messages = toUiMessages(e, t);
+      if (onRefusal && messages.length > 0) onRefusal(messages);
+      else dialog.toast(messages[0]?.text ?? tc('ui.status.somethingWrong'), 'error');
+      return false;
     }
   };
 
   const onClick = async (action: ActionDefinition) => {
     if (action.opens_dialog && action.dialog_fields?.length) {
+      setRefusal([]);
       setPending(action); // the dialog is itself the confirmation
       return;
     }
@@ -126,10 +134,14 @@ export function ActionBar({
           entity={entity}
           action={pending}
           onCancel={() => setPending(null)}
+          refusal={refusal}
+          busy={runM.isPending}
           onSubmit={(values) => {
             const action = pending;
-            setPending(null);
-            void execute(action, values);
+            setRefusal([]);
+            void execute(action, values, setRefusal).then((done) => {
+              if (done) setPending(null);
+            });
           }}
         />
       )}

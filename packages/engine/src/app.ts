@@ -323,8 +323,8 @@ export async function createApp(
   app.addHook("onSend", requestLoggerOnSend);
 
   // Server-side i18n: translate message KEYS in any ApiResponse to the request
-  // locale (user.language → Accept-Language → fallback), then drop the transient
-  // params. Single central point — handlers just push keys into the context.
+  // locale (user.language → Accept-Language → fallback), then drop the params of
+  // each key it translated. Single central point — handlers just push keys into the context.
   app.addHook("preSerialization", async (request, _reply, payload) => {
     const body = payload as { messages?: import("@digitaplatform/shared").ResponseMessage[] } | null;
     if (!body || !Array.isArray(body.messages) || body.messages.length === 0) return payload;
@@ -335,6 +335,9 @@ export async function createApp(
         ? userLang
         : i18n.resolveLocale(request.headers["accept-language"]);
     for (const m of body.messages) {
+      // A key the engine has no text for is an app's key, such as a hook's refusal: the app's
+      // texts reach only the client, so the key travels on with its params for the client to fill.
+      if (m.params && i18n.t(m.text, undefined, locale) === m.text) continue;
       m.text = i18n.t(m.text, m.params, locale);
       delete m.params;
     }
