@@ -104,12 +104,20 @@ describe("A user who holds only roles of the app reads the workspaces that name 
     expect(await listedWorkspaces("reception")).toEqual(["workshop-reception"]);
   });
 
-  it("opens a workspace that names its role, whole, and no other workspace", async () => {
+  it("opens a workspace that names its role, whole, and finds no other workspace", async () => {
     const own = await get("reception", "resource/Workspace/workshop-reception");
     expect(own.statusCode).toBe(200);
     expect(own.json().data).toMatchObject({ roles: ["Reception"], default_view: "workshop-overview", cards: [{ id: "open" }] });
-    for (const other of ["workshop-technician", "workshop-lead", "everyone"]) {
-      expect((await get("reception", `resource/Workspace/${other}`)).statusCode).toBe(403);
+    // A workspace not meant for the user answers as a missing one does, so no answer tells that it exists.
+    for (const other of ["workshop-technician", "workshop-lead", "everyone", "no-such-workspace"]) {
+      expect((await get("reception", `resource/Workspace/${other}`)).statusCode).toBe(404);
+      expect((await get("reception", `resource/Workspace/${other}/actions`)).statusCode).toBe(404);
+    }
+  });
+
+  it("opens each workspace that names one of its roles, for a user with several roles", async () => {
+    for (const own of ["workshop-reception", "workshop-technician"]) {
+      expect((await get("demo", `resource/Workspace/${own}`)).statusCode).toBe(200);
     }
   });
 

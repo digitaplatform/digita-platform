@@ -17,7 +17,7 @@ import { foreignPasswordValue } from "../entity/password-cipher.js";
 import { copyDocumentData } from "./copy-service.js";
 import { projectFields } from "./project-fields.js";
 import { resolveDefaults, applyNewChildRowDefaults } from "../defaults/default-resolver.js";
-import { applyScopeFilters, applyRoleVisibilityFilter, isRoleVisible } from "../permissions/scope-filter.js";
+import { applyScopeFilters, applyRoleVisibilityFilter, isRoleVisible, readsThroughRoleList } from "../permissions/scope-filter.js";
 import { env } from "../config/env.js";
 import { PermissionDeniedError } from "../permissions/permission-checker.js";
 import { DocumentShareService } from "../permissions/document-share-service.js";
@@ -313,6 +313,9 @@ export class DocumentService {
    * Read access = an RBAC read permission OR an explicit DocShare on this
    * specific document (D10b). The share is checked lazily — only when the
    * normal permission check denies — so the common path stays one check.
+   * A user who reads the entity only through the role lists of its rows may
+   * read exactly the rows meant for its roles, so a stored row it may not read
+   * answers not found, as a missing one does, and no answer tells that it exists.
    */
   private async assertReadAccess(
     user: UserContext,
@@ -329,6 +332,9 @@ export class DocumentService {
         (await this.documentShareService.hasShare(doctype, name, user.email, "read"))
       ) {
         return; // explicit share grants read on this doc
+      }
+      if (err instanceof PermissionDeniedError && data && readsThroughRoleList(this.registry.get(doctype), user)) {
+        throw new NotFoundError(doctype, name);
       }
       throw err;
     }
@@ -464,14 +470,15 @@ export class DocumentService {
     user: UserContext,
     data: Record<string, unknown>,
   ): Promise<void> {
-    // Permission check on specific document (owner, condition, scope)
-    await this.assertReadAccess(user, doctype, name, data);
-
     // Role-visibility (e.g. Workspace): a role-restricted document the user may not
-    // see is reported as not-found (same as RBAC elsewhere — don't leak its shape).
+    // see is reported as not-found (same as RBAC elsewhere — don't leak its shape),
+    // before the check on the document could refuse it and so tell that it exists.
     if (!isRoleVisible(entity, user, data)) {
       throw new NotFoundError(doctype, name);
     }
+
+    // Permission check on specific document (owner, condition, scope)
+    await this.assertReadAccess(user, doctype, name, data);
   }
 
   async getDoc(

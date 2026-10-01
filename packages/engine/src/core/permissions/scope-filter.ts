@@ -3,22 +3,28 @@ import { SYSTEM_ROLES } from "@digitaplatform/shared";
 import type { UserContext } from "./types.js";
 
 /**
- * The permission rows of `entity` that a check of `user` weighs. These are the declared rows,
- * except on an entity with a `role_visibility_field` whose declared rows name none of the user's
- * roles: a row there is meant for the roles it lists, so each role of the user selects and reads,
- * at level 0, the rows that list one of the user's roles. A role that a declared row names keeps
- * exactly what the declared rows grant, so a row's role list never widens them. Guest, the
- * anonymous caller, gets no such read.
+ * Whether `user` reads `entity` only through the role lists of its rows: the entity has a
+ * `role_visibility_field` and its declared rows name none of the user's roles. A row there is
+ * meant for the roles it lists. A role that a declared row names keeps exactly what the declared
+ * rows grant, so a row's role list never widens them. Guest, the anonymous caller, never reads
+ * this way.
+ */
+export function readsThroughRoleList(entity: EntityDefinition, user: UserContext): boolean {
+  return (
+    !!entity.role_visibility_field &&
+    !user.roles.includes(SYSTEM_ROLES.GUEST) &&
+    !entity.permissions.some((perm) => user.roles.includes(perm.role))
+  );
+}
+
+/**
+ * The permission rows of `entity` that a check of `user` weighs: the declared rows, or, for a
+ * user who reads the entity only through the role lists of its rows, one row per role of the
+ * user that selects and reads, at level 0, the rows whose list names one of the user's roles.
  */
 export function permissionRowsFor(entity: EntityDefinition, user: UserContext): EntityPermission[] {
-  const field = entity.role_visibility_field;
-  if (
-    !field ||
-    user.roles.includes(SYSTEM_ROLES.GUEST) ||
-    entity.permissions.some((perm) => user.roles.includes(perm.role))
-  ) {
-    return entity.permissions;
-  }
+  if (!readsThroughRoleList(entity, user)) return entity.permissions;
+  const field = entity.role_visibility_field!;
   return user.roles.map((role) => ({ role, level: 0, select: 1, read: 1, scope: { field, user_field: "roles" } }));
 }
 
