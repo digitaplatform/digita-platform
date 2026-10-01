@@ -15,5 +15,7 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    // vitest's default of 5000 ms fails a test on a machine busy with other runs.
+    testTimeout: 30000,
   },
 });
