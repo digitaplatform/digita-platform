@@ -86,11 +86,21 @@ export default function ListPage() {
   }, [meta, user]);
 
   // The engine leaves a field out of every row when no read row of the user opens it, so the
-  // list leaves its column out instead of showing it empty.
+  // list leaves its column out instead of showing it empty. A row shared with the user shows its
+  // level-0 fields, and the engine lists shared rows unless a conditional level-0 read row makes
+  // it re-check the read of every row, which drops them.
   const readableMeta = useMemo(() => {
     if (!meta) return undefined;
     const canReadField = readableFieldPredicate(meta, user);
-    return { ...meta, fields: meta.fields.filter((f) => canReadField(f.fieldname, f.perm_level ?? 0)) };
+    const listsSharedRows = !(meta.permissions ?? []).some(
+      (p) => (p.level ?? 0) === 0 && p.read === 1 && !!p.condition && !!user?.roles.includes(p.role),
+    );
+    return {
+      ...meta,
+      fields: meta.fields.filter(
+        (f) => canReadField(f.fieldname, f.perm_level ?? 0) || (listsSharedRows && (f.perm_level ?? 0) === 0),
+      ),
+    };
   }, [meta, user]);
 
   // Live-sync: refresh this list when another user (or tab) writes to the entity.
