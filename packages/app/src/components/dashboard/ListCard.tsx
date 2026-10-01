@@ -3,6 +3,7 @@ import type { ListCard as ListCardDef, ViewSectionData } from '@digitaplatform/s
 import { cn } from '@digitaplatform/components';
 import { EMPTY } from '@/lib/format';
 import { useMeta } from '@/hooks/useMeta';
+import { CellValue } from '@/components/render/cells';
 import { CardShell, type CardStatus } from './CardShell';
 
 interface ListCardProps {
@@ -37,16 +38,17 @@ function cellText(value: unknown): string {
 
 /**
  * Compact read-only table over the section rows. A column header is the field label
- * of the section's entity. Values render via String(value) with an em-dash for
- * null — CellValue is intentionally NOT used: a column may name a key no field
- * of the entity has.
+ * of the section's entity. A column that names a field of that entity shows its value
+ * as a list does, through CellValue; a key no field has (an aggregate can name one)
+ * renders via String(value) with an em-dash for null.
  * Each row links via card.deep_link (with $token interpolation done at the Page,
  * passed down as onNavigate), or is non-interactive when no deep_link is set.
  */
 export function ListCard({ card, icon, status, error, data, entity, onNavigate }: ListCardProps) {
   const meta = useMeta(entity);
   // A key no field has (an aggregate can name one) heads its column as it is.
-  const fieldLabel = (key: string) => meta.data?.fields.find((f) => f.fieldname === key)?.label ?? key;
+  const fieldOf = (key: string) => meta.data?.fields.find((f) => f.fieldname === key);
+  const fieldLabel = (key: string) => fieldOf(key)?.label ?? key;
   // The table waits for the labels, so its headers never flash the keys.
   const shellStatus = status === 'ready' && meta.isLoading ? 'loading' : status;
   if (shellStatus !== 'ready') {
@@ -81,11 +83,14 @@ export function ListCard({ card, icon, status, error, data, entity, onNavigate }
           </thead>
           <tbody>
             {limited.map((row, i) => {
-              const content = columns.map((c) => (
-                <td key={c} className="truncate px-1 py-2 text-textMain">
-                  {cellText(row[c])}
-                </td>
-              ));
+              const content = columns.map((c) => {
+                const field = fieldOf(c);
+                return (
+                  <td key={c} className="truncate px-1 py-2 text-textMain">
+                    {field && entity ? <CellValue field={field} row={row} entity={entity} /> : cellText(row[c])}
+                  </td>
+                );
+              });
               return (
                 <tr
                   key={String(row['_id'] ?? i)}
