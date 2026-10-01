@@ -493,6 +493,8 @@ function RecordForm({
             : Array.isArray(rows)
               ? (rows as Doc[]).find((row) => row[ROW_ID_FIELD] === value.slice(rowAt + 2))
               : undefined;
+          // The engine fills nothing from a row the parent no longer holds either.
+          if (src.target_path && !rec) throw new Error(tc('ui.record.pickedRowNotFound'));
           for (const { target, sourcePath } of targets) {
             const cur = form.getValues(target);
             if (cur == null || cur === '') {

@@ -147,17 +147,19 @@ describe('RecordPage shows a fetch_from read that fails', () => {
 });
 
 describe('RecordPage fills fetch_from fields from the row a sub-row Link picks', () => {
+  const visitWithSlot = {
+    name: 'Visit',
+    label: 'Visit',
+    title_field: '_id',
+    permissions: [],
+    fields: [
+      { fieldname: 'slot', fieldtype: 'Link', label: 'Slot', target: 'Garage', target_path: 'bays' },
+      { fieldname: 'bay', fieldtype: 'Link', label: 'Bay', target: 'Bay', fetch_from: 'slot.bay' },
+    ],
+  } as unknown as EntityDefinition;
+
   it('reads the parent and fills from the picked row', async () => {
-    state.meta = {
-      name: 'Visit',
-      label: 'Visit',
-      title_field: '_id',
-      permissions: [],
-      fields: [
-        { fieldname: 'slot', fieldtype: 'Link', label: 'Slot', target: 'Garage', target_path: 'bays' },
-        { fieldname: 'bay', fieldtype: 'Link', label: 'Bay', target: 'Bay', fetch_from: 'slot.bay' },
-      ],
-    } as unknown as EntityDefinition;
+    state.meta = visitWithSlot;
     state.options = [{ _id: 'G-1::r2', display: 'Garage One · Bay 2' }];
     const read = vi.fn((entity: string, name: string) =>
       entity === 'Garage' && name === 'G-1'
@@ -176,5 +178,19 @@ describe('RecordPage fills fetch_from fields from the row a sub-row Link picks',
     await waitFor(() => expect(comboboxValue('bay')).toBe('B2'));
     expect(read).toHaveBeenCalledWith('Garage', 'G-1');
     expect(within(slot).queryByText(/could not be filled/)).toBeNull();
+  });
+
+  it('says at the Link that the picked row is gone when the parent no longer holds it', async () => {
+    state.meta = visitWithSlot;
+    state.options = [{ _id: 'G-1::r3', display: 'Garage One · Bay 3' }];
+    state.getDoc = () =>
+      Promise.resolve({ success: true, status_code: 200, data: { _id: 'G-1', bays: [{ _row_id: 'r1', bay: 'B1' }] }, messages: [] });
+
+    const slot = await pick('slot');
+
+    expect(
+      await within(slot).findByText('Bay could not be filled from this record: The picked row no longer exists'),
+    ).toBeVisible();
+    expect(comboboxValue('bay')).toBe('');
   });
 });
