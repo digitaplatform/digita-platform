@@ -91,7 +91,7 @@ const initial = bootIdentity({
 
 /** Whether the tenant allows no light/dark choice: its branding says so once /boot answered,
  *  the cache before. */
-function isModeLocked(branding: BootBranding | null): boolean {
+export function isModeLocked(branding: BootBranding | null): boolean {
   return branding ? branding.allow_user_theme_mode === false : localStorage.getItem(MODE_LOCK_CACHE_KEY) !== null;
 }
 

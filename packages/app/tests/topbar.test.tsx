@@ -30,4 +30,13 @@ describe('Topbar', () => {
     expect(screen.queryByRole('button', { name: 'ui.theme.toggle' })).toBeNull();
     expect(screen.getByRole('button', { name: 'ui.density.label' })).toBeTruthy();
   });
+
+  it('offers no light/dark choice before /boot answers, while the cache says the tenant allows none', () => {
+    useThemeStore.getState().setBranding({ allow_user_theme_mode: false });
+    // A reload: the shell renders before /boot answers, and only the cache knows the lock.
+    useThemeStore.setState({ branding: null });
+    render(<Topbar />);
+
+    expect(screen.queryByRole('button', { name: 'ui.theme.toggle' })).toBeNull();
+  });
 });

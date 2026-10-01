@@ -98,6 +98,18 @@ describe('the branding a tenant sets', () => {
     expect(root().classList.contains('dark')).toBe(true);
   });
 
+  it("paints a person's own mode on the first frame again once the tenant lifted the lock", async () => {
+    localStorage.setItem('digita-app:theme-mode', 'dark');
+    let store = await loadThemeStore();
+    store.getState().setBranding({ allow_user_theme_mode: false });
+    store.getState().setBranding({ allow_user_theme_mode: true });
+    root().classList.remove('dark');
+
+    store = await loadThemeStore();
+    expect(store.getState().mode).toBe('dark');
+    expect(root().classList.contains('dark')).toBe(true);
+  });
+
   it('changes no mode under the lock, not even from the design showcase', async () => {
     const store = await loadThemeStore();
     store.getState().setBranding({ allow_user_theme_mode: false });
