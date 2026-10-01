@@ -4,6 +4,7 @@ import type {
   ImportReport,
   ImportRowError,
 } from "@digitaplatform/shared";
+import { ROW_ID_FIELD } from "@digitaplatform/shared";
 import type { DocumentService } from "../document/document-service.js";
 import { ValidationFailedError } from "../document/document-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
@@ -210,7 +211,10 @@ export class ImportService {
 
   // ── helpers ──────────────────────────────────────────────
 
-  /** Clone a raw row: strip system keys (keep `_id` under user_set) + `_`-keys in child rows. */
+  /**
+   * Clone a raw row: strip system keys (keep `_id` under user_set) and every `_`-key of a child row
+   * but `_row_id`, which names the stored row an update keeps the protected cells of.
+   */
   private clean(
     entity: EntityDefinition,
     raw: Record<string, unknown>,
@@ -234,7 +238,7 @@ export class ImportService {
         row[field.fieldname] = (row[field.fieldname] as Record<string, unknown>[]).map((child) => {
           const c: Record<string, unknown> = {};
           for (const [k, v] of Object.entries(child)) {
-            if (k.startsWith("_")) continue;
+            if (k.startsWith("_") && k !== ROW_ID_FIELD) continue;
             c[k] = v;
           }
           return c;

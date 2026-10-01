@@ -156,7 +156,7 @@ describe("Export round-trip", () => {
     expect("creation" in it1).toBe(false);
     expect("docstatus" in it1).toBe(false);
     expect("_link_titles" in it1).toBe(false);
-    expect("_row_id" in lines[0]!).toBe(false);       // child _row_id stripped
+    expect(lines[0]!._row_id).toEqual(expect.any(String)); // an import names the stored row by it
   });
 
   it("export → wipe → import → re-export is deep-equal on business content (JSON)", async () => {
@@ -176,7 +176,7 @@ describe("Export round-trip", () => {
     const firstJson = sortByBk((await exp("RtItem", "?round_trip=true")).json().data);
     const csv = (await exp("RtItem", "?round_trip=true&format=csv")).body;
     expect(csv).toContain("item_no");
-    expect(csv).not.toContain("_id"); // system fields stripped
+    expect(csv.split(/\r?\n/)[0]).not.toContain("_id"); // system fields stripped
 
     await db.deleteMany("RtItem", {}, "app");
     const back = await imp("RtItem", { csv, mode: "insert" });
