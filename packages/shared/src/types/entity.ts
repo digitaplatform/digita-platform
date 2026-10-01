@@ -774,6 +774,8 @@ export interface LinkDefinition {
   label: string;
   entity: string;
   link_field: string;
+  /** Icon name resolved client-side to a lucide icon (see the UI icon registry).
+   *  Unknown/absent → label-only link. */
   icon?: string;
   show_count?: boolean;
   filters?: Record<string, unknown>;
