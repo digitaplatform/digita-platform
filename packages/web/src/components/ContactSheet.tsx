@@ -5,10 +5,11 @@ import { ArrowRight, CalendarDays, X } from "lucide-react";
 import { Drawer, buttonAttributes } from "@digitaplatform/components";
 import { closeContactSheet, useContactSheetOpen } from "@/lib/contact-sheet";
 import { CONTACT_TOPICS, type ContactTopic } from "@/lib/contact-request";
+import { failureText, readFormFailure, type FormFailure, type FormFailureTexts } from "@/lib/form-failure";
 
 /** The sheet's texts in the page's locale, built by the server (src/components/chrome-texts.ts):
  *  a client component cannot read the site's texts itself. */
-export interface ContactSheetTexts {
+export interface ContactSheetTexts extends FormFailureTexts {
   title: string;
   heading: string;
   close: string;
@@ -24,7 +25,7 @@ export interface ContactSheetTexts {
   messagePlaceholder: string;
   send: string;
   sent: string;
-  /** The failure line; the address follows it as a mailto link. */
+  /** The failure line; the address follows it as a mailto link, and follows each class text the same way. */
   failed: string;
   privacyNote: string;
   privacy: string;
@@ -65,6 +66,15 @@ interface ContactPanelProps {
 /** Mounted on every open, so the form state starts fresh each time. */
 function ContactPanel({ locale, texts, contactEmail, bookingUrl, privacyHref, renderedAt }: ContactPanelProps) {
   const [state, setState] = useState<"editing" | "sending" | "sent" | "failed">("editing");
+  const [failure, setFailure] = useState<FormFailure>({ kind: "invalid" });
+  // The fields the visitor fills in, by the name the route answers with; the others are the sheet's own.
+  const labels = new Map([
+    ["name", texts.name],
+    ["email", texts.email],
+    ["company", texts.company],
+    ["topic", texts.topic],
+    ["message", texts.message],
+  ]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -76,10 +86,16 @@ function ContactPanel({ locale, texts, contactEmail, bookingUrl, privacyHref, re
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, rendered_at: renderedAt, locale, page: window.location.pathname }),
       });
-      setState(res.ok ? "sent" : "failed");
+      if (res.ok) {
+        setState("sent");
+        return;
+      }
+      setFailure(await readFormFailure(res));
     } catch {
-      setState("failed");
+      // No answer came: the visitor's connection or the server is down, and nothing they typed is wrong.
+      setFailure({ kind: "unavailable" });
     }
+    setState("failed");
   }
 
   return (
@@ -170,7 +186,7 @@ function ContactPanel({ locale, texts, contactEmail, bookingUrl, privacyHref, re
             </button>
             {state === "failed" && (
               <p role="alert" className="text-sm text-error">
-                {texts.failed}{" "}
+                {failureText(failure, texts, (field) => labels.get(field), locale)}{" "}
                 <a href={`mailto:${contactEmail}`} className="underline">
                   {contactEmail}
                 </a>

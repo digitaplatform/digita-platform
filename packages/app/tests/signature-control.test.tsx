@@ -105,7 +105,7 @@ function Form({ initial, onChange }: { initial?: string; onChange: (next: unknow
 
 const pad = () => screen.getByRole('img', { name: 'Customer signature' });
 const queryPad = () => screen.queryByRole('img', { name: 'Customer signature' });
-const clearButton = () => screen.queryByRole('button', { name: 'ui.action.clear' });
+const clearButton = () => screen.queryByRole('button', { name: 'ui.action.clear Customer signature' });
 
 function drawStroke(canvas: HTMLElement, pointerId = 1) {
   fireEvent.pointerDown(canvas, { pointerId, button: 0, clientX: 10, clientY: 20 });

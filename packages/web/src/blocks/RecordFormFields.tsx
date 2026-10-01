@@ -2,13 +2,13 @@
 
 import { useId, useRef, useState, type FormEvent } from "react";
 import { Checkbox, Input, Select, buttonAttributes } from "@digitaplatform/components";
+import { failureText, readFormFailure, type FormFailure, type FormFailureTexts } from "@/lib/form-failure";
 import type { RecordFormField } from "./record-form";
 
 /** The form's texts in the page's locale, from the block's props or the site's texts. */
-export interface RecordFormTexts {
+export interface RecordFormTexts extends FormFailureTexts {
   send: string;
   sent: string;
-  failed: string;
 }
 
 type FieldState = Record<string, string | boolean>;
@@ -48,14 +48,17 @@ interface RecordFormFieldsProps {
    *  route's fill-time check measures a person's time from the server's render, not from the
    *  browser's clock. A program that sends a number of its own passes the check. */
   renderedAt: number;
+  /** The page's language, which words the wait of a visitor who sent too many forms. */
+  locale?: string;
 }
 
 /** The record form's inputs, drawn with the kit's controls, and its post to /api/record. */
-export function RecordFormFields({ app, entity, fields, texts, renderedAt }: RecordFormFieldsProps) {
+export function RecordFormFields({ app, entity, fields, texts, renderedAt, locale }: RecordFormFieldsProps) {
   const formId = useId();
   const honeypot = useRef<HTMLInputElement>(null);
   const [values, setValues] = useState(() => initialState(fields));
   const [state, setState] = useState<"editing" | "sending" | "sent" | "failed">("editing");
+  const [failure, setFailure] = useState<FormFailure>({ kind: "invalid" });
   const set = (name: string, value: string | boolean) => setValues((current) => ({ ...current, [name]: value }));
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -67,10 +70,16 @@ export function RecordFormFields({ app, entity, fields, texts, renderedAt }: Rec
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ app, entity, values: recordValues(fields, values), website: honeypot.current?.value ?? "", rendered_at: renderedAt }),
       });
-      setState(res.ok ? "sent" : "failed");
+      if (res.ok) {
+        setState("sent");
+        return;
+      }
+      setFailure(await readFormFailure(res));
     } catch {
-      setState("failed");
+      // No answer came: the visitor's connection or the server is down, and nothing they typed is wrong.
+      setFailure({ kind: "unavailable" });
     }
+    setState("failed");
   }
 
   if (state === "sent") {
@@ -160,7 +169,7 @@ export function RecordFormFields({ app, entity, fields, texts, renderedAt }: Rec
       </button>
       {state === "failed" && (
         <p role="alert" className="text-sm text-error">
-          {texts.failed}
+          {failureText(failure, texts, (field) => fields.find((candidate) => candidate.name === field && candidate.type !== "hidden")?.label, locale)}
         </p>
       )}
     </form>
