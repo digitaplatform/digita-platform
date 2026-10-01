@@ -2,7 +2,9 @@
 // The requests behind a tree node's path, through the real list hook and a real query client: only
 // the engine's list endpoint is stubbed, and it answers each request when the test releases it.
 // A Link to an entity without a tree reads no path, and a request for the next level up keeps the
-// rows of the previous one as placeholder data, which must never show as a shorter path.
+// rows of the previous one as placeholder data, which must never show as a shorter path. A tree Link
+// without a value asks for nothing, and the path stops at a parent the list does not return or at
+// one it has already met.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -14,6 +16,7 @@ type ListParams = { filters?: [string, string, unknown][]; page_size?: number };
 const engine = vi.hoisted(() => ({
   rows: [] as Row[],
   requestedEntities: [] as string[],
+  requestedIds: [] as unknown[],
   answers: [] as Array<() => void>,
 }));
 vi.mock('@/services/resource', async (importOriginal) => ({
@@ -22,6 +25,7 @@ vi.mock('@/services/resource', async (importOriginal) => ({
   getList: (entity: string, params: ListParams) => {
     engine.requestedEntities.push(entity);
     const ids = params.filters?.find(([field, op]) => field === '_id' && op === 'in')?.[2] as string[] | undefined;
+    engine.requestedIds.push(ids);
     const rows = engine.rows.filter((r) => !ids || ids.includes(r._id as string));
     const meta = { total: rows.length, page: 1, page_size: params.page_size ?? 20, total_pages: 1 };
     return new Promise((resolve) => engine.answers.push(() => resolve({ success: true, data: rows, meta })));
@@ -90,6 +94,7 @@ beforeEach(() => {
     { _id: 'G-5', name: 'Spa hotels', parent: 'G-2' },
   ];
   engine.requestedEntities.length = 0;
+  engine.requestedIds.length = 0;
   engine.answers.length = 0;
 });
 
@@ -109,5 +114,40 @@ describe('LinkControl requests for a tree path', () => {
     while (await answerNextRequest(engine.requestedEntities.length)) shownTexts.push(readFieldText());
     shownTexts.push(readFieldText());
     expect([...new Set(shownTexts)]).toEqual(['Spa hotels', 'Business customers › Hotels › Spa hotels']);
+  });
+
+  it('sends none for a tree Link that holds no value', async () => {
+    renderLinkField('CustomerGroup', '', '');
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(engine.requestedEntities).toEqual([]);
+  });
+
+  it('stops after a parent the list does not return and shows the node alone', async () => {
+    engine.rows = engine.rows.filter((r) => r._id !== 'G-2');
+    renderLinkField('CustomerGroup', 'G-5', 'Spa hotels');
+    await waitFor(() => expect(engine.answers).toHaveLength(1));
+    while (await answerNextRequest(engine.requestedEntities.length));
+    expect(engine.requestedIds).toEqual([['G-5'], ['G-5', 'G-2']]);
+    expect(readFieldText()).toBe('Spa hotels');
+  });
+
+  it('ends the path at a parent it has already met', async () => {
+    // A path walk that never ends reads these names without end: the read that passes any honest
+    // count fails the test instead of hanging it.
+    let reads = 0;
+    const cycleRow = (_id: string, name: string, parent: string) => ({
+      _id,
+      parent,
+      get name() {
+        if (++reads > 1000) throw new Error('the path walk never ends');
+        return name;
+      },
+    });
+    engine.rows = [cycleRow('G-7', 'North', 'G-8'), cycleRow('G-8', 'South', 'G-7')];
+    renderLinkField('CustomerGroup', 'G-7', 'North');
+    await waitFor(() => expect(engine.answers).toHaveLength(1));
+    while (await answerNextRequest(engine.requestedEntities.length));
+    expect(readFieldText()).toBe('South › North');
+    expect(engine.requestedIds).toEqual([['G-7'], ['G-7', 'G-8']]);
   });
 });
