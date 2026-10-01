@@ -7,8 +7,9 @@ export interface ResponseMessage {
   path?: string;
   /** Machine-readable code so callers can branch without parsing text. */
   code?: string;
-  /** Transient: interpolation params for server-side translation. Consumed +
-   *  removed by the engine's preSerialization i18n hook — never sent to clients. */
+  /** Interpolation params of the `text` key. The engine's preSerialization i18n hook fills and
+   *  removes them for a key it holds a text for; an app's key, which only the client can
+   *  translate, keeps them. */
   params?: Record<string, string>;
 }
 
@@ -54,7 +55,7 @@ export interface DeclaredClientError {
   /** i18n message key to show INSTEAD of the raw `Error.message`. When present,
    *  the raw message is preserved in `error.detail` for diagnostics. */
   messageKey?: string;
-  /** Interpolation params for `messageKey`'s server-side translation. Only
+  /** Interpolation params for `messageKey`'s translation. Only
    *  forwarded when `messageKey` is also set. */
   params?: Record<string, string>;
 }
