@@ -33,6 +33,7 @@ export function ActionBar({
 }) {
   const navigate = useNavigate();
   const t = useI18nStore((s) => s.t);
+  const tEntity = useI18nStore((s) => s.tEntity);
   const translations = useI18nStore((s) => s.translations);
   const tc = useChrome();
   const dialog = useDialogHost();
@@ -45,11 +46,13 @@ export function ActionBar({
   const execute = async (action: ActionDefinition, body?: Doc) => {
     try {
       const res = await runM.mutateAsync({ name, action: action.action, body });
-      dialog.toast(action.label, 'success');
       const result = res.result;
       const created = result?.created;
       if (created?.entity && created?.name) {
+        dialog.toast(tc('ui.action.actionCreated', { entity: tEntity(created.entity), name: created.name }), 'success');
         navigate(`/${created.entity}/${encodeURIComponent(created.name)}`);
+      } else {
+        dialog.toast(tc('ui.action.actionSucceeded', { action: action.label }), 'success');
       }
       // File-producing actions: `download` (or the legacy {xml, filename}
       // shape, e.g. generateXRechnung) saves client-side; `open_url` opens.

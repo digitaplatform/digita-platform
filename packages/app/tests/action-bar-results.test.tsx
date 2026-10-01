@@ -48,6 +48,8 @@ function answerWith(result: Record<string, unknown>) {
   mocks.mutateAsync.mockResolvedValue({ result, dialog_data: {} });
 }
 
+const succeeded = (action: string) => `ui.action.actionSucceeded ${JSON.stringify({ action })}`;
+
 const createInvoiceAction: ActionDefinition = { label: 'Create invoice', action: 'createInvoiceAction' };
 
 beforeEach(() => {
@@ -57,14 +59,14 @@ beforeEach(() => {
 });
 
 describe('the success of an action', () => {
-  it('runs it on the saved document and toasts its label as a success, without the question a confirm would ask', async () => {
+  it('runs it on the saved document and toasts that it completed, without the question a confirm would ask', async () => {
     const user = userEvent.setup();
     answerWith({});
     drawBar([createInvoiceAction]);
 
     await user.click(screen.getByRole('button', { name: 'Create invoice' }));
 
-    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith('Create invoice', 'success'));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(succeeded('Create invoice'), 'success'));
     expect(mocks.mutateAsync).toHaveBeenCalledTimes(1);
     expect(mocks.mutateAsync).toHaveBeenCalledWith({ name: 'WO-1', action: 'createInvoiceAction', body: undefined });
     expect(mocks.confirm).not.toHaveBeenCalled();
@@ -79,7 +81,7 @@ describe('the success of an action', () => {
     await user.click(screen.getByRole('button', { name: 'Create invoice' }));
 
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith('Stock is short', 'error'));
-    expect(mocks.toast).not.toHaveBeenCalledWith('Create invoice', 'success');
+    expect(mocks.toast).not.toHaveBeenCalledWith(expect.anything(), 'success');
     expect(screen.getByTestId('where')).toHaveTextContent('/WorkOrder/WO-1');
   });
 });
@@ -93,7 +95,10 @@ describe('the document an action created', () => {
     await user.click(screen.getByRole('button', { name: 'Create invoice' }));
 
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/Invoice/INV-7'));
-    expect(mocks.toast).toHaveBeenCalledWith('Create invoice', 'success');
+    expect(mocks.toast).toHaveBeenCalledWith(
+      `ui.action.actionCreated ${JSON.stringify({ entity: 'Invoice', name: 'INV-7' })}`,
+      'success',
+    );
   });
 
   it('opens a document whose name needs escaping under that name', async () => {
@@ -113,7 +118,7 @@ describe('the document an action created', () => {
 
     await user.click(screen.getByRole('button', { name: 'Create invoice' }));
 
-    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith('Create invoice', 'success'));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(succeeded('Create invoice'), 'success'));
     expect(screen.getByTestId('where')).toHaveTextContent('/WorkOrder/WO-1');
   });
 });
@@ -243,7 +248,7 @@ describe('an action with confirm', () => {
 
     await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledTimes(1));
     expect(mocks.mutateAsync).toHaveBeenCalledWith({ name: 'WO-1', action: 'cancelOrderAction', body: undefined });
-    expect(mocks.toast).toHaveBeenCalledWith('Cancel order', 'success');
+    expect(mocks.toast).toHaveBeenCalledWith(succeeded('Cancel order'), 'success');
   });
 
   it('does not run after a no', async () => {
@@ -306,7 +311,7 @@ describe('an action that opens a dialog', () => {
     await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledTimes(1));
     expect(mocks.mutateAsync).toHaveBeenCalledWith({ name: 'WO-1', action: 'bookPartsAction', body: { warehouse: 'MAIN' } });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(mocks.toast).toHaveBeenCalledWith('Book parts', 'success');
+    expect(mocks.toast).toHaveBeenCalledWith(succeeded('Book parts'), 'success');
   });
 
   it('runs nothing when the dialog is cancelled', async () => {
