@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Globe } from 'lucide-react';
 import { LanguageMenu } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
-import { TranslationsLoadError } from '@/stores/i18n';
+import { TranslationsLoadError, useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useProfileUpdate } from '@/hooks/useAccount';
 import { useDialogHost } from '@/components/overlay/DialogHost';
@@ -21,7 +21,9 @@ export function LanguageSwitcher({ onChosen }: { onChosen?: (code: string) => vo
   const tc = useChrome();
   const languages = useSessionStore((s) => s.languages);
   const allow = useSessionStore((s) => s.allowUserLanguage);
-  const current = useSessionStore((s) => s.locale?.code);
+  // The language whose texts are in use: the session may already name one whose texts
+  // failed to load, and the button must not claim it.
+  const current = useI18nStore((s) => s.locale);
   const setLocale = useSessionStore((s) => s.setLocale);
   const failureText = useSwitchFailureText();
   const [failure, setFailure] = useState<string | null>(null);

@@ -8,8 +8,17 @@ vi.mock('@/hooks/useAccount', () => ({ useProfileUpdate: () => ({ mutate: vi.fn(
 vi.mock('@/components/overlay/DialogHost', () => ({ useDialogHost: () => ({ toast }) }));
 vi.mock('@/lib/chrome-i18n', () => ({ useChrome: () => (key: string) => key }));
 vi.mock('@digitaplatform/components', () => ({
-  LanguageMenu: ({ languages, onSelect }: { languages: { code: string }[]; onSelect: (code: string) => void }) => (
+  LanguageMenu: ({
+    current,
+    languages,
+    onSelect,
+  }: {
+    current?: string;
+    languages: { code: string }[];
+    onSelect: (code: string) => void;
+  }) => (
     <div>
+      <span data-testid="current">{current}</span>
       {languages.map((l) => (
         <button key={l.code} onClick={() => onSelect(l.code)}>
           {l.code}
@@ -20,10 +29,12 @@ vi.mock('@digitaplatform/components', () => ({
 }));
 
 const { useSessionStore } = await import('@/stores/session');
+const { useI18nStore } = await import('@/stores/i18n');
 const { LanguageSwitcher } = await import('@/components/layout/LanguageSwitcher');
 
 afterEach(() => {
   toast.mockReset();
+  useI18nStore.setState({ locale: 'en' });
 });
 
 function offerLanguages(setLocale: (code: string) => Promise<void>) {
@@ -55,5 +66,23 @@ describe('a language switch', () => {
     fireEvent.click(screen.getByText('de'));
     await waitFor(() => expect(setLocale).toHaveBeenCalledWith('de'));
     expect(toast).not.toHaveBeenCalled();
+  });
+
+  // A failed switch leaves the old texts in use, while the boot after the profile save
+  // already names the new language: the button shows the texts the page speaks.
+  it('shows the language whose texts are in use, not the one whose load failed', () => {
+    offerLanguages(vi.fn(async () => undefined));
+    useSessionStore.setState({ locale: { code: 'de' } });
+    useI18nStore.setState({ locale: 'en' });
+    render(<LanguageSwitcher />);
+    expect(screen.getByTestId('current')).toHaveTextContent('en');
+  });
+
+  it('shows the new language once its texts are in use', () => {
+    offerLanguages(vi.fn(async () => undefined));
+    useSessionStore.setState({ locale: { code: 'de' } });
+    useI18nStore.setState({ locale: 'de' });
+    render(<LanguageSwitcher />);
+    expect(screen.getByTestId('current')).toHaveTextContent('de');
   });
 });

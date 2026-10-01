@@ -203,7 +203,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   setLocale: async (code) => {
-    if (code === get().locale?.code) return;
+    // A failed load keeps the old texts while a later boot may already name the language, so
+    // a switch is a no-op only when the texts in use are this language's too.
+    if (code === get().locale?.code && code === useI18nStore.getState().locale) return;
     try {
       localStorage.setItem(LOCALE_STORAGE_KEY, code);
     } catch {
