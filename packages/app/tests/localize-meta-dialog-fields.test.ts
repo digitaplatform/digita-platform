@@ -4,9 +4,9 @@ import { localizeAction, localizeMeta } from '@/lib/localize-meta';
 
 /**
  * The dialog an action opens speaks the session language: each of its fields takes its label from
- * `action_field.<Entity>.<action>.<field>`, and a field without a key keeps the label the entity
- * file writes. The key names the action, so localizeMeta does not give a dialog field the text of
- * an entity field that shares its name.
+ * `action_field.<Entity>.<action>.<field>`. That key names the action, so it wins over the text of
+ * an entity field that shares the dialog field's name; a dialog field without a key of its own takes
+ * that entity field's text, and else keeps the label the entity file writes.
  */
 
 const accept = {
@@ -42,7 +42,7 @@ const t: Record<string, string> = {
   'action_field.Quote.accept.signature': 'Unterschrift',
   'action_field.Quote.accept.parts': 'Teile',
   'action_field.Quote.accept.parts.qty': 'Menge',
-  // An entity field of the same name is another text and stays out of the dialog.
+  // An entity field of the same name gives its text to a dialog field without a key of its own.
   'field.Quote.note': 'Interne Notiz',
   'field.Quote.accepted_by': 'Akzeptiert von',
 };
@@ -58,8 +58,8 @@ describe('localizeMeta dialog fields', () => {
     expect(label('parts')).toBe('Teile');
   });
 
-  it('keeps the written label where a dialog field has no key, also where an entity field has one', () => {
-    expect(label('note')).toBe('Note');
+  it('takes the text of the entity field of the same name where a dialog field has no key', () => {
+    expect(label('note')).toBe('Interne Notiz');
   });
 
   it('translates the columns of a table in the dialog by the table and the column', () => {
@@ -86,6 +86,6 @@ describe('localizeAction', () => {
   it('localizes one action as localizeMeta does, for an action the engine reports for a record', () => {
     const one = localizeAction('Quote', accept, t);
     expect(one.label).toBe('Angebot annehmen');
-    expect(one.dialog_fields!.map((f) => f.label)).toEqual(['Angenommen von', 'Unterschrift', 'Note', 'Teile']);
+    expect(one.dialog_fields!.map((f) => f.label)).toEqual(['Angenommen von', 'Unterschrift', 'Interne Notiz', 'Teile']);
   });
 });

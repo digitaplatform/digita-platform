@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { getTranslations } from '@/services/translations';
+import { humanize } from '@/lib/localize-meta';
 
 /**
  * Platform data translations (hierarchical keys: entity.X / field.X.f /
@@ -20,18 +21,6 @@ interface I18nState {
   tEntity: (entity: string, fallback?: string) => string;
   /** Localized section/tab label — sections are fields, so they share the field namespace. */
   tSection: (entity: string, section: string, fallback?: string) => string;
-}
-
-/** Last-resort label when neither a translation nor a meta label exists: turn a
- *  raw identifier into Title Case words (display_name → "Display Name",
- *  itemCode → "Item Code") so the UI never shows a snake_case field name. */
-function humanize(s: string): string {
-  return s
-    .replace(/[_-]+/g, ' ')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function interpolate(template: string, params?: Record<string, string | number>): string {

@@ -24,6 +24,25 @@ import type { EntitySummary } from '@/types';
 
 type Dict = Record<string, string>;
 
+/** Last-resort label when neither a translation nor a meta label exists: turn a
+ *  raw identifier into Title Case words (display_name → "Display Name",
+ *  itemCode → "Item Code") so the UI never shows a snake_case field name. */
+export function humanize(s: string): string {
+  return s
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** The text of a field of localized meta. localizeMeta and localizeAction chose its key, by its
+ *  table or its action, so a renderer shows that text: the store's `tField` would look up the key
+ *  of the entity field of the same name and show its text over the one chosen. */
+export function fieldLabel(field: { fieldname: string; label?: string }): string {
+  return field.label ?? humanize(field.fieldname);
+}
+
 /** A child field keys by its table first, so two tables may name a column the same and still read
  *  differently, and then by its name alone, the key an app wrote before the table was part of it. */
 function localizeField(entity: string, f: FieldDefinition, t: Dict, table?: string): FieldDefinition {
@@ -38,12 +57,16 @@ function localizeField(entity: string, f: FieldDefinition, t: Dict, table?: stri
   return out;
 }
 
-/** A dialog field is keyed by its action, not by the entity: it is an input of the action and may
- *  share its name with an entity field that has another text. A table's columns add the table. */
-function localizeDialogField(prefix: string, f: FieldDefinition, t: Dict): FieldDefinition {
+/** A dialog field is keyed by its action first: it is an input of the action and may share its name
+ *  with an entity field that has another text. A table's columns add the table. Without a key of its
+ *  own it takes the text of the entity field of the same name, because a dialog field mostly fills
+ *  that field, and the dialogs of an app that translated only those fields stay translated. */
+function localizeDialogField(entity: string, prefix: string, f: FieldDefinition, t: Dict): FieldDefinition {
   const key = `${prefix}.${f.fieldname}`;
-  const out: FieldDefinition = { ...f, label: t[key] ?? f.label };
-  if (Array.isArray(f.child_fields)) out.child_fields = f.child_fields.map((cf) => localizeDialogField(key, cf, t));
+  const out: FieldDefinition = { ...f, label: t[key] ?? t[`field.${entity}.${f.fieldname}`] ?? f.label };
+  if (Array.isArray(f.child_fields)) {
+    out.child_fields = f.child_fields.map((cf) => localizeDialogField(entity, key, cf, t));
+  }
   return out;
 }
 
@@ -62,7 +85,9 @@ export function localizeAction(entity: string, a: ActionDefinition, t: Dict): Ac
     }));
   }
   if (a.dialog_fields) {
-    localized.dialog_fields = a.dialog_fields.map((f) => localizeDialogField(`action_field.${entity}.${a.action}`, f, t));
+    localized.dialog_fields = a.dialog_fields.map((f) =>
+      localizeDialogField(entity, `action_field.${entity}.${a.action}`, f, t),
+    );
   }
   return localized;
 }
