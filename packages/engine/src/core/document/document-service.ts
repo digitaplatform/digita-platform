@@ -354,7 +354,8 @@ export class DocumentService {
 
   /**
    * Who viewed the document and when, newest first, for a user who passes the read
-   * `getDoc` checks. Views are logged only for an entity with `track_views`.
+   * `getDoc` checks. Views are logged only for an entity with `track_views`. Reading the
+   * log is no view of the document, so it is gated without the view `getDoc` logs.
    */
   async getViewLog(
     doctype: string,
@@ -362,7 +363,7 @@ export class DocumentService {
     user: UserContext = GUEST_USER,
     limit?: number,
   ): Promise<Array<{ viewed_by: string; timestamp: Date }>> {
-    await this.getDoc(doctype, name, user);
+    await this.loadReadableDoc(this.registry.get(doctype), doctype, name, user);
     return this.viewLogService.getViewLog(doctype, name, limit);
   }
 
@@ -425,15 +426,13 @@ export class DocumentService {
     }
   }
 
-  async getDoc(
+  /** The stored document, for a user who may read it, as `getDoc` checks that. */
+  private async loadReadableDoc(
+    entity: EntityDefinition,
     doctype: string,
     name: string,
-    user: UserContext = GUEST_USER,
-    ctx?: ResponseContext,
-    locale?: string,
+    user: UserContext,
   ): Promise<BaseDocument> {
-    const entity = this.registry.get(doctype);
-
     // Permission check — an explicit DocShare grants read on this doc (D10b).
     await this.assertReadAccess(user, doctype, name);
 
@@ -453,6 +452,18 @@ export class DocumentService {
     if (!isRoleVisible(entity, user, doc._data)) {
       throw new NotFoundError(doctype, name);
     }
+    return doc;
+  }
+
+  async getDoc(
+    doctype: string,
+    name: string,
+    user: UserContext = GUEST_USER,
+    ctx?: ResponseContext,
+    locale?: string,
+  ): Promise<BaseDocument> {
+    const entity = this.registry.get(doctype);
+    const doc = await this.loadReadableDoc(entity, doctype, name, user);
 
     // Filter fields by read permission before anything is derived from them: a
     // link title or a status color resolved from a masked field would show it.

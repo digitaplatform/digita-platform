@@ -54,6 +54,7 @@ import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
+import { ViewLogService } from "../src/core/version/view-log-service.js";
 
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
@@ -125,12 +126,28 @@ describe("GET /resource/:doctype/:name/views", () => {
     await vi.waitFor(async () => {
       const res = await views(adminTok);
       expect(res.statusCode).toBe(200);
-      expect((res.json().data as Array<{ viewed_by: string }>).map((v) => v.viewed_by)).toContain("clerk@d");
+      expect((res.json().data as Array<{ viewed_by: string }>).map((v) => v.viewed_by)).toEqual(["clerk@d"]);
     });
     const res = await views(clerkTok);
     expect(res.statusCode).toBe(200);
     const entry = (res.json().data as Array<{ viewed_by: string; timestamp: string }>).find((v) => v.viewed_by === "clerk@d")!;
     expect(Number.isNaN(Date.parse(entry.timestamp))).toBe(false);
+  });
+
+  // The log lists who opened the record; a read of the log itself opens nothing.
+  it("logs no view when the log is read, and still logs a read of the record", async () => {
+    const logView = vi.spyOn(ViewLogService.prototype, "logView");
+    try {
+      expect((await views(adminTok)).statusCode).toBe(200);
+      expect((await views(clerkTok)).statusCode).toBe(200);
+      expect(logView).not.toHaveBeenCalled();
+
+      const read = await app.inject({ method: "GET", url: `/api/v1/resource/ViewLogCustomer/${customerId}`, headers: bearer(clerkTok) });
+      expect(read.statusCode).toBe(200);
+      expect(logView).toHaveBeenCalledExactlyOnceWith("ViewLogCustomer", customerId, "clerk@d");
+    } finally {
+      logView.mockRestore();
+    }
   });
 
   it("refuses a user who may not read the record", async () => {
