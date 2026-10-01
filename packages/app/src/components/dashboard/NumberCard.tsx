@@ -141,7 +141,7 @@ function Body({
         <button
           type="button"
           onClick={() => onNavigate(deepLink)}
-          className="self-start rounded text-left hover:text-primary-600 dark:hover:text-primary-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+          className="self-start rounded text-left hover:text-primaryText focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         >
           {number}
         </button>

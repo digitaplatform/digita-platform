@@ -1,5 +1,5 @@
 import { semantic } from './semantic.js';
-import { onPrimaryFor, primaryHoverFor } from './on-primary.js';
+import { onPrimaryFor, primaryGraphicFor, primaryHoverFor, primaryTextFor } from './on-primary.js';
 import { PRIMARY, NEUTRAL, ACCENT } from './colors.js';
 import {
   fontFamily,
@@ -22,7 +22,7 @@ export type { SemanticTokens } from './semantic.js';
 export { PRIMARY, NEUTRAL, ACCENT } from './colors.js';
 export { COLOR_PALETTES } from './palettes.js';
 export { synthesizeRamp, RAMP_STEPS } from './synthesize.js';
-export { onPrimaryFor, primaryHoverFor, contrastRatio } from './on-primary.js';
+export { onPrimaryFor, primaryHoverFor, primaryTextFor, primaryGraphicFor, contrastRatio } from './on-primary.js';
 export type { RampStep } from './synthesize.js';
 export { TINT_PALETTES, DEFAULT_TINT_KEY, tintRamp } from './tints.js';
 export type { TintKey } from './tints.js';
@@ -91,7 +91,8 @@ export function varsForDesign(design: Design, mode: 'light' | 'dark'): Record<st
 /** ADR-V2 tint layer: flat { cssVarName: value } for one TINT ramp + mode —
  *  the full --color-primary-50..950 ramp plus the mode-flipping tonal
  *  container roles (light: ramp 100/900, dark: ramp 800/100 — the same rule
- *  as runtime branding's setContainerRoles). Drives the bare-:root BLUE
+ *  as runtime branding's setContainerRoles), and the primary colour as text and as
+ *  a graphic, measured on the default design's canvas and surface. Drives the bare-:root BLUE
  *  default and every :root[data-tint="…"] block in gen-css.mjs. */
 export function varsForTint(ramp: Record<string, string>, mode: 'light' | 'dark'): Record<string, string> {
   const out: Record<string, string> = {};
@@ -100,6 +101,9 @@ export function varsForTint(ramp: Record<string, string>, mode: 'light' | 'dark'
   out[cssVarName('onPrimaryContainer')] = mode === 'light' ? ramp['900']! : ramp['100']!;
   out[cssVarName('onPrimary')] = onPrimaryFor(ramp);
   out[cssVarName('primaryHover')] = primaryHoverFor(ramp);
+  const grounds = [semantic[mode].bg, semantic[mode].surface];
+  out[cssVarName('primaryText')] = primaryTextFor(ramp, grounds);
+  out[cssVarName('primaryGraphic')] = primaryGraphicFor(ramp, grounds);
   return out;
 }
 

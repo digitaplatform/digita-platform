@@ -61,7 +61,7 @@ export function NavGroup({ label, icon, open, onToggle, children }: NavGroupProp
 export function navLeafClass(active: boolean): string {
   return cn(
     'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition duration-base ease-smooth focus-visible:shadow-focus focus-visible:outline-none',
-    active ? 'bg-bgHover font-medium text-primary-600' : 'text-textMain hover:bg-bgHover',
+    active ? 'bg-bgHover font-medium text-primaryText' : 'text-textMain hover:bg-bgHover',
   );
 }
 

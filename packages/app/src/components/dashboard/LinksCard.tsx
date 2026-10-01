@@ -9,7 +9,7 @@ interface LinksCardProps {
 }
 
 const linkClass =
-  'block rounded px-2 py-1.5 text-sm text-primary-600 dark:text-primary-400 hover:bg-subtle hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500';
+  'block rounded px-2 py-1.5 text-sm text-primaryText hover:bg-subtle hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500';
 
 /**
  * Pure links tile. Each entry routes IN-app via onNavigate (`to`) or opens an

@@ -55,7 +55,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
         <label
           data-ui="textfield-label"
           htmlFor={inputId}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-textMuted transition-all duration-base ease-smooth peer-focus:top-2 peer-focus:translate-y-0 peer-focus:text-xs peer-focus:text-primary-600 peer-[:not(:placeholder-shown)]:top-2 peer-[:not(:placeholder-shown)]:translate-y-0 peer-[:not(:placeholder-shown)]:text-xs"
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-textMuted transition-all duration-base ease-smooth peer-focus:top-2 peer-focus:translate-y-0 peer-focus:text-xs peer-focus:text-primaryText peer-[:not(:placeholder-shown)]:top-2 peer-[:not(:placeholder-shown)]:translate-y-0 peer-[:not(:placeholder-shown)]:text-xs"
         >
           {label}
         </label>

@@ -69,7 +69,7 @@ export function BrandMark({ name, logoUrl: lightLogoUrl, logoDarkUrl, nameIsCust
   ) : signature?.monogram ? (
     <div
       aria-hidden="true"
-      className="h-7 w-7 shrink-0 text-primary-600 [&>svg]:h-full [&>svg]:w-full"
+      className="h-7 w-7 shrink-0 text-primaryGraphic [&>svg]:h-full [&>svg]:w-full"
       dangerouslySetInnerHTML={{ __html: signature.monogram }}
     />
   ) : (

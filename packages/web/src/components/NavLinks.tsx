@@ -91,7 +91,7 @@ export function NavIconLink({
       aria-label={item.label}
       title={item.label}
       aria-current={active ? "page" : undefined}
-      className={cn(topBarButtonClass, className, active && "bg-bgHover text-primary-600")}
+      className={cn(topBarButtonClass, className, active && "bg-bgHover text-primaryText")}
     >
       {children}
     </Link>

@@ -1,5 +1,6 @@
-import { brandingStyle, resetBranding, writeIdentityStyle, type IdentityStyle } from '../runtime/runtime.js';
+import { brandingStyle, pageRoleProperties, resetBranding, writeIdentityStyle, type IdentityStyle } from '../runtime/runtime.js';
 import { cssVarName } from '../tokens/index.js';
+import { synthesizeRamp } from '../tokens/synthesize.js';
 import { composeSurfaceContainerRamp, SURFACE_CONTAINER_ROLES } from '../tokens/surface-containers.js';
 import { getRuntimeSignature } from './runtime-registry.js';
 
@@ -147,6 +148,12 @@ export function signatureStyle(s: Signature): IdentityStyle {
     }
     for (const [token, value] of Object.entries(s.colors)) {
       style.properties[cssVarName(token)] = `light-dark(${value.light}, ${value.dark})`;
+    }
+    // The primary colour on the page is measured on the signature's own canvas and surface.
+    const { bg } = s.colors;
+    const ramp = s.accent ? synthesizeRamp(s.accent) : null;
+    if (ramp && bg && surface) {
+      pageRoleProperties(ramp, { light: [bg.light, surface.light], dark: [bg.dark, surface.dark] }, style.properties);
     }
   }
   if (s.graphics) {

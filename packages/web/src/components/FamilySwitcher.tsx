@@ -65,7 +65,7 @@ export function FamilySwitcher({
           isCurrentSite(item, domain) ? (
             <span key={`${item.label}-${i}`} role="menuitem" aria-current="true" tabIndex={-1} className={`${ITEM} font-semibold`}>
               {item.label}
-              <Check className="ml-auto h-4 w-4 text-primary-600" aria-hidden="true" />
+              <Check className="ml-auto h-4 w-4 text-primaryGraphic" aria-hidden="true" />
             </span>
           ) : (
             <NavItemLink

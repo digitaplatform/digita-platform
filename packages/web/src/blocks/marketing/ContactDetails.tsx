@@ -17,12 +17,12 @@ export function ContactDetails({ props }: { props?: P }) {
             <span key={i}>{line}</span>
           ))}
           {email && (
-            <a href={`mailto:${email}`} className="mt-3 text-primary-600 hover:underline">
+            <a href={`mailto:${email}`} className="mt-3 text-primaryText hover:underline">
               {email}
             </a>
           )}
           {phone && (
-            <a href={`tel:${phone.replace(/\s+/g, "")}`} className="text-primary-600 hover:underline">
+            <a href={`tel:${phone.replace(/\s+/g, "")}`} className="text-primaryText hover:underline">
               {phone}
             </a>
           )}

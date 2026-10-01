@@ -1,5 +1,7 @@
 /** The contrast a label needs on a primary fill: WCAG AA for normal text. */
 const AA_TEXT = 4.5;
+/** The contrast a graphic needs on its ground: WCAG AA for non-text contrast. */
+const AA_GRAPHIC = 3;
 const WHITE = '#FFFFFF';
 
 function channels(hex: string): [number, number, number] {
@@ -55,4 +57,29 @@ export function primaryHoverFor(ramp: Record<string, string>): string {
   const fill = ramp['600'];
   if (!fill) throw new Error('primary ramp has no step 600');
   return mixed(fill, onPrimaryFor(ramp) === WHITE ? '#000000' : WHITE, 0.12);
+}
+
+// Step 600 first, then outward one step at a time, so the brand colour itself wins wherever it passes.
+const STEPS_FROM_BRAND = ['600', '700', '500', '800', '400', '900', '300', '950', '200', '100', '50'];
+
+function primaryOnGrounds(ramp: Record<string, string>, grounds: string[], minimum: number): string {
+  const weakest = (step: string) => Math.min(...grounds.map((ground) => contrastRatio(ramp[step]!, ground)));
+  const steps = STEPS_FROM_BRAND.filter((step) => ramp[step]);
+  // A ground no step can reach gets the strongest step, and the signature kit's check shows the miss.
+  return ramp[steps.find((step) => weakest(step) >= minimum) ?? steps.reduce((a, b) => (weakest(a) >= weakest(b) ? a : b))]!;
+}
+
+/**
+ * The primary colour drawn as text on the page in one mode: the ramp step closest to step 600 that
+ * reaches AA on every ground of that mode. Step 600 alone serves one mode only, because no colour
+ * reaches 4.5:1 on both a light and a dark canvas.
+ */
+export function primaryTextFor(ramp: Record<string, string>, grounds: string[]): string {
+  return primaryOnGrounds(ramp, grounds, AA_TEXT);
+}
+
+/** The primary colour drawn as a graphic on the page in one mode (an icon, a focus ring, an active
+ *  tab's rule): the ramp step closest to step 600 that reaches 3:1 on every ground of that mode. */
+export function primaryGraphicFor(ramp: Record<string, string>, grounds: string[]): string {
+  return primaryOnGrounds(ramp, grounds, AA_GRAPHIC);
 }

@@ -177,7 +177,7 @@ const RICH_TEXT_CLASS =
   '[&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 ' +
   '[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-textMuted ' +
   '[&_code]:font-mono [&_code]:text-xs [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-surface [&_pre]:p-2 ' +
-  '[&_a]:text-primary-600 [&_a]:underline [&_hr]:my-3 [&_hr]:border-border';
+  '[&_a]:text-primaryText [&_a]:underline [&_hr]:my-3 [&_hr]:border-border';
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

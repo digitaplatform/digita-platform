@@ -148,7 +148,7 @@ describe("the top bar on phones and tablets", () => {
       drawHeader(ITEMS);
       const [events] = shown('a[href="/events"]', viewport);
       expect(events!.getAttribute("aria-current")).toBe("page");
-      expect(events!.className).toContain("text-primary-600");
+      expect(events!.className).toContain("text-primaryText");
     });
 
     it(`PLANTED INNOCENT: leaves the icon of another page unmarked at ${viewport} px`, () => {
@@ -156,7 +156,7 @@ describe("the top bar on phones and tablets", () => {
       drawHeader(ITEMS);
       const [about] = shown('a[href="/about"]', viewport);
       expect(about!.hasAttribute("aria-current")).toBe(false);
-      expect(about!.className).not.toContain("text-primary-600");
+      expect(about!.className).not.toContain("text-primaryText");
     });
   }
 

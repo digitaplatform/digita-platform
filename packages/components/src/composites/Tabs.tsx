@@ -60,7 +60,7 @@ export const Tabs = forwardRef<HTMLDivElement, TabsProps>(function Tabs(
               'inline-flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition duration-base ease-smooth focus-visible:outline-none focus-visible:shadow-focus',
               // An unselected tab whose badge reports an error reads as the error, not as muted.
               selected
-                ? 'border-primary-600 text-primary-600'
+                ? 'border-primaryGraphic text-primaryText'
                 : 'border-transparent text-textMuted hover:text-textMain [&:has([data-color=error])]:text-error [&:has([data-color=error])]:hover:text-error',
             )}
           >

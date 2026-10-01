@@ -32,7 +32,7 @@ function Panel({ title, badge, children }: { title: string; badge: string; child
     <div className="overflow-hidden rounded-card border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
         <span className="font-mono text-xs text-textMuted">{title}</span>
-        <span className="rounded-full bg-primary-50 px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-primary-600">
+        <span className="rounded-full bg-primaryContainer px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-onPrimaryContainer">
           {badge}
         </span>
       </div>
@@ -71,20 +71,20 @@ export default function MetadataDemo() {
                 <span className="text-textMuted">{"{"}</span>
                 <motion.span variants={row(0)} className="block">
                   {"  "}
-                  <span className="text-primary-600">&quot;naming&quot;</span>: <span className="text-textMain">&quot;SO-{"{####:fiscal_year}"}&quot;</span>,
+                  <span className="text-primaryText">&quot;naming&quot;</span>: <span className="text-textMain">&quot;SO-{"{####:fiscal_year}"}&quot;</span>,
                 </motion.span>
                 <motion.span variants={row(1)} className="block">
                   {"  "}
-                  <span className="text-primary-600">&quot;is_submittable&quot;</span>: <span className="text-textMain">true</span>,{"  "}
+                  <span className="text-primaryText">&quot;is_submittable&quot;</span>: <span className="text-textMain">true</span>,{"  "}
                   <span className="text-textMuted">// docstatus + workflow</span>
                 </motion.span>
                 <motion.span variants={row(2)} className="block">
                   {"  "}
-                  <span className="text-primary-600">&quot;states&quot;</span>: [draft → confirmed → delivered],
+                  <span className="text-primaryText">&quot;states&quot;</span>: [draft → confirmed → delivered],
                 </motion.span>
                 <motion.span variants={row(3)} className="block">
                   {"  "}
-                  <span className="text-primary-600">&quot;fields&quot;</span>: [
+                  <span className="text-primaryText">&quot;fields&quot;</span>: [
                 </motion.span>
                 <motion.span variants={row(4)} className="block">
                   {"    { customer, "}
@@ -105,7 +105,7 @@ export default function MetadataDemo() {
                 </motion.span>
                 <motion.span variants={row(8)} className="block">
                   {"  "}
-                  <span className="text-primary-600">&quot;hooks&quot;</span>: {"{ computeTotals, checkCreditLimit }"}
+                  <span className="text-primaryText">&quot;hooks&quot;</span>: {"{ computeTotals, checkCreditLimit }"}
                 </motion.span>
                 <span className="text-textMuted">{"}"}</span>
               </code>
@@ -133,16 +133,16 @@ export default function MetadataDemo() {
                   <span className="text-textMuted">{"{"}</span>
                   <motion.span variants={row(0)} className="block">
                     {"  "}
-                    <span className="text-primary-600">&quot;_id&quot;</span>: <span className="text-textMain">&quot;SO-2026-0042&quot;</span>,{"  "}
+                    <span className="text-primaryText">&quot;_id&quot;</span>: <span className="text-textMain">&quot;SO-2026-0042&quot;</span>,{"  "}
                     <span className="text-textMuted">// naming series</span>
                   </motion.span>
                   <motion.span variants={row(1)} className="block">
                     {"  "}
-                    <span className="text-primary-600">&quot;customer&quot;</span>: <span className="text-textMain">&quot;Veloluck GmbH&quot;</span>,
+                    <span className="text-primaryText">&quot;customer&quot;</span>: <span className="text-textMain">&quot;Veloluck GmbH&quot;</span>,
                   </motion.span>
                   <motion.span variants={row(2)} className="block">
                     {"  "}
-                    <span className="text-primary-600">&quot;lines&quot;</span>: [
+                    <span className="text-primaryText">&quot;lines&quot;</span>: [
                   </motion.span>
                   {LINES.map((l, i) => (
                     <motion.span key={l.product} variants={row(3 + i)} className="block">
@@ -156,13 +156,13 @@ export default function MetadataDemo() {
                   </motion.span>
                   <motion.span variants={row(6)} className="block">
                     {"  "}
-                    <span className="text-primary-600">&quot;grand_total&quot;</span>: <span className="text-textMain">{GRAND.toFixed(2)}</span>,{"  "}
+                    <span className="text-primaryText">&quot;grand_total&quot;</span>: <span className="text-textMain">{GRAND.toFixed(2)}</span>,{"  "}
                     <span className="text-textMuted">// raw (JSON)</span>
                   </motion.span>
                   <motion.span variants={row(7)} className="block">
                     {"  "}
-                    <span className="text-primary-600">&quot;status&quot;</span>: <span className="text-textMain">&quot;confirmed&quot;</span>,{" "}
-                    <span className="text-primary-600">&quot;docstatus&quot;</span>: <span className="text-textMain">1</span>
+                    <span className="text-primaryText">&quot;status&quot;</span>: <span className="text-textMain">&quot;confirmed&quot;</span>,{" "}
+                    <span className="text-primaryText">&quot;docstatus&quot;</span>: <span className="text-textMain">1</span>
                   </motion.span>
                   <span className="text-textMuted">{"}"}</span>
                 </code>

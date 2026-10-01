@@ -74,7 +74,7 @@ function DataRain({ columns }: { columns: string[][] }) {
         return (
           <div
             key={column.left}
-            className="absolute top-0 !animate-[rain-fall_var(--rain-duration)_linear_var(--rain-delay)_infinite] whitespace-pre font-mono text-xs leading-10 text-primary-600"
+            className="absolute top-0 !animate-[rain-fall_var(--rain-duration)_linear_var(--rain-delay)_infinite] whitespace-pre font-mono text-xs leading-10 text-primaryGraphic"
             style={{ left: column.left, "--rain-duration": column.duration, "--rain-delay": column.delay } as CSSProperties}
           >
             {[...half, ...half].join("\n")}

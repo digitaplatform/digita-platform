@@ -33,7 +33,7 @@ export interface ContactSheetTexts extends FormFailureTexts {
 }
 
 const FIELD =
-  "w-full rounded-input border border-border bg-background px-3 py-3 text-base text-textMain placeholder:text-textMuted focus:border-primary-600 focus:shadow-focus focus:outline-none";
+  "w-full rounded-input border border-border bg-background px-3 py-3 text-base text-textMain placeholder:text-textMuted focus:border-primaryGraphic focus:shadow-focus focus:outline-none";
 const LABEL = "flex flex-col gap-1.5 text-sm font-semibold text-textMain";
 
 /**
@@ -129,13 +129,13 @@ function ContactPanel({ locale, texts, contactEmail, bookingUrl, privacyHref, re
                 href={bookingUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between gap-3 rounded-card border border-primary-600 bg-subtle px-4 py-4 font-semibold text-textMain hover:bg-bgHover focus-visible:shadow-focus focus-visible:outline-none"
+                className="flex items-center justify-between gap-3 rounded-card border border-primaryGraphic bg-subtle px-4 py-4 font-semibold text-textMain hover:bg-bgHover focus-visible:shadow-focus focus-visible:outline-none"
               >
                 <span className="flex items-center gap-3">
-                  <CalendarDays className="h-5 w-5 text-primary-600" aria-hidden="true" />
+                  <CalendarDays className="h-5 w-5 text-primaryGraphic" aria-hidden="true" />
                   {texts.book}
                 </span>
-                <ArrowRight className="h-4 w-4 text-primary-600" aria-hidden="true" />
+                <ArrowRight className="h-4 w-4 text-primaryGraphic" aria-hidden="true" />
               </a>
               <div className="flex items-center gap-3 text-xs text-textMuted">
                 <span className="h-px flex-1 bg-border" />

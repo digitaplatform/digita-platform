@@ -12,7 +12,7 @@ export function Pillars({ props }: { props?: P }) {
       <div className={`grid gap-5 ${COLUMNS(items.length)}`}>
         {items.map((item, i) => (
           <Card key={i} variant="default" className={cardClass}>
-            {s(item, "num") && <p className="font-mono text-xs tracking-wider text-primary-600">{s(item, "num")}</p>}
+            {s(item, "num") && <p className="font-mono text-xs tracking-wider text-primaryText">{s(item, "num")}</p>}
             <h3 className="font-display text-xl font-semibold text-textMain">{s(item, "title")}</h3>
             {s(item, "body") && <p className="text-sm leading-relaxed text-textMuted">{s(item, "body")}</p>}
           </Card>

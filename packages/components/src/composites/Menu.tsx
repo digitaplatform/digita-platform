@@ -179,7 +179,7 @@ export function MenuItem({ onSelect, children, icon, danger, checked, disabled, 
     >
       {radio ? (
         <CheckMark
-          className={cn('h-4 w-4 shrink-0 text-primary-600', checked ? 'opacity-100' : 'opacity-0')}
+          className={cn('h-4 w-4 shrink-0 text-primaryGraphic', checked ? 'opacity-100' : 'opacity-0')}
         />
       ) : icon ? (
         <span className="flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">

@@ -17,7 +17,7 @@ export function Compare({ props }: { props?: P }) {
             <th scope="col" className="pb-4 pr-6 font-mono text-xs font-medium uppercase tracking-widest text-textMuted">
               {columnA}
             </th>
-            <th scope="col" className="pb-4 pl-6 font-mono text-xs font-medium uppercase tracking-widest text-primary-600">
+            <th scope="col" className="pb-4 pl-6 font-mono text-xs font-medium uppercase tracking-widest text-primaryText">
               {columnB}
             </th>
           </tr>
@@ -32,8 +32,8 @@ export function Compare({ props }: { props?: P }) {
                 <span className="mb-1 block font-mono text-xs uppercase tracking-widest md:hidden">{columnA}</span>
                 {s(row, "a")}
               </td>
-              <td className="block border-l-2 border-primary-600 pl-4 align-top text-sm font-medium leading-relaxed text-textMain md:table-cell md:border-l md:py-5 md:pl-6">
-                <span className="mb-1 block font-mono text-xs uppercase tracking-widest text-primary-600 md:hidden">{columnB}</span>
+              <td className="block border-l-2 border-primaryGraphic pl-4 align-top text-sm font-medium leading-relaxed text-textMain md:table-cell md:border-l md:py-5 md:pl-6">
+                <span className="mb-1 block font-mono text-xs uppercase tracking-widest text-primaryText md:hidden">{columnB}</span>
                 {s(row, "b")}
               </td>
             </tr>

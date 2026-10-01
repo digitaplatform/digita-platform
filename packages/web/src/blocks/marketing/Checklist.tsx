@@ -10,7 +10,7 @@ export function Checklist({ props }: { props?: P }) {
       <ul className={`grid gap-x-8 ${columns}`}>
         {items.map((item, i) => (
           <li key={i} className="flex gap-3 border-t border-border py-4">
-            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-primary-600">
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-primaryGraphic">
               <path d="M5 10.5l3.5 3.5L15 6.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <div className="flex flex-col gap-1">

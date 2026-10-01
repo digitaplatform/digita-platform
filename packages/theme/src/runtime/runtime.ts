@@ -1,7 +1,7 @@
 import { COLOR_PALETTES, type PaletteName } from '../tokens/palettes.js';
-import { cssVarName } from '../tokens/index.js';
+import { cssVarName, semantic } from '../tokens/index.js';
 import { synthesizeRamp } from '../tokens/synthesize.js';
-import { onPrimaryFor, primaryHoverFor } from '../tokens/on-primary.js';
+import { onPrimaryFor, primaryGraphicFor, primaryHoverFor, primaryTextFor } from '../tokens/on-primary.js';
 import { TINT_PALETTES, type TintKey } from '../tokens/tints.js';
 import { DEFAULT_DESIGN_ID, DESIGNS, getDesign } from '../designs/index.js';
 import { getRuntimeDesign } from '../designs/runtime-registry.js';
@@ -105,15 +105,38 @@ function clearRamp(target: HTMLElement, name: 'primary' | 'accent'): void {
 function tintRoleProperties(ramp: Record<string, string>, properties: Record<string, string>): void {
   properties[cssVarName('onPrimary')] = onPrimaryFor(ramp);
   properties[cssVarName('primaryHover')] = primaryHoverFor(ramp);
+  pageRoleProperties(ramp, DEFAULT_PAGE_GROUNDS, properties);
   const { 100: c100, 800: c800, 900: c900 } = ramp;
   if (!c100 || !c800 || !c900) return;
   properties[cssVarName('primaryContainer')] = `light-dark(${c100}, ${c800})`;
   properties[cssVarName('onPrimaryContainer')] = `light-dark(${c900}, ${c100})`;
 }
 
+/** The grounds the primary colour is drawn on in each mode: the canvas and the surface. */
+export interface PageGrounds {
+  light: string[];
+  dark: string[];
+}
+
+const DEFAULT_PAGE_GROUNDS: PageGrounds = {
+  light: [semantic.light.bg, semantic.light.surface],
+  dark: [semantic.dark.bg, semantic.dark.surface],
+};
+
+/** The primary colour as text and as a graphic on the page, a `light-dark()` pair each, because a
+ *  step that reaches the contrast on a light canvas misses it on a dark one. */
+export function pageRoleProperties(ramp: Record<string, string>, grounds: PageGrounds, properties: Record<string, string>): void {
+  properties[cssVarName('primaryText')] =
+    `light-dark(${primaryTextFor(ramp, grounds.light)}, ${primaryTextFor(ramp, grounds.dark)})`;
+  properties[cssVarName('primaryGraphic')] =
+    `light-dark(${primaryGraphicFor(ramp, grounds.light)}, ${primaryGraphicFor(ramp, grounds.dark)})`;
+}
+
 function clearTintRoles(target: HTMLElement): void {
   target.style.removeProperty(cssVarName('onPrimary'));
   target.style.removeProperty(cssVarName('primaryHover'));
+  target.style.removeProperty(cssVarName('primaryText'));
+  target.style.removeProperty(cssVarName('primaryGraphic'));
   target.style.removeProperty(cssVarName('primaryContainer'));
   target.style.removeProperty(cssVarName('onPrimaryContainer'));
 }

@@ -118,7 +118,7 @@ describe("the code-app plugin", () => {
     expect(html).toContain('aria-label="Show the code behind the form"');
     expect(html).toContain("hover or tap to see the code");
     // Keys take the accent, comments are muted.
-    expect(html).toContain('<span class="text-primary-600">&quot;name&quot;</span>');
+    expect(html).toContain('<span class="text-primaryText">&quot;name&quot;</span>');
     expect(html).toContain('<span class="text-textMuted">// the entity</span>');
   });
 
