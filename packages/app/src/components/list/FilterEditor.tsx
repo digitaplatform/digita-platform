@@ -420,7 +420,7 @@ function LinkFilterValue({
         setPicked({ id: opt.id, label: opt.label });
         onValue(opt.id);
       }}
-      placeholder={field.target ? tc('ui.link.searchEntity', { entity: field.target }) : tc('ui.list.search')}
+      placeholder={tc('ui.link.searchField', { field: field.label })}
       loadingLabel={tc('ui.link.searching')}
       emptyLabel={tc('ui.select.noResults')}
       ariaLabel={tc('ui.filter.value')}

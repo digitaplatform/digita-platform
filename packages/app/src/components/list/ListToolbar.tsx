@@ -645,7 +645,7 @@ function QuickLinkFilter({
         setPickedRecord({ id: option.id, label: option.label });
         onValue(option.id);
       }}
-      placeholder={tc('ui.link.searchEntity', { entity: target })}
+      placeholder={tc('ui.link.searchField', { field: label })}
       loadingLabel={tc('ui.link.searching')}
       emptyLabel={tc('ui.select.noResults')}
       ariaLabel={label}
