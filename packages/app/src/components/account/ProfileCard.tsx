@@ -29,7 +29,9 @@ export function ProfileCard({ user, languages, onSave, saving, error }: ProfileC
   const [fullName, setFullName] = useState(user.full_name ?? '');
   const [language, setLanguage] = useState(user.language ?? '');
 
-  const dirty = fullName.trim() !== (user.full_name ?? '').trim() || language !== (user.language ?? '');
+  const nameChanged = fullName.trim() !== (user.full_name ?? '').trim();
+  const languageChanged = language !== (user.language ?? '');
+  const dirty = nameChanged || languageChanged;
 
   const langOptions = [
     { value: '', label: tc('ui.account.profile.languageDefault') },
@@ -42,9 +44,11 @@ export function ProfileCard({ user, languages, onSave, saving, error }: ProfileC
   const submit = (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!dirty || saving) return;
+    // digita-auth keeps a field the body leaves out and stores an empty one ("" clears the
+    // language), so a changed field goes out even when empty and an unchanged one stays out.
     onSave({
-      full_name: fullName.trim() === '' ? undefined : fullName.trim(),
-      language: language === '' ? undefined : language,
+      full_name: nameChanged ? fullName.trim() : undefined,
+      language: languageChanged ? language : undefined,
     });
   };
 
