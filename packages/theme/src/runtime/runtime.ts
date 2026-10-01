@@ -289,18 +289,21 @@ export function pointerDefaultDensity(): Density {
   return 'comfortable';
 }
 
-/** Initial density: the stored user choice ALWAYS wins; otherwise default by
- *  pointer type (see pointerDefaultDensity). Resolution is synchronous — call
+/** Initial density: the stored user choice ALWAYS wins; otherwise the tenant's
+ *  density, else the default by pointer type (see pointerDefaultDensity). Resolution is synchronous — call
  *  `applyDensity(resolveInitialDensity())` once in the boot script before
  *  first paint, so the value is applied exactly once (no double-apply flash). */
-export function resolveInitialDensity(storageKey: string = DENSITY_STORAGE_KEY): Density {
+export function resolveInitialDensity(
+  storageKey: string = DENSITY_STORAGE_KEY,
+  tenantDensity?: Density | null,
+): Density {
   try {
     const stored = localStorage.getItem(storageKey);
     if (stored === 'comfortable' || stored === 'compact' || stored === 'spacious') return stored;
   } catch {
-    /* private mode — fall through to the pointer default */
+    /* private mode — fall through to the tenant's or the pointer default */
   }
-  return pointerDefaultDensity();
+  return tenantDensity ?? pointerDefaultDensity();
 }
 
 /** Initial mode from localStorage, else `system` (follow the OS preference live). */
