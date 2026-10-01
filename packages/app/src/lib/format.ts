@@ -158,6 +158,47 @@ export function fromDatetimeInput(text: string, timezone: string | null | undefi
   return new Date(wall - zoneOffset(first, timezone)).toISOString();
 }
 
+/** A wall time `HH:mm` as the list writes the time of a Datetime in the locale (12/24h per locale). */
+export function formatWallTime(time: string, locale: string | undefined): string {
+  const m = /^(\d{2}):(\d{2})$/.exec(time);
+  if (!m) return time;
+  return new Intl.DateTimeFormat(loc(locale), { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }).format(
+    new Date(Date.UTC(1970, 0, 1, Number(m[1]), Number(m[2]))),
+  );
+}
+
+/** The marks of the morning and the afternoon in a locale, lower case and without dots or spaces. */
+function dayPeriods(locale: string | undefined): { am: string[]; pm: string[] } {
+  const f = new Intl.DateTimeFormat(loc(locale), { hour: 'numeric', hour12: true, timeZone: 'UTC' });
+  const mark = (hour: number) =>
+    normalizePeriod(f.formatToParts(new Date(Date.UTC(1970, 0, 1, hour))).find((p) => p.type === 'dayPeriod')?.value ?? '');
+  return { am: ['am', mark(1)].filter(Boolean), pm: ['pm', mark(13)].filter(Boolean) };
+}
+
+function normalizePeriod(text: string): string {
+  return text.toLowerCase().replace(/[.\s]/g, '');
+}
+
+/** The `HH:mm` wall time of a time a person typed: hour and minutes apart by a colon or a dot, on a
+ *  24-hour clock or with the locale's mark of morning or afternoon; undefined for any other text. */
+export function parseWallTime(text: string, locale: string | undefined): string | undefined {
+  const m = /^\s*(\d{1,2})(?:[:.](\d{2}))?\s*(.*?)\s*$/.exec(text);
+  if (!m) return undefined;
+  let hour = Number(m[1]);
+  const minute = Number(m[2] ?? 0);
+  const mark = normalizePeriod(m[3] ?? '');
+  if (minute > 59) return undefined;
+  if (mark) {
+    const { am, pm } = dayPeriods(locale);
+    if (hour < 1 || hour > 12) return undefined;
+    if (am.includes(mark)) hour %= 12;
+    else if (pm.includes(mark)) hour = (hour % 12) + 12;
+    else return undefined;
+  } else if (hour > 23) return undefined;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(hour)}:${pad(minute)}`;
+}
+
 /** Percent — the value is already a percentage number (e.g. 42.5 → "42.5 %"),
  *  not a 0–1 ratio, so the number is locale-formatted and a "%" appended. */
 export function formatPercent(value: unknown, locale: string | undefined, precision = 2): string {

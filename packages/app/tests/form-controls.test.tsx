@@ -465,20 +465,19 @@ describe('Datetime', () => {
   it('draws the stored moment in the time zone of the person and emits the edited time as UTC', async () => {
     useSessionStore.setState({ locale: { code: 'en', format_locale: 'en', timezone: 'Europe/Zurich' } });
     const { onFieldChange } = drawField(buildField('Datetime'), '2026-09-28T10:30:45.000Z');
-    const input = await screen.findByLabelText('Thing');
-    expect(input).toHaveAttribute('type', 'datetime-local');
-    expect(input).toHaveValue('2026-09-28T12:30');
+    expect(await screen.findByRole('button', { name: 'Thing' })).toHaveTextContent('09/28/2026');
+    const time = screen.getByRole('textbox', { name: /^Thing/ });
+    expect(time).toHaveValue('12:30 PM');
 
-    fireEvent.change(input, { target: { value: '2026-10-01T08:15' } });
-    expect(onFieldChange).toHaveBeenLastCalledWith('thing', '2026-10-01T06:15:00.000Z');
-
-    fireEvent.change(input, { target: { value: '' } });
-    expect(onFieldChange).toHaveBeenLastCalledWith('thing', undefined);
+    fireEvent.change(time, { target: { value: '8:15 AM' } });
+    fireEvent.blur(time);
+    expect(onFieldChange).toHaveBeenLastCalledWith('thing', '2026-09-28T06:15:00.000Z');
   });
 
   it('locks the input while it is read-only', async () => {
     drawField(buildField('Datetime'), '2026-09-28T10:30', { readOnly: true });
-    expect(await screen.findByLabelText('Thing')).toHaveAttribute('readonly');
+    expect(await screen.findByRole('button', { name: 'Thing' })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: /^Thing/ })).toHaveAttribute('readonly');
   });
 });
 
