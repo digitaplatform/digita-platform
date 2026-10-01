@@ -229,7 +229,7 @@ export class PermissionChecker {
     if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return false;
     const entity = this.registry.get(entityName);
     return permissionRowsFor(entity, user).some(
-      (p) => p.level === 0 && !!p.read && !!p.condition && user.roles.includes(p.role),
+      (p) => canGrantActionTo(p, user.roles) && !!p.read && !!p.condition,
     );
   }
 
@@ -467,7 +467,7 @@ export class PermissionChecker {
     const entity = this.registry.get(entityName);
     const fields = new Set<string>(["_id", "docstatus", entity.workflow_field ?? "status"]);
     for (const perm of permissionRowsFor(entity, user)) {
-      if (perm.level !== 0 || !perm.read || !user.roles.includes(perm.role)) continue;
+      if (!canGrantActionTo(perm, user.roles) || !perm.read) continue;
       if (perm.if_owner) fields.add("owner");
       if (perm.scope) fields.add(perm.scope.field);
       if (perm.condition) {
