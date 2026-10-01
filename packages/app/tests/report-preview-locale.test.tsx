@@ -6,7 +6,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { EntityDefinition, EntityReportLink } from '@digitaplatform/shared';
 import { readBundle } from '@digitaplatform/shared/i18n-node';
 import { ReportPreviewDialog } from '@digitaplatform/components';
@@ -69,13 +68,7 @@ describe('the print preview of a record, in German', () => {
 
 describe('the print button of a list row, in German', () => {
   it('is named by the German print text when its link has no label', () => {
-    render(
-      <MemoryRouter initialEntries={['/Invoice']}>
-        <Routes>
-          <Route path="/:entity" element={<RowPrintButton link={{ report: 'invoice' }} doc={DOC} onPrint={() => {}} />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    render(<RowPrintButton link={{ report: 'invoice' }} doc={DOC} onPrint={() => {}} />);
 
     expect(screen.getByRole('button', { name: germanText('ui.action.print') })).toBeInTheDocument();
   });

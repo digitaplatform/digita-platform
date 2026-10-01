@@ -3,9 +3,8 @@ import type { EntityDefinition, EntityReportLink } from '@digitaplatform/shared'
 import { Button, ReportPreviewDialog } from '@digitaplatform/components';
 import { ChevronDown, Printer } from 'lucide-react';
 import { useSessionStore } from '@/stores/session';
-import { useI18nStore } from '@/stores/i18n';
 import { hasEntityPermission, type PermAction } from '@/lib/permissions';
-import { reportLinkLabel, reportLinkVisible, reportRenderUrl, resolveReportParams } from '@/lib/report-link';
+import { reportLinkVisible, reportRenderUrl, resolveReportParams } from '@/lib/report-link';
 import { useChrome } from '@/lib/chrome-i18n';
 import { tid } from '@/lib/testid';
 
@@ -20,7 +19,6 @@ type Doc = Record<string, unknown>;
 export function PrintMenu({ meta, doc }: { meta: EntityDefinition; doc: Doc }) {
   const user = useSessionStore((s) => s.user);
   const tc = useChrome();
-  const translations = useI18nStore((s) => s.translations);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<EntityReportLink | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -67,7 +65,7 @@ export function PrintMenu({ meta, doc }: { meta: EntityDefinition; doc: Doc }) {
           {...tid.action('print')}
         >
           <Printer className="h-4 w-4" aria-hidden="true" />
-          {reportLinkLabel(meta.name, links[0]!, translations) ?? tc('ui.action.print')}
+          {links[0]!.label ?? tc('ui.action.print')}
         </Button>
       ) : (
         <div className="relative" ref={menuRef}>
@@ -86,7 +84,7 @@ export function PrintMenu({ meta, doc }: { meta: EntityDefinition; doc: Doc }) {
                   {...tid.action(`print:${link.report}`)}
                   onClick={() => openPreview(link)}
                 >
-                  {reportLinkLabel(meta.name, link, translations) ?? link.report}
+                  {link.label ?? link.report}
                 </button>
               ))}
             </div>
@@ -97,7 +95,7 @@ export function PrintMenu({ meta, doc }: { meta: EntityDefinition; doc: Doc }) {
         <ReportPreviewDialog
           open
           onClose={() => setActive(null)}
-          title={reportLinkLabel(meta.name, active, translations) ?? active.report}
+          title={active.label ?? active.report}
           src={reportRenderUrl(active.report, params, 'html')}
           printHref={reportRenderUrl(active.report, params, 'html', { print: true })}
           downloads={formats

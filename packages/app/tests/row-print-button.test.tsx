@@ -47,6 +47,7 @@ afterAll(() => {
 const state = vi.hoisted(() => ({
   meta: {} as unknown,
   rows: [] as Array<Record<string, unknown>>,
+  translations: {} as Record<string, string>,
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -54,8 +55,9 @@ vi.mock('react-router-dom', () => ({
   useSearchParams: () => [new URLSearchParams(), vi.fn()],
   useNavigate: () => vi.fn(),
 }));
-vi.mock('@/hooks/useMeta', () => ({
-  useMeta: () => ({ data: state.meta, isLoading: false, isError: false }),
+// The meta service answers the raw entity file; the list localizes it through useMeta.
+vi.mock('@/services/meta', () => ({
+  getEntityMeta: async () => ({ success: true, status_code: 200, messages: [], data: state.meta }),
 }));
 vi.mock('@/hooks/useList', () => ({
   useList: () => ({
@@ -80,7 +82,7 @@ vi.mock('@/stores/session', () => ({
 vi.mock('@/stores/i18n', () => ({
   useI18nStore: (select: (state: Record<string, unknown>) => unknown) =>
     select({
-      translations: {},
+      translations: state.translations,
       t: (key: string) => key,
       tField: (_entity: string, _field: string, fallback?: string) => fallback ?? '',
       tOption: (_entity: string, _field: string, value: string) => value,
@@ -122,6 +124,7 @@ function drawList(reports: EntityReportLink[], permissions: Array<Record<string,
 }
 
 beforeEach(() => {
+  state.translations = {};
   state.rows = [
     { _id: 'INV-1', title: 'First invoice', docstatus: 0 },
     { _id: 'INV-2', title: 'Second invoice', docstatus: 1 },
@@ -234,6 +237,17 @@ describe('the print button of a row in a list', () => {
     await screen.findByTestId('row:INV-1');
 
     expect(screen.queryByRole('button', { name: 'Print delivery note' })).toBeNull();
+  });
+
+  it('names the button and titles the preview by the translated label of the link', async () => {
+    const user = userEvent.setup();
+    state.translations = { 'report.Invoice.invoice': 'Rechnung drucken' };
+    drawList([INVOICE_LINK]);
+    const [second] = await screen.findAllByRole('button', { name: 'Rechnung drucken' });
+
+    await user.click(second!);
+
+    expect(await screen.findByRole('dialog', { name: 'Rechnung drucken' })).toBeInTheDocument();
   });
 
   it('is left out of the list for an entity that has no report link', async () => {
