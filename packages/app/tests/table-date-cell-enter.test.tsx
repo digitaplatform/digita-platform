@@ -73,7 +73,7 @@ vi.mock('@/components/render/cells', () => ({
 }));
 vi.mock('@/stores/i18n', () => ({
   useI18nStore: (sel: (s: Record<string, unknown>) => unknown) =>
-    sel({ tField: (_e: string, _f: string, label: string) => label }),
+    sel({}),
 }));
 vi.mock('@/stores/session', () => ({
   useSessionStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ user: {}, locale: undefined }),
