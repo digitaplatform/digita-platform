@@ -208,3 +208,17 @@ describe('TreeView with names that open groups (expandOnNameClick)', () => {
     expect(screen.getByText('Leaf')).toBeInTheDocument();
   });
 });
+
+describe('TreeView empty text under a search', () => {
+  it('says so when a query hides every node', () => {
+    render(<TreeView nodes={nodes} query="nothing like it" emptyLabel="No results" />);
+    expect(screen.getByText('No results')).toBeInTheDocument();
+    expect(screen.queryByRole('tree')).toBeNull();
+  });
+
+  it('shows the matches and no empty text when a query finds a node', () => {
+    render(<TreeView nodes={nodes} query="total" emptyLabel="No results" />);
+    expect(screen.getByText('total')).toBeInTheDocument();
+    expect(screen.queryByText('No results')).toBeNull();
+  });
+});

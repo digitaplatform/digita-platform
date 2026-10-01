@@ -213,7 +213,8 @@ export function TreeView({
     }
   };
 
-  if (nodes.length === 0) {
+  // A search that hides every node says so: an empty bordered box would read as a tree still loading.
+  if (nodes.length === 0 || (q && flat.length === 0)) {
     return (
       <div className={cn('px-3 py-6 text-center text-sm text-textMuted', className)}>{emptyLabel}</div>
     );

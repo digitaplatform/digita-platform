@@ -102,6 +102,23 @@ describe('Groups page search', () => {
   });
 });
 
+describe('Groups page search without a match', () => {
+  it('says that no group matches the query', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(findSearchBox(), 'nowhere');
+    expect(screen.getByText('ui.select.noResults')).toBeInTheDocument();
+    expect(findRow('G-1')).toBeNull();
+  });
+
+  it('shows no such text while a group matches', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(findSearchBox(), 'swi');
+    expect(screen.queryByText('ui.select.noResults')).toBeNull();
+  });
+});
+
 describe('Groups page row actions on a filtered tree', () => {
   it('adds a child under a match, with the path of the match', async () => {
     const user = userEvent.setup();
