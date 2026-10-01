@@ -82,6 +82,9 @@ export function SearchDialog<Row>({
     // A fresh result set arrived: ignore any stray hover until the pointer
     // truly moves again, so Enter picks the first result, not a hovered row.
     pointerMoved.current = false;
+    // The list can still stand where a person scrolled the previous rows, and setActive(0) scrolls
+    // nothing when the first row was already active: start at the top, where the row Enter picks is.
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
   }, [rowsKey]);
 
   // Keep the highlighted row scrolled into view during arrow navigation.

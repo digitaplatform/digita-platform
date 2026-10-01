@@ -107,3 +107,23 @@ describe('a search dialog keeps its rows while the next query loads', () => {
     expect(screen.getByText('Searching…')).toBeInTheDocument();
   });
 });
+
+describe('a search dialog shows a new answer from its first row', () => {
+  it('scrolls the results back to the top when a new answer lands, so the row Enter picks is in view', () => {
+    const view = render(<Search rows={ROWS} />);
+    const results = screen.getByRole('table').parentElement!;
+    // A person wheel-scrolled the list: the highlight stays on the first row.
+    results.scrollTop = 300;
+    view.rerender(<Search rows={[{ _id: 'c', name: 'Zug Pharma' }]} />);
+    expect(results.scrollTop).toBe(0);
+    expect(screen.getByText('Zug Pharma').closest('tr')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('keeps the scroll while the rows stay the same, as they do under the busy mark', () => {
+    const view = render(<Search rows={ROWS} />);
+    const results = screen.getByRole('table').parentElement!;
+    results.scrollTop = 300;
+    view.rerender(<Search rows={ROWS.map((row) => ({ ...row }))} stale />);
+    expect(results.scrollTop).toBe(300);
+  });
+});
