@@ -10,6 +10,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ContactSheet } from "../src/components/ContactSheet";
 import { contactSheetTexts } from "../src/components/chrome-texts";
+import { t } from "../src/i18n/messages";
 import { Stack } from "../src/blocks/marketing/Stack";
 import { closeContactSheet, openContactSheet } from "../src/lib/contact-sheet";
 import { setSiteEnv } from "./site-env";
@@ -97,22 +98,36 @@ afterEach(async () => {
   await act(async () => root?.unmount());
   root = null;
   document.body.innerHTML = "";
+  vi.unstubAllGlobals();
 });
+
+async function openSheet(locale: "en" | "de") {
+  const container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  const sheet = createElement(ContactSheet, {
+    locale,
+    texts: contactSheetTexts(locale),
+    contactEmail: "hello@example.org",
+    privacyHref: `/${locale}/privacy`,
+    renderedAt: 1_000_000,
+  });
+  await act(async () => root!.render(sheet));
+  await act(async () => openContactSheet());
+}
+
+/** Sends the open sheet, filled in, against a route that answers `response`, and returns what the alert reads. */
+async function sendAgainst(response: Response): Promise<string | null | undefined> {
+  vi.stubGlobal("fetch", vi.fn(async () => response));
+  const filled = { name: "Ada Example", email: "ada@example.org", message: "We want to digitalize." };
+  for (const [name, value] of Object.entries(filled)) (document.querySelector(`[name="${name}"]`) as HTMLInputElement).value = value;
+  await act(async () => document.querySelector("form")!.requestSubmit());
+  return document.querySelector('[role="alert"]')?.textContent;
+}
 
 describe("a German site", () => {
   it("shows the contact sheet in German", async () => {
-    const container = document.createElement("div");
-    document.body.append(container);
-    root = createRoot(container);
-    const sheet = createElement(ContactSheet, {
-      locale: "de",
-      texts: contactSheetTexts("de"),
-      contactEmail: "hello@example.org",
-      privacyHref: "/de/privacy",
-      renderedAt: 1_000_000,
-    });
-    await act(async () => root!.render(sheet));
-    await act(async () => openContactSheet());
+    await openSheet("de");
     const text = document.body.textContent ?? "";
     expect(text).toContain("Nachricht");
     expect(document.querySelector("h2")?.textContent).toBe("Reden wir.");
@@ -125,5 +140,32 @@ describe("a German site", () => {
     const html = renderToStaticMarkup(createElement(Stack, { props: { items: [{ title: "Shop", status: "coming" }] }, locale: "de" }));
     expect(html).toContain(">kommt<");
     expect(html).not.toContain(">coming<");
+  });
+});
+
+describe("the contact sheet with the site's texts", () => {
+  const told = (key: string, values: Record<string, string> = {}) =>
+    `${Object.entries(values).reduce((text, [name, value]) => text.replace(`{${name}}`, value), t(key, "en"))} hello@example.org.`;
+
+  it("PLANTED DEFECT: does not blame the input when the engine cannot take the form (503)", async () => {
+    await openSheet("en");
+    expect(await sendAgainst(Response.json({ ok: false }, { status: 503 }))).toBe(told("contactUnavailable"));
+  });
+
+  it("PLANTED DEFECT: tells a visitor over the budget (429) when to try again", async () => {
+    await openSheet("en");
+    const response = Response.json({ ok: false }, { status: 429, headers: { "Retry-After": "3600" } });
+    expect(await sendAgainst(response)).toBe(told("contactTooMany", { time: "in 1 hour" }));
+  });
+
+  it("PLANTED DEFECT: names the field to correct, by its label", async () => {
+    await openSheet("en");
+    const response = Response.json({ ok: false, field: "email" }, { status: 400 });
+    expect(await sendAgainst(response)).toBe(told("contactInvalidField", { field: t("contactEmail", "en") }));
+  });
+
+  it("PLANTED INNOCENT: still asks for a check of the details when the post was wrong and names no field", async () => {
+    await openSheet("en");
+    expect(await sendAgainst(Response.json({ ok: false }, { status: 400 }))).toBe(told("contactFailed"));
   });
 });

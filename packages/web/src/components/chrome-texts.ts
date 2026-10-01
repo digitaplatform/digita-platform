@@ -25,6 +25,9 @@ export function contactSheetTexts(locale: Locale): ContactSheetTexts {
     send: t("contactSend", locale),
     sent: t("contactSent", locale),
     failed: t("contactFailed", locale),
+    invalidField: t("contactInvalidField", locale),
+    unavailable: t("contactUnavailable", locale),
+    tooMany: t("contactTooMany", locale),
     privacyNote: t("contactPrivacyNote", locale),
     privacy: t("contactPrivacy", locale),
     topics: {
