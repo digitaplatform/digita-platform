@@ -31,6 +31,7 @@ vi.mock('@/hooks/useMeta', () => ({
 
 import LinkControl from '@/controls/LinkControl';
 import { AddViaLinkSearch } from '@/controls/AddViaLinkSearch';
+import { LinkEntryInput } from '@/controls/LinkEntryInput';
 import { useI18nStore } from '@/stores/i18n';
 
 const CODE_NAME = 'CustomerGroup';
@@ -121,6 +122,15 @@ describe.each(SUPPORTED_LANGUAGES)('a Link picker in %s', (language) => {
     render(<AddViaLinkSearch open onClose={() => {}} linkField={buildGroupField(language)} onPick={() => {}} />);
     expect(readDialogTitle()).toContain(LABEL[language]);
     expect(readDialogTitle()).not.toContain(CODE_NAME);
+  });
+
+  it('names the link field of a table by its label in the entry input under its lines', () => {
+    render(<LinkEntryInput linkField={buildGroupField(language)} onPick={() => {}} />);
+    const entry = screen.getByRole('textbox');
+    for (const text of [entry.getAttribute('placeholder'), entry.getAttribute('aria-label')]) {
+      expect(text).toContain(LABEL[language]);
+      expect(text).not.toContain(CODE_NAME);
+    }
   });
 });
 
