@@ -20,6 +20,9 @@ const ENV = {
 type Answer = { status: number; body: unknown };
 let fetchMock: ReturnType<typeof vi.fn>;
 let engineStatus = 201;
+/** What the engine's create answers beside its status: its error body and its headers. */
+let engineBody: unknown = { data: {} };
+let engineHeaders: Record<string, string> = {};
 let address = 0;
 
 async function loadRoute(env: Record<string, string | undefined> = ENV) {
@@ -43,13 +46,17 @@ const valid = () => ({
   rendered_at: Date.now() - 10_000,
 });
 
-async function send(route: Awaited<ReturnType<typeof loadRoute>>, body: unknown, from = `203.0.113.${++address}`): Promise<Answer> {
+async function post(route: Awaited<ReturnType<typeof loadRoute>>, body: unknown, from = `203.0.113.${++address}`): Promise<Response> {
   const req = new NextRequest("http://localhost/api/contact", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-forwarded-for": from },
     body: JSON.stringify(body),
   });
-  const res = await route.POST(req);
+  return route.POST(req);
+}
+
+async function send(route: Awaited<ReturnType<typeof loadRoute>>, body: unknown, from?: string): Promise<Answer> {
+  const res = await post(route, body, from);
   return { status: res.status, body: await res.json() };
 }
 
@@ -57,11 +64,13 @@ const calls = (part: string) => fetchMock.mock.calls.filter(([url]) => String(ur
 
 beforeEach(() => {
   engineStatus = 201;
+  engineBody = { data: {} };
+  engineHeaders = {};
   fetchMock = vi.fn(async (url: string) => {
     if (url.includes("/api/v1/public/resource/WebSite")) {
       return Response.json({ data: [{ _id: "simetrix", site_name: "simetrix", contact_email: "hello@example.org" }] });
     }
-    if (url.includes("/api/v1/public/resource/ContactRequest")) return Response.json({ data: {} }, { status: engineStatus });
+    if (url.includes("/api/v1/public/resource/ContactRequest")) return Response.json(engineBody, { status: engineStatus, headers: engineHeaders });
     throw new Error(`unexpected fetch ${url}`);
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -159,6 +168,37 @@ describe("POST /api/contact", () => {
     expect((await send(route, valid(), "198.51.100.7")).status).toBe(429);
     vi.advanceTimersByTime(1);
     expect((await send(route, valid(), "198.51.100.7")).status).toBe(200);
+  });
+
+  it("PLANTED DEFECT: passes the engine's 400 through with the field it names, so the sheet names the field to correct", async () => {
+    const route = await loadRoute();
+    engineStatus = 400;
+    engineBody = { error: { code: "VALIDATION_ERROR", field: "email" } };
+    expect(await send(route, valid())).toEqual({ status: 400, body: { ok: false, message: "Invalid request", field: "email" } });
+  });
+
+  it("PLANTED DEFECT: passes the engine's 429 through with its wait, so the sheet tells the visitor when to try again", async () => {
+    const route = await loadRoute();
+    engineStatus = 429;
+    engineHeaders = { "Retry-After": "120" };
+    const res = await post(route, valid());
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("120");
+  });
+
+  it("PLANTED INNOCENT: names no wait for an engine 429 that names none", async () => {
+    const route = await loadRoute();
+    engineStatus = 429;
+    const res = await post(route, valid());
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBeNull();
+  });
+
+  it("does not blame the visitor for a key the engine does not let Guest set: the site is not set up for it", async () => {
+    const route = await loadRoute();
+    engineStatus = 400;
+    engineBody = { error: { code: "BAD_REQUEST", field: "company" } };
+    expect(await send(route, valid())).toEqual({ status: 503, body: { ok: false, message: "Contact is not configured" } });
   });
 
   it("answers 500 without an internal URL when the engine fails the create", async () => {
