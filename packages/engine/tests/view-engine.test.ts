@@ -164,6 +164,114 @@ describe("ViewEngine — link section whose optional param the request omits", (
   });
 });
 
+describe("ViewEngine — link section", () => {
+  const linkView = (fields?: string[]) =>
+    makeView({
+      anchored: false,
+      source: undefined,
+      params: [{ name: "customer", type: "string" }],
+      sections: [
+        { key: "customer", kind: "link", entity: "customer", target: "$param.customer", ...(fields ? { fields } : {}) },
+      ],
+    });
+  const row = { _id: "CUST-1", name: "Acme AG", city: "Arth" };
+
+  it("returns the linked row, read as the caller, and names its entity", async () => {
+    const deps = makeDeps();
+    deps.documentService.getDoc.mockResolvedValue({ toJSON: () => row });
+    const ctx = new ResponseContext();
+    const out = await new ViewEngine(deps as never).execute(linkView(), { query: { customer: "CUST-1" } }, user, ctx);
+    expect(out.sections["customer"]).toEqual(row);
+    expect(out.entities).toEqual({ customer: "customer" });
+    expect(deps.documentService.getDoc).toHaveBeenCalledWith("customer", "CUST-1", user, ctx);
+  });
+
+  it("keeps only the fields the section lists", async () => {
+    const deps = makeDeps();
+    deps.documentService.getDoc.mockResolvedValue({ toJSON: () => row });
+    const out = await new ViewEngine(deps as never).execute(
+      linkView(["name"]), { query: { customer: "CUST-1" } }, user, new ResponseContext(),
+    );
+    expect(out.sections["customer"]).toEqual({ name: "Acme AG" });
+  });
+
+  it("gives a caller who may not read the target no row, a warning and no entity", async () => {
+    const deps = makeDeps();
+    deps.documentService.getDoc.mockRejectedValue(new PermissionDeniedError("ada@example.com", "customer", "read"));
+    const ctx = new ResponseContext();
+    const out = await new ViewEngine(deps as never).execute(linkView(), { query: { customer: "CUST-1" } }, user, ctx);
+    expect(out.sections["customer"]).toBeNull();
+    expect(out.entities).toEqual({});
+    expect(ctx.getMessages().find((m) => m.path === "/sections/customer")?.code).toBe("omitted_no_permission");
+  });
+
+  it("gives a target that no longer exists no row and the warning omitted_not_found", async () => {
+    const deps = makeDeps();
+    deps.documentService.getDoc.mockRejectedValue(new NotFoundError("customer", "CUST-9"));
+    const ctx = new ResponseContext();
+    const out = await new ViewEngine(deps as never).execute(linkView(), { query: { customer: "CUST-9" } }, user, ctx);
+    expect(out.sections["customer"]).toBeNull();
+    expect(ctx.getMessages().find((m) => m.path === "/sections/customer")?.code).toBe("omitted_not_found");
+  });
+});
+
+describe("ViewEngine — list section expand", () => {
+  const expandView = (as?: string) =>
+    makeView({
+      anchored: false,
+      source: undefined,
+      params: [],
+      sections: [
+        {
+          key: "invoices",
+          kind: "list",
+          entity: "salesInvoice",
+          expand: { field: "customer", entity: "customer", fields: ["name"], ...(as ? { as } : {}) },
+        },
+      ],
+    });
+  const page = (data: Record<string, unknown>[]) => ({ data, total: data.length, page: 1, page_size: 20, total_pages: 1 });
+  const invoices = [
+    { _id: "I-1", customer: "C-1" },
+    { _id: "I-2", customer: "C-2" },
+    { _id: "I-3", customer: "C-1" },
+    { _id: "I-4" },
+  ];
+
+  it("adds the linked row's fields to each row, from one read of the distinct ids made as the caller", async () => {
+    const deps = makeDeps();
+    deps.documentService.getList
+      .mockResolvedValueOnce(page(invoices))
+      .mockResolvedValueOnce(page([{ _id: "C-1", name: "Acme AG" }, { _id: "C-2", name: "Beta GmbH" }]));
+    const ctx = new ResponseContext();
+    const out = await new ViewEngine(deps as never).execute(expandView(), { query: {} }, user, ctx);
+    expect(out.sections["invoices"]).toEqual([
+      { _id: "I-1", customer: "C-1", customer_doc: { _id: "C-1", name: "Acme AG" } },
+      { _id: "I-2", customer: "C-2", customer_doc: { _id: "C-2", name: "Beta GmbH" } },
+      { _id: "I-3", customer: "C-1", customer_doc: { _id: "C-1", name: "Acme AG" } },
+      { _id: "I-4", customer_doc: null },
+    ]);
+    expect(deps.documentService.getList).toHaveBeenCalledTimes(2);
+    const [entity, query, caller, callCtx] = deps.documentService.getList.mock.calls[1]!;
+    expect(entity).toBe("customer");
+    expect(query).toEqual({ filters: [["_id", "in", ["C-1", "C-2"]]], fields: ["name"], limit: 2 });
+    expect(caller).toBe(user);
+    expect(callCtx).toBe(ctx);
+  });
+
+  it("leaves a row whose linked row the caller may not read unexpanded, under the name `as` gives", async () => {
+    const deps = makeDeps();
+    // getList answers only the customers the caller may read; C-2 is not one of them.
+    deps.documentService.getList
+      .mockResolvedValueOnce(page(invoices))
+      .mockResolvedValueOnce(page([{ _id: "C-1", name: "Acme AG" }]));
+    const out = await new ViewEngine(deps as never).execute(expandView("buyer"), { query: {} }, user, new ResponseContext());
+    const rows = out.sections["invoices"] as Record<string, unknown>[];
+    expect(rows.map((r) => r["buyer"])).toEqual([{ _id: "C-1", name: "Acme AG" }, null, { _id: "C-1", name: "Acme AG" }, null]);
+    expect(rows.some((r) => "customer_doc" in r)).toBe(false);
+  });
+});
+
 describe("ViewEngine — root resolution", () => {
   it("bubbles NotFoundError when root is missing", async () => {
     const deps = makeDeps();
