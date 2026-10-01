@@ -4,7 +4,7 @@ import type { EntityDefinition, TransitionDefinition } from '@digitaplatform/sha
 import { Button } from '@digitaplatform/components';
 import { evaluateExpr } from '@/lib/expression';
 import { resolveWorkflowField } from '@/lib/workflow-field';
-import { isAdministrator, hasRecordPermission } from '@/lib/permissions';
+import { isAdministrator, hasEntityPermission, hasRecordPermission } from '@/lib/permissions';
 import { toUiMessages } from '@/lib/api-result';
 import { useSessionStore } from '@/stores/session';
 import { useI18nStore } from '@/stores/i18n';
@@ -80,8 +80,12 @@ export function WorkflowBar({
   // A cancelled (docstatus 2) submittable doc can be amended into a fresh draft —
   // gated by the `amend` permission on this document (Administrator bypasses).
   // The engine re-checks authoritatively; this is only for affordance visibility.
+  // An amend inserts the new draft, so the engine also requires `create`.
   const canAmend =
-    !!meta.is_submittable && docstatus === 2 && hasRecordPermission(meta, user, 'amend', doc);
+    !!meta.is_submittable &&
+    docstatus === 2 &&
+    hasRecordPermission(meta, user, 'amend', doc) &&
+    hasEntityPermission(meta, user, 'create');
 
   if (!canSubmit && !canCancel && !canAmend && transitions.length === 0) return null;
 
