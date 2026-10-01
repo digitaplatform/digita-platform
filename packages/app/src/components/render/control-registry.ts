@@ -17,7 +17,7 @@ const LOADERS: Partial<Record<FieldType, Loader>> = {
   Data: () => import('@/controls/DataControl'),
   Text: () => import('@/controls/TextControl'),
   SmallText: () => import('@/controls/TextControl'),
-  TextEditor: () => import('@/controls/TextControl'),
+  TextEditor: () => import('@/controls/TextControl').then((m) => ({ default: m.TextEditorControl })),
   Code: () => import('@/controls/TextControl').then((m) => ({ default: m.CodeControl })),
   Markdown: () => import('@/controls/TextControl').then((m) => ({ default: m.MarkdownControl })),
   Password: () => import('@/controls/PasswordControl'),

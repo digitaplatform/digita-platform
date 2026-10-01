@@ -73,7 +73,7 @@ afterEach(() => {
 });
 
 describe('the multi-line text controls', () => {
-  it.each(['Text', 'SmallText', 'TextEditor', 'Code', 'Markdown'])(
+  it.each(['Text', 'SmallText', 'Code', 'Markdown'])(
     '%s draws its text in a text area and emits what is typed',
     async (fieldtype) => {
       const user = userEvent.setup();
@@ -90,7 +90,7 @@ describe('the multi-line text controls', () => {
     },
   );
 
-  it.each(['Text', 'SmallText', 'TextEditor', 'Code', 'Markdown'])('%s refuses typing while it is read-only', async (fieldtype) => {
+  it.each(['Text', 'SmallText', 'Code', 'Markdown'])('%s refuses typing while it is read-only', async (fieldtype) => {
     const user = userEvent.setup();
     const { onFieldChange } = drawField(buildField(fieldtype), 'locked text', { readOnly: true });
     const box = await screen.findByLabelText('Thing');

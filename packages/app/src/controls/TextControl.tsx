@@ -1,10 +1,9 @@
-import type { KeyboardEvent } from 'react';
+import { useLayoutEffect, useRef, type KeyboardEvent } from 'react';
 import DOMPurify from 'dompurify';
 import type { FieldControlProps } from '@/controls/types';
 import { TEXTAREA_CLASS, describedBy } from '@/controls/control-styles';
 
-/** Multi-line text (also the alias target for TextEditor until its rich variant
- *  exists, and for SmallText with fewer rows). */
+/** Multi-line text (also SmallText, with fewer rows). */
 export default function TextControl({
   field,
   value,
@@ -30,6 +29,54 @@ export default function TextControl({
       placeholder={field.placeholder}
       value={value == null ? '' : String(value)}
       onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
+    />
+  );
+}
+
+/** TextEditor: the stored HTML drawn as formatted text and edited in place, so a person
+ *  never sees or types tags; it stores HTML. Both the shown and the stored HTML are
+ *  sanitized, because pasted content brings scripts and handlers along. */
+export function TextEditorControl({
+  value,
+  state,
+  onChange,
+  controlId,
+  labelId,
+  describedById,
+  errorId,
+}: FieldControlProps) {
+  const box = useRef<HTMLDivElement>(null);
+  // The HTML this editor emitted last. Writing it back would move the caret to the start
+  // while the person types, so only a value that came from elsewhere replaces the content.
+  const emitted = useRef<string | undefined>(undefined);
+  const html = value == null ? '' : String(value);
+  useLayoutEffect(() => {
+    if (html === emitted.current) return;
+    box.current!.innerHTML = DOMPurify.sanitize(html);
+    emitted.current = undefined;
+  }, [html]);
+  return (
+    <div
+      ref={box}
+      data-ui="input"
+      id={controlId}
+      role="textbox"
+      aria-multiline="true"
+      contentEditable={!state.readOnly}
+      suppressContentEditableWarning
+      className={`${TEXTAREA_CLASS} overflow-y-auto ${RICH_TEXT_CLASS}`}
+      aria-labelledby={labelId}
+      aria-describedby={describedBy(describedById, errorId)}
+      aria-required={state.required || undefined}
+      aria-invalid={state.invalid || undefined}
+      aria-readonly={state.readOnly || undefined}
+      onInput={(e) => {
+        const next = DOMPurify.sanitize(e.currentTarget.innerHTML);
+        // An editor emptied by the person still holds a line break the browser leaves behind.
+        const stored = e.currentTarget.textContent === '' && !e.currentTarget.querySelector('img') ? undefined : next;
+        emitted.current = stored ?? '';
+        onChange(stored);
+      }}
     />
   );
 }
