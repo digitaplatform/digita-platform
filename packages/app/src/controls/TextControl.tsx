@@ -52,7 +52,7 @@ export function TextEditorControl({
   const html = value == null ? '' : String(value);
   useLayoutEffect(() => {
     if (html === emitted.current) return;
-    box.current!.innerHTML = DOMPurify.sanitize(html, RICH_TEXT);
+    box.current!.innerHTML = drawnRichText.sanitize(html, RICH_TEXT);
     emitted.current = undefined;
   }, [html]);
   return (
@@ -94,6 +94,16 @@ const RICH_TEXT = {
   ALLOW_DATA_ATTR: false,
   ALLOW_ARIA_ATTR: false,
 };
+
+/** A link drawn in a TextEditor opens a new tab, as a Markdown preview link does, so a
+ *  reader never navigates the record page away. Its own instance keeps the hook off every
+ *  other sanitize, and off the stored value, which keeps what the person wrote. */
+const drawnRichText = DOMPurify(window);
+drawnRichText.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName !== 'A') return;
+  node.setAttribute('target', '_blank');
+  node.setAttribute('rel', 'noopener noreferrer');
+});
 
 /** Code: the plain text in a monospace area that does not wrap or check spelling, so
  *  columns line up, and Enter starts the next line at the indentation of the current one. */
