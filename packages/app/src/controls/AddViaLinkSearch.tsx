@@ -82,7 +82,8 @@ export function AddViaLinkSearch({
       getRowId={(r) => r._id}
       onPick={(r) => onPick(r._id, r.display)}
       loading={results.isLoading}
-      stale={results.isPlaceholderData}
+      // Stale from the keystroke on: the search for the typed text goes out only after the debounce.
+      stale={results.isPlaceholderData || query.trim() !== debounced.trim()}
       searchPlaceholder={tc('ui.list.search')}
       emptyLabel={tc('ui.select.noResults')}
       loadingLabel={tc('ui.link.searching')}

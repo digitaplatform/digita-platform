@@ -202,8 +202,9 @@ describe('LinkControl — search_dialog mode', () => {
     await user.click(input);
     await user.keyboard('Ac{Enter}'); // >= min_chars opens the dialog
     const dialog = await screen.findByRole('dialog');
-    expect(dialog).toBeInTheDocument();
-    // SearchDialog pre-highlights the first row — Enter picks it directly.
+    // The rows stand for the typed text only once its answer lands; until then they are stale and
+    // Enter picks none. SearchDialog pre-highlights the first row; then Enter picks it directly.
+    await waitFor(() => expect(within(dialog).getByRole('table')).not.toHaveAttribute('aria-busy'));
     await user.keyboard('{Enter}');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(onChange).toHaveBeenCalledWith('O-1');

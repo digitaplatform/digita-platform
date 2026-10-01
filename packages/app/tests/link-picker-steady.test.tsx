@@ -42,6 +42,12 @@ const META = vi.hoisted(() => ({
     tree: { parent_field: 'parent', label_field: 'name' },
     fields: [{ fieldname: 'name', fieldtype: 'Data', label: 'Name' }],
   },
+  ServiceGroup: {
+    name: 'ServiceGroup',
+    title_field: 'name',
+    tree: { parent_field: 'parent', label_field: 'name', group_by: 'domain' },
+    fields: [{ fieldname: 'name', fieldtype: 'Data', label: 'Name' }],
+  },
 }));
 vi.mock('@/hooks/useMeta', () => ({
   useMeta: (entity?: string) => ({ data: entity ? META[entity as keyof typeof META] : undefined }),
@@ -72,6 +78,7 @@ const CUSTOMER_FIELD = {
   search_columns: ['name'],
 } as FieldDefinition;
 const GROUP_FIELD = { fieldname: 'group', fieldtype: 'Link', label: 'Customer group', target: 'CustomerGroup' } as FieldDefinition;
+const SERVICE_GROUP_FIELD = { fieldname: 'group', fieldtype: 'Link', label: 'Group', target: 'ServiceGroup' } as FieldDefinition;
 const FIRST_ANSWER: SearchAnswer = [
   { _id: 'C-1', display: 'Alpine Hotel', fields: { name: 'Alpine Hotel' } },
   { _id: 'C-2', display: 'Bergbahn AG', fields: { name: 'Bergbahn AG' } },
@@ -89,7 +96,7 @@ function renderWithEngine(ui: React.ReactElement) {
   return render(ui, { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> });
 }
 
-function buildField(field: FieldDefinition, doc: Record<string, unknown> = {}) {
+function buildField(field: FieldDefinition, doc: Record<string, unknown> = {}, onChange: (value: unknown) => void = () => {}) {
   return (
     <LinkControl
       field={field}
@@ -97,15 +104,15 @@ function buildField(field: FieldDefinition, doc: Record<string, unknown> = {}) {
       doc={doc}
       entity="WorkOrder"
       state={STATE}
-      onChange={() => {}}
+      onChange={onChange}
       controlId="field"
       labelId="field-label"
     />
   );
 }
 
-function renderField(field: FieldDefinition, doc?: Record<string, unknown>) {
-  return renderWithEngine(buildField(field, doc));
+function renderField(field: FieldDefinition, doc?: Record<string, unknown>, onChange?: (value: unknown) => void) {
+  return renderWithEngine(buildField(field, doc, onChange));
 }
 
 /** Lands the engine's answer to every search for `q` sent so far. */
@@ -160,6 +167,44 @@ describe('the search dialog of a Link field', () => {
     await within(panel).findByText('Zug Pharma');
     expect(within(panel).queryByText('Alpine Hotel')).toBeNull();
     expect(within(panel).getByRole('table')).not.toHaveAttribute('aria-busy');
+  });
+
+  it('lets no row of the previous text be picked from the first keystroke of the next one', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderField(CUSTOMER_FIELD, {}, onChange);
+    await user.click(screen.getByRole('button', { name: 'ui.list.search' }));
+    const panel = screen.getByRole('dialog');
+    await landSearch('', FIRST_ANSWER);
+    await within(panel).findByText('Alpine Hotel');
+
+    // The search for "zug" goes out only after the debounce; the rows are marked before it does.
+    await user.type(within(panel).getByRole('searchbox'), 'zug');
+    expect(within(panel).getByRole('table')).toHaveAttribute('aria-busy', 'true');
+    await user.keyboard('{Enter}');
+    await user.click(within(panel).getByText('Bergbahn AG'));
+    expect(onChange).not.toHaveBeenCalled();
+
+    await landSearch('zug', ZUG_ANSWER);
+    await user.click(await within(panel).findByText('Zug Pharma'));
+    expect(onChange.mock.calls.map((call) => call[0])).toEqual(['C-3']);
+  });
+
+  it('lets no remembered row be picked when it opens with text typed into the field', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderField(CUSTOMER_FIELD, {}, onChange);
+    await user.click(screen.getByRole('button', { name: 'ui.list.search' }));
+    await landSearch('', FIRST_ANSWER);
+    await within(screen.getByRole('dialog')).findByText('Alpine Hotel');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await user.type(screen.getByRole('combobox'), 'zug{Enter}');
+    const panel = screen.getByRole('dialog');
+    expect(within(panel).getByRole('table')).toHaveAttribute('aria-busy', 'true');
+    await user.keyboard('{Enter}');
+    expect(onChange).not.toHaveBeenCalled();
   });
 });
 
@@ -220,6 +265,25 @@ describe('the add-via-link picker of a table', () => {
     await within(panel).findByText('Zug Pharma');
     expect(within(panel).getByRole('table')).not.toHaveAttribute('aria-busy');
   });
+
+  it('lets no row of the previous text be picked from the first keystroke of the next one', async () => {
+    const user = userEvent.setup();
+    const onPick = vi.fn();
+    renderWithEngine(<AddViaLinkSearch open onClose={() => {}} linkField={CUSTOMER_FIELD} onPick={onPick} />);
+    const panel = screen.getByRole('dialog');
+    await landSearch('', FIRST_ANSWER);
+    await within(panel).findByText('Alpine Hotel');
+
+    await user.type(within(panel).getByRole('searchbox'), 'zug');
+    expect(within(panel).getByRole('table')).toHaveAttribute('aria-busy', 'true');
+    await user.keyboard('{Enter}');
+    await user.click(within(panel).getByText('Bergbahn AG'));
+    expect(onPick).not.toHaveBeenCalled();
+
+    await landSearch('zug', ZUG_ANSWER);
+    await user.click(await within(panel).findByText('Zug Pharma'));
+    expect(onPick).toHaveBeenCalledWith('C-3', 'Zug Pharma');
+  });
 });
 
 describe('the tree picker of a Link field', () => {
@@ -253,5 +317,24 @@ describe('the tree picker of a Link field', () => {
   it('loads no tree for a form a person only looks at', () => {
     renderField(GROUP_FIELD);
     expect(engine.lists).toHaveLength(0);
+  });
+
+  it('offers no node of the previous partition while the nodes of the new one load', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const view = renderField(SERVICE_GROUP_FIELD, { domain: 'sales' }, onChange);
+    await user.hover(screen.getByRole('combobox'));
+    await landLists([{ _id: 'G-S1', name: 'Sales key accounts', parent: null, domain: 'sales' }]);
+
+    view.rerender(buildField(SERVICE_GROUP_FIELD, { domain: 'service' }, onChange));
+    await waitFor(() => expect(engine.lists).toHaveLength(1));
+    await user.click(screen.getByRole('combobox'));
+    const panel = screen.getByRole('dialog');
+    expect(within(panel).queryByRole('treeitem', { name: 'Sales key accounts' })).toBeNull();
+    expect(within(panel).getByText('ui.link.searching')).toBeInTheDocument();
+
+    await landLists([{ _id: 'G-V1', name: 'Service contracts', parent: null, domain: 'service' }]);
+    expect(await within(panel).findByRole('treeitem', { name: 'Service contracts' })).toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

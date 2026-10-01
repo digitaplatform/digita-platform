@@ -180,7 +180,10 @@ export default function LinkControl({
   // ---- tree mode: target entity declares a tree → pick from the hierarchy ----
   if (treeCfg) {
     const parentField = treeCfg.parent_field;
-    const nodes: TreeViewNode[] = (treeList.data?.rows ?? []).map((r) => {
+    // Rows kept from the query of another partition are not this partition's nodes: offered, a
+    // click would store a group of the previous partition on this record.
+    const treeRows = treeList.isPlaceholderData ? [] : (treeList.data?.rows ?? []);
+    const nodes: TreeViewNode[] = treeRows.map((r) => {
       const parent = r[parentField];
       return {
         id: String(r._id),
@@ -291,7 +294,7 @@ export default function LinkControl({
             query={treeQuery}
             className="min-h-0 max-h-full flex-1"
             disabledIds={disabledIds}
-            emptyLabel={treeList.isLoading ? tc('ui.link.searching') : tc('ui.select.noResults')}
+            emptyLabel={treeList.isLoading || treeList.isPlaceholderData ? tc('ui.link.searching') : tc('ui.select.noResults')}
             // Groups open on a tap of their name and stay pickable: the tree's own parent field picks groups.
             expandOnNameClick
             selectLabel={tc('ui.tree.select')}
@@ -402,7 +405,8 @@ export default function LinkControl({
             select({ _id: r._id, display: String(r.display ?? r._id) });
           }}
           loading={dialogResults.isLoading}
-          stale={dialogResults.isPlaceholderData}
+          // Stale from the keystroke on: the search for the typed text goes out only after the debounce.
+          stale={dialogResults.isPlaceholderData || dialogQuery.trim() !== dialogDebounced.trim()}
           searchPlaceholder={tc('ui.list.search')}
           emptyLabel={tc('ui.select.noResults')}
           loadingLabel={tc('ui.link.searching')}
