@@ -2,7 +2,7 @@ import { readdir, readFile } from "fs/promises";
 import { join, extname } from "path";
 import type { EntityDefinition, FieldDefinition, FieldType, FreezeSpec } from "@digitaplatform/shared";
 import { DIGITA } from "@digitaplatform/shared";
-import { LAYOUT_FIELD_TYPES } from "@digitaplatform/shared";
+import { LAYOUT_FIELD_TYPES, UPLOAD_FIELD_TYPES } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { createLogger } from "../logging/logger.js";
 import { isValidStoragePath, STORAGE_PATH_RULE } from "../storage/storage-path.js";
@@ -930,8 +930,8 @@ export class EntityRegistry {
   auditAttachStoragePaths(): Array<{ entity: string; problem: string }> {
     const offenders: Array<{ entity: string; problem: string }> = [];
 
-    const isAttach = (f: FieldDefinition): boolean =>
-      f.fieldtype === "Attach" || f.fieldtype === "AttachImage";
+    // An Image field holds a file URL but takes no upload, so it needs no folder.
+    const isAttach = (f: FieldDefinition): boolean => (UPLOAD_FIELD_TYPES as readonly string[]).includes(f.fieldtype);
 
     for (const entity of this.entities.values()) {
       const attachFields: string[] = [];

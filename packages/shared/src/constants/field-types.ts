@@ -56,7 +56,15 @@ export const DATE_FIELD_TYPES: readonly FieldType[] = ["Date", "Datetime", "Time
 
 export const LINK_FIELD_TYPES: readonly FieldType[] = ["Link"];
 
-export const FILE_FIELD_TYPES: readonly FieldType[] = ["Attach", "AttachImage"];
+/** The field types a person uploads a file into. Each upload lands under the entity's storage_path. */
+export const UPLOAD_FIELD_TYPES = ["Attach", "AttachImage"] as const satisfies readonly FieldType[];
+
+/**
+ * The field types whose value is the URL of a File row, so the file is read, bound, copied and
+ * cleaned up with the record that holds it. Image is one: it takes no upload of its own and shows a
+ * file URL that a seed, an API client or a copy of an upload field set.
+ */
+export const FILE_FIELD_TYPES = [...UPLOAD_FIELD_TYPES, "Image"] as const satisfies readonly FieldType[];
 
 export const DATA_FORMAT_OPTIONS = ["Email", "Phone", "URL", "IP", "Name"] as const;
 

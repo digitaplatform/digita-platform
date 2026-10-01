@@ -19,6 +19,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
   getRootLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
 }));
 
+import { FILE_FIELD_TYPES } from "@digitaplatform/shared";
 import { deleteFileRefCounted, parseFileId, collectAttachFileIds } from "../src/core/storage/file-cleanup.js";
 import type { FieldDefinition } from "@digitaplatform/shared";
 
@@ -124,5 +125,20 @@ describe("parseFileId — private and public file URLs", () => {
     ] as unknown as FieldDefinition[];
     expect(collectAttachFileIds(fields, {})).toEqual([]);
     expect(collectAttachFileIds(fields, { lines: "nope" })).toEqual([]);
+  });
+});
+
+describe("the file field types the engine scans", () => {
+  it("PLANTED DEFECT: finds the file of every type the shared set names, Image too", () => {
+    expect(FILE_FIELD_TYPES).toContain("Image");
+    for (const fieldtype of FILE_FIELD_TYPES) {
+      const fields = [{ fieldname: "file", fieldtype }] as unknown as FieldDefinition[];
+      expect(collectAttachFileIds(fields, { file: "/api/v1/file/FILE-000001/download" }), fieldtype).toEqual(["FILE-000001"]);
+    }
+  });
+
+  it("PLANTED INNOCENT: finds no file in a field of another type that holds a file URL", () => {
+    const fields = [{ fieldname: "note", fieldtype: "Data" }] as unknown as FieldDefinition[];
+    expect(collectAttachFileIds(fields, { note: "/api/v1/file/FILE-000001/download" })).toEqual([]);
   });
 });

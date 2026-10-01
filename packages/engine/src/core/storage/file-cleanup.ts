@@ -1,5 +1,5 @@
 import { basename } from "path";
-import { DIGITA } from "@digitaplatform/shared";
+import { DIGITA, FILE_FIELD_TYPES as FILE_URL_FIELD_TYPES } from "@digitaplatform/shared";
 import type { FilterEntry } from "../database/mongodb-service.js";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { StoragePort } from "./storage-port.js";
@@ -10,8 +10,8 @@ const log = createLogger("file-cleanup");
 const FILE = DIGITA.COLLECTIONS.FILE;
 const CORE = DIGITA.DATABASES.CORE;
 
-/** Field types whose value is a file_url pointing at a File doc. */
-export const FILE_FIELD_TYPES = new Set(["Attach", "AttachImage", "Image"]);
+/** The shared field types whose value is a file_url pointing at a File doc, as a set to look up. */
+export const FILE_FIELD_TYPES: ReadonlySet<string> = new Set(FILE_URL_FIELD_TYPES);
 
 /**
  * Resolve the storage key for a File doc. Docs written since the StoragePort
