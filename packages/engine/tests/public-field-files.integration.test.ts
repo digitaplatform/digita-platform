@@ -318,6 +318,56 @@ describe("Files of a field that became public", () => {
   });
 });
 
+describe("A save after the move", () => {
+  const auth = () => ({ authorization: `Bearer ${adminToken}` });
+
+  it("PLANTED DEFECT: stores the public URL when a save without If-Match writes back the private URL of a public file", async () => {
+    registry.register(shop(false));
+    const main = await upload("image", "back-main.pdf", "written back main", "ITEM-20");
+    const gallery = await upload("picture", "back-gallery.pdf", "written back gallery", "ITEM-20");
+    await db.insertOne("TestShopItem", {
+      _id: "ITEM-20", doctype: "TestShopItem", docstatus: 0, image: main.file_url,
+      images: [{ _row_id: "r20", idx: 1, picture: gallery.file_url, caption: "side" }],
+    }, DIGITA.DATABASES.CORE);
+    registry.register(shop(true));
+    await publishFilesOfPublicFields(db, registry.getAll());
+    expect((await fileRow(main._id))["is_private"]).toBe(false);
+
+    // An API client that kept the URLs it read before the move and sends no If-Match.
+    const saved = await app.inject({
+      method: "PUT",
+      url: "/api/v1/resource/TestShopItem/ITEM-20",
+      headers: auth(),
+      payload: { image: main.file_url, images: [{ _row_id: "r20", idx: 1, picture: gallery.file_url, caption: "front" }] },
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+    const item = (await db.findOne("TestShopItem", "ITEM-20", DIGITA.DATABASES.CORE)) as Record<string, unknown>;
+    expect(item["image"]).toBe(`/api/v1/public/file/${main._id}`);
+    expect(item["images"]).toMatchObject([{ picture: `/api/v1/public/file/${gallery._id}`, caption: "front" }]);
+
+    const created = await app.inject({ method: "POST", url: "/api/v1/resource/TestShopItem", headers: auth(), payload: { _id: "ITEM-21", image: main.file_url } });
+    expect(created.statusCode, created.body).toBe(201);
+    expect(((await db.findOne("TestShopItem", "ITEM-21", DIGITA.DATABASES.CORE)) as Record<string, unknown>)["image"]).toBe(`/api/v1/public/file/${main._id}`);
+  });
+
+  it("PLANTED INNOCENT: keeps the private URL of a private file, and a private field's value", async () => {
+    registry.register(shop(true));
+    const own = await upload("image", "still-private.pdf", "uploaded before the field opened", "ITEM-22");
+    await db.updateOne(DIGITA.COLLECTIONS.FILE, own._id, { is_private: true, file_url: `/api/v1/file/${own._id}/download` }, DIGITA.DATABASES.CORE);
+    const scan = await upload("invoice_scan", "scan-22.pdf", "a private scan", "ITEM-22");
+    const saved = await app.inject({
+      method: "POST",
+      url: "/api/v1/resource/TestShopItem",
+      headers: auth(),
+      payload: { _id: "ITEM-22", image: `/api/v1/file/${own._id}/download`, invoice_scan: scan.file_url },
+    });
+    expect(saved.statusCode, saved.body).toBe(201);
+    const item = (await db.findOne("TestShopItem", "ITEM-22", DIGITA.DATABASES.CORE)) as Record<string, unknown>;
+    expect(item["image"]).toBe(`/api/v1/file/${own._id}/download`);
+    expect(item["invoice_scan"]).toBe(scan.file_url);
+  });
+});
+
 describe("The first start after the upgrade that makes the fields public", () => {
   let colleagueFile: { _id: string; file_url: string };
   let merchantFile: { _id: string; file_url: string };
@@ -372,4 +422,55 @@ describe("The first start after the upgrade that makes the fields public", () =>
     const item = (await db.findOne("TestShopItem", "ITEM-4", DIGITA.DATABASES.CORE)) as Record<string, unknown>;
     expect(item["image"]).toBe(`/api/v1/public/file/${merchantFile._id}`);
   });
+});
+
+describe("The boot step on a tenant with many files", () => {
+  // The engine chart's liveness probe kills a start that is not listening after about 105 seconds
+  // (15 s delay, then 3 failures 30 s apart); the step must leave the start most of that window.
+  const WINDOW_MS = 30_000;
+  const COUNT = 5000;
+
+  it("publishes 5000 files within the window, and a later start takes a fraction of it", async () => {
+    registry.register(shop(false));
+    const files: Record<string, unknown>[] = [];
+    const items: Record<string, unknown>[] = [];
+    for (let i = 0; i < COUNT; i++) {
+      const fileId = `FILE-BULK-${i}`;
+      const item = `BULK-${i}`;
+      const privateUrl = `/api/v1/file/${fileId}/download`;
+      files.push({
+        _id: fileId, file_name: `${i}.png`, file_url: privateUrl, is_private: true, owner: "admin@digita.local",
+        attached_to_entity: "TestShopItem", attached_to_name: item, attached_to_field: i % 2 ? "image" : "picture",
+      });
+      // Every fifth file stays private: its row holds it in no public field.
+      const held = i % 5 !== 0;
+      items.push(
+        i % 2
+          ? { _id: item, doctype: "TestShopItem", docstatus: 0, image: held ? privateUrl : null }
+          : { _id: item, doctype: "TestShopItem", docstatus: 0, images: [{ _row_id: `b${i}`, idx: 1, picture: held ? privateUrl : null }] },
+      );
+    }
+    await db.collection(DIGITA.COLLECTIONS.FILE, DIGITA.DATABASES.CORE).insertMany(files as never[]);
+    await db.collection("TestShopItem", DIGITA.DATABASES.CORE).insertMany(items as never[]);
+    registry.register(shop(true));
+
+    let started = Date.now();
+    await publishFilesOfPublicFields(db, registry.getAll());
+    const first = Date.now() - started;
+    started = Date.now();
+    await publishFilesOfPublicFields(db, registry.getAll());
+    const later = Date.now() - started;
+    process.stderr.write(`[benchmark] ${COUNT} files: first start ${first} ms, later start ${later} ms\n`);
+
+    const published = await db.collection(DIGITA.COLLECTIONS.FILE, DIGITA.DATABASES.CORE).countDocuments({ _id: { $regex: "^FILE-BULK-" }, is_private: false } as never);
+    expect(published).toBe(COUNT - COUNT / 5);
+    const sample = (await db.findOne("TestShopItem", "BULK-1", DIGITA.DATABASES.CORE)) as Record<string, unknown>;
+    expect(sample["image"]).toBe("/api/v1/public/file/FILE-BULK-1");
+    const cell = (await db.findOne("TestShopItem", "BULK-2", DIGITA.DATABASES.CORE)) as Record<string, unknown>;
+    expect(cell["images"]).toMatchObject([{ picture: "/api/v1/public/file/FILE-BULK-2" }]);
+    expect(((await fileRow("FILE-BULK-5")) as Record<string, unknown>)["is_private"]).toBe(true);
+    // Bounds far below the window, which reading every file and row one by one missed.
+    expect(first).toBeLessThan(WINDOW_MS / 6);
+    expect(later).toBeLessThan(WINDOW_MS / 60);
+  }, 300_000);
 });
