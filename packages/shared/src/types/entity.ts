@@ -848,6 +848,8 @@ export interface TransitionDefinition {
   allowed_roles: string[];
   /** Field stamps applied to the doc as part of this transition. */
   side_effects?: { set?: Record<string, unknown> };
+  /** Ask for a yes before the transition moves the state. */
+  confirm?: boolean;
 }
 
 // ─── Hook Definitions ────────────────────────────────────

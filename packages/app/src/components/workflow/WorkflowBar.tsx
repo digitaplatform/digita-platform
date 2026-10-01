@@ -71,7 +71,8 @@ export function WorkflowBar({
 
   // A transition without an action shows its target state in the text the state badge uses, so a
   // button and the badge name a state in the same words. An action arrives translated, from localizeMeta.
-  const transitionLabel = (tr: TransitionDefinition) => tr.action || (wf ? tOption(meta.name, wf, tr.to) : tr.to);
+  const stateLabel = (state: string) => (wf ? tOption(meta.name, wf, state) : state);
+  const transitionLabel = (tr: TransitionDefinition) => tr.action || stateLabel(tr.to);
 
   // The engine refuses Submit and Cancel without the `submit` / `cancel` bit on this document.
   const canSubmit = !!meta.is_submittable && docstatus === 0 && hasRecordPermission(meta, user, 'submit', doc);
@@ -130,7 +131,12 @@ export function WorkflowBar({
           variant="secondary"
           disabled={disabled || busy}
           {...tid.transition(tr.to)}
-          onClick={() => void run(() => transM.mutateAsync({ name, to: tr.to }))}
+          onClick={() => {
+            const move = () => transM.mutateAsync({ name, to: tr.to });
+            void (tr.confirm
+              ? confirmThen(tc('ui.workflow.transitionConfirm', { state: stateLabel(tr.to) }), move)
+              : run(move));
+          }}
         >
           {transitionLabel(tr)}
         </Button>
