@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Badge, Card } from '@digitaplatform/components';
+import { Badge, Button, Card } from '@digitaplatform/components';
 import { ApiClientError } from '@/lib/errors';
+import { ErrorBlock } from '@/components/status';
 import { useSessionStore } from '@/stores/session';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useDialogHost } from '@/components/overlay/DialogHost';
@@ -116,7 +117,10 @@ export default function AccountPage() {
       confirmLabel: tc('ui.account.sessions.revoke'),
       danger: true,
     });
-    if (ok) revoke.mutate(sid);
+    if (ok)
+      revoke.mutate(sid, {
+        onError: (e) => dialog.toast(tc('ui.account.sessions.revokeFailed', { error: e.message }), 'error'),
+      });
   };
 
   const onRevokeOthers = async () => {
@@ -126,7 +130,10 @@ export default function AccountPage() {
       confirmLabel: tc('ui.account.sessions.revokeOthers'),
       danger: true,
     });
-    if (ok) revokeOthers.mutate();
+    if (ok)
+      revokeOthers.mutate(undefined, {
+        onError: (e) => dialog.toast(tc('ui.account.sessions.revokeOthersFailed', { error: e.message }), 'error'),
+      });
   };
 
   return (
@@ -178,13 +185,22 @@ export default function AccountPage() {
         currentPasswordError={pwError}
         resetSignal={pwResetSignal}
       />
-      <SessionsCard
-        sessions={sessions.data ?? []}
-        loading={sessions.isPending}
-        onRevoke={onRevoke}
-        onRevokeOthers={onRevokeOthers}
-        busy={revoke.isPending || revokeOthers.isPending}
-      />
+      {sessions.isError ? (
+        <div className="space-y-2">
+          <ErrorBlock title={tc('ui.account.sessions.loadFailed')} detail={sessions.error.message} />
+          <Button type="button" variant="secondary" onClick={() => void sessions.refetch()}>
+            {tc('ui.action.reload')}
+          </Button>
+        </div>
+      ) : (
+        <SessionsCard
+          sessions={sessions.data ?? []}
+          loading={sessions.isPending}
+          onRevoke={onRevoke}
+          onRevokeOthers={onRevokeOthers}
+          busy={revoke.isPending || revokeOthers.isPending}
+        />
+      )}
     </div>
   );
 }
