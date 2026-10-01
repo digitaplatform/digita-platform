@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // Heading and HTML are layout fields: the form draws them itself instead of a control. A Heading
-// reads in the session language, which the localized meta every form is given carries. The markup of an HTML field comes from entity metadata that any app
-// author writes, so it must reach the page only after DOMPurify has dropped what runs code.
+// reads in the session language, which the localized meta every form is given carries. The
+// markup of an HTML field comes from entity metadata that any app author writes, so it must reach
+// the page only after DOMPurify has dropped what runs code.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';

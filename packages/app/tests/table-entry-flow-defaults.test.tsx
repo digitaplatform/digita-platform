@@ -64,7 +64,7 @@ vi.mock('@/controls/AddViaLinkSearch', () => ({
 }));
 vi.mock('@/stores/i18n', () => ({
   useI18nStore: (select: (state: Record<string, unknown>) => unknown) =>
-    select({ tField: (_entity: string, _field: string, label: string) => label }),
+    select({}),
 }));
 vi.mock('@/stores/session', () => ({
   useSessionStore: (select: (state: Record<string, unknown>) => unknown) => select({ user: {} }),
