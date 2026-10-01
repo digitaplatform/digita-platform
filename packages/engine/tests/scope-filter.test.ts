@@ -87,6 +87,13 @@ describe("applyScopeFilters (D10c — union/OR semantics)", () => {
     expect(applyScopeFilters(e, user(["Other"]), { a: 1 })).toEqual({ a: 1 });
   });
 
+  it("ANDs the caller's filter with a scope on the same field instead of replacing it", () => {
+    const e = entityWith([P("Sales", { scope: { field: "dept", user_field: "department" } })]);
+    expect(applyScopeFilters(e, user(["Sales"], { department: "Sales" }), { dept: { $regex: "Sal" } })).toEqual({
+      $and: [{ dept: { $regex: "Sal" } }, { dept: "Sales" }],
+    });
+  });
+
   it("a user value that is a list matches a row through any of its members, in a list and in one row", () => {
     const e = entityWith([P("Sales", { scope: { field: "dept", user_field: "departments" } })]);
     expect(applyScopeFilters(e, user(["Sales"], { departments: ["A", "B"] }), {})).toEqual({ dept: { $in: ["A", "B"] } });

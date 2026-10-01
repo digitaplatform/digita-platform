@@ -64,9 +64,12 @@ export function scopeValueMatches(docValue: unknown, userValue: unknown): boolea
  * Semantics (D10c fix): a user sees the UNION (OR) of what each of their
  * read-granting roles allows — RBAC is additive across roles. Each applicable
  * `level 0` read permission contributes one condition:
- *   - `scope`     → `{ <scope.field>: <user[scope.user_field]> }`
+ *   - `scope`     → `{ <scope.field>: <user[scope.user_field]> }`, or
+ *                   `{ <scope.field>: { $in: <the list> } }` when the user's value is a list
  *   - `if_owner`  → `{ owner: <user.email> }`
  *   - neither     → unrestricted read via that role → no scope filter at all
+ * The conditions AND-combine with the caller's filters, so a caller's filter on
+ * a scoped field narrows the rows the scope admits instead of being replaced.
  *
  * Previously multiple scoped roles were AND-ed (and same-field scopes
  * overwrote each other), which was wrong (too restrictive / last-wins).
@@ -122,10 +125,14 @@ export function applyScopeFilters(
     return { ...existingFilters, _id: { $in: [] as unknown[] } };
   }
 
-  // Single condition → merge flat. Multiple → OR them (union across roles),
-  // AND-combined with any pre-existing filters.
+  // Single condition → merge flat, unless it constrains a key the caller's filters do: a
+  // flat merge would replace the caller's condition, so the two AND instead. Multiple →
+  // OR them (union across roles), AND-combined with any pre-existing filters.
   if (conditions.length === 1) {
-    return { ...existingFilters, ...conditions[0] };
+    const condition = conditions[0]!;
+    return Object.keys(condition).some((key) => key in existingFilters)
+      ? { $and: [existingFilters, condition] }
+      : { ...existingFilters, ...condition };
   }
   const scopeOr = { $or: conditions };
   return Object.keys(existingFilters).length > 0

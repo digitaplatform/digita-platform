@@ -90,8 +90,8 @@ const call = (user: string, method: "GET" | "POST" | "PUT" | "DELETE", url: stri
   app.inject({ method, url: `/api/v1/${url}`, headers: { authorization: `Bearer ${tokens[user]}` }, payload });
 const get = (user: string, url: string) => call(user, "GET", url);
 
-async function listedWorkspaces(user: string): Promise<string[]> {
-  const res = await get(user, "resource/Workspace?order_by=priority%20asc");
+async function listedWorkspaces(user: string, query = ""): Promise<string[]> {
+  const res = await get(user, `resource/Workspace?order_by=priority%20asc${query}`);
   expect(res.statusCode).toBe(200);
   const body = res.json() as { data: Array<Record<string, unknown>>; meta: { total: number } };
   expect(body.meta.total).toBe(body.data.length);
@@ -102,6 +102,11 @@ describe("A user who holds only roles of the app reads the workspaces that name 
   it("lists exactly the workspaces that name one of its roles", async () => {
     expect(await listedWorkspaces("demo")).toEqual(["workshop-reception", "workshop-technician"]);
     expect(await listedWorkspaces("reception")).toEqual(["workshop-reception"]);
+  });
+
+  it("narrows its workspaces further by its own filter on the role list", async () => {
+    const filters = encodeURIComponent(JSON.stringify([["roles", "like", "%Technician%"]]));
+    expect(await listedWorkspaces("reception", `&filters=${filters}`)).toEqual([]);
   });
 
   it("opens a workspace that names its role, whole, and finds no other workspace", async () => {
