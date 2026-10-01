@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { EntityDefinition } from '@digitaplatform/shared';
 import type { EntitySummary } from '@/types';
 import { getEntityMeta, getEntityCatalog } from '@/services/meta';
-import { qk, qkPrefix } from '@/lib/query-keys';
+import { qk } from '@/lib/query-keys';
 import { unwrap } from '@/lib/api-result';
 import { useI18nStore } from '@/stores/i18n';
 import { localizeMeta, localizeSummary } from '@/lib/localize-meta';
@@ -48,10 +48,4 @@ export function useMetaCatalog() {
     [query.data, translations],
   );
   return { ...query, data };
-}
-
-/** Force a meta refetch (catalog + every per-entity definition). */
-export function useRefreshMeta(): () => Promise<void> {
-  const qc = useQueryClient();
-  return () => qc.invalidateQueries({ queryKey: qkPrefix.allMeta() });
 }
