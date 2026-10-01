@@ -102,7 +102,7 @@ export function PrintMenu({ meta, doc }: { meta: EntityDefinition; doc: Doc }) {
           printHref={reportRenderUrl(active.report, params, 'html', { print: true })}
           downloads={formats
             .filter((f) => f !== 'html')
-            .map((f) => ({ label: f.toUpperCase(), href: reportRenderUrl(active.report, params, f) }))}
+            .map((f) => ({ label: f.toUpperCase(), href: reportRenderUrl(active.report, params, f, { source: active.source }) }))}
           printLabel={tc('ui.action.print')}
           reloadLabel={tc('ui.report.reloadPreview')}
           openLabel={tc('ui.report.openInNewTab')}

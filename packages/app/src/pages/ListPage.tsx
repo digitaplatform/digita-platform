@@ -451,7 +451,7 @@ export default function ListPage() {
           printHref={reportRenderUrl(printLink.report, printParams, 'html', { print: true })}
           downloads={printFormats
             .filter((f) => f !== 'html')
-            .map((f) => ({ label: f.toUpperCase(), href: reportRenderUrl(printLink.report, printParams, f) }))}
+            .map((f) => ({ label: f.toUpperCase(), href: reportRenderUrl(printLink.report, printParams, f, { source: printLink.source }) }))}
         />
       )}
     </div>

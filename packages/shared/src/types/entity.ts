@@ -753,6 +753,11 @@ export interface EntityReportLink {
    * an empty value prints in the locale of the report definition.
    */
   locale?: string;
+  /**
+   * Collection of the report (a key of its data.collections) that the csv download exports. The
+   * report service refuses a csv export of a report with two or more collections without one.
+   */
+  source?: string;
   /** Offered export formats (default ["pdf"]); "html" powers the preview. */
   formats?: ("pdf" | "html" | "png" | "csv")[];
   /** Permission gate on THIS entity (default "print"). */

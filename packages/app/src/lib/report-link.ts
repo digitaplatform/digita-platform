@@ -68,11 +68,13 @@ export function reportRenderUrl(
   report: string,
   params: Record<string, string>,
   format: 'html' | 'pdf' | 'png' | 'csv',
-  opts: { print?: boolean } = {},
+  opts: { print?: boolean; source?: string } = {},
 ): string {
   const query = new URLSearchParams({ format, ...params });
   // The report service answers a csv export that names a locale with 400.
   if (format === 'csv') query.delete('locale');
+  // Only a csv export picks one collection; the other formats render the whole report.
+  if (format === 'csv' && opts.source) query.set('source', opts.source);
   if (opts.print) query.set('print', '1');
   return `${REPORT_URL}/api/v1/report/definitions/${encodeURIComponent(report)}/render?${query.toString()}`;
 }
