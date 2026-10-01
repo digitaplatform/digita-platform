@@ -250,6 +250,20 @@ describe('the print button of a row in a list', () => {
     expect(await screen.findByRole('dialog', { name: 'Rechnung drucken' })).toBeInTheDocument();
   });
 
+  it('names the buttons of the preview by the texts of the app', async () => {
+    const user = userEvent.setup();
+    drawList([INVOICE_LINK]);
+    const [second] = await screen.findAllByRole('button', { name: 'Print invoice' });
+
+    await user.click(second!);
+    const dialog = await screen.findByRole('dialog', { name: 'Print invoice' });
+
+    expect(within(dialog).getByTestId('report-preview:print')).toHaveTextContent('ui.action.print');
+    expect(within(dialog).getByTestId('report-preview:reload')).toHaveAccessibleName('ui.report.reloadPreview');
+    expect(within(dialog).getByTestId('report-preview:open')).toHaveAccessibleName('ui.report.openInNewTab');
+    expect(within(dialog).getByRole('button', { name: 'ui.action.close' })).toBeInTheDocument();
+  });
+
   it('is left out of the list for an entity that has no report link', async () => {
     drawList([]);
 

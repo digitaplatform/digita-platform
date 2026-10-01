@@ -459,6 +459,10 @@ export default function ListPage() {
           downloads={printFormats
             .filter((f) => f !== 'html')
             .map((f) => ({ label: f.toUpperCase(), href: reportRenderUrl(printLink.report, printParams, f, { source: printLink.source }) }))}
+          printLabel={tc('ui.action.print')}
+          reloadLabel={tc('ui.report.reloadPreview')}
+          openLabel={tc('ui.report.openInNewTab')}
+          closeLabel={tc('ui.action.close')}
         />
       )}
     </div>
