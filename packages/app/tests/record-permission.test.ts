@@ -4,10 +4,10 @@ import { hasRecordPermission } from '@/lib/permissions';
 import type { SessionUser } from '@/types';
 
 /**
- * hasRecordPermission answers what the engine's PermissionChecker.hasPermission answers for a
- * stored record: a level-0 row of one of the user's roles sets the bit, the record's workflow
- * state does not strip it from that row's role, and the row's if_owner, condition and scope
- * admit the record.
+ * hasRecordPermission answers as the engine's PermissionChecker.hasPermission does for a stored
+ * record: a level-0 row of one of the user's roles sets the bit, the record's workflow state does
+ * not strip it from that row's role, and the row's if_owner, condition and scope admit the record.
+ * A gate the app cannot judge from what it holds leaves the row standing.
  */
 
 const reception: SessionUser = { _id: 'u1', email: 'rita@example.com', roles: ['Reception'] };

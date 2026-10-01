@@ -19,6 +19,9 @@
 export interface EvalScope {
   doc: Record<string, unknown>;
   user?: Record<string, unknown>;
+  /** The roots hold only part of what the expression may read, so a path whose first field
+   *  they lack is an error, never `undefined`. */
+  isPartial?: boolean;
 }
 
 export interface EvalResult {
@@ -96,6 +99,9 @@ class Lexer {
 
 function resolveScopePath(scope: EvalScope, root: 'doc' | 'user', path: string[]): Value {
   let cur: unknown = root === 'user' ? scope.user : scope.doc;
+  if (scope.isPartial && (cur as Record<string, unknown> | undefined)?.[path[0]!] === undefined) {
+    throw new Error(`${root}.${path[0]} is not held`);
+  }
   for (const seg of path) {
     if (cur == null || typeof cur !== 'object') return undefined;
     cur = (cur as Record<string, unknown>)[seg];
@@ -229,13 +235,14 @@ export function evaluateExpr(expr: string, scope: EvalScope): EvalResult {
   let src = expr.trim();
   if (src.startsWith('eval:')) src = src.slice(5).trim();
 
-  // Fast paths: a bare `doc.field` / `user.field` is a truthy check.
-  if (/^doc\.[A-Za-z0-9_]+$/.test(src)) return { value: isTruthy(scope.doc[src.slice(4)]) };
-  if (/^user\.[A-Za-z0-9_]+$/.test(src)) return { value: isTruthy(scope.user?.[src.slice(5)]) };
-
   try {
     const lex = new Lexer(src);
-    return { value: isTruthy(parseOr(lex, scope)) };
+    const value = isTruthy(parseOr(lex, scope));
+    // The grammar stops at the first token it does not know, as in `doc.a === 1`; the value of
+    // the part before it is not the expression's.
+    lex.skipWs();
+    if (!lex.done()) throw new Error(`unexpected "${src.slice(lex.pos())}" at ${lex.pos()}`);
+    return { value };
   } catch (e) {
     return { value: false, error: e instanceof Error ? e.message : String(e) };
   }

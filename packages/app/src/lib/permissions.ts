@@ -69,14 +69,19 @@ export function hasRecordPermission(
 /**
  * Whether the row's `if_owner`, `condition` and `scope` admit the record. A gate the app cannot
  * judge from what it holds leaves the row standing, so the app never hides what the engine may
- * allow: an owner this reader may not see, a condition the app's evaluator cannot read, a user
- * attribute the session does not carry.
+ * allow: an owner this reader may not see, a condition the app's evaluator cannot read, a record
+ * field this reader may not read, a user attribute the session does not carry. Such a row may
+ * show an action the engine then refuses.
  */
 function rowAdmits(p: EntityPermission, user: SessionUser, record: Record<string, unknown>): boolean {
   const owner = record['owner'];
   if (p.if_owner && owner !== undefined && owner !== user.email && owner !== user._id) return false;
   if (p.condition) {
-    const met = evaluateExpr(p.condition, { doc: record, user: user as unknown as Record<string, unknown> });
+    const met = evaluateExpr(p.condition, {
+      doc: record,
+      user: user as unknown as Record<string, unknown>,
+      isPartial: true,
+    });
     if (!met.error && !met.value) return false;
   }
   if (p.scope) {

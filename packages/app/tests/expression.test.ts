@@ -8,14 +8,14 @@ describe('evaluateExpr', () => {
     expect(evaluateExpr('', scope({})).value).toBe(true);
   });
 
-  it('bare doc.field truthy check (fast path)', () => {
+  it('bare doc.field truthy check', () => {
     expect(evaluateExpr('doc.active', scope({ active: true })).value).toBe(true);
     expect(evaluateExpr('doc.active', scope({ active: false })).value).toBe(false);
     expect(evaluateExpr('doc.active', scope({ active: '' })).value).toBe(false);
     expect(evaluateExpr('doc.count', scope({ count: 0 })).value).toBe(false);
   });
 
-  it('user.field fast path', () => {
+  it('bare user.field truthy check', () => {
     expect(evaluateExpr('user.is_admin', scope({}, { is_admin: true })).value).toBe(true);
     expect(evaluateExpr('user.missing', scope({}, {})).value).toBe(false);
   });
@@ -56,6 +56,22 @@ describe('evaluateExpr', () => {
     expect(r2.error).toBeDefined();
     expect(r2.value).toBe(false);
     void r;
+  });
+
+  it('an expression the grammar does not read to its end → error', () => {
+    expect(evaluateExpr("doc.status === 'draft'", scope({ status: 'draft' })).error).toBeDefined();
+    expect(evaluateExpr('doc.qty * doc.price > 100', scope({ qty: 2, price: 10 })).error).toBeDefined();
+    expect(evaluateExpr("doc.status == 'draft'  ", scope({ status: 'draft' }))).toEqual({ value: true });
+  });
+
+  it('a partial scope: a path whose first field it lacks → error', () => {
+    const partial = { doc: { status: 'open', note: null }, user: { email: 'rita@example.com' }, isPartial: true };
+    expect(evaluateExpr('doc.margin > 100', partial).error).toBeDefined();
+    expect(evaluateExpr('doc.branch == user.branch', partial).error).toBeDefined();
+    expect(evaluateExpr('doc.margin', partial).error).toBeDefined();
+    expect(evaluateExpr("doc.status == 'open' && user.email != null", partial)).toEqual({ value: true });
+    expect(evaluateExpr('doc.note == null', partial)).toEqual({ value: true });
+    expect(evaluateExpr('doc.margin > 100', { doc: {}, user: {} })).toEqual({ value: false });
   });
 
   it('evaluateSafe degrades errors to true', () => {
