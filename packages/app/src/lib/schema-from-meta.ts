@@ -183,9 +183,9 @@ function buildFieldSchema(field: FieldDefinition): ZodTypeAny {
   return s.nullable().optional();
 }
 
-/** Mirrors the engine: it applies a default only where the value is missing, null or an empty string. */
+/** Mirrors the engine: it applies a default only where the value is missing or an empty string; a null is a clear. */
 function takesDefault(v: unknown): boolean {
-  return v === undefined || v === null || v === '';
+  return v === undefined || v === '';
 }
 
 /** Mirrors the engine: whitespace, an unticked Check and a Rating of 0 are no value, so a required one refuses them. */

@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useForm, type Resolver } from 'react-hook-form';
 import { Copy, Lock } from 'lucide-react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { EntityDefinition } from '@digitaplatform/shared';
+import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
 import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from '@digitaplatform/shared';
 import { Badge, Button, PageHeader, findScrollContainer } from '@digitaplatform/components';
 import { useMeta } from '@/hooks/useMeta';
@@ -13,7 +13,7 @@ import { usePreview } from '@/hooks/usePreview';
 import { getDoc, getSingle } from '@/services/resource';
 import { qk } from '@/lib/query-keys';
 import { buildZodSchema, fieldErrorMessage } from '@/lib/schema-from-meta';
-import { buildDefaults } from '@/lib/default-tokens';
+import { buildDefaults, resolveDefaultToken } from '@/lib/default-tokens';
 import { mergePreviewRows, RECOMPUTE_OVERRIDES_KEY } from '@/lib/merge-preview-rows';
 import { resolveFetchFromTargets } from '@/lib/resolve-fetch-from';
 import {
@@ -177,34 +177,59 @@ const DISPLAY_ONLY_KEYS = new Set([
  *  TableControl.addLinkRow) is exactly as transient as the top-level one
  *  and must never reach the stored document, or it goes stale the moment the
  *  linked record's title changes. */
-function stripRow(row: Doc): Doc {
+function stripRow(row: Doc, clearedToNull: readonly string[]): Doc {
   const out: Doc = {};
   for (const [k, v] of Object.entries(row)) {
     if (DISPLAY_ONLY_KEYS.has(k)) continue;
     out[k] = v;
   }
+  for (const k of clearedToNull) if (out[k] === undefined) out[k] = null;
   return out;
 }
 
+/** The fields whose default the form seeds into a new record or row (an `eval:` default it cannot). */
+function seededDefaultFields(fields: readonly FieldDefinition[]): string[] {
+  return fields.filter((f) => resolveDefaultToken(f.default) !== undefined).map((f) => f.fieldname);
+}
+
+/**
+ * A field cleared back to empty (undefined) goes as an explicit null where JSON.stringify
+ * would otherwise drop the key: on an existing record when it held a value when loaded,
+ * since the engine keeps a missing field's stored value; on a new record or row when the
+ * form seeded its default, since the engine fills a missing field's default but keeps a null.
+ */
 export function stripForSave(meta: EntityDefinition, values: Doc, original?: Doc): Doc {
   const drop = new Set<string>(DISPLAY_ONLY_KEYS);
-  const tableFields = new Set<string>();
+  const tables = new Map<string, FieldDefinition>();
   for (const f of meta.fields) {
     if (LAYOUT_FIELD_TYPES.includes(f.fieldtype) || f.fieldtype === 'ReadOnly') drop.add(f.fieldname);
-    if (f.fieldtype === 'Table') tableFields.add(f.fieldname);
+    if (f.fieldtype === 'Table') tables.set(f.fieldname, f);
   }
   const out: Doc = {};
   for (const [k, v] of Object.entries(values)) {
     if (drop.has(k)) continue;
-    if (tableFields.has(k) && Array.isArray(v)) {
-      out[k] = v.map((row) => (row && typeof row === 'object' ? stripRow(row as Doc) : row));
+    const table = tables.get(k);
+    if (table && Array.isArray(v)) {
+      const seeded = seededDefaultFields(table.child_fields ?? []);
+      const storedRows = original?.[k];
+      const storedIds = new Set(
+        (Array.isArray(storedRows) ? storedRows : []).map((r) => (r as Doc | null)?.[ROW_ID_FIELD]),
+      );
+      out[k] = v.map((row) => {
+        if (!row || typeof row !== 'object') return row;
+        const id = (row as Doc)[ROW_ID_FIELD];
+        const isNewRow = !(typeof id === 'string' && id !== '' && storedIds.has(id));
+        return stripRow(row as Doc, isNewRow ? seeded : []);
+      });
       continue;
     }
-    // A field cleared back to empty (undefined) that HELD a value when loaded must be
-    // sent as an explicit null — otherwise JSON.stringify drops the key and the engine
-    // keeps the old value, so the clear wouldn't persist. On create (no `original`) we
-    // leave it out so field defaults still apply.
-    out[k] = v === undefined && original && original[k] != null ? null : v;
+    out[k] = v;
+  }
+  for (const f of meta.fields) {
+    const k = f.fieldname;
+    if (drop.has(k) || tables.has(k) || !(k in values) || out[k] !== undefined) continue;
+    const cleared = original ? original[k] != null : resolveDefaultToken(f.default) !== undefined;
+    if (cleared) out[k] = null;
   }
   return out;
 }

@@ -150,8 +150,7 @@ describe("resolveDefaults", () => {
         { fieldname: "count", fieldtype: "Int", label: "Count", default: 10 },
       ],
     });
-    // 0 is falsy but not undefined/null/"" — the impl only skips if !==undefined/null/""
-    // 0 !== undefined and 0 !== null and 0 !== "" → should NOT be overridden
+    // 0 is falsy but a value: only a missing value or "" takes the default.
     const result = resolveDefaults(entity, { count: 0 }, "admin@example.com");
     expect(result.count).toBe(0);
   });
@@ -166,14 +165,14 @@ describe("resolveDefaults", () => {
     expect(result.status).toBe("Draft");
   });
 
-  it("applies default when field value is null", () => {
+  it("keeps an explicit null over the default: the value is empty on purpose (#227)", () => {
     const entity = makeEntity({
       fields: [
         { fieldname: "status", fieldtype: "Select", label: "Status", default: "Draft" },
       ],
     });
     const result = resolveDefaults(entity, { status: null }, "admin@example.com");
-    expect(result.status).toBe("Draft");
+    expect(result.status).toBeNull();
   });
 
   it("applies default when field value is empty string", () => {
