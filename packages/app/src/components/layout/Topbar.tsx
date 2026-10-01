@@ -1,6 +1,6 @@
 import { Menu, Moon, Sun, Monitor, Search } from 'lucide-react';
 import { ModeButton, TopBar, topBarButtonClass, cn } from '@digitaplatform/components';
-import { useThemeStore } from '@/stores/theme';
+import { isModeLocked, useThemeStore } from '@/stores/theme';
 import { useUiStore } from '@/stores/ui';
 import { useChrome } from '@/lib/chrome-i18n';
 import { LanguageSwitcher, useSaveLanguageToProfile } from '@/components/layout/LanguageSwitcher';
@@ -17,8 +17,9 @@ import { DesignMenu } from '@/components/layout/DesignMenu';
 export function Topbar({ showMenuButton = true }: { showMenuButton?: boolean }) {
   const mode = useThemeStore((s) => s.mode);
   const cycleMode = useThemeStore((s) => s.cycleMode);
-  // A tenant may keep everyone on the system mode (BrandingSetting.allow_user_theme_mode).
-  const canChooseMode = useThemeStore((s) => s.branding?.allow_user_theme_mode !== false);
+  // A tenant may keep everyone on the system mode (BrandingSetting.allow_user_theme_mode). Before
+  // /boot answers, the store's cache of that choice decides, as it does for setMode.
+  const canChooseMode = useThemeStore((s) => !isModeLocked(s.branding));
   const setMobileNav = useUiStore((s) => s.setMobileNav);
   const setCommandPalette = useUiStore((s) => s.setCommandPalette);
   const tc = useChrome();
