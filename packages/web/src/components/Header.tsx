@@ -76,12 +76,6 @@ export function Header({
   const textItems = items.filter((item) => !iconLinks.some((link) => link.item === item));
   const familyItems = sortNav(family?.items);
   const comingLabel = t("familyComing", locale);
-  const controls = (
-    <>
-      <LocaleSwitcher current={locale} publishedSlugs={publishedSlugs} enabledLocales={enabledLocales} label={t("language", locale)} />
-      <ThemeToggle label={t("toggleTheme", locale)} />
-    </>
-  );
 
   return (
     <TopBar>
@@ -114,7 +108,8 @@ export function Header({
               <FamilySwitcher locale={locale} items={familyItems} domain={site?.domain} label={t("familyLabel", locale)} comingLabel={comingLabel} />
             </div>
           )}
-          {controls}
+          <LocaleSwitcher current={locale} publishedSlugs={publishedSlugs} enabledLocales={enabledLocales} label={t("language", locale)} />
+          <ThemeToggle label={t("toggleTheme", locale)} />
           {/* The header menu's item for the contact sheet; SheetButton draws nothing where the site offers no sheet. */}
           {contact && <SheetButton {...buttonAttributes({ size: "sm", className: "shrink-0" })}>{contact.label}</SheetButton>}
           <MobileNav
@@ -129,9 +124,7 @@ export function Header({
             openLabel={t("openMenu", locale)}
             closeLabel={t("closeMenu", locale)}
             comingLabel={comingLabel}
-          >
-            {controls}
-          </MobileNav>
+          />
         </div>
       </div>
     </TopBar>
