@@ -1580,6 +1580,21 @@ describe("Upload API Integration", () => {
         expect(clone["attached_to_name"]).toBe(copy._id);
       });
 
+      it("leaves a file uploaded for another entity loose when a save names it", async () => {
+        const bookLetter = await uploadAsApp(ownerToken, "letter", "%PDF a letter uploaded for a TestBook");
+        const created = await app.inject({
+          method: "POST",
+          url: "/api/v1/resource/TestSysBook",
+          headers: authHeaders(ownerToken),
+          payload: { title: "Names a book's letter", letter: bookLetter.file_url },
+        });
+        expect(created.statusCode).toBe(201);
+        const row = (await db.findOne(DIGITA.COLLECTIONS.FILE, bookLetter._id, "core")) as Record<string, unknown>;
+        expect(row["attached_to_entity"]).toBe("TestBook");
+        expect(row["attached_to_name"]).toBeUndefined();
+        expect((await downloadAs(salesToken, bookLetter._id)).statusCode).toBe(403);
+      });
+
       it("PLANTED INNOCENT: does the same through the stored id", async () => {
 
         const { letter, id } = await sysBookWithLetter("%PDF system book, deleted lower");
