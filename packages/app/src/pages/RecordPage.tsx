@@ -38,6 +38,7 @@ import { FormRenderer } from '@/components/render/FormRenderer';
 import { workflowBadge } from '@/components/render/cells';
 import { ContextPanel } from '@/components/record/ContextPanel';
 import { LinksPanel } from '@/components/record/LinksPanel';
+import { HistoryPanel } from '@/components/record/HistoryPanel';
 import { WorkflowBar } from '@/components/workflow/WorkflowBar';
 import { ActionBar } from '@/components/workflow/ActionBar';
 import { PrintMenu } from '@/components/workflow/PrintMenu';
@@ -608,6 +609,9 @@ function RecordForm({
     }
   };
 
+  // The history routes answer only a reader of the record.
+  const canReadHistory = !isNew && !!name && hasRecordPermission(meta, user, 'read', initial);
+
   const title = isNew
     ? `${tEntity(entity, meta.label ?? entity)} · ${tc('ui.record.new')}`
     : (meta.title_field && watched[meta.title_field]
@@ -743,6 +747,8 @@ function RecordForm({
         />
         {hasContext && <ContextPanel entity={entity} meta={meta} doc={watched} />}
       </div>
+
+      {canReadHistory && <HistoryPanel entity={entity} name={name!} meta={meta} />}
 
       <RecordActions
         saving={saving}

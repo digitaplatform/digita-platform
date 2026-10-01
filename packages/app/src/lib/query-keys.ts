@@ -12,6 +12,9 @@ export const qk = {
   single: (entity: string) => ['resource', entity, 'single'] as const,
   actions: (entity: string, name: string) => ['resource', entity, 'doc', name, 'actions'] as const,
   relatedDocs: (entity: string, name: string) => ['resource', entity, 'doc', name, 'related'] as const,
+  versions: (entity: string, name: string) => ['resource', entity, 'doc', name, 'history', 'versions'] as const,
+  activity: (entity: string, name: string) => ['resource', entity, 'doc', name, 'history', 'activity'] as const,
+  views: (entity: string, name: string) => ['resource', entity, 'doc', name, 'history', 'views'] as const,
   search: (entity: string, q: string, filters?: unknown) =>
     ['search', entity, q, filters ?? null] as const,
   globalSearch: (q: string) => ['search', 'global', q] as const,
@@ -25,6 +28,7 @@ export const qk = {
 export const qkPrefix = {
   entity: (entity: string) => ['resource', entity] as const,
   lists: (entity: string) => ['resource', entity, 'list'] as const,
+  history: (entity: string, name: string) => ['resource', entity, 'doc', name, 'history'] as const,
   allMeta: () => ['meta'] as const,
   listPreferences: (entity: string) => ['listPreferences', entity] as const,
 };

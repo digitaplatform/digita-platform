@@ -75,6 +75,7 @@ export function useUpdate<T = Doc>(doctype: string) {
       qc.setQueryData(qk.doc(doctype, vars.name), doc);
       void qc.invalidateQueries({ queryKey: qkPrefix.lists(doctype) });
       void qc.invalidateQueries({ queryKey: qk.actions(doctype, vars.name) });
+      void qc.invalidateQueries({ queryKey: qkPrefix.history(doctype, vars.name) });
       maybeRefreshBoot(qc, doctype);
     },
   });

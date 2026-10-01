@@ -64,6 +64,43 @@ export function getRelatedDocs(entity: string, name: string): Promise<ApiRespons
   return api.get<ApiResponse<RelatedDocResult[]>>(`${RESOURCE}/${enc(entity, name)}/related`);
 }
 
+/** One saved change of a document: who saved it, when, and each field it changed. The engine
+ *  leaves out a field the caller may not read, and a Table cell the caller may not read. */
+export interface DocVersion {
+  _id?: string;
+  changed_by: string;
+  timestamp: string;
+  changes: { field: string; old: unknown; new: unknown }[];
+}
+
+export function getVersions(entity: string, name: string): Promise<ApiResponse<DocVersion[]>> {
+  return api.get<ApiResponse<DocVersion[]>>(`${RESOURCE}/${enc(entity, name)}/versions`);
+}
+
+/** One entry of a document's activity stream. `user_name` is the actor's name when it was written. */
+export interface ActivityEntry {
+  _id: string;
+  action: string;
+  user: string;
+  user_name?: string;
+  summary?: string;
+  creation: string;
+}
+
+export function getActivity(entity: string, name: string): Promise<ApiResponse<ActivityEntry[]>> {
+  return api.get<ApiResponse<ActivityEntry[]>>(`/api/v1/activity/${enc(entity, name)}`);
+}
+
+/** One read of a document, which the engine records only for an entity with `track_views`. */
+export interface DocView {
+  viewed_by: string;
+  timestamp: string;
+}
+
+export function getViews(entity: string, name: string): Promise<ApiResponse<DocView[]>> {
+  return api.get<ApiResponse<DocView[]>>(`${RESOURCE}/${enc(entity, name)}/views`);
+}
+
 /** One typeahead result for a Link field. Sub-row results carry a composite
  *  `<parent>::<row_id>` _id + a parent-title subtitle. */
 export interface LinkSearchResult {
