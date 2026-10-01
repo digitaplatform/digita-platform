@@ -262,6 +262,43 @@ describe('the Jobs page of a tenant with several apps', () => {
   });
 });
 
+// Editing a saved job on a page where an app is chosen: PUT replaces the job, so the body carries
+// what the dialog does not show as the job has it, and the toast tells what the save did.
+describe('editing a saved job of the chosen app', () => {
+  const scheduledSweep: JobDef = { ...savedSweep, schedule: { cron: '0 3 * * *' }, enabled: false, timeout_minutes: 15, max_attempts: 7 };
+
+  beforeEach(() => {
+    routes['/api/v1/jobs'] = () => json({ jobs: [savedDunning, scheduledSweep] });
+  });
+
+  async function editSweep() {
+    renderJobs();
+    await pickApp('simetrix-ch');
+    fireEvent.click(await screen.findByTestId('action:job-edit'));
+    await screen.findByRole('dialog');
+  }
+
+  it('says the schedule is saved when the cron changes', async () => {
+    await editSweep();
+    fireEvent.change(screen.getByLabelText(/^Cron/), { target: { value: '0 4 * * *' } });
+    fireEvent.click(screen.getByTestId('action:job-save'));
+
+    expect(await screen.findByText('Schedule saved.')).toBeInTheDocument();
+    expect(screen.queryByText('Saved. The job now runs only when started by hand.')).toBeNull();
+    expect(saves[0]!.body.schedule).toEqual({ cron: '0 4 * * *' });
+  });
+
+  it('says the job now runs only by hand when the cron is cleared', async () => {
+    await editSweep();
+    fireEvent.change(screen.getByLabelText(/^Cron/), { target: { value: '' } });
+    fireEvent.click(screen.getByTestId('action:job-save'));
+
+    expect(await screen.findByText('Saved. The job now runs only when started by hand.')).toBeInTheDocument();
+    expect(screen.queryByText('Schedule saved.')).toBeNull();
+    expect(saves[0]!.body.schedule).toBeNull();
+  });
+});
+
 // The definitions of a catalog are read together, and one that fails does not fail the read: the
 // page must read it again on Reload and must not keep a result with failures as fresh.
 describe('a definition read that fails on the Jobs page', () => {

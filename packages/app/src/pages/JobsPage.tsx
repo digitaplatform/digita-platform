@@ -534,7 +534,8 @@ function JobConfigDialog({
             max_attempts: job.max_attempts,
           });
         else await jobsApi.create(body);
-        toast(tc('ui.jobs.scheduleSaved'), 'success');
+        // Clearing the cron is how a schedule is stopped: say the job is now manual, not that a schedule was saved.
+        toast(tc(job?.schedule && !body.schedule ? 'ui.jobs.scheduleCleared' : 'ui.jobs.scheduleSaved'), 'success');
       } else {
         // Run now: reuse this task's manual job (schedule null) if one exists,
         // else create it — then trigger. Keeps one manual entry per task+doc.
