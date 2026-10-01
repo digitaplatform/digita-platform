@@ -3,7 +3,7 @@ import { DIGITA } from "@digitaplatform/shared";
 import { join } from "path";
 import { seedDataTranslations } from "../setup/seed-data-translations.js";
 import type { MongoDBService } from "../database/mongodb-service.js";
-import type { EntityRegistry } from "../entity/entity-registry.js";
+import { EntityRegistry } from "../entity/entity-registry.js";
 import type { ViewRegistry } from "../view/view-registry.js";
 import type { TranslationService } from "../i18n/translation-service.js";
 import type { RoleRegistry } from "../permissions/role-registry.js";
@@ -92,25 +92,33 @@ async function performReload(deps: AdminReloadDefinitionsDeps): Promise<ReloadSu
   const entityDirs = deps.getEntityDirs();
   const localeDirs = deps.getLocaleDirs();
 
-  // 1. Re-load entity definitions from disk into the registry. `loadAll`
+  // The directories boot loads, in the order it loads them.
+  const loadEntityFiles = async (into: EntityRegistry): Promise<void> => {
+    for (const dir of entityDirs) {
+      await into.loadAll(dir);
+    }
+    for (const d of domainDirs) {
+      await into.loadAll(join(d.root, "entities"), { defaultDatabase: d.dbName });
+    }
+  };
+
+  // 1. Check the files in a scratch registry. A file boot would refuse, a malformed definition or
+  //    a Link to an entity no file has, is refused here with the same message, before anything the
+  //    engine serves or stores changes: `loadAll` below overwrites the live registry. Only the
+  //    files are checked, as at boot, so a definition POST /meta wrote cannot refuse a reload.
+  try {
+    const staged = new EntityRegistry();
+    await loadEntityFiles(staged);
+    staged.assertLinkTargetsLoaded();
+  } catch (err) {
+    throw new BadRequestError(err instanceof Error ? err.message : String(err));
+  }
+
+  // 1b. Re-load entity definitions from disk into the live registry. `loadAll`
   //    overwrites both the in-memory `entities` map and the file-snapshot
   //    `fileEntities` map for any name it encounters — that's exactly the
   //    refresh we want.
-  for (const dir of entityDirs) {
-    await registry.loadAll(dir);
-  }
-  for (const d of domainDirs) {
-    await registry.loadAll(join(d.root, "entities"), { defaultDatabase: d.dbName });
-  }
-
-  // 1b. Boot refuses a Link to an entity no file loaded, so replacing the stored definitions with
-  //     files that carry one would leave an engine that cannot start again. Nothing is written
-  //     before this check, and the answer names every entity, field and target.
-  try {
-    registry.assertLinkTargetsLoaded();
-  } catch (err) {
-    throw new BadRequestError((err as Error).message);
-  }
+  await loadEntityFiles(registry);
 
   // 2. Wipe the admin-side `entities` collection and re-write
   //    every loaded entity. This drops any DB-only overrides.
