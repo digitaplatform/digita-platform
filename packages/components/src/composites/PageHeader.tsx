@@ -257,8 +257,14 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
         ref={barRef}
         data-ui="page-header-bar"
         // Sticky inside the stuck header: pulled down from the header's top, which is
-        // under the TopBar, to the band the header leaves visible.
-        className="sticky top-[var(--topbar-h,0px)] z-20 flex min-h-12 items-center gap-2 bg-surface px-3"
+        // under the TopBar, to the band the header leaves visible. Without a back link and
+        // actions the bar holds nothing until the header sticks, and its background would
+        // stand as a blank band above the title; it keeps its height, so the collapse never
+        // changes the header's size.
+        className={cn(
+          'sticky top-[var(--topbar-h,0px)] z-20 flex min-h-12 items-center gap-2 px-3',
+          !back && !actions && !collapsed ? 'bg-transparent' : 'bg-surface',
+        )}
       >
         {backNode}
         {/* A flex item in flow, not an absolute centered span: it shrinks and
