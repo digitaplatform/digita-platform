@@ -10,6 +10,7 @@ import { useChrome } from '@/lib/chrome-i18n';
 import { qkPrefix } from '@/lib/query-keys';
 import { useUiStore } from '@/stores/ui';
 import { LoadingBlock, ErrorBlock } from '@/components/status';
+import { optionList } from '@/controls/SelectControl';
 
 type Row = Record<string, unknown>;
 
@@ -40,7 +41,7 @@ export function TreeEditor({
   const orderField = tree.order_field ?? labelField;
 
   const groupField = tree.group_by ? meta.fields.find((f) => f.fieldname === tree.group_by) : undefined;
-  const groupOptions = (groupField?.options ?? []) as string[];
+  const groupOptions = optionList(groupField?.options);
   const [group, setGroup] = useState(groupOptions[0] ?? '');
   const [movingId, setMovingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
