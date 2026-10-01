@@ -38,6 +38,24 @@ const cases: [string, ConditionCase][] = [
     'a field the reader may not read',
     { condition: 'doc.margin > 100', stored: { status: 'open', margin: 500 }, shown: { status: 'open' }, isJudged: false },
   ],
+  [
+    'a field the reader may not read, after a part the record fails',
+    {
+      condition: "doc.status == 'open' || doc.margin > 100",
+      stored: { status: 'closed', margin: 500 },
+      shown: { status: 'closed' },
+      isJudged: false,
+    },
+  ],
+  [
+    'a token claim, after a part the record meets',
+    {
+      condition: "doc.status == 'open' && user.branch == 'North'",
+      stored: { status: 'open' },
+      claims: { branch: 'North' },
+      isJudged: false,
+    },
+  ],
   ['a field the record meets', { condition: "doc.status == 'open'", stored: { status: 'open' }, isJudged: true }],
   ['a field the record fails', { condition: "doc.status == 'open'", stored: { status: 'closed' }, isJudged: true }],
   [
