@@ -5,10 +5,11 @@ import { getActions, runAction, type ActionResult } from '@/services/resource';
 import { qk, qkPrefix } from '@/lib/query-keys';
 import { unwrap } from '@/lib/api-result';
 import { useI18nStore } from '@/stores/i18n';
+import { localizeAction } from '@/lib/localize-meta';
 
 /** The actions the engine reports as available on this doc (already filtered by
- *  show_if + requires_permission server-side). Action labels are localized via
- *  the generic `action.{Entity}.{action}` key (fallback: the raw meta label). */
+ *  show_if + requires_permission server-side), localized as localizeMeta localizes the
+ *  actions of an entity: their labels, inputs and dialog fields. */
 export function useActions(entity: string | undefined, name: string | undefined) {
   const query = useQuery<ActionDefinition[]>({
     queryKey: entity && name ? qk.actions(entity, name) : ['resource', '__none__', 'actions'],
@@ -20,7 +21,7 @@ export function useActions(entity: string | undefined, name: string | undefined)
   const data = useMemo(
     () =>
       query.data && entity
-        ? query.data.map((a) => ({ ...a, label: translations[`action.${entity}.${a.action}`] ?? a.label }))
+        ? query.data.map((a) => localizeAction(entity, a, translations))
         : query.data,
     [query.data, translations, entity],
   );

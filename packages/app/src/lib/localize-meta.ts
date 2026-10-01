@@ -16,7 +16,7 @@ import type { EntitySummary } from '@/types';
  * Any future label field localizes by adding ONE line here — renderers read
  * already-localized meta and never build translation keys themselves.
  *
- * Wired into `useMeta` / `useMetaCatalog` so it runs reactively on
+ * Wired into `useMeta` / `useMetaCatalog` / `useActions` so it runs reactively on
  * the active locale. Select OPTION values are the one exception: an `options`
  * string[] carries no label slot, so they stay resolved at the control via the
  * store's `tOption` (already localized).
