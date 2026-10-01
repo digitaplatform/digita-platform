@@ -3,6 +3,8 @@ import {
   applyScopeFilters,
   applyRoleVisibilityFilter,
   isRoleVisible,
+  permissionRowsFor,
+  scopeValueMatches,
 } from "../src/core/permissions/scope-filter.js";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import type { UserContext } from "../src/core/permissions/types.js";
@@ -83,6 +85,40 @@ describe("applyScopeFilters (D10c — union/OR semantics)", () => {
   it("no read permission → filters untouched", () => {
     const e = entityWith([P("Other", { read: 0 })]);
     expect(applyScopeFilters(e, user(["Other"]), { a: 1 })).toEqual({ a: 1 });
+  });
+
+  it("a user value that is a list matches a row through any of its members, in a list and in one row", () => {
+    const e = entityWith([P("Sales", { scope: { field: "dept", user_field: "departments" } })]);
+    expect(applyScopeFilters(e, user(["Sales"], { departments: ["A", "B"] }), {})).toEqual({ dept: { $in: ["A", "B"] } });
+    expect(scopeValueMatches("B", ["A", "B"])).toBe(true);
+    expect(scopeValueMatches(["C", "B"], ["A", "B"])).toBe(true);
+    expect(scopeValueMatches("C", ["A", "B"])).toBe(false);
+    expect(scopeValueMatches("A", [])).toBe(false);
+  });
+});
+
+describe("permissionRowsFor — a row is meant for the roles its role_visibility_field lists", () => {
+  const declared = [P("System User", { select: 1 }), P("Desk", { select: 1, condition: "eval:doc.status == 'Open'" })];
+  const listed = (): EntityDefinition =>
+    ({ name: "Workspace", role_visibility_field: "roles", permissions: declared }) as unknown as EntityDefinition;
+
+  it("lets each role that no declared row names select and read the rows that list one of the user's roles", () => {
+    const scoped = { level: 0, select: 1, read: 1, scope: { field: "roles", user_field: "roles" } };
+    expect(permissionRowsFor(listed(), user(["Reception", "Technician"]))).toEqual([
+      { role: "Reception", ...scoped },
+      { role: "Technician", ...scoped },
+    ]);
+  });
+
+  it("keeps the declared rows for a user whose role a declared row names, so a listed role never widens them", () => {
+    expect(permissionRowsFor(listed(), user(["System User", "Reception"]))).toBe(declared);
+    expect(permissionRowsFor(listed(), user(["Desk"]))).toBe(declared);
+  });
+
+  it("gives Guest, a user with no role and an entity without the field only the declared rows", () => {
+    expect(permissionRowsFor(listed(), user(["Guest"]))).toBe(declared);
+    expect(permissionRowsFor(listed(), user([]))).toEqual([]);
+    expect(permissionRowsFor(entityWith(declared), user(["Reception"]))).toEqual(declared);
   });
 });
 

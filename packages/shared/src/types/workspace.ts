@@ -84,7 +84,8 @@ export interface WorkspaceDoc {
   icon?: string;
   enabled?: boolean;
   priority?: number;
-  /** Role names that may SEE this workspace. Empty/absent = all authenticated users. */
+  /** Role names that may SEE this workspace, even a role that no permission row names.
+   *  Empty/absent = every user a permission row lets read workspaces. */
   roles?: string[];
   /** Role names for whom this is the DEFAULT workspace. */
   is_default_for_roles?: string[];

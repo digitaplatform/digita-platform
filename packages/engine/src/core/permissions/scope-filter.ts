@@ -1,6 +1,26 @@
-import type { EntityDefinition } from "@digitaplatform/shared";
+import type { EntityDefinition, EntityPermission } from "@digitaplatform/shared";
 import { SYSTEM_ROLES } from "@digitaplatform/shared";
 import type { UserContext } from "./types.js";
+
+/**
+ * The permission rows of `entity` that a check of `user` weighs. These are the declared rows,
+ * except on an entity with a `role_visibility_field` whose declared rows name none of the user's
+ * roles: a row there is meant for the roles it lists, so each role of the user selects and reads,
+ * at level 0, the rows that list one of the user's roles. A role that a declared row names keeps
+ * exactly what the declared rows grant, so a row's role list never widens them. Guest, the
+ * anonymous caller, gets no such read.
+ */
+export function permissionRowsFor(entity: EntityDefinition, user: UserContext): EntityPermission[] {
+  const field = entity.role_visibility_field;
+  if (
+    !field ||
+    user.roles.includes(SYSTEM_ROLES.GUEST) ||
+    entity.permissions.some((perm) => user.roles.includes(perm.role))
+  ) {
+    return entity.permissions;
+  }
+  return user.roles.map((role) => ({ role, level: 0, select: 1, read: 1, scope: { field, user_field: "roles" } }));
+}
 
 /** Normalize a scope value for comparison: Date → epoch ms, ObjectId-like → String. */
 function normScope(v: unknown): unknown {
@@ -16,11 +36,14 @@ function normScope(v: unknown): unknown {
  * field-mask check so they agree with the Mongo list filter (which matches by
  * array membership). A `scope`-restricted read admits a doc when the doc's scope
  * value equals the user's — OR, when the doc value is an ARRAY, when the user's
- * value is a member (a doc belonging to several scopes is visible to each).
+ * value is a member (a doc belonging to several scopes is visible to each). A
+ * user value that is an ARRAY matches when one of its members does (a user
+ * belonging to several scopes sees each), as the list filter's `$in` does.
  * Returns false for a null/undefined user value (that role then grants nothing).
  */
 export function scopeValueMatches(docValue: unknown, userValue: unknown): boolean {
   if (userValue === null || userValue === undefined) return false;
+  if (Array.isArray(userValue)) return userValue.some((member) => scopeValueMatches(docValue, member));
   const u = normScope(userValue);
   if (Array.isArray(docValue)) return docValue.some((el) => normScope(el) === u);
   return normScope(docValue) === u;
@@ -50,7 +73,7 @@ export function applyScopeFilters(
     return existingFilters;
   }
 
-  const readPerms = entity.permissions.filter(
+  const readPerms = permissionRowsFor(entity, user).filter(
     (p) => user.roles.includes(p.role) && p.level === 0 && p.read,
   );
 
@@ -72,7 +95,7 @@ export function applyScopeFilters(
       // scope configured but the user has no value → this role grants nothing
       // (mirrors single-doc, where an undefined userValue always denies).
       if (userValue === undefined || userValue === null) continue;
-      parts.push({ [perm.scope.field]: userValue });
+      parts.push({ [perm.scope.field]: Array.isArray(userValue) ? { $in: userValue } : userValue });
     }
     if (perm.if_owner) {
       parts.push({ owner: user.email });

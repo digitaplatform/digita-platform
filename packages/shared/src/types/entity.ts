@@ -1035,10 +1035,12 @@ export interface EntityDefinition {
    *  re-bootstrap — e.g. Setting / BrandingSetting. The engine does not act on it. */
   reload_boot_on_write?: boolean;
   /** Name of a `string[]` field holding role names that gate VISIBILITY of each
-   *  document: a row whose field is empty/absent is visible to everyone, otherwise
-   *  it is visible only to users whose roles intersect it. The engine enforces this
-   *  on list/read (defense-in-depth; Administrator bypasses). Generic — any entity
-   *  may opt in (e.g. Workspace → "roles"). */
+   *  document: a row whose field is empty/absent is visible to every user a
+   *  permission row lets read the entity, otherwise only to users whose roles
+   *  intersect it. A user whose roles no permission row names selects and reads, at
+   *  level 0, exactly the rows whose field lists one of its roles. The engine
+   *  enforces this on list/read (Administrator bypasses). Generic — any entity may
+   *  opt in (e.g. Workspace → "roles"). */
   role_visibility_field?: string;
 
   // Change tracking

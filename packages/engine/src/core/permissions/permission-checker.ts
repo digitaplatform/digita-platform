@@ -2,7 +2,7 @@ import type { EntityDefinition, EntityPermission, FieldDefinition, StatePermissi
 import { ROW_ID_FIELD, SYSTEM_ROLES, canGrantActionTo } from "@digitaplatform/shared";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import { docFieldsOf, evaluateExpression } from "../expression/expression-evaluator.js";
-import { scopeValueMatches } from "./scope-filter.js";
+import { permissionRowsFor, scopeValueMatches } from "./scope-filter.js";
 import type { UserContext, PermissionCheckResult } from "./types.js";
 import { createLogger } from "../logging/logger.js";
 
@@ -87,7 +87,7 @@ export class PermissionChecker {
     }
 
     const entity = this.registry.get(entityName);
-    const permissions = entity.permissions;
+    const permissions = permissionRowsFor(entity, user);
 
     if (!permissions || permissions.length === 0) {
       return { allowed: false, reason: "No permissions defined" };
@@ -208,7 +208,7 @@ export class PermissionChecker {
   hasConditionalRowRead(user: UserContext, entityName: string): boolean {
     if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return false;
     const entity = this.registry.get(entityName);
-    return entity.permissions.some(
+    return permissionRowsFor(entity, user).some(
       (p) => p.level === 0 && !!p.read && !!p.condition && user.roles.includes(p.role),
     );
   }
@@ -222,7 +222,7 @@ export class PermissionChecker {
   hasRowDependentRead(user: UserContext, entityName: string): boolean {
     if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return false;
     const entity = this.registry.get(entityName);
-    return entity.permissions.some(
+    return permissionRowsFor(entity, user).some(
       (p) =>
         !!p.read &&
         user.roles.includes(p.role) &&
@@ -317,7 +317,7 @@ export class PermissionChecker {
     }
 
     const entity = this.registry.get(entityName);
-    const rows: ReadRow[] = entity.permissions.filter(
+    const rows: ReadRow[] = permissionRowsFor(entity, user).filter(
       (perm) => user.roles.includes(perm.role) && !!perm.read && admits(perm),
     );
     if (readsLevel0) rows.push({ level: 0 });
@@ -352,7 +352,7 @@ export class PermissionChecker {
     const anyGated = tableField.child_fields.some((c) => (c.perm_level ?? 0) > 0);
     if (!anyGated) return null;
 
-    const rows: ReadRow[] = entity.permissions.filter(
+    const rows: ReadRow[] = permissionRowsFor(entity, user).filter(
       (perm) => user.roles.includes(perm.role) && !!perm.read && this.permMatchesDoc(perm, user, doc),
     );
     if (sharedForRead) rows.push({ level: 0 });
@@ -376,7 +376,7 @@ export class PermissionChecker {
   getFilterableFields(user: UserContext, entityName: string): Set<string> | null {
     if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return null;
     const entity = this.registry.get(entityName);
-    const reads = entity.permissions.filter((perm) => !!perm.read && user.roles.includes(perm.role));
+    const reads = permissionRowsFor(entity, user).filter((perm) => !!perm.read && user.roles.includes(perm.role));
     const fields = new Set<string>();
     for (const field of entity.fields) {
       if (!opensOnEveryListedRow(reads, (row) => opensField(row, field.fieldname, field.perm_level ?? 0))) continue;
@@ -411,7 +411,7 @@ export class PermissionChecker {
     if (!admitted) return false;
     const entity = this.registry.get(entityName);
     const level = entity.fields.find((f) => f.fieldname === displayField)?.perm_level ?? 0;
-    const admittingRowOpensTitle = entity.permissions.some(
+    const admittingRowOpensTitle = permissionRowsFor(entity, user).some(
       (perm) =>
         user.roles.includes(perm.role) &&
         (!!perm.select || !!perm.read) &&
@@ -431,7 +431,7 @@ export class PermissionChecker {
    */
   isPickerTitleVisible(user: UserContext, entityName: string, displayField: string): boolean {
     if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return true;
-    const rows = this.registry.get(entityName).permissions.filter(
+    const rows = permissionRowsFor(this.registry.get(entityName), user).filter(
       (perm) => user.roles.includes(perm.role) && (!!perm.select || !!perm.read),
     );
     return opensOnEveryListedRow(rows, (row) => opensField(row, displayField, 0));
@@ -446,7 +446,7 @@ export class PermissionChecker {
   listReadGateFields(user: UserContext, entityName: string): string[] | undefined {
     const entity = this.registry.get(entityName);
     const fields = new Set<string>(["_id", "docstatus", entity.workflow_field ?? "status"]);
-    for (const perm of entity.permissions) {
+    for (const perm of permissionRowsFor(entity, user)) {
       if (perm.level !== 0 || !perm.read || !user.roles.includes(perm.role)) continue;
       if (perm.if_owner) fields.add("owner");
       if (perm.scope) fields.add(perm.scope.field);
@@ -467,7 +467,7 @@ export class PermissionChecker {
   getFilterAllowlist(user: UserContext, entityName: string): Set<string> {
     const entity = this.registry.get(entityName);
     const filterable = this.getFilterableFields(user, entityName);
-    const reads = entity.permissions.filter((perm) => !!perm.read && user.roles.includes(perm.role));
+    const reads = permissionRowsFor(entity, user).filter((perm) => !!perm.read && user.roles.includes(perm.role));
     const showsOperatorFields = !reads.some((row) => row.fields) || opensOnEveryListedRow(reads, (row) => !row.fields);
     const operatorFields = filterable === null || showsOperatorFields ? OPERATOR_FIELDS : [];
     return new Set<string>([
@@ -500,7 +500,7 @@ export class PermissionChecker {
 
     const writableLevels = new Set<number>();
 
-    for (const perm of entity.permissions) {
+    for (const perm of permissionRowsFor(entity, user)) {
       if (!user.roles.includes(perm.role)) continue;
       if (perm.write && this.permMatchesDoc(perm, user, doc)) {
         writableLevels.add(perm.level);
@@ -537,7 +537,7 @@ export class PermissionChecker {
     if (!anyGated) return null;
 
     const writableLevels = new Set<number>();
-    for (const perm of entity.permissions) {
+    for (const perm of permissionRowsFor(entity, user)) {
       if (!user.roles.includes(perm.role)) continue;
       if (perm.write && this.permMatchesDoc(perm, user, doc)) writableLevels.add(perm.level);
     }
