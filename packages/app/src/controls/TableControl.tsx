@@ -200,17 +200,6 @@ export default function TableControl(props: FieldControlProps) {
     return { ...row, [cf.fieldname]: r.error ? undefined : r.value };
   };
 
-  // A signature's PNG data URL would fill its cell as text, so it shows as a small image.
-  const renderCellValue = (cf: FieldDefinition, row: Row): ReactNode => {
-    const signature = row[cf.fieldname];
-    if (cf.fieldtype === 'Signature' && typeof signature === 'string' && signature !== '') {
-      return (
-        <img src={signature} alt={tc('ui.signature.alt')} className="h-7 w-auto rounded border border-border bg-paper" />
-      );
-    }
-    return <CellValue field={cf} row={row} entity={entity} />;
-  };
-
   // Cosmetic conditional styling: first matching rule's class for the cell.
   const cellClassName = ({ row, column }: DataGridDisplayArgs<Row>): string | undefined => {
     const rules = fieldByName.get(column.key)?.conditional_style;
@@ -257,7 +246,7 @@ export default function TableControl(props: FieldControlProps) {
     const renderReadOnlyCell = ({ row, column }: DataGridDisplayArgs<Row>): ReactNode => {
       const cf = fieldByName.get(column.key);
       if (!cf) return null;
-      return renderCellValue(cf, cf.display_formula ? formulaRow(cf, row) : row);
+      return <CellValue field={cf} row={cf.display_formula ? formulaRow(cf, row) : row} entity={entity} />;
     };
 
     return (
@@ -281,7 +270,7 @@ export default function TableControl(props: FieldControlProps) {
                   <div key={c.fieldname} className="truncate">
                     <dt className="text-textMuted">{tField(entity, c.fieldname, c.label)}</dt>
                     <dd className="text-textMain">
-                      {renderCellValue(c, row)}
+                      <CellValue field={c} row={row} entity={entity} />
                     </dd>
                   </div>
                 ))}
@@ -526,7 +515,7 @@ export default function TableControl(props: FieldControlProps) {
     if (rowState(row)[column.key]?.visible === false) return null;
     const cf = fieldByName.get(column.key);
     if (!cf) return null;
-    return renderCellValue(cf, cf.display_formula ? formulaRow(cf, row) : row);
+    return <CellValue field={cf} row={cf.display_formula ? formulaRow(cf, row) : row} entity={entity} />;
   };
   const renderEditor = ({
     row,

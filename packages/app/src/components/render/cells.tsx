@@ -2,6 +2,7 @@ import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
 import type { BadgeProps } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
 import { useI18nStore } from '@/stores/i18n';
+import { useChrome } from '@/lib/chrome-i18n';
 import { resolveWorkflowField } from '@/lib/workflow-field';
 import {
   EMPTY,
@@ -36,6 +37,7 @@ export function CellValue({
   const locale = useSessionStore((s) => s.locale);
   const defaultCurrency = useSessionStore((s) => s.settings?.default_currency);
   const tOption = useI18nStore((s) => s.tOption);
+  const tc = useChrome();
   const value = row[field.fieldname];
 
   if (field.fieldtype === 'Link') {
@@ -81,6 +83,11 @@ export function CellValue({
           loading="lazy"
           className="h-8 w-8 rounded border border-border bg-subtle object-cover"
         />
+      );
+    case 'Signature':
+      // A signature is stored as a PNG data URL, which would fill the cell as text.
+      return (
+        <img src={String(value)} alt={tc('ui.signature.alt')} className="h-7 w-auto rounded border border-border bg-paper" />
       );
     case 'Attach': {
       const name = String(value).split('/').pop() || String(value);

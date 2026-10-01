@@ -324,3 +324,29 @@ describe('a Duration cell honors hide_days and hide_seconds', () => {
     expect(cellTexts(container)).toEqual(expect.arrayContaining(['26:03:04', '1d:2:03']));
   });
 });
+
+describe('a Signature field in a list', () => {
+  it('shows the signature as a small image, never as its PNG data URL', () => {
+    const signed = 'data:image/png;base64,c2lnbmVk';
+    const m = meta([
+      { fieldname: 'name', fieldtype: 'Data', label: 'Name', in_list_view: true },
+      { fieldname: 'signature', fieldtype: 'Signature', label: 'Signature', in_list_view: true },
+    ]);
+    const { container } = render(
+      <ListRenderer
+        entity="Widget"
+        meta={m}
+        rows={[{ _id: 'c1', name: 'Acme', signature: signed }]}
+        page={1}
+        total={1}
+        totalPages={1}
+        onRowClick={noop}
+        onSort={noop}
+        onPageChange={noop}
+      />,
+    );
+    expect(container).toHaveTextContent('Acme');
+    expect(container).not.toHaveTextContent('data:image');
+    expect(container.querySelector(`img[src="${signed}"]`)).toBeInTheDocument();
+  });
+});
