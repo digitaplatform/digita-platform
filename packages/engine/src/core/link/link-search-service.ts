@@ -128,7 +128,7 @@ export class LinkSearchService {
   /**
    * What a search of `user` on `entityName` may name and must re-check, as getList
    * does: `filters` keys only from the fields the user may filter on (else
-   * FilterFieldNotAllowedError) and values that are not a list (else
+   * FilterFieldNotAllowedError) and values that are neither a list nor an object (else
    * MalformedFilterValueError), rows a read condition hides dropped per stored row,
    * and fields masked on the stored row whenever a grant's owner, condition or scope
    * decides them.
