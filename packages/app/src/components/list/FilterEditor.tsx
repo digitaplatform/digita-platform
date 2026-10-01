@@ -6,6 +6,7 @@ import { useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useSearchLink } from '@/hooks/useSearchLink';
 import { FIELD_CLASS } from '@/controls/control-styles';
+import { optionList } from '@/controls/SelectControl';
 import type { FilterTuple } from '@/lib/filter-from-url';
 import { resolveLinkFilters } from '@/lib/link-filters';
 import {
@@ -436,11 +437,6 @@ function LinkFilterValue({
       clearLabel={tc('ui.action.clear')}
     />
   );
-}
-function optionList(options: unknown): string[] {
-  if (Array.isArray(options)) return options as string[];
-  if (typeof options === 'string') return options.split('\n').map((s) => s.trim()).filter(Boolean);
-  return [];
 }
 
 /** Coerce a numeric input string to a number; keep '' as '' (empty marker). */
