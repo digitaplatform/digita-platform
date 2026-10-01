@@ -4,12 +4,12 @@ import { useSessionStore } from '@/stores/session';
 import { useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
 import { resolveWorkflowField } from '@/lib/workflow-field';
+import { currencyText } from '@/lib/amount-width';
 import {
   EMPTY,
   formatDate,
   formatDatetime,
   formatNumber,
-  formatCurrency,
   formatPercent,
   formatDuration,
 } from '@/lib/format';
@@ -56,10 +56,8 @@ export function CellValue({
       return <>{formatDate(value, locale?.format_locale)}</>;
     case 'Datetime':
       return <>{formatDatetime(value, locale?.format_locale, locale?.timezone)}</>;
-    case 'Currency': {
-      const cf = field.currency_field ? String(row[field.currency_field] ?? '') : '';
-      return <span className="tabular-nums">{formatCurrency(value, locale?.format_locale, cf || defaultCurrency, { precision: field.precision })}</span>;
-    }
+    case 'Currency':
+      return <span className="tabular-nums">{currencyText(field, row, locale?.format_locale, defaultCurrency)}</span>;
     case 'Float':
       return <span className="tabular-nums">{formatNumber(value, locale?.format_locale, { precision: field.precision ?? 2 })}</span>;
     case 'Int':
