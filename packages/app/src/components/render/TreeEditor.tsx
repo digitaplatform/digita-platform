@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { EntityDefinition, TreeConfig } from '@digitaplatform/shared';
-import { TreeView, Button, IconButton, Select, type TreeViewNode } from '@digitaplatform/components';
+import { TreeView, Button, IconButton, Input, Select, type TreeViewNode } from '@digitaplatform/components';
 import { useList } from '@/hooks/useList';
 import { updateDoc, deleteDoc } from '@/services/resource';
 import { RecordDialog } from '@/components/record/RecordDialog';
@@ -45,6 +45,7 @@ export function TreeEditor({
   const [group, setGroup] = useState(groupOptions[0] ?? '');
   const [movingId, setMovingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState('');
   // The record being edited/created in the modal (null = closed). `name` set =
   // edit; only `seed` set = create with those pre-fills.
   const [editing, setEditing] = useState<{ name?: string; seed?: Row; ancestry?: string[] } | null>(
@@ -226,8 +227,20 @@ export function TreeEditor({
         )}
       </div>
 
+      <Input
+        type="text"
+        role="searchbox"
+        aria-label={tc('ui.list.search')}
+        placeholder={tc('ui.list.search')}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+
       <TreeView
         nodes={nodes}
+        // A search writes no open groups: the tree opens a match's ancestors only while it searches,
+        // so clearing the search shows the groups as the person left them.
+        query={query}
         emptyLabel={tc('ui.select.noResults')}
         expandedIds={expandedIds}
         onExpandedChange={setNodeExpanded}
