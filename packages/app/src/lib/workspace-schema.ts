@@ -37,7 +37,11 @@ const chartCard = z.object({
   chart_type: z.enum(['bar', 'line', 'area', 'pie', 'donut']),
   x_field: z.string().min(1),
   y_fields: z.array(z.string()).min(1),
-  series_field: z.string().optional(),
+  // An unknown key is dropped without a word, so this one is refused by name: its author
+  // expects a series per value of a field, and the chart would draw the y_fields series instead.
+  series_field: z
+    .never({ invalid_type_error: 'a chart draws no series per value of a field, only one per y_fields entry' })
+    .optional(),
   stacked: z.boolean().optional(),
 });
 const listCard = z.object({

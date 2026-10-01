@@ -50,7 +50,6 @@ export interface ChartCard extends ViewBoundCard {
   x_field: string;
   /** REQUIRED, >=1 — value series row keys. */
   y_fields: string[];
-  series_field?: string;
   stacked?: boolean;
 }
 
