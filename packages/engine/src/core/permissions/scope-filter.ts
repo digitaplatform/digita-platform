@@ -1,5 +1,5 @@
 import type { EntityDefinition, EntityPermission } from "@digitaplatform/shared";
-import { SYSTEM_ROLES } from "@digitaplatform/shared";
+import { SYSTEM_ROLES, canGrantActionTo } from "@digitaplatform/shared";
 import type { UserContext } from "./types.js";
 
 /**
@@ -85,7 +85,7 @@ export function applyScopeFilters(
   }
 
   const readPerms = permissionRowsFor(entity, user).filter(
-    (p) => user.roles.includes(p.role) && p.level === 0 && p.read,
+    (p) => canGrantActionTo(p, user.roles) && p.read,
   );
 
   // No read permission at all → leave filters unchanged (RBAC denies access
