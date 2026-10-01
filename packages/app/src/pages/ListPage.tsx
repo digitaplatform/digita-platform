@@ -357,6 +357,7 @@ export default function ListPage() {
         meta={meta}
         total={listQ.data?.total}
         search={search}
+        hideSearch={treeMode}
         filters={effTuples}
         orFilters={effOrFilters}
         columns={effColumns}

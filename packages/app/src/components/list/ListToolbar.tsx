@@ -60,6 +60,8 @@ export interface ListToolbarProps {
   /** C4: total matching records — rendered as a muted count beside the title. */
   total?: number;
   search: string;
+  /** Leave the search box out where the page searches in a box of its own (the tree display). */
+  hideSearch?: boolean;
   filters: FilterTuple[];
   orFilters: FilterTuple[];
   /** Visible columns (ordered). [] = in_list_view default. */
@@ -102,6 +104,7 @@ export function ListToolbar(props: ListToolbarProps) {
     meta,
     total,
     search,
+    hideSearch,
     filters,
     orFilters,
     columns,
@@ -183,15 +186,17 @@ export function ListToolbar(props: ListToolbarProps) {
         className="-mx-4"
         title={title}
         search={
-          <Input
-            type="search"
-            wrapperClassName="md:max-w-xs"
-            leftIcon={<Search className="h-4 w-4" aria-hidden="true" />}
-            placeholder={tc('ui.list.search')}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            aria-label={tc('ui.list.search')}
-          />
+          !hideSearch && (
+            <Input
+              type="search"
+              wrapperClassName="md:max-w-xs"
+              leftIcon={<Search className="h-4 w-4" aria-hidden="true" />}
+              placeholder={tc('ui.list.search')}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              aria-label={tc('ui.list.search')}
+            />
+          )
         }
         actions={
           <>
