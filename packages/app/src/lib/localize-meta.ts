@@ -11,6 +11,7 @@ import type { EntitySummary } from '@/types';
  * (`transition.<Entity>.<action>`) and the labels of a record's links
  * (`link.<Entity>.<linked entity>.<link_field>`). A child field of a table also keys
  * by its table (`field.<Entity>.<table>.<field>`, `description.<Entity>.<table>.<field>`).
+ * What a view returns is no entity meta; its texts key by the view, see `viewSectionLabel`.
  * Any future label field localizes by adding ONE line here — renderers read
  * already-localized meta and never build translation keys themselves.
  *
@@ -99,6 +100,23 @@ export function localizeSummary(s: EntitySummary, t: Dict): EntitySummary {
     label: t[`entity.${s.name}`] ?? s.label,
     label_plural: t[`entity_plural.${s.name}`] ?? s.label_plural,
   };
+}
+
+type TField = (entity: string, field: string, fallback?: string) => string;
+
+/**
+ * The texts of what a view returns. A view's result names no entity for its values, so they key by
+ * the view the way a form's keys by its entity, a section like a Table field of the view,
+ * `field.<view>.<section>`, and a value like a child field of that Table,
+ * `field.<view>.<section>.<key>`. The store's `tField` reads a key without a text as words, so a
+ * panel never prints a result's key as it is.
+ */
+export function viewSectionLabel(tField: TField, view: string, section: string): string {
+  return tField(view, section);
+}
+
+export function viewValueLabel(tField: TField, view: string, section: string, key: string): string {
+  return tField(`${view}.${section}`, key);
 }
 
 /** Localize a workspace: its name and the texts of its cards. The keys name the workspace by its
