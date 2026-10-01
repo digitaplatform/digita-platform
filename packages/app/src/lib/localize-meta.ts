@@ -8,9 +8,10 @@ import type { EntitySummary } from '@/types';
  * the raw value: entity name + plural, field labels, section/tab headings, field
  * help-text (`description`), action labels, the fields of an action's dialog
  * (`action_field.<Entity>.<action>.<field>`) and workflow transition labels
- * (`transition.<Entity>.<action>`). Any future label field localizes
- * by adding ONE line here — renderers read already-localized meta and never build
- * translation keys themselves.
+ * (`transition.<Entity>.<action>`). A child field of a table also keys by its table
+ * (`field.<Entity>.<table>.<field>`, `description.<Entity>.<table>.<field>`). Any
+ * future label field localizes by adding ONE line here — renderers read
+ * already-localized meta and never build translation keys themselves.
  *
  * Wired into `useMeta` / `useMetaCatalog` / `useActions` so it runs reactively on
  * the active locale. Select OPTION values are the one exception: an `options`
@@ -20,10 +21,17 @@ import type { EntitySummary } from '@/types';
 
 type Dict = Record<string, string>;
 
-function localizeField(entity: string, f: FieldDefinition, t: Dict): FieldDefinition {
-  const out: FieldDefinition = { ...f, label: t[`field.${entity}.${f.fieldname}`] ?? f.label };
-  if (f.description) out.description = t[`description.${entity}.${f.fieldname}`] ?? f.description;
-  if (Array.isArray(f.child_fields)) out.child_fields = f.child_fields.map((cf) => localizeField(entity, cf, t));
+/** A child field keys by its table first, so two tables may name a column alike and read differently,
+ *  and then by its name alone, which is the key the apps wrote before a table could be named. */
+function localizeField(entity: string, f: FieldDefinition, t: Dict, table?: string): FieldDefinition {
+  const text = (family: string) =>
+    (table ? t[`${family}.${entity}.${table}.${f.fieldname}`] : undefined) ?? t[`${family}.${entity}.${f.fieldname}`];
+  const out: FieldDefinition = { ...f, label: text('field') ?? f.label };
+  if (f.description) out.description = text('description') ?? f.description;
+  if (Array.isArray(f.child_fields)) {
+    const path = table ? `${table}.${f.fieldname}` : f.fieldname;
+    out.child_fields = f.child_fields.map((cf) => localizeField(entity, cf, t, path));
+  }
   return out;
 }
 
