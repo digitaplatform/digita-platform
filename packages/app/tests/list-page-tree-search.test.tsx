@@ -1,16 +1,18 @@
 // @vitest-environment jsdom
 // The list of a tree entity has one search box in either display. The tree reads its own box, never
-// the list's `?q=`, so the header's box would filter nothing in the tree display.
+// the list's `?q=`, so the header's box would filter nothing in the tree display. Moving to the tree
+// drops a query typed in list display, which no box would show while the count and the exports
+// still carried it.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { EntityDefinition } from '@digitaplatform/shared';
 
-const page = vi.hoisted(() => ({ search: '' }));
+const page = vi.hoisted(() => ({ search: '', setParams: vi.fn() }));
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ entity: 'CustomerGroup' }),
-  useSearchParams: () => [new URLSearchParams(page.search), vi.fn()],
+  useSearchParams: () => [new URLSearchParams(page.search), page.setParams],
   useNavigate: () => vi.fn(),
 }));
 const META = vi.hoisted(
@@ -85,6 +87,9 @@ function renderList(search: string) {
   );
 }
 
+/** The URL parameters of the last write, as a plain object. */
+const lastWrite = () => Object.fromEntries(page.setParams.mock.lastCall![0] as URLSearchParams);
+
 const listSearchBoxes = () => screen.queryAllByRole('searchbox', { name: 'ui.list.search' });
 
 beforeEach(() => useUiStore.setState({ treeEditorCollapsedIds: {} }));
@@ -101,5 +106,19 @@ describe('ListPage search of a tree entity', () => {
   it('keeps the search box of the list display', () => {
     renderList('');
     expect(listSearchBoxes()).toHaveLength(1);
+  });
+
+  it('drops the list query when the display moves to the tree and keeps the filters', () => {
+    const f = JSON.stringify([['region', '=', 'North']]);
+    renderList(new URLSearchParams({ q: 'rose', f }).toString());
+    fireEvent.click(screen.getByRole('radio', { name: 'ui.tree.viewTree' }));
+    expect(lastWrite()).toEqual({ display: 'tree', f });
+  });
+
+  it('keeps the filters when the display moves back to the list', () => {
+    const f = JSON.stringify([['region', '=', 'North']]);
+    renderList(new URLSearchParams({ display: 'tree', f }).toString());
+    fireEvent.click(screen.getByRole('radio', { name: 'ui.tree.viewList' }));
+    expect(lastWrite()).toEqual({ f });
   });
 });

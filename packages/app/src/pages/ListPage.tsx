@@ -417,7 +417,11 @@ export default function ListPage() {
         <SegmentedControl
           aria-label={tc('ui.tree.viewTree')}
           value={treeMode ? 'tree' : 'list'}
-          onChange={(v) => updateParam({ display: v === 'tree' ? 'tree' : undefined })}
+          // The tree searches in its own box: a list query would stay in the count and the exports
+          // with no box showing it.
+          onChange={(v) =>
+            updateParam(v === 'tree' ? { display: 'tree', q: undefined } : { display: undefined })
+          }
           options={[
             { value: 'list', label: tc('ui.tree.viewList') },
             { value: 'tree', label: tc('ui.tree.viewTree') },
