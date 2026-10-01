@@ -43,8 +43,17 @@ export function formatNumber(value: unknown, locale: string | undefined, opts?: 
   return new Intl.NumberFormat(loc(locale), o).format(n);
 }
 
+/** The fraction digits a money amount shows: the field's own `precision`, else the
+ *  minor unit of its currency (2 for CHF, 0 for JPY), else 2, because a bill that
+ *  reads 440.9 looks wrong even when nobody named the currency. */
+export function currencyFractionDigits(currency: string | null | undefined, precision?: number): number {
+  if (precision != null) return precision;
+  if (!currency) return 2;
+  return new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2;
+}
+
 /** Locale-formatted currency (symbol + placement per region). Without a currency
- *  the number is rendered plain. */
+ *  the number is rendered plain, still with the two digits of an amount. */
 export function formatCurrency(
   value: unknown,
   locale: string | undefined,
@@ -56,7 +65,7 @@ export function formatCurrency(
   if (n === null) return String(value);
   if (!currency) {
     warnOnce('currency', '[format] no currency supplied — rendering the number without a symbol');
-    return formatNumber(value, locale, opts);
+    return formatNumber(value, locale, { precision: currencyFractionDigits(currency, opts?.precision) });
   }
   const o: Intl.NumberFormatOptions = { style: 'currency', currency };
   if (opts?.precision != null) {

@@ -78,7 +78,7 @@ function RecordKpis({ entity, meta, doc }: { entity: string; meta: EntityDefinit
               {tField(entity, f.fieldname, f.label)}
             </div>
             <div className="text-h1 font-display tabular-nums text-textMain">
-              {formatCurrency(doc[f.fieldname], formatLocale, cf || defaultCurrency)}
+              {formatCurrency(doc[f.fieldname], formatLocale, cf || defaultCurrency, { precision: f.precision })}
             </div>
           </div>
         );
