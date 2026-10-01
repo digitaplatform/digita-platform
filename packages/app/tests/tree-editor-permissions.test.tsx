@@ -6,8 +6,11 @@ import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { EntityDefinition, TreeConfig } from '@digitaplatform/shared';
 
+const list = vi.hoisted(() => ({
+  rows: [] as Array<Record<string, unknown>>,
+}));
 vi.mock('@/hooks/useList', () => ({
-  useList: () => ({ data: { rows: [{ _id: 'G-1', name: 'Retail', parent: null }] }, isLoading: false, isError: false }),
+  useList: () => ({ data: { rows: list.rows }, isLoading: false, isError: false }),
 }));
 vi.mock('@/lib/chrome-i18n', () => ({
   useChrome: () => (key: string) => key,
@@ -34,6 +37,7 @@ const META = {
     { role: 'Creator', level: 0, select: 1, read: 1, create: 1 },
     { role: 'Writer', level: 0, select: 1, read: 1, write: 1 },
     { role: 'Deleter', level: 0, select: 1, read: 1, delete: 1 },
+    { role: 'Owner', level: 0, select: 1, read: 1, write: 1, delete: 1, if_owner: true },
   ],
 } as unknown as EntityDefinition;
 const TREE: TreeConfig = { parent_field: 'parent', label_field: 'name' };
@@ -54,6 +58,7 @@ const ENTRIES = ['ui.tree.addRoot', 'ui.tree.addChild', 'ui.tree.move', 'ui.acti
 
 beforeEach(() => {
   useSessionStore.setState({ user: null });
+  list.rows = [{ _id: 'G-1', name: 'Retail', parent: null }];
 });
 
 describe('the actions of the tree view', () => {
@@ -79,5 +84,21 @@ describe('the actions of the tree view', () => {
     renderAs(['Sales Manager']);
     expect(screen.getByText('ui.tree.addRoot', { exact: false })).toBeInTheDocument();
     for (const entry of ENTRIES.slice(1)) expect(screen.getByLabelText(entry)).toBeInTheDocument();
+  });
+
+  // A role whose write and delete rows are if_owner may move and delete its own nodes only: the
+  // engine refuses the rest, so the tree offers them per node.
+  it('offers a move and a delete on the own node only, to a role whose rows are if_owner', () => {
+    list.rows = [
+      { _id: 'G-1', name: 'Mine', parent: null, owner: 'u@demo.test' },
+      { _id: 'G-2', name: 'Theirs', parent: null, owner: 'other@demo.test' },
+    ];
+    renderAs(['Owner']);
+    const entriesOf = (label: string) => {
+      const row = screen.getByText(label).closest('[data-tree-id]') as HTMLElement;
+      return ['ui.tree.move', 'ui.action.delete'].filter((entry) => row.querySelector(`[aria-label="${entry}"]`) !== null);
+    };
+    expect(entriesOf('Mine')).toEqual(['ui.tree.move', 'ui.action.delete']);
+    expect(entriesOf('Theirs')).toEqual([]);
   });
 });
