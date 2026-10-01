@@ -66,6 +66,7 @@ import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import type { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { attachLegacyLooseFiles, attachLegacyLooseFilesOnce } from "../src/core/storage/legacy-file-attachment.js";
+import { IMAGE_VARIANT_WIDTHS } from "../src/core/api/public-router.js";
 
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
@@ -1638,6 +1639,20 @@ describe("Upload API Integration", () => {
       expect(Buffer.from(res.rawPayload).equals(bannerContent)).toBe(true);
       expect(res.headers["content-type"]).toContain("image/png");
       expect(res.headers["content-disposition"]).toMatch(/^inline;/);
+    });
+
+    it("PLANTED DEFECT: refuses a width outside the fixed set with 400", async () => {
+      for (const w of ["500", "0", "-320", "abc", "640px", "", "3840"]) {
+        const res = await app.inject({ method: "GET", url: `${publicUrl}?w=${w}` });
+        expect(res.statusCode, `w=${w}`).toBe(400);
+      }
+    });
+
+    it("PLANTED INNOCENT: takes each width of the set", async () => {
+      for (const w of IMAGE_VARIANT_WIDTHS) {
+        const res = await app.inject({ method: "GET", url: `${publicUrl}?w=${w}` });
+        expect(res.statusCode, `w=${w}`).toBe(200);
+      }
     });
 
     it("a normal (non-public) field stays private and is NOT served by the public route", async () => {
