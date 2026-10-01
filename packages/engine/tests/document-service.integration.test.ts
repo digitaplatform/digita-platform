@@ -835,6 +835,19 @@ describe("An update re-derives the fetch_from fields of a row whose Link changed
     expect(fresh!["product_code"] ?? null).toBeNull();
   });
 
+  it("clears the fetched values of a row whose Link is cleared, as an insert without one stores none", async () => {
+    const created = await docService.insert("FetchOrder", { title: "SO", lines: [{ product: "STOCKABLE", quantity: 1 }] }, salesperson);
+    const [row] = await storedLines(created._id);
+    expect(row!["product_code"]).toBe("P-200");
+
+    await docService.update("FetchOrder", created._id, { lines: [{ ...row, product: null }] }, salesperson);
+
+    const [cleared] = await storedLines(created._id);
+    expect(cleared!["product"] ?? null).toBeNull();
+    expect(cleared!["product_code"] ?? null).toBeNull();
+    expect(cleared!["uom"] ?? null).toBeNull();
+  });
+
   it("keeps a value the same write sets on the row whose Link changed", async () => {
     const created = await docService.insert("FetchOrder", { title: "SO", lines: [{ product: "SERVICE" }] }, adminUser);
     const [row] = await storedLines(created._id);

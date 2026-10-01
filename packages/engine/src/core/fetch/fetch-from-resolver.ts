@@ -172,7 +172,11 @@ export class FetchFromResolver {
         if (!isEmpty && !isStoredValue) continue;
       }
       const linkedId = rowData[linkFieldname];
-      if (!linkedId) continue;
+      // A row whose Link was cleared keeps nothing of its old source, as an insert without one stores none.
+      if (!linkedId) {
+        if (storedRow) rowData[childField.fieldname] = null;
+        continue;
+      }
 
       const linkField = field.child_fields?.find((f) => f.fieldname === linkFieldname);
       if (!linkField || linkField.fieldtype !== "Link" || !linkField.target) continue;
