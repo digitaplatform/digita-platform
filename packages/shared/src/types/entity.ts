@@ -709,6 +709,9 @@ export interface ActionDefinition {
   /** Require a confirm dialog before running (skipped when opens_dialog — the
    *  dialog is itself the confirmation). */
   confirm?: boolean;
+  /** What running the action does, said in its confirm dialog under the title; read only with
+   *  `confirm`. Translated under `action_confirm_message.<Entity>.<action>`. */
+  confirm_message?: string;
   show_if?: string;
   requires_permission?: string;
   opens_dialog?: boolean;

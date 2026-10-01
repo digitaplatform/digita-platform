@@ -33,6 +33,7 @@ export function ActionBar({
 }) {
   const navigate = useNavigate();
   const t = useI18nStore((s) => s.t);
+  const translations = useI18nStore((s) => s.translations);
   const tc = useChrome();
   const dialog = useDialogHost();
   const { data: actions } = useActions(entity, name);
@@ -86,6 +87,9 @@ export function ActionBar({
     if (action.confirm) {
       const ok = await dialog.confirm({
         title: tc('ui.action.confirmActionTitle', { action: action.label }),
+        message:
+          action.confirm_message &&
+          (translations[`action_confirm_message.${entity}.${action.action}`] ?? action.confirm_message),
         confirmLabel: action.label,
         danger: action.type === 'danger',
       });
