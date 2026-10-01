@@ -129,6 +129,7 @@ function Section({ view, name, data }: { view: string; name: string; data: ViewS
                 <th
                   key={c}
                   scope="col"
+                  title={label(c)}
                   className={cn('max-w-0 truncate pb-1 pr-2 text-left text-textMuted', tableSkin.headerCell)}
                 >
                   {label(c)}

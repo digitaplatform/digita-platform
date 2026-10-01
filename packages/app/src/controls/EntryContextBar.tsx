@@ -65,19 +65,19 @@ export function EntryContextBar({
   if (!anchored || !result) return null;
 
   // Flatten every section into label:value pairs (aggregate rows and the
-  // first row of lists alike) — the strip is a one-liner by design. A section
-  // names its pairs, because two sections may carry a key alike.
-  const pairs: Array<[string, string, string]> = [];
+  // first row of lists alike) — the strip is a one-liner by design. A pair
+  // keeps its section, because two sections may carry the same key.
+  const pairs: Array<{ id: string; label: string; value: string }> = [];
   for (const [section, data] of Object.entries(result.sections)) {
     const rowData = Array.isArray(data) ? data[0] : data;
     if (!rowData) continue;
     for (const [k, v] of Object.entries(rowData)) {
       if (v == null || typeof v === 'object') continue;
-      pairs.push([
-        `${section}.${k}`,
-        viewValueLabel(tField, view, section, k),
-        typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v),
-      ]);
+      pairs.push({
+        id: `${section}.${k}`,
+        label: viewValueLabel(tField, view, section, k),
+        value: typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v),
+      });
     }
   }
   if (pairs.length === 0) return null;
@@ -87,9 +87,9 @@ export function EntryContextBar({
       data-testid="entry-context-bar"
       className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-card border border-border bg-subtle px-3 py-1.5 text-xs text-textMuted"
     >
-      {pairs.map(([id, label, v]) => (
+      {pairs.map(({ id, label, value }) => (
         <span key={id} className="whitespace-nowrap">
-          {label}: <span className="font-medium text-textMain tabular-nums">{v}</span>
+          {label}: <span className="font-medium text-textMain tabular-nums">{value}</span>
         </span>
       ))}
     </div>

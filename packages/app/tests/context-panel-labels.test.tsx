@@ -2,7 +2,7 @@
 // The context panel labels what a view returns in the session language, never by the keys of the
 // result: a section is headed by the text of `field.<view>.<section>`, a value by the text of
 // `field.<view>.<section>.<key>`, and a key without a text reads as words, not as the key.
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import type { EntityDefinition } from '@digitaplatform/shared';
 import { useI18nStore } from '@/stores/i18n';
@@ -51,7 +51,11 @@ function renderPanel(translations: Record<string, string>) {
   return render(<ContextPanel entity="WorkOrder" meta={META} doc={{ customer: 'C-1' }} />);
 }
 
-afterEach(() => useI18nStore.setState({ locale: 'en', translations: {}, loaded: false }));
+const FRENCH = {
+  'field.customer360.customer': 'Client',
+  'field.customer360.customer.display_name': 'Nom affiché',
+  'field.customer360.open_orders': 'Commandes ouvertes',
+};
 
 const GERMAN = {
   'field.customer360.customer': 'Kunde',
@@ -88,6 +92,15 @@ describe('ContextPanel labels', () => {
     expect(screen.queryByText('_id')).not.toBeInTheDocument();
   });
 
+  it('gives a column header its text as a title, because a long text is cut to the column', async () => {
+    renderPanel(GERMAN);
+
+    const orders = (await screen.findByText('Offene Aufträge')).parentElement!;
+    const headers = within(orders).getAllByRole('columnheader');
+    expect(headers[1]).toHaveAttribute('title', 'Auftrag');
+    expect(headers[2]).toHaveAttribute('title', 'Stufe');
+  });
+
   it('shows a key without a text as words, never as the key', async () => {
     renderPanel(GERMAN);
 
@@ -96,15 +109,16 @@ describe('ContextPanel labels', () => {
   });
 
   it('follows the language the texts are in', async () => {
-    renderPanel({
-      'field.customer360.customer': 'Client',
-      'field.customer360.customer.display_name': 'Nom affiché',
-      'field.customer360.open_orders': 'Commandes ouvertes',
-    });
+    const { rerender } = renderPanel(GERMAN);
+    await screen.findByText('Kunde');
+
+    useI18nStore.setState({ translations: FRENCH });
+    rerender(<ContextPanel entity="WorkOrder" meta={META} doc={{ customer: 'C-1' }} />);
 
     expect(await screen.findByText('Client')).toBeInTheDocument();
     expect(screen.getByText('Nom affiché')).toBeInTheDocument();
     expect(screen.getByText('Commandes ouvertes')).toBeInTheDocument();
     expect(screen.queryByText('Kunde')).not.toBeInTheDocument();
+    expect(screen.queryByText('Anzeigename')).not.toBeInTheDocument();
   });
 });
