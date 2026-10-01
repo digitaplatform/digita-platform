@@ -160,7 +160,7 @@ export function ViewPicker({
                   onReset();
                   close();
                 }}
-                className="inline-flex items-center gap-1 font-medium text-primary-600 hover:underline"
+                className="inline-flex items-center gap-1 font-medium text-primaryText hover:underline"
               >
                 <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
                 {tc('ui.view.reset')}
@@ -181,7 +181,7 @@ export function ViewPicker({
             {...tid.view('all')}
           >
             {!activeId ? (
-              <Check className="h-4 w-4 shrink-0 text-primary-600" aria-hidden="true" />
+              <Check className="h-4 w-4 shrink-0 text-primaryGraphic" aria-hidden="true" />
             ) : (
               <ListX className="h-4 w-4 shrink-0 text-textMuted" aria-hidden="true" />
             )}
@@ -209,7 +209,7 @@ export function ViewPicker({
                       {...tid.view('apply', v._id)}
                     >
                       {isActive ? (
-                        <Check className="h-4 w-4 shrink-0 text-primary-600" aria-hidden="true" />
+                        <Check className="h-4 w-4 shrink-0 text-primaryGraphic" aria-hidden="true" />
                       ) : (
                         <span className="h-4 w-4 shrink-0" aria-hidden="true" />
                       )}
@@ -236,7 +236,7 @@ export function ViewPicker({
                         {...tid.view('default', v._id)}
                         icon={
                           <Star
-                            className={'h-4 w-4 ' + (mineDefault ? 'fill-primary-600 text-primary-600' : '')}
+                            className={'h-4 w-4 ' + (mineDefault ? 'fill-primaryGraphic text-primaryGraphic' : '')}
                             aria-hidden="true"
                           />
                         }
@@ -257,7 +257,7 @@ export function ViewPicker({
                         {...tid.view('org-default', v._id)}
                         icon={
                           <Building2
-                            className={'h-4 w-4 ' + (orgDefault ? 'text-primary-600' : '')}
+                            className={'h-4 w-4 ' + (orgDefault ? 'text-primaryGraphic' : '')}
                             aria-hidden="true"
                           />
                         }

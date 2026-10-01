@@ -13,7 +13,7 @@ export default function LocaleNotFound() {
   const { notFound, defaultLocale } = useSiteConfig();
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col items-center px-6 py-32 text-center">
-      <p className="text-sm font-medium text-primary-600">404</p>
+      <p className="text-sm font-medium text-primaryText">404</p>
       <h1 className="mt-3 text-3xl font-semibold tracking-tight text-textMain">{notFound.title}</h1>
       <p className="mt-3 text-textMuted">{notFound.body}</p>
       <Link href={localePath(locale, defaultLocale)} {...buttonAttributes({ className: "mt-8" })}>

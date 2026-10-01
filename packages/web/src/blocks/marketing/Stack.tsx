@@ -36,7 +36,7 @@ export function Stack({ props, locale }: { props?: P; locale: Locale }) {
               </div>
               {s(item, "body") && <p className="text-sm leading-relaxed text-textMuted">{s(item, "body")}</p>}
               {s(item, "href") && s(item, "link_label") && (
-                <LocaleLink href={s(item, "href")} className="mt-auto text-sm font-semibold text-primary-600 hover:underline">
+                <LocaleLink href={s(item, "href")} className="mt-auto text-sm font-semibold text-primaryText hover:underline">
                   {s(item, "link_label")}
                 </LocaleLink>
               )}

@@ -364,7 +364,7 @@ function LoadingGroup() {
   return (
     <ShowcaseGroup title="Spinner, Skeleton" exports={['Spinner', 'Skeleton']}>
       <ShowcaseState state="Spinner">
-        <Spinner className="h-6 w-6 text-primary-600" />
+        <Spinner className="h-6 w-6 text-primaryGraphic" />
       </ShowcaseState>
       <ShowcaseState state="Skeleton">
         <div className="w-56 space-y-2">

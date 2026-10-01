@@ -211,7 +211,7 @@ export function ListRenderer({
               type="button"
               {...tid.row(entity, rowId(row))}
               onClick={() => onRowClick(rowId(row))}
-              className="font-medium text-primary-600 hover:underline"
+              className="font-medium text-primaryText hover:underline"
             >
               {primaryLabel(row) || '—'}
             </button>
@@ -281,7 +281,7 @@ export function ListRenderer({
             <div className="flex items-center justify-between gap-2">
               <span className="flex min-w-0 items-center gap-2">
                 <RecordImage meta={meta} row={r} className="h-10 w-10" />
-                <span className="font-medium text-primary-600">{primaryLabel(r)}</span>
+                <span className="font-medium text-primaryText">{primaryLabel(r)}</span>
               </span>
               {hasStates && statusBadge(r)}
             </div>

@@ -23,7 +23,7 @@ import { PageError } from '@/components/render/PageError';
 function Splash() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
-      <Spinner className="h-8 w-8 text-primary-600" />
+      <Spinner className="h-8 w-8 text-primaryGraphic" />
     </div>
   );
 }

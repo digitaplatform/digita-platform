@@ -97,7 +97,7 @@ function Chevron({ className, dir }: { className?: string; dir: 'left' | 'right'
 const DAY_BTN =
   'dp-day flex min-h-8 items-center justify-center rounded-md text-sm text-textMain transition-colors duration-base ease-smooth hover:bg-bgHover disabled:pointer-events-none';
 const SEL = 'bg-primary-600 font-semibold text-onPrimary hover:bg-primary-600';
-const TODAY = 'font-semibold text-primary-600';
+const TODAY = 'font-semibold text-primaryText';
 
 export function DatePicker({
   value,
@@ -260,7 +260,7 @@ export function DatePicker({
               className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm font-semibold text-textMain hover:bg-bgHover"
             >
               {title}
-              <Chevron dir="right" className={cn('h-3.5 w-3.5 text-primary-600 transition-transform duration-base', view === 'my' && 'rotate-90')} />
+              <Chevron dir="right" className={cn('h-3.5 w-3.5 text-primaryGraphic transition-transform duration-base', view === 'my' && 'rotate-90')} />
             </button>
             <div className="flex items-center gap-0.5">
               <button type="button" aria-label={view === 'my' ? previousYearsLabel : previousLabel} onClick={() => page(-1)} className="flex h-7 w-7 items-center justify-center rounded-btn text-textMuted hover:bg-bgHover"><Chevron dir="left" className="h-4 w-4" /></button>

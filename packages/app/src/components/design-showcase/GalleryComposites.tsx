@@ -533,7 +533,7 @@ function CardListGroup() {
           onRowClick={noop}
           renderCard={(r) => (
             <>
-              <span className="font-medium text-primary-600">{r.item}</span>
+              <span className="font-medium text-primaryText">{r.item}</span>
               <span className="mt-1 block text-xs text-textMuted">
                 {r.quantity} × {r.price} · {r.amount}
               </span>

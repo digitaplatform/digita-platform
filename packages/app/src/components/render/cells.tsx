@@ -126,7 +126,7 @@ export function CellValue({
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="text-primary-600 hover:underline"
+          className="text-primaryText hover:underline"
         >
           {name}
         </a>

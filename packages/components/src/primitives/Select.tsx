@@ -281,7 +281,7 @@ export function Select({
               isSelected && 'font-medium',
             )}
           >
-            <span className="flex h-4 w-4 shrink-0 items-center justify-center text-primary-600">
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center text-primaryGraphic">
               {isSelected && <CheckIcon className="h-4 w-4" />}
             </span>
             <span className="truncate">{o.label}</span>

@@ -45,7 +45,7 @@ export function ShortcutCard({ card, icon, countData, onNavigate }: ShortcutCard
         className="flex w-full items-start gap-3 rounded-card p-4 text-left transition-colors hover:bg-bgHover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
       >
         {icon && (
-          <span className="mt-0.5 shrink-0 text-primary-600 dark:text-primary-400" aria-hidden="true">
+          <span className="mt-0.5 shrink-0 text-primaryGraphic" aria-hidden="true">
             {icon}
           </span>
         )}

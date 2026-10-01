@@ -5,7 +5,7 @@ import { isContactItem, sortNav } from "@/lib/nav";
 import { t } from "@/i18n/messages";
 import { NavItemLink } from "./NavItemLink";
 
-const LINK = "inline-flex w-fit items-center gap-1 text-sm text-textMain transition-colors hover:text-primary-600";
+const LINK = "inline-flex w-fit items-center gap-1 text-sm text-textMain transition-colors hover:text-primaryText";
 
 /**
  * Site footer, the columns of the canvas: the brand with the site's contact address, then the

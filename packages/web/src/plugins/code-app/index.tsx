@@ -15,7 +15,7 @@ function Code({ lines }: { lines: string[] }) {
                   {part}
                 </span>
               ) : part.startsWith('"') && j % 2 === 1 ? (
-                <span key={j} className="text-primary-600">
+                <span key={j} className="text-primaryText">
                   {part}
                 </span>
               ) : (
@@ -51,7 +51,7 @@ export default function CodeApp({ props, locale }: { props?: P; locale: Locale }
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
           <span className="truncate font-display text-sm font-semibold text-textMain">{s(props, "form_title")}</span>
-          <span className="font-mono text-xs uppercase tracking-wider text-primary-600">{s(props, "form_status")}</span>
+          <span className="font-mono text-xs uppercase tracking-wider text-primaryText">{s(props, "form_status")}</span>
         </div>
         <div className="grid grid-cols-2 gap-3.5 p-5 text-sm">
           {list(props, "fields").map((field, i) => (
@@ -82,7 +82,7 @@ export default function CodeApp({ props, locale }: { props?: P; locale: Locale }
         </div>
         <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-border px-5 py-3.5 text-sm">
           <span className="text-textMuted">{s(props, "footer")}</span>
-          <span className="font-semibold text-primary-600">{t("heroRevealHint", locale)} ↗</span>
+          <span className="font-semibold text-primaryText">{t("heroRevealHint", locale)} ↗</span>
         </div>
       </div>
       <div
@@ -90,7 +90,7 @@ export default function CodeApp({ props, locale }: { props?: P; locale: Locale }
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
           <span className="truncate font-mono text-xs text-textMuted">{s(props, "definition_title")}</span>
-          <span className="font-mono text-xs uppercase tracking-wider text-primary-600">{s(props, "definition_tag")}</span>
+          <span className="font-mono text-xs uppercase tracking-wider text-primaryText">{s(props, "definition_tag")}</span>
         </div>
         <Code lines={definition} />
       </div>

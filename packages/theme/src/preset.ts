@@ -54,6 +54,8 @@ const preset = {
         textMuted: v('textMuted'),
         onPrimary: v('onPrimary'),
         primaryHover: v('primaryHover'),
+        primaryText: v('primaryText'),
+        primaryGraphic: v('primaryGraphic'),
         onError: v('onError'),
         scrim: v('scrim'),
         // M3 tonal primary-container roles (P3) → bg-primaryContainer,

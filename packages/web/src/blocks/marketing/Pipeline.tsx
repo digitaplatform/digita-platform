@@ -10,7 +10,7 @@ export function Pipeline({ props }: { props?: P }) {
         {stages.map((stage, i) => (
           <li key={i}>
             <Card variant="default" className={`h-full ${cardClass}`}>
-              {s(stage, "stage") && <p className="font-mono text-xs tracking-wider text-primary-600">{s(stage, "stage")}</p>}
+              {s(stage, "stage") && <p className="font-mono text-xs tracking-wider text-primaryText">{s(stage, "stage")}</p>}
               <h3 className="font-display text-xl font-semibold text-textMain">{s(stage, "title")}</h3>
               {s(stage, "body") && <p className="text-sm leading-relaxed text-textMuted">{s(stage, "body")}</p>}
               {s(stage, "target") && (

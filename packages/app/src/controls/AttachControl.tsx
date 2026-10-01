@@ -42,7 +42,7 @@ export default function AttachControl({
   if (state.readOnly) {
     if (!url) return <span className="text-sm text-textMuted">—</span>;
     return safeUrl ? (
-      <a id={controlId} aria-labelledby={labelId} href={safeUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary-600 hover:underline">
+      <a id={controlId} aria-labelledby={labelId} href={safeUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primaryText hover:underline">
         {fileName}
       </a>
     ) : (
@@ -71,7 +71,7 @@ export default function AttachControl({
       <div className="flex flex-wrap items-center gap-2">
         {url &&
           (safeUrl ? (
-            <a href={safeUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary-600 hover:underline">
+            <a href={safeUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primaryText hover:underline">
               {fileName}
             </a>
           ) : (
