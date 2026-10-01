@@ -344,6 +344,19 @@ describe("A filter value names no other field", () => {
     const byTitle = await search({ title: "Road Bike" });
     expect([byTitle.statusCode, byTitle.json().data]).toEqual([200, [{ _id: "P-2", display: "Road Bike" }]]);
   });
+
+  it("refuses an operator object in a link search's value, as the list does", async () => {
+    const search = (filters: unknown) => authed(`/api/v1/search/Product?${queryOf({ q: "", filters })}`);
+    const nested = await search({ title: { $regex: "(a+)+$" } });
+    expect([nested.statusCode, nested.json().error.code]).toEqual([400, "MALFORMED_FILTER_VALUE"]);
+    const listed = await get(listUrl({ filters: [["title", "=", { $regex: "(a+)+$" }]] }));
+    expect(listed.statusCode).toBe(400);
+  });
+
+  it("refuses an operator object in a count's value", async () => {
+    const count = (filters: unknown) => authed(`/api/v1/resource/Product/count?${queryOf({ filters })}`);
+    expect((await count([{ title: { $ne: "Road Bike" } }])).statusCode).toBe(400);
+  });
 });
 
 describe("Rows add up on a record, not across a list", () => {
