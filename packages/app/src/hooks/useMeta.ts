@@ -10,7 +10,6 @@ import { localizeMeta, localizeSummary } from '@/lib/localize-meta';
 
 // Meta is stable within a session but NOT immutable — a 30-min window auto-recovers
 // after an engine restart/redeploy (NOT Infinity, which would strand a stale schema).
-// useRefreshMeta() forces it instantly (the F5 "refresh meta" escape hatch).
 const META_STALE = 30 * 60 * 1000;
 const META_GC = 60 * 60 * 1000;
 
