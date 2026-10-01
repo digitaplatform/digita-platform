@@ -230,6 +230,27 @@ export class PermissionChecker {
     );
   }
 
+  /**
+   * May a row of this entity be hidden from a user who may list it? A grant the user
+   * holds may depend on an owner, a condition or a scope, a workflow state may take
+   * read away from one of the user's roles, or the rows may name the roles that see them.
+   */
+  mayHideRows(user: UserContext, entityName: string): boolean {
+    if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return false;
+    const entity = this.registry.get(entityName);
+    if (entity.role_visibility_field) return true;
+    const gatedGrant = entity.permissions.some(
+      (p) =>
+        (!!p.select || !!p.read) &&
+        user.roles.includes(p.role) &&
+        (!!p.if_owner || !!p.condition || !!p.scope),
+    );
+    const strippedRead = (entity.states ?? []).some((state) =>
+      (state.permissions ?? []).some((o) => o.read === 0 && user.roles.includes(o.role)),
+    );
+    return gatedGrant || strippedRead;
+  }
+
   /** Map the action string to the StatePermissionOverride key and return
    *  true when the override sets that key to 0 (strip). Unknown actions
    *  (those not in StatePermissionOverride) cannot be stripped — fall through. */
