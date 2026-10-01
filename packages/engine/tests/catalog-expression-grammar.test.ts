@@ -6,6 +6,7 @@ import { parseExpression, rootFieldsOf, stripEvalPrefix } from "@digitaplatform/
 import { evaluateExpression } from "../src/core/expression/expression-evaluator.js";
 import { evaluateExpr as formBefore } from "./fixtures/legacy-expression/form-evaluator.js";
 import { evaluateExpression as engineBefore } from "./fixtures/legacy-expression/engine-evaluator.js";
+import { catalogAppDir } from "./_catalog-apps.js";
 
 /**
  * Every field expression and every `eval:` expression of the catalogs, under the grammar form and
@@ -161,16 +162,18 @@ function meaningChanges(expressions: CatalogExpression[]): MeaningChange[] {
  * the old form compared 1 with true as unequal and hid the field, while the engine compared them as
  * equal, as the shared grammar does.
  */
-const KNOWN_CHANGES: MeaningChange[] = ["digita-catalog", "digita-catalog-show"].flatMap((catalog) =>
-  ["motor_brand", "battery_wh"].map((field) => ({
-    where: `${catalog}/workshop/operations/entities/bike.entity.json: Bike.${field}.depends_on`,
+function knownChanges(catalog: string): MeaningChange[] {
+  if (!["digita-catalog", "digita-catalog-show"].includes(basename(catalog))) return [];
+  const bike = relative(join(catalog, ".."), join(catalogAppDir(catalog, "workshop"), "operations/entities/bike.entity.json"));
+  return ["motor_brand", "battery_wh"].map((field) => ({
+    where: `${bike}: Bike.${field}.depends_on`,
     expression: "doc.is_ebike == true",
     doc: { is_ebike: 1 },
     form: { value: false },
     engine: { value: true },
     now: { value: true },
-  })),
-);
+  }));
+}
 
 describe.each(CATALOGS)("the expressions of %s", (catalog) => {
   const present = existsSync(catalog);
@@ -193,7 +196,6 @@ describe.each(CATALOGS)("the expressions of %s", (catalog) => {
   });
 
   it.skipIf(!present)("mean what they meant before, except the known changes", () => {
-    const known = KNOWN_CHANGES.filter((change) => change.where.startsWith(`${basename(catalog)}/`));
-    expect(meaningChanges(expressions)).toEqual(known);
+    expect(meaningChanges(expressions)).toEqual(knownChanges(catalog));
   });
 });

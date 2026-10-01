@@ -2,7 +2,8 @@ import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 
 // Same env mock as the resource-api integration test, but with APP_DIRS pointing
 // at the web-content app so its Guest-readable entities (WebSite/WebPage/…) load.
-vi.mock("../src/core/config/env.js", () => {
+vi.mock("../src/core/config/env.js", async () => {
+  const { catalogAppDir } = await import("./_catalog-apps.js");
   return { env: {
     NODE_ENV: "test", APP_VERSION: "0.1.0", SERVICE_NAME: "digita-test", PORT: 0, HOST: "127.0.0.1",
     BASE_URL: "http://localhost:3000", API_PREFIX: "/api/v1",
@@ -29,7 +30,7 @@ vi.mock("../src/core/config/env.js", () => {
     JOBS_ENABLED: false, JOBS_CONCURRENCY: 1, JOBS_RETRY_ATTEMPTS: 1, JOBS_RETRY_DELAY_MS: 1000,
     REALTIME_ENABLED: false, WS_PATH: "/ws", WS_PING_INTERVAL_MS: 25000,
     IMPORT_MAX_ROWS: 100, EXPORT_MAX_ROWS: 100,
-    APP_DIRS: ["../../../digita-catalog/web"], ENTITIES_DIR: "./src/entities", MODULES_DIR: "./src/modules", TRANSLATIONS_DIR: process.env.TRANSLATIONS_DIR,
+    APP_DIRS: [catalogAppDir("../../../digita-catalog", "web")], ENTITIES_DIR: "./src/entities", MODULES_DIR: "./src/modules", TRANSLATIONS_DIR: process.env.TRANSLATIONS_DIR,
     AUTO_MIGRATE: true, TRACK_CHANGES_DEFAULT: false,
     SEED_APP_DATA_ON_BOOT: false, SEED_DEMO_DATA_ON_BOOT: false,
     // Its entities grant Guest read, so start-up needs the renderer's purge route; nothing listens there.
@@ -57,11 +58,12 @@ import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { existsSync } from "node:fs";
+import { catalogAppDir } from "./_catalog-apps.js";
 
 // The web-content app now lives in the separate digita-catalog repo. This is a
 // cross-repo integration test (engine + the web app): run it when digita-catalog is
 // checked out as a sibling (local / integration), skip it in engine-only CI.
-const APPS_PRESENT = existsSync("../../../digita-catalog/web");
+const APPS_PRESENT = existsSync(catalogAppDir("../../../digita-catalog", "web"));
 
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
