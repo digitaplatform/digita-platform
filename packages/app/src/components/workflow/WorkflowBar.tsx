@@ -61,8 +61,11 @@ export function WorkflowBar({
     if (tr.from !== current && tr.from !== '*') return false;
     // An empty allowed_roles lets every user take the transition, as the engine reads it.
     if (!admin && tr.allowed_roles.length > 0 && !tr.allowed_roles.some((r) => roles.has(r))) return false;
-    if (tr.condition) {
-      const r = evaluateExpr(tr.condition, { doc, user: (user as unknown as Doc) ?? {} });
+    // The engine takes an Administrator's move whatever the condition says.
+    if (tr.condition && !admin) {
+      // The engine reads the stored record and the token, which hold fields and claims this
+      // read-filtered doc and the session user lack; such a condition is left to the engine.
+      const r = evaluateExpr(tr.condition, { doc, user: (user as unknown as Doc) ?? {}, isPartial: true });
       if (r.error) return true; // fail-open for visibility; the engine still enforces
       return r.value;
     }
