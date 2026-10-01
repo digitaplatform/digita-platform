@@ -374,7 +374,7 @@ export default function ListPage() {
         canCreate={canCreate}
         isAdmin={prefs.isAdmin}
         canEditView={prefs.canEdit}
-        onSearch={(q) => updateParam({ q: q || undefined }, true)}
+        onSearch={treeMode ? undefined : (q) => updateParam({ q: q || undefined }, true)}
         onFiltersChange={onFiltersChange}
         onColumnsChange={onColumnsChange}
         onApplyView={onApplyView}

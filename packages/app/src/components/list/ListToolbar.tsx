@@ -73,7 +73,8 @@ export interface ListToolbarProps {
   canCreate: boolean;
   isAdmin?: boolean;
   canEditView: (v: ListPreferenceDoc) => boolean;
-  onSearch: (q: string) => void;
+  /** Omitted → no search box: the tree display filters through a box of its own. */
+  onSearch?: (q: string) => void;
   onFiltersChange: (and: FilterTuple[], or: FilterTuple[]) => void;
   onColumnsChange: (cols: string[]) => void;
   onApplyView: (id: string) => void;
@@ -148,7 +149,7 @@ export function ListToolbar(props: ListToolbarProps) {
   useEffect(() => setDraft(search), [search]);
   useEffect(() => {
     const id = setTimeout(() => {
-      if (draft !== search) onSearch(draft);
+      if (draft !== search) onSearch?.(draft);
     }, 300);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -183,15 +184,17 @@ export function ListToolbar(props: ListToolbarProps) {
         className="-mx-4"
         title={title}
         search={
-          <Input
-            type="search"
-            wrapperClassName="md:max-w-xs"
-            leftIcon={<Search className="h-4 w-4" aria-hidden="true" />}
-            placeholder={tc('ui.list.search')}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            aria-label={tc('ui.list.search')}
-          />
+          onSearch && (
+            <Input
+              type="search"
+              wrapperClassName="md:max-w-xs"
+              leftIcon={<Search className="h-4 w-4" aria-hidden="true" />}
+              placeholder={tc('ui.list.search')}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              aria-label={tc('ui.list.search')}
+            />
+          )
         }
         actions={
           <>
