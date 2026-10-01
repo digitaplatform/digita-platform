@@ -1,6 +1,8 @@
 import type { EntityDefinition } from '@digitaplatform/shared';
 import { Chip } from '@digitaplatform/components';
 import { useI18nStore } from '@/stores/i18n';
+import { useSessionStore } from '@/stores/session';
+import { formatDatetime } from '@/lib/format';
 import { useChrome } from '@/lib/chrome-i18n';
 import type { FilterTuple } from '@/lib/filter-from-url';
 import type { FilterOp } from '@/lib/filter-operators';
@@ -42,6 +44,7 @@ export function FilterChip({ meta, filter, onRemove }: FilterChipProps) {
   const tField = useI18nStore((s) => s.tField);
   const tOption = useI18nStore((s) => s.tOption);
   const tc = useChrome();
+  const locale = useSessionStore((s) => s.locale);
 
   const [fieldname, op, value] = filter;
   const fieldDef = meta.fields.find((f) => f.fieldname === fieldname);
@@ -66,6 +69,8 @@ export function FilterChip({ meta, filter, onRemove }: FilterChipProps) {
 
   function fmt(v: unknown): string {
     if (v == null || v === '') return '∅';
+    // A Datetime filter holds a UTC instant, shown on the person's wall clock as the list shows it.
+    if (fieldDef?.fieldtype === 'Datetime') return formatDatetime(v, locale?.format_locale, locale?.timezone);
     return String(v);
   }
   function optLabel(v: unknown): string {
