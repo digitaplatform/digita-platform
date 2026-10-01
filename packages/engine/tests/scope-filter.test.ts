@@ -115,6 +115,12 @@ describe("permissionRowsFor — a row is meant for the roles its role_visibility
     expect(permissionRowsFor(listed(), user(["Desk"]))).toBe(declared);
   });
 
+  it("gives nothing, and does not fail, on an entity that declares no permissions", () => {
+    const bare = { name: "Workspace", role_visibility_field: "roles" } as unknown as EntityDefinition;
+    expect(permissionRowsFor(bare, user(["Reception"]))).toEqual([]);
+    expect(applyScopeFilters(bare, user(["Reception"]), { a: 1 })).toEqual({ a: 1 });
+  });
+
   it("gives Guest, a user with no role and an entity without the field only the declared rows", () => {
     expect(permissionRowsFor(listed(), user(["Guest"]))).toBe(declared);
     expect(permissionRowsFor(listed(), user([]))).toEqual([]);

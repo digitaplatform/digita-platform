@@ -4,16 +4,18 @@ import type { UserContext } from "./types.js";
 
 /**
  * Whether `user` reads `entity` only through the role lists of its rows: the entity has a
- * `role_visibility_field` and its declared rows name none of the user's roles. A row there is
- * meant for the roles it lists. A role that a declared row names keeps exactly what the declared
- * rows grant, so a row's role list never widens them. Guest, the anonymous caller, never reads
- * this way.
+ * `role_visibility_field` and declares permission rows, none of which names the user's roles. A
+ * row there is meant for the roles it lists. A role that a declared row names keeps exactly what
+ * the declared rows grant, so a row's role list never widens them. An entity that declares no
+ * row stays closed, and Guest, the anonymous caller, never reads this way.
  */
 export function readsThroughRoleList(entity: EntityDefinition, user: UserContext): boolean {
+  const declared = entity.permissions ?? [];
   return (
     !!entity.role_visibility_field &&
+    declared.length > 0 &&
     !user.roles.includes(SYSTEM_ROLES.GUEST) &&
-    !entity.permissions.some((perm) => user.roles.includes(perm.role))
+    !declared.some((perm) => user.roles.includes(perm.role))
   );
 }
 
@@ -23,7 +25,7 @@ export function readsThroughRoleList(entity: EntityDefinition, user: UserContext
  * user that selects and reads, at level 0, the rows whose list names one of the user's roles.
  */
 export function permissionRowsFor(entity: EntityDefinition, user: UserContext): EntityPermission[] {
-  if (!readsThroughRoleList(entity, user)) return entity.permissions;
+  if (!readsThroughRoleList(entity, user)) return entity.permissions ?? [];
   const field = entity.role_visibility_field!;
   return user.roles.map((role) => ({ role, level: 0, select: 1, read: 1, scope: { field, user_field: "roles" } }));
 }
