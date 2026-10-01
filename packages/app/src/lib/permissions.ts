@@ -31,6 +31,14 @@ export function isAdministrator(user: SessionUser | null | undefined): boolean {
   return !!user?.roles?.includes(SYSTEM_ROLES.ADMINISTRATOR);
 }
 
+/**
+ * Whether the engine withheld the entity's permission rows, as it does for a caller outside the
+ * internal audience. The app then cannot judge that caller's actions and leaves them to the engine.
+ */
+function isMatrixWithheld(entity: Pick<EntityDefinition, 'permissions'>): boolean {
+  return (entity.permissions ?? []).length === 0;
+}
+
 /** Does the user hold `action` on the entity through a level-0 row, as the engine requires? */
 export function hasEntityPermission(
   entity: Pick<EntityDefinition, 'permissions'>,
@@ -38,7 +46,7 @@ export function hasEntityPermission(
   action: PermAction,
 ): boolean {
   if (!user) return false;
-  if (isAdministrator(user)) return true;
+  if (isAdministrator(user) || isMatrixWithheld(entity)) return true;
   return (entity.permissions ?? []).some((p) => canGrantActionTo(p, user.roles) && p[action] === 1);
 }
 
@@ -56,7 +64,7 @@ export function hasRecordPermission(
   record: Record<string, unknown>,
 ): boolean {
   if (!user) return false;
-  if (isAdministrator(user)) return true;
+  if (isAdministrator(user) || isMatrixWithheld(entity)) return true;
   return (entity.permissions ?? []).some(
     (p) =>
       canGrantActionTo(p, user.roles) &&
@@ -149,10 +157,8 @@ export function readableFieldPredicate(
   record?: Record<string, unknown>,
 ): (fieldname: string, level: number) => boolean {
   if (!user) return () => false;
-  if (isAdministrator(user)) return () => true;
-  // The engine sends a caller outside the internal audience only the fields it may read, and
-  // no rows to judge them by.
-  if ((entity.permissions ?? []).length === 0) return () => true;
+  // The engine sends a caller outside the internal audience only the fields it may read.
+  if (isAdministrator(user) || isMatrixWithheld(entity)) return () => true;
   const rows: Pick<EntityPermission, 'level' | 'fields'>[] = (entity.permissions ?? []).filter(
     (p) => p.read === 1 && user.roles.includes(p.role) && (!record || rowAdmits(p, user, record)),
   );

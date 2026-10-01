@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { EntityDefinition } from '@digitaplatform/shared';
-import { hasRecordPermission } from '@/lib/permissions';
+import { hasEntityPermission, hasRecordPermission } from '@/lib/permissions';
 import type { SessionUser } from '@/types';
 
 /**
@@ -86,5 +86,32 @@ describe('hasRecordPermission and the gates of a row', () => {
     expect(hasRecordPermission(meta, withoutBranch, 'delete', { branch: 'North' })).toBe(false);
     const north = { ...reception, branch: 'North' } as unknown as SessionUser;
     expect(hasRecordPermission(meta, north, 'delete', { branch: 'North' })).toBe(true);
+  });
+});
+
+// The engine sends a caller outside the internal audience no permission rows (/meta strips them),
+// so the app cannot judge that caller's actions and leaves them to the engine.
+describe('an entity whose permission rows the engine withheld', () => {
+  const withheld = workOrder({ permissions: [], states: undefined });
+
+  it('leaves every action on a record to the engine', () => {
+    for (const action of ['write', 'delete', 'submit', 'cancel', 'amend'] as const) {
+      expect(hasRecordPermission(withheld, reception, action, { status: 'open' })).toBe(true);
+    }
+  });
+
+  it('leaves the entity actions to the engine', () => {
+    expect(hasEntityPermission(withheld, reception, 'create')).toBe(true);
+  });
+
+  it('still refuses through rows that grant the user nothing', () => {
+    const otherRole = workOrder({ permissions: [{ role: 'Workshop Lead', level: 0, write: 1, create: 1 }] });
+    expect(hasRecordPermission(otherRole, reception, 'write', { status: 'open' })).toBe(false);
+    expect(hasEntityPermission(otherRole, reception, 'create')).toBe(false);
+  });
+
+  it('refuses a signed-out caller', () => {
+    expect(hasRecordPermission(withheld, null, 'write', { status: 'open' })).toBe(false);
+    expect(hasEntityPermission(withheld, null, 'create')).toBe(false);
   });
 });
