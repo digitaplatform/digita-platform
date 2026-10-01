@@ -1,7 +1,7 @@
 import type { EntityDefinition, EntityPermission, FieldDefinition, StatePermissionOverride } from "@digitaplatform/shared";
 import { EngineError } from "../errors/engine-error.js";
 import { PermissionAction, ROW_ID_FIELD, SYSTEM_ROLES, canGrantActionTo } from "@digitaplatform/shared";
-import type { EntityRegistry } from "../entity/entity-registry.js";
+import { UnknownDoctypeError, type EntityRegistry } from "../entity/entity-registry.js";
 import { docFieldsOf, evaluateExpression } from "../expression/expression-evaluator.js";
 import { permissionRowsFor, scopeValueMatches } from "./scope-filter.js";
 import type { UserContext, PermissionCheckResult } from "./types.js";
@@ -105,6 +105,17 @@ export class PermissionChecker {
     }
   }
 
+  /** Whether the entity keeps each row its owner's alone. A name the registry does not know declares
+   *  nothing, so it is not personal; the caller's own check refuses or admits it as before. */
+  private isPersonal(entityName: string): boolean {
+    try {
+      return this.registry.get(entityName)?.personal === true;
+    } catch (err) {
+      if (err instanceof UnknownDoctypeError) return false;
+      throw err;
+    }
+  }
+
   /**
    * Check permission without throwing.
    */
@@ -114,12 +125,19 @@ export class PermissionChecker {
     action: string,
     doc?: Record<string, unknown>,
   ): Promise<PermissionCheckResult> {
-    // Administrator bypasses everything
+    // A personal entity's row is its owner's alone, for every role. A create carries no owner yet;
+    // the engine stamps the caller.
+    if (doc && action !== "create" && doc["owner"] !== user.email && doc["owner"] !== user._id && this.isPersonal(entityName)) {
+      return { allowed: false, reason: "The row belongs to another person" };
+    }
+
+    // Administrator bypasses everything else
     if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) {
       return { allowed: true };
     }
 
     const entity = this.registry.get(entityName);
+
     const permissions = permissionRowsFor(entity, user);
 
     if (!permissions || permissions.length === 0) {
