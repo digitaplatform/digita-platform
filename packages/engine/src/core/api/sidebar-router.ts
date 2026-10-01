@@ -55,9 +55,28 @@ export function registerSidebarRoutes(
       // counts. `null` = all fields readable (admin / unrestricted).
       const user = request.user as UserContext | undefined;
       const readable = user ? permissionChecker.getReadableFields(user, doctype, doc._data) : null;
-      const result = readable ? versions.map((v) => maskVersionChanges(v, readable)) : versions;
+      const result =
+        user && readable
+          ? versions.map((v) =>
+              maskVersionChanges(v, readable, (table) =>
+                permissionChecker.getReadableChildFields(user, doctype, table, doc._data),
+              ),
+            )
+          : versions;
       const entity = registry.get(doctype);
       return reply.send(successResponse(result.map((v) => readVersionChanges(v, entity))));
+    },
+  );
+
+  // ─── View Log ─────────────────────────────────────────
+  app.get(
+    `${basePath}/:doctype/:name/views`,
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { doctype, name } = request.params as { doctype: string; name: string };
+      const query = request.query as Record<string, string>;
+      const limit = parseInt(query["limit"] ?? "20", 10);
+      const views = await documentService.getViewLog(doctype, name, request.user as UserContext | undefined, limit);
+      return reply.send(successResponse(views));
     },
   );
 
@@ -73,7 +92,29 @@ export function registerSidebarRoutes(
   );
 }
 
-/** Drop change entries whose field the user may not read (perm_level gating). */
-function maskVersionChanges(version: Version, readable: Set<string>): Version {
-  return { ...version, changes: version.changes.filter((c) => readable.has(c.field)) };
+/**
+ * Drop change entries whose field the user may not read (perm_level gating). A Table's change
+ * holds its rows whole, so each old and new row keeps only the cells the user may read.
+ */
+function maskVersionChanges(
+  version: Version,
+  readable: Set<string>,
+  readableCells: (table: string) => Set<string> | null,
+): Version {
+  return {
+    ...version,
+    changes: version.changes
+      .filter((c) => readable.has(c.field))
+      .map((c) => {
+        const cells = readableCells(c.field);
+        return cells ? { ...c, old: keepCells(c.old, cells), new: keepCells(c.new, cells) } : c;
+      }),
+  };
+}
+
+function keepCells(rows: unknown, cells: Set<string>): unknown {
+  if (!Array.isArray(rows)) return rows;
+  return rows.map((row) =>
+    row && typeof row === "object" ? Object.fromEntries(Object.entries(row).filter(([cell]) => cells.has(cell))) : row,
+  );
 }

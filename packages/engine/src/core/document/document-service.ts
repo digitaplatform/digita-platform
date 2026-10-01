@@ -353,6 +353,20 @@ export class DocumentService {
   }
 
   /**
+   * Who viewed the document and when, newest first, for a user who passes the read
+   * `getDoc` checks. Views are logged only for an entity with `track_views`.
+   */
+  async getViewLog(
+    doctype: string,
+    name: string,
+    user: UserContext = GUEST_USER,
+    limit?: number,
+  ): Promise<Array<{ viewed_by: string; timestamp: Date }>> {
+    await this.getDoc(doctype, name, user);
+    return this.viewLogService.getViewLog(doctype, name, limit);
+  }
+
+  /**
    * Overlay per-document data translations onto a single document's data for the
    * given locale. Generic: only the entity's `translatable` fields that are
    * present are looked up; a missing translation keeps the stored value. No-op
