@@ -192,7 +192,7 @@ function renderInline(text: string): string {
 }
 
 const FENCE = /^\s*(`{3,}|~{3,})/;
-const HEADING = /^(#{1,6})\s+(.*?)\s*#*\s*$/;
+const HEADING = /^(#{1,6})\s/;
 const RULE = /^\s*([-*_])(\s*\1){2,}\s*$/;
 const QUOTE = /^\s*>/;
 const LIST_ITEM = /^\s*([-*+]|\d+[.)])\s+(.*)$/;
@@ -225,7 +225,10 @@ function renderMarkdown(source: string): string {
     const heading = HEADING.exec(line);
     if (heading) {
       const level = heading[1]!.length;
-      blocks.push(`<h${level}>${renderInline(heading[2]!)}</h${level}>`);
+      // A closing run of # is markup. The lookbehind lets only the start of a run try to reach
+      // the end of the line, so a long line costs one pass, never a pass per space.
+      const text = line.slice(level).trim().replace(/(?<!#)#+$/, '').trimEnd();
+      blocks.push(`<h${level}>${renderInline(text)}</h${level}>`);
       i++;
       continue;
     }
