@@ -195,6 +195,17 @@ describe('the tree picker of a Link field', () => {
     expect(tree.className).not.toMatch(/max-h-\[/);
   });
 
+  it('has its rows when it opens from the keyboard, because they load while the field has focus', async () => {
+    const user = userEvent.setup();
+    renderField(GROUP_FIELD);
+    await user.tab();
+    expect(screen.getByRole('combobox')).toHaveFocus();
+    await waitFor(() => expect(engine.lists).toHaveLength(1));
+    await landLists(GROUP_ROWS);
+    await user.keyboard('{Enter}');
+    expect(within(screen.getByRole('dialog')).getByRole('treeitem', { name: 'Business customers' })).toBeInTheDocument();
+  });
+
   it('loads no tree for a form a person only looks at', () => {
     renderField(GROUP_FIELD);
     expect(engine.lists).toHaveLength(0);

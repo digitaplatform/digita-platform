@@ -97,11 +97,13 @@ export default function LinkControl({
   // labels from the target meta; rows carry those column values.
   const targetMeta = useMeta(field.target);
   const treeCfg = targetMeta.data?.tree;
-  // Whole (small) tree loaded once a person moves to the field or into it, so its rows stand in
-  // the picker when it opens, while a form a person only looks at loads none of it; scoped by the
-  // resolved filters AND auto-scoped by the tree's own partition (`tree.group_by`, e.g. `domain`):
-  // a self-referential parent field on a partitioned tree must only offer nodes in
-  // the SAME partition (picking a "sales" group's parent shows only the sales
+  // The whole (small) tree loads once a pointer enters the field or the field takes focus, also when
+  // a person only tabs past it; a form a person only looks at loads none of it. Its rows are ready
+  // when the picker opens only if the pointer or the focus reached the field before the open: a quick
+  // tap on a touch screen sends the request as it opens the picker, which then shows its loading line
+  // until the rows land. The load is scoped by the resolved filters AND auto-scoped by the tree's own
+  // partition (`tree.group_by`, e.g. `domain`): a self-referential parent field on a partitioned tree
+  // must only offer nodes in the SAME partition (picking a "sales" group's parent shows only the sales
   // forest, not all four domains interleaved). Explicit target_filters win.
   const treeGroupBy = treeCfg?.group_by;
   const partitionValue =
