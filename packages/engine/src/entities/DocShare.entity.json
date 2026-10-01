@@ -22,8 +22,7 @@
     { "fieldname": "cb_1", "fieldtype": "ColumnBreak", "idx": 7 },
     { "fieldname": "can_read", "fieldtype": "Check", "label": "Can Read", "default": true, "idx": 8 },
     { "fieldname": "can_share", "fieldtype": "Check", "label": "Can Share", "default": false, "idx": 10 },
-    { "fieldname": "expires_at", "fieldtype": "Datetime", "label": "Expires At", "idx": 11 },
-    { "fieldname": "notify", "fieldtype": "Check", "label": "Notify User", "default": true, "idx": 12 }
+    { "fieldname": "expires_at", "fieldtype": "Datetime", "label": "Expires At", "idx": 11 }
   ],
   "indexes": [
     { "fields": ["entity", "document_name"], "name": "idx_doc" },

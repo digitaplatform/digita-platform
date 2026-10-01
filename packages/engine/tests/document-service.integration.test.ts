@@ -26,7 +26,7 @@ import { TranslationService } from "../src/core/i18n/translation-service.js";
 import { DocumentService, NotFoundError, DeleteBlockedError, ValidationFailedError, ActionHandlerMissingError } from "../src/core/document/document-service.js";
 import { PermissionDeniedError } from "../src/core/permissions/permission-checker.js";
 import { FilterFieldNotAllowedError } from "../src/core/database/filter-builder.js";
-import { DocumentShareService } from "../src/core/permissions/document-share-service.js";
+import { readFileSync } from "node:fs";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { SYSTEM_ROLES, DIGITA } from "@digitaplatform/shared";
 import type { UserContext } from "../src/core/permissions/types.js";
@@ -119,6 +119,18 @@ afterAll(async () => {
   await db.disconnect();
   await replSet.stop();
 }, 30000);
+
+/** The core DocShare entity, so a test shares a document the way the resource route does. */
+function registerDocShare(): void {
+  registry.register(
+    JSON.parse(readFileSync(new URL("../src/entities/DocShare.entity.json", import.meta.url), "utf8")) as EntityDefinition,
+  );
+}
+
+/** Share a document for reading through the document service, as POST /resource/DocShare does. */
+function shareWith(entity: string, documentName: string, sharedWith: string) {
+  return docService.insert("DocShare", { entity, document_name: documentName, shared_with: sharedWith, can_read: true }, adminUser);
+}
 
 describe("DocumentService Integration", () => {
   // ── INSERT ────────────────────────────────────────────────
@@ -432,7 +444,6 @@ describe("DocShare read access (D10b)", () => {
     roles: ["Viewer"], // a role with NO permission on SharedDoc
     full_name: "Viewer",
   };
-  let shareService: DocumentShareService;
 
   beforeAll(async () => {
     registry.register(
@@ -456,7 +467,7 @@ describe("DocShare read access (D10b)", () => {
     );
     await db.ensureCollection("SharedListDoc", "app");
     await db.ensureCollection(DIGITA.COLLECTIONS.DOC_SHARE, DIGITA.DATABASES.IDENTITY);
-    shareService = new DocumentShareService(db);
+    registerDocShare();
   });
 
   it("denies a user without read role, but an explicit DocShare grants read", async () => {
@@ -466,22 +477,14 @@ describe("DocShare read access (D10b)", () => {
     await expect(docService.getDoc("SharedDoc", doc._id, viewer)).rejects.toThrow(PermissionDeniedError);
 
     // Share the document with the viewer (read).
-    await shareService.share({
-      entity: "SharedDoc",
-      document_name: doc._id,
-      shared_with: viewer.email,
-      shared_by: adminUser.email,
-      can_read: true,
-      can_share: false,
-      notify: false,
-    });
+    const share = await shareWith("SharedDoc", doc._id, viewer.email);
 
     // Now the viewer can read exactly this document.
     const seen = await docService.getDoc("SharedDoc", doc._id, viewer);
     expect(seen._id).toBe(doc._id);
 
     // Revoking the share denies access again.
-    await shareService.unshare("SharedDoc", doc._id, viewer.email);
+    await docService.deleteDoc("DocShare", share._id, adminUser);
     await expect(docService.getDoc("SharedDoc", doc._id, viewer)).rejects.toThrow(PermissionDeniedError);
   });
 
@@ -493,15 +496,7 @@ describe("DocShare read access (D10b)", () => {
     expect(before.data.some((d) => (d as { _id: string })._id === doc._id)).toBe(false);
 
     // Share it → now it appears in the viewer's list.
-    await shareService.share({
-      entity: "SharedListDoc",
-      document_name: doc._id,
-      shared_with: viewer.email,
-      shared_by: adminUser.email,
-      can_read: true,
-      can_share: false,
-      notify: false,
-    });
+    await shareWith("SharedListDoc", doc._id, viewer.email);
     const after = await docService.getList("SharedListDoc", {}, viewer);
     expect(after.data.some((d) => (d as { _id: string })._id === doc._id)).toBe(true);
   });
@@ -1760,15 +1755,8 @@ describe("A document shared for reading shows what a level-0 read shows", () => 
     await db.ensureCollection(DIGITA.COLLECTIONS.DOC_SHARE, DIGITA.DATABASES.IDENTITY);
     const doc = await docService.insert("ShareShownDoc", { title: "Theirs", secret: "s-theirs" }, adminUser);
     sharedId = doc._id;
-    await new DocumentShareService(db).share({
-      entity: "ShareShownDoc",
-      document_name: sharedId,
-      shared_with: reader.email,
-      shared_by: adminUser.email,
-      can_read: true,
-      can_share: false,
-      notify: false,
-    });
+    registerDocShare();
+    await shareWith("ShareShownDoc", sharedId, reader.email);
   });
 
   it("shows the shared document's level-0 fields on getDoc, never a higher level", async () => {
