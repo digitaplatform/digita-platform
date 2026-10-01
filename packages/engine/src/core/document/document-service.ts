@@ -1392,7 +1392,7 @@ export class DocumentService {
         entity.database,
         session,
       );
-      await this.attachFilesToDocument(entity, name, doc._data, user, session);
+      await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
 
       await this.hookRunner.run(doctype, "on_update", doc, ctx, session, user);
       if (this.ruleEngine) {
@@ -1429,7 +1429,7 @@ export class DocumentService {
       const after = new Set(collectAttachFileIds(entity.fields, doc._data));
       const orphans = attachFilesBefore.filter((fileId) => !after.has(fileId));
       if (storage && orphans.length > 0) {
-        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, storage, orphans, { entity: entity.name, name }, user));
+        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, storage, orphans, { entity: entity.name, name: doc._id }, user));
       }
     };
     if (options.sessionOverride) {
@@ -1970,7 +1970,7 @@ export class DocumentService {
       const storage = this.storage;
       if (storage) {
         const fileIds = collectAttachFileIds(entity.fields, doc._data);
-        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, storage, fileIds, { entity: entity.name, name }, user));
+        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, storage, fileIds, { entity: entity.name, name: doc._id }, user));
       }
     };
     if (sessionOverride) {
@@ -2517,7 +2517,7 @@ export class DocumentService {
     // clones are written in the insert's transaction, so a refused amendment leaves none.
     const newDoc = await this.db.withTransaction(async (session) => {
       const copyData = copyDocumentData(entity, doc._data, stored);
-      await this.cloneAttachments(entity, name, copyData, user, session);
+      await this.cloneAttachments(entity, doc._id, copyData, user, session);
       return this.insert(doctype, { ...copyData, ...amendData }, user, ctx, session);
     });
 
@@ -2562,7 +2562,7 @@ export class DocumentService {
     // clones are written in the insert's transaction, so a refused copy leaves none.
     return this.db.withTransaction(async (session) => {
       const copyData = copyDocumentData(entity, doc._data, stored);
-      await this.cloneAttachments(entity, name, copyData, user, session);
+      await this.cloneAttachments(entity, doc._id, copyData, user, session);
       return this.insert(doctype, copyData, user, ctx, session);
     });
   }
