@@ -408,6 +408,22 @@ function RecordForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocker.state]);
 
+  // A single is the page itself, with no list to go back to, so leaving the page would neither ask
+  // nor discard: Cancel asks here and puts the stored values back in place.
+  const onCancel = async () => {
+    if (!isSingle || !form.formState.isDirty) {
+      navigate(-1);
+      return;
+    }
+    const ok = await dialog.confirm({
+      title: tc('ui.record.discardTitle'),
+      message: tc('ui.record.discardMessage'),
+      confirmLabel: tc('ui.action.discard'),
+      danger: true,
+    });
+    if (ok) form.reset();
+  };
+
   // Native tab-close guard.
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -751,7 +767,7 @@ function RecordForm({
         hideSave={docLocked || writeRefused}
         saveDisabled={conflict}
         busy={saving || deleteM.isPending}
-        onCancel={() => navigate(-1)}
+        onCancel={() => void onCancel()}
         onDelete={onDelete}
       />
     </form>
