@@ -92,8 +92,8 @@ export class BkResolver {
 
   /**
    * Fill `idx` with the bk → `_id` map of `entity`'s existing rows via a
-   * targeted projection (not a full document scan). Preserves the seed loader's
-   * `if (!idx.has(bk))` precedence — pre-existing entries (uploaded/pass-2) win.
+   * targeted projection (not a full document scan). An entry `idx` already holds
+   * wins.
    */
   async indexEntity(entity: EntityDefinition, idx: Map<string, string>): Promise<void> {
     const bkFields = businessKeyFields(entity);
