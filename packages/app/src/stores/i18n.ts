@@ -19,8 +19,6 @@ interface I18nState {
   tOption: (entity: string, field: string, value: string) => string;
   /** Localized entity label (`entity.{Entity}`); falls back to the given label or the name. */
   tEntity: (entity: string, fallback?: string) => string;
-  /** Localized section/tab label — sections are fields, so they share the field namespace. */
-  tSection: (entity: string, section: string, fallback?: string) => string;
 }
 
 function interpolate(template: string, params?: Record<string, string | number>): string {
@@ -73,9 +71,5 @@ export const useI18nStore = create<I18nState>((set, get) => ({
 
   tEntity: (entity, fallback) => {
     return get().translations[`entity.${entity}`] ?? fallback ?? humanize(entity);
-  },
-
-  tSection: (entity, section, fallback) => {
-    return get().translations[`field.${entity}.${section}`] ?? fallback ?? humanize(section);
   },
 }));
