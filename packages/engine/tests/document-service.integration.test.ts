@@ -775,6 +775,7 @@ describe("An update re-derives the fetch_from fields of a row whose Link changed
         permissions: [
           { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
           { role: "Salesperson", level: 0, select: 1, read: 1, write: 1, create: 1 },
+          { role: "Picker", level: 0, select: 1 },
         ],
       }),
     );
@@ -846,6 +847,28 @@ describe("An update re-derives the fetch_from fields of a row whose Link changed
     expect(cleared!["product"] ?? null).toBeNull();
     expect(cleared!["product_code"] ?? null).toBeNull();
     expect(cleared!["uom"] ?? null).toBeNull();
+  });
+
+  it("previews a saved record's row whose Link changed with the values the save stores", async () => {
+    const created = await docService.insert("FetchOrder", { title: "SO", lines: [{ product: "SERVICE", quantity: 1 }] }, salesperson);
+    const [row] = await storedLines(created._id);
+    expect(row!["uom"]).toBe("HOUR");
+    const draft = { _id: created._id, title: "SO", lines: [{ ...row, product: "STOCKABLE" }] };
+
+    const preview = await docService.preview("FetchOrder", draft, salesperson);
+    await docService.update("FetchOrder", created._id, { lines: draft.lines }, salesperson);
+
+    const [saved] = await storedLines(created._id);
+    expect(saved!["uom"]).toBe("PCS");
+    const [previewed] = preview._data["lines"] as Record<string, unknown>[];
+    expect(previewed!["uom"]).toBe(saved!["uom"]);
+    expect(previewed!["product_code"]).toBe(saved!["product_code"]);
+  });
+
+  it("refuses to preview a saved record to a role that may pick but not read it", async () => {
+    const created = await docService.insert("FetchOrder", { title: "SO", lines: [{ product: "SERVICE" }] }, adminUser);
+    const picker: UserContext = { _id: "pk-1", email: "pk@test.local", roles: ["Picker"], full_name: "Picker" };
+    await expect(docService.preview("FetchOrder", { _id: created._id, lines: [] }, picker)).rejects.toThrow();
   });
 
   it("keeps a value the same write sets on the row whose Link changed", async () => {

@@ -365,7 +365,8 @@ function RecordForm({
       const serverRows = data[tableField];
       const currentRows = form.getValues(tableField);
       if (!Array.isArray(serverRows) || !Array.isArray(currentRows)) continue;
-      const merged = mergePreviewRows(currentRows as Doc[], serverRows as Doc[], spec);
+      const storedRows = stored?.[tableField];
+      const merged = mergePreviewRows(currentRows as Doc[], serverRows as Doc[], spec, Array.isArray(storedRows) ? (storedRows as Doc[]) : []);
       if (merged) form.setValue(tableField, merged, { shouldDirty: false, shouldValidate: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
