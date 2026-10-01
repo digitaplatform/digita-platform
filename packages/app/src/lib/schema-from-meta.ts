@@ -98,7 +98,8 @@ function baseForType(field: FieldDefinition): ZodTypeAny {
         coordinates: z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]),
       });
     case 'Table':
-      return tableSchema(field);
+      // A Table inside a row: the engine defaults no row of it.
+      return tableSchema(field, () => false);
     case 'ReadOnly':
       return z.any();
     default:
@@ -140,17 +141,32 @@ function applyNumberConstraints(schema: ZodTypeAny, field: FieldDefinition): Zod
 
 /** Child-table schema (mirrors the engine): per-row _row_id/idx + each child field
  *  with its full constraints (required + length/range/regex) + min_rows/max_rows.
- *  (Phase 2 enabled child-required/min/max now that the table is editable.) */
-function tableSchema(field: FieldDefinition): ZodTypeAny {
+ *  (Phase 2 enabled child-required/min/max now that the table is editable.)
+ *  The engine evaluates a cell's `eval:` default in each row it defaults on save, so a
+ *  required cell with one is refused only in a row the engine does not default. */
+function tableSchema(
+  field: FieldDefinition,
+  isDefaultedOnSave: (row: Record<string, unknown>) => boolean,
+): ZodTypeAny {
   const childShape: Record<string, ZodTypeAny> = {
     [ROW_ID_FIELD]: z.string().optional(),
     idx: z.number().int().optional(),
   };
+  const evalRequired: FieldDefinition[] = [];
   for (const cf of field.child_fields ?? []) {
     if (!isStored(cf.fieldtype)) continue;
-    childShape[cf.fieldname] = buildFieldSchema(cf);
+    if (cf.required && isEvalDefault(cf.default)) evalRequired.push(cf);
+    childShape[cf.fieldname] = buildFieldSchema(evalRequired.includes(cf) ? { ...cf, required: false } : cf);
   }
-  let arr = z.array(z.object(childShape).passthrough());
+  const row = z.object(childShape).passthrough().superRefine((r, ctx) => {
+    if (isDefaultedOnSave(r)) return;
+    for (const cf of evalRequired) {
+      if (isEmptyValue(cf, r[cf.fieldname])) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: [cf.fieldname], message: 'field_required' });
+      }
+    }
+  });
+  let arr = z.array(row);
   if (field.min_rows !== undefined) arr = arr.min(field.min_rows, 'table_min_rows');
   if (field.max_rows !== undefined) arr = arr.max(field.max_rows, 'table_max_rows');
   return arr;
@@ -193,23 +209,42 @@ export function fieldErrorMessage(error: unknown): string | undefined {
 }
 
 /**
+ * Mirrors the engine: it defaults every row of a record it inserts, and on update each row
+ * whose `_row_id` the stored record does not hold.
+ */
+function rowDefaultedOnSave(
+  stored: Record<string, unknown> | undefined,
+  table: string,
+): (row: Record<string, unknown>) => boolean {
+  if (!stored) return () => true;
+  const storedRows = stored[table];
+  const storedIds = new Set(
+    (Array.isArray(storedRows) ? storedRows : []).map((r) => (r as Record<string, unknown> | null)?.[ROW_ID_FIELD]),
+  );
+  return (row: Record<string, unknown>) => {
+    const id = row[ROW_ID_FIELD];
+    return !(typeof id === 'string' && id !== '' && storedIds.has(id));
+  };
+}
+
+/**
  * @param requiredResolver live `(fieldname) => boolean` from the field-state sweep.
  *        Pass via a ref so the returned schema instance is stable.
- * @param isNew the form holds a record the engine has not inserted yet.
+ * @param stored the record as the engine holds it, or nothing while the form holds a new one.
  */
 export function buildZodSchema(
   entity: Pick<EntityDefinition, 'fields'>,
   requiredResolver?: (fieldname: string) => boolean,
-  isNew = false,
+  stored?: Record<string, unknown>,
 ): ZodTypeAny {
   // The engine evaluates an `eval:` default on insert and refuses the field there when the
   // expression yields nothing; the form cannot evaluate it, so it must not refuse the field first.
-  const isFilledOnInsert = (f: FieldDefinition) => isNew && isEvalDefault(f.default);
+  const isFilledOnInsert = (f: FieldDefinition) => !stored && isEvalDefault(f.default);
   const shape: Record<string, ZodTypeAny> = {};
   for (const f of entity.fields) {
     if (!isStored(f.fieldtype)) continue;
     if (f.fieldtype === 'Table') {
-      shape[f.fieldname] = tableSchema(f).nullable().optional();
+      shape[f.fieldname] = tableSchema(f, rowDefaultedOnSave(stored, f.fieldname)).nullable().optional();
     } else {
       shape[f.fieldname] = buildFieldSchema(isFilledOnInsert(f) ? { ...f, required: false } : f);
     }
