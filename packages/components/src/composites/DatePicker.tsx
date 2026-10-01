@@ -43,6 +43,9 @@ export interface DatePickerProps {
   /** Names of the two paging buttons; the caller owns the language, as it does for `clearLabel`. */
   previousLabel?: string;
   nextLabel?: string;
+  /** Their names in the month and year view, where they page twelve years instead of a month. */
+  previousYearsLabel?: string;
+  nextYearsLabel?: string;
   disabled?: boolean;
   invalid?: boolean;
   id?: string;
@@ -104,6 +107,8 @@ export function DatePicker({
   clearLabel = 'Clear',
   previousLabel = 'Previous',
   nextLabel = 'Next',
+  previousYearsLabel = previousLabel,
+  nextYearsLabel = nextLabel,
   disabled,
   invalid,
   id,
@@ -258,8 +263,8 @@ export function DatePicker({
               <Chevron dir="right" className={cn('h-3.5 w-3.5 text-primary-600 transition-transform duration-base', view === 'my' && 'rotate-90')} />
             </button>
             <div className="flex items-center gap-0.5">
-              <button type="button" aria-label={previousLabel} onClick={() => page(-1)} className="flex h-7 w-7 items-center justify-center rounded-btn text-textMuted hover:bg-bgHover"><Chevron dir="left" className="h-4 w-4" /></button>
-              <button type="button" aria-label={nextLabel} onClick={() => page(1)} className="flex h-7 w-7 items-center justify-center rounded-btn text-textMuted hover:bg-bgHover"><Chevron dir="right" className="h-4 w-4" /></button>
+              <button type="button" aria-label={view === 'my' ? previousYearsLabel : previousLabel} onClick={() => page(-1)} className="flex h-7 w-7 items-center justify-center rounded-btn text-textMuted hover:bg-bgHover"><Chevron dir="left" className="h-4 w-4" /></button>
+              <button type="button" aria-label={view === 'my' ? nextYearsLabel : nextLabel} onClick={() => page(1)} className="flex h-7 w-7 items-center justify-center rounded-btn text-textMuted hover:bg-bgHover"><Chevron dir="right" className="h-4 w-4" /></button>
             </div>
           </div>
 

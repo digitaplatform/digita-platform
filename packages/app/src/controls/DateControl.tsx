@@ -33,8 +33,10 @@ export default function DateControl({
       disabled={state.readOnly}
       placeholder={field.placeholder}
       clearLabel={tc('ui.action.clear')}
-      previousLabel={tc('ui.datepicker.previous')}
-      nextLabel={tc('ui.datepicker.next')}
+      previousLabel={tc('ui.datepicker.previousMonth')}
+      nextLabel={tc('ui.datepicker.nextMonth')}
+      previousYearsLabel={tc('ui.datepicker.previousYears')}
+      nextYearsLabel={tc('ui.datepicker.nextYears')}
       value={value == null ? undefined : String(value).slice(0, 10)}
       // Every pick commits (like LinkControl): the DatePicker is a button, not an
       // Enter-commit input, and 'Date' was removed from ENTER_EXIT_TYPES — so the
