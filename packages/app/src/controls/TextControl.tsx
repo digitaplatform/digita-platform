@@ -34,8 +34,8 @@ export default function TextControl({
 }
 
 /** TextEditor: the stored HTML drawn as formatted text and edited in place, so a person
- *  never sees or types tags; it stores HTML. Both the shown and the stored HTML are
- *  sanitized, because pasted content brings scripts and handlers along. */
+ *  never sees or types tags; it stores HTML. Both the shown and the stored HTML keep only
+ *  RICH_TEXT, because pasted content brings scripts and handlers along. */
 export function TextEditorControl({
   value,
   state,
@@ -52,7 +52,7 @@ export function TextEditorControl({
   const html = value == null ? '' : String(value);
   useLayoutEffect(() => {
     if (html === emitted.current) return;
-    box.current!.innerHTML = DOMPurify.sanitize(html);
+    box.current!.innerHTML = DOMPurify.sanitize(html, RICH_TEXT);
     emitted.current = undefined;
   }, [html]);
   return (
@@ -71,15 +71,29 @@ export function TextEditorControl({
       aria-invalid={state.invalid || undefined}
       aria-readonly={state.readOnly || undefined}
       onInput={(e) => {
-        const next = DOMPurify.sanitize(e.currentTarget.innerHTML);
+        const next = DOMPurify.sanitize(e.currentTarget.innerHTML, RICH_TEXT);
         // An editor emptied by the person still holds a line break the browser leaves behind.
-        const stored = e.currentTarget.textContent === '' && !e.currentTarget.querySelector('img') ? undefined : next;
+        const stored = e.currentTarget.textContent === '' ? undefined : next;
         emitted.current = stored ?? '';
         onChange(stored);
       }}
     />
   );
 }
+
+/** What a TextEditor value may draw: text blocks, emphasis and links. Any person who may
+ *  write the field writes HTML that everyone who opens the record sees, so style, class
+ *  and data attributes (which can lay a fake page over the app), forms and images (which
+ *  can send what a reader types or opens to an outside host) are dropped. */
+const RICH_TEXT = {
+  ALLOWED_TAGS: [
+    'p', 'div', 'br', 'b', 'strong', 'i', 'em', 'u', 's', 'ul', 'ol', 'li',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'code', 'pre', 'hr', 'a', 'span',
+  ],
+  ALLOWED_ATTR: ['href'],
+  ALLOW_DATA_ATTR: false,
+  ALLOW_ARIA_ATTR: false,
+};
 
 /** Code: the plain text in a monospace area that does not wrap or check spelling, so
  *  columns line up, and Enter starts the next line at the indentation of the current one. */

