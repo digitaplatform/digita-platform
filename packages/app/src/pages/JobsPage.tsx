@@ -486,7 +486,7 @@ function JobConfigDialog({
   });
   const effectiveDoc = task.isSingle ? (singleDocQ.data ?? '') : doc;
   // A new schedule needs its cron. An edited job may go without one and is then run by hand only,
-  // as the cron field's hint says.
+  // as the cron field's label says.
   const valid = !!effectiveDoc && (!isSchedule || (!!name.trim() && (!!job || !!cron.trim())));
 
   const submit = async () => {
