@@ -12,7 +12,10 @@ vi.mock("server-only", () => ({}));
 setSiteEnv();
 
 const site = vi.hoisted(() => ({ theme: "simetrix" as string | undefined }));
-vi.mock("@/lib/engine-client", () => ({ getSite: async () => ({ _id: "example", theme: site.theme }) }));
+vi.mock("@/lib/engine-client", () => ({
+  getSite: async () => ({ _id: "example", theme: site.theme }),
+  findWebsiteSignature: async () => undefined,
+}));
 
 // A plugin that shows what it was handed, in place of the code-split registry a static render cannot wait for.
 vi.mock("@/plugins", () => {

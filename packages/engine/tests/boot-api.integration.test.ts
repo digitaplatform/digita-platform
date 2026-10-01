@@ -219,6 +219,15 @@ describe("Boot API Integration", () => {
       await db.updateOne("BrandingSetting", "branding", { default_signature: "veloluck-workbench" }, "core");
       expect((await branding()).default_signature).toBe("veloluck-workbench");
     });
+
+    it("relays BrandingSetting.web_default_signature to an anonymous caller, and none while it is unset", async () => {
+      const branding = async () => (await app.inject({ method: "GET", url: "/api/v1/boot" })).json().data.branding;
+      await db.updateOne("BrandingSetting", "branding", { web_default_signature: null }, "core");
+      expect(await branding()).not.toHaveProperty("web_default_signature");
+
+      await db.updateOne("BrandingSetting", "branding", { web_default_signature: "veloluck-lakeside" }, "core");
+      expect((await branding()).web_default_signature).toBe("veloluck-lakeside");
+    });
   });
 
   describe("GET /health", () => {

@@ -162,6 +162,43 @@ export async function getBranding(): Promise<WebBranding | null> {
   }
 }
 
+/**
+ * The website look the tenant's settings name: `BrandingSetting.web_default_signature` of the
+ * tenant's apps (ENGINE_URLS), read from each app's anonymous boot. Site engines have no staff
+ * app, so in practice the one app a person administers names it. Apps that name a look must
+ * agree: when they name different ones, none is used and the log names them. An app that does not
+ * answer is logged and left out. Undefined: no app names one.
+ */
+export async function findWebsiteSignature(): Promise<string | undefined> {
+  const { engineUrls, revalidateSeconds } = getConfig();
+  const named = new Map<string, string>();
+  await Promise.all(
+    [...engineUrls].map(async ([app, engineUrl]) => {
+      try {
+        const res = await fetch(`${engineUrl}/api/v1/boot`, {
+          next: { revalidate: revalidateSeconds, tags: ["web:branding"] },
+        });
+        if (!res.ok) {
+          console.error(`[digita-web] the boot of app "${app}" answered HTTP ${res.status}; its website look is left out`);
+          return;
+        }
+        const json = (await res.json()) as { data?: { branding?: { web_default_signature?: string } } };
+        const look = json.data?.branding?.web_default_signature;
+        if (look) named.set(app, look);
+      } catch (err) {
+        console.error(`[digita-web] the boot of app "${app}" is unreachable; its website look is left out:`, err);
+      }
+    }),
+  );
+  const looks = new Set(named.values());
+  if (looks.size > 1) {
+    const which = [...named].map(([app, look]) => `${app}: ${look}`).join(", ");
+    console.error(`[digita-web] the tenant's apps name different website looks (${which}); none is used`);
+    return undefined;
+  }
+  return [...looks][0];
+}
+
 /** The engine's answer to a public create: its status, the error code of a refusal, the field a 400
  *  names and the wait it asks of a visitor over its budget. */
 export interface CreateAnswer {
