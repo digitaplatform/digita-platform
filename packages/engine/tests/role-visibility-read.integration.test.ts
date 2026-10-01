@@ -153,6 +153,16 @@ describe("A user who holds only roles of the app reads the workspaces that name 
   it("reads no workspace through a role of another app", async () => {
     expect((await get("other-app", "resource/Workspace")).statusCode).toBe(403);
   });
+
+  it("exports no workspace", async () => {
+    expect((await get("reception", "export/Workspace")).statusCode).toBe(403);
+  });
+});
+
+describe("An anonymous caller reads no workspace", () => {
+  it("is refused the public list of workspaces", async () => {
+    expect((await app.inject({ method: "GET", url: "/api/v1/public/resource/Workspace" })).statusCode).toBe(403);
+  });
 });
 
 describe("A System User or an Administrator reads the workspaces as before", () => {
@@ -160,6 +170,11 @@ describe("A System User or an Administrator reads the workspaces as before", () 
     expect(await listedWorkspaces("system")).toEqual(["everyone"]);
     expect(await listedWorkspaces("system-reception")).toEqual(["workshop-reception", "everyone"]);
     expect((await get("system", "resource/View/utilization")).statusCode).toBe(200);
+  });
+
+  it("finds for a System User no workspace whose role list leaves it out", async () => {
+    expect((await get("system", "resource/Workspace/everyone")).statusCode).toBe(200);
+    expect((await get("system", "resource/Workspace/workshop-reception")).statusCode).toBe(404);
   });
 
   it("shows an Administrator every workspace", async () => {
