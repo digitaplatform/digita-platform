@@ -84,7 +84,8 @@ export interface WorkspaceDoc {
   icon?: string;
   enabled?: boolean;
   priority?: number;
-  /** Role names that may SEE this workspace. Empty/absent = all authenticated users. */
+  /** Role names that may SEE this workspace, even a role that no permission row names.
+   *  Empty/absent = every user a permission row lets read workspaces. */
   roles?: string[];
   /** Role names for whom this is the DEFAULT workspace. */
   is_default_for_roles?: string[];
@@ -105,4 +106,8 @@ export type ViewSectionData = Record<string, unknown> | Array<Record<string, unk
 export interface ViewResult {
   source: Record<string, unknown> | null;
   sections: Record<string, ViewSectionData>;
+  /** The entity each section that ran read, by section key, whose field labels name its row
+   *  keys. A section that failed has none, and an engine of an older release sends no map, so a
+   *  reader names the row keys as they are. */
+  entities?: Record<string, string>;
 }

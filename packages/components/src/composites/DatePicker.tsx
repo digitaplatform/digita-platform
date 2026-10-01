@@ -24,8 +24,9 @@ import { Popover } from '../primitives/Popover.js';
  *
  * Keyboard: opening puts the focus on the selected day (today without one). The arrow keys move it
  * a day or a week, Home and End to the ends of the week, PageUp and PageDown a month (with Shift a
- * year), across the edges of the month; Enter picks. Tab and Shift+Tab wrap inside the open panel. A
- * panel that held the focus hands it back to the trigger when it closes.
+ * year), across the edges of the month; Enter picks. Tab and Shift+Tab wrap inside the open panel,
+ * except in a Table grid cell, whose editor takes Tab (not Shift+Tab) to commit the cell and move on.
+ * A panel that held the focus hands it back to the trigger when it closes.
  *
  * Value contract: 'YYYY-MM-DD' string or undefined (matches DateControl).
  * Week starts Monday (format-locale follow-up: derive from Intl.Locale).
@@ -42,6 +43,9 @@ export interface DatePickerProps {
   /** Names of the two paging buttons; the caller owns the language, as it does for `clearLabel`. */
   previousLabel?: string;
   nextLabel?: string;
+  /** Their names in the month and year view, where they page twelve years instead of a month. */
+  previousYearsLabel?: string;
+  nextYearsLabel?: string;
   disabled?: boolean;
   invalid?: boolean;
   id?: string;
@@ -103,6 +107,8 @@ export function DatePicker({
   clearLabel = 'Clear',
   previousLabel = 'Previous',
   nextLabel = 'Next',
+  previousYearsLabel = previousLabel,
+  nextYearsLabel = nextLabel,
   disabled,
   invalid,
   id,
@@ -113,6 +119,7 @@ export function DatePicker({
   const anchorRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<'days' | 'my'>('days');
   const selected = useMemo(() => parseIso(value), [value]);
@@ -145,9 +152,10 @@ export function DatePicker({
 
   // Closing removes the day button that holds the focus, and the focus would fall to the page. A
   // panel that held it hands it to the trigger; one that did not (a click outside) leaves it where
-  // the person put it.
+  // the person put it. Only this picker's own panel counts: Escape closes every open calendar, and
+  // each one would otherwise send the focus to its own trigger.
   const close = () => {
-    const holdsFocus = document.activeElement?.closest('.dg-datepicker') != null;
+    const holdsFocus = panelRef.current?.contains(document.activeElement) ?? false;
     setOpen(false);
     if (holdsFocus) triggerRef.current?.focus();
   };
@@ -243,7 +251,7 @@ export function DatePicker({
       </button>
 
       <Popover open={open} anchorRef={anchorRef} onRequestClose={close} className="dg-datepicker w-76 p-3">
-        <div role="dialog" aria-modal="true" aria-labelledby={ariaLabelledby} onKeyDown={keepTab}>
+        <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={ariaLabelledby} onKeyDown={keepTab}>
           <div className="mb-2 flex items-center justify-between">
             <button
               type="button"
@@ -255,8 +263,8 @@ export function DatePicker({
               <Chevron dir="right" className={cn('h-3.5 w-3.5 text-primary-600 transition-transform duration-base', view === 'my' && 'rotate-90')} />
             </button>
             <div className="flex items-center gap-0.5">
-              <button type="button" aria-label={previousLabel} onClick={() => page(-1)} className="flex h-7 w-7 items-center justify-center rounded-btn text-textMuted hover:bg-bgHover"><Chevron dir="left" className="h-4 w-4" /></button>
-              <button type="button" aria-label={nextLabel} onClick={() => page(1)} className="flex h-7 w-7 items-center justify-center rounded-btn text-textMuted hover:bg-bgHover"><Chevron dir="right" className="h-4 w-4" /></button>
+              <button type="button" aria-label={view === 'my' ? previousYearsLabel : previousLabel} onClick={() => page(-1)} className="flex h-7 w-7 items-center justify-center rounded-btn text-textMuted hover:bg-bgHover"><Chevron dir="left" className="h-4 w-4" /></button>
+              <button type="button" aria-label={view === 'my' ? nextYearsLabel : nextLabel} onClick={() => page(1)} className="flex h-7 w-7 items-center justify-center rounded-btn text-textMuted hover:bg-bgHover"><Chevron dir="right" className="h-4 w-4" /></button>
             </div>
           </div>
 

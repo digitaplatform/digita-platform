@@ -8,6 +8,8 @@ import {
   applySignature,
   bootIdentity,
   getRuntimeSignature,
+  resolveInitialDensity,
+  resolveInitialMode,
   storeIdentityPreferences,
   DEFAULT_SIGNATURE_ID,
   IDENTITY_PREFERENCE_KEYS,
@@ -23,10 +25,9 @@ import { signature as veloluckLakeside } from '@digitaplatform/veloluck-lakeside
 import { signature as veloluckPrecise } from '@digitaplatform/veloluck-precise';
 import { signature as veloluckWorkbench } from '@digitaplatform/veloluck-workbench';
 import { nextMode } from '@digitaplatform/components';
+import faviconUrl from '@digitaplatform/theme/favicon.svg?no-inline';
 import { getUserPreference, setUserPreference } from '@/services/userPreference';
-import { APP_BASE_PATH } from '@/lib/appBase';
-
-const TEMPLATE_KEY = 'digita-app:template';
+import { APP_BASE_PATH, appUrl } from '@/lib/appBase';
 
 // The signature this app drew last in this browser, kept only as a CACHE so the first
 // paint, before /boot answers, wears the tenant's look instead of flashing digita. It
@@ -34,6 +35,10 @@ const TEMPLATE_KEY = 'digita-app:template';
 // tenant share the origin and may wear different looks, so each app caches its own
 // under its base path.
 const SIGNATURE_CACHE_KEY = `digita-app:signature-cache${APP_BASE_PATH}`;
+
+// Whether this app's tenant allows no light/dark choice, cached like the signature, so the first
+// paint before /boot answers follows the system mode instead of a mode this browser stored.
+const MODE_LOCK_CACHE_KEY = `digita-app:mode-lock${APP_BASE_PATH}`;
 
 interface ThemeState {
   mode: ThemeMode;
@@ -45,8 +50,6 @@ interface ThemeState {
    *  COMPOSES on top of the design, never replaces it): the answer of
    *  drawnSignature, or a look the design showcase previews. */
   signature: string;
-  /** Per-user template override (else resolved from branding.default_template). */
-  templateOverride: string | null;
   branding: BootBranding | null;
   setMode: (mode: ThemeMode) => void;
   cycleMode: () => void;
@@ -59,7 +62,6 @@ interface ThemeState {
    *  plugin composition loads, so a DELIVERED tenant default (registered by the
    *  host loader) replaces the boot-time fallback and its full brand world lands. */
   reapplySignature: () => void;
-  setTemplateOverride: (key: string) => void;
   setBranding: (branding: BootBranding) => void;
   /** Pull mode + density + design from UserPreference (server) so they roam across
    *  devices. Called once authenticated; the server value wins over the localStorage
@@ -84,7 +86,14 @@ interface ThemeState {
 const initial = bootIdentity({
   signatures: [digitaSignature, simetrixSignature, veloluckWorkbench, veloluckLakeside, veloluckPrecise],
   signature: localStorage.getItem(SIGNATURE_CACHE_KEY) ?? undefined,
+  mode: localStorage.getItem(MODE_LOCK_CACHE_KEY) !== null ? 'system' : undefined,
 });
+
+/** Whether the tenant allows no light/dark choice: its branding says so once /boot answered,
+ *  the cache before. */
+export function isModeLocked(branding: BootBranding | null): boolean {
+  return branding ? branding.allow_user_theme_mode === false : localStorage.getItem(MODE_LOCK_CACHE_KEY) !== null;
+}
 
 // The signature everyone sees, by one rule: once /boot answered, the tenant's
 // BrandingSetting.default_signature if this app offers it; before that, the look
@@ -96,6 +105,16 @@ const initial = bootIdentity({
 function drawnSignature(branding: BootBranding | null): string {
   const id = branding ? branding.default_signature : localStorage.getItem(SIGNATURE_CACHE_KEY);
   return id && getRuntimeSignature(id) ? id : DEFAULT_SIGNATURE_ID;
+}
+
+// The page's icon: the tenant's favicon, else the platform's, which main.tsx puts in place at
+// start. One link element is kept, so a branding without a favicon puts the platform's back.
+function showFavicon(href: string): void {
+  const link =
+    document.head.querySelector<HTMLLinkElement>('link[rel="icon"]') ??
+    document.head.appendChild(Object.assign(document.createElement('link'), { rel: 'icon' }));
+  link.removeAttribute('type');
+  link.setAttribute('href', href);
 }
 
 // Apply signature `id`, then re-assert the tenant's branding on top: a tenant's
@@ -116,9 +135,9 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   density: initial.density,
   design: initial.design,
   signature: drawnSignature(null),
-  templateOverride: localStorage.getItem(TEMPLATE_KEY),
   branding: null,
   setMode: (mode) => {
+    if (isModeLocked(get().branding)) return;
     localStorage.setItem(MODE_STORAGE_KEY, mode);
     applyMode(mode);
     set({ mode });
@@ -147,15 +166,20 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     localStorage.setItem(SIGNATURE_CACHE_KEY, signature);
     set({ signature });
   },
-  setTemplateOverride: (key) => {
-    localStorage.setItem(TEMPLATE_KEY, key);
-    set({ templateOverride: key });
-  },
   // The branding may name another default signature, so the signature is drawn
-  // again, and applySignatureLayered puts the tenant's overrides and the per-user
-  // density back over it.
+  // again, and applySignatureLayered puts the tenant's overrides and the density
+  // back over it: a person's own density, else the tenant's. A tenant that allows
+  // no light/dark choice puts everyone on the system mode.
   setBranding: (branding) => {
-    set({ branding });
+    const wasModeLocked = isModeLocked(get().branding);
+    const isNowModeLocked = isModeLocked(branding);
+    if (isNowModeLocked) localStorage.setItem(MODE_LOCK_CACHE_KEY, 'locked');
+    else localStorage.removeItem(MODE_LOCK_CACHE_KEY);
+    // Under the lock everyone follows the system mode; when it lifts, a person's own mode returns.
+    const mode = isNowModeLocked ? 'system' : wasModeLocked ? resolveInitialMode() : get().mode;
+    if (mode !== get().mode || isNowModeLocked !== wasModeLocked) applyMode(mode);
+    set({ branding, density: resolveInitialDensity(undefined, branding.density), mode });
+    showFavicon(branding.favicon ? appUrl(branding.favicon) : faviconUrl);
     get().reapplySignature();
   },
   loadRemotePrefs: async () => {
@@ -165,7 +189,9 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         getUserPreference(IDENTITY_PREFERENCE_KEYS.density),
         getUserPreference(IDENTITY_PREFERENCE_KEYS.design),
       ]);
-      const stored = storeIdentityPreferences({ mode, density, design });
+      // Under the lock a roamed mode is not kept, or it would paint the next load's first frame.
+      const isLocked = isModeLocked(get().branding);
+      const stored = storeIdentityPreferences({ mode: isLocked ? undefined : mode, density, design });
       if (stored.mode) {
         applyMode(stored.mode);
         set({ mode: stored.mode });

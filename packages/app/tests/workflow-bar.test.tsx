@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
-import type { EntityDefinition } from '@digitaplatform/shared';
+import { render, cleanup, screen, waitFor, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { EntityDefinition, TransitionDefinition } from '@digitaplatform/shared';
+
+const mocks = vi.hoisted(() => ({
+  confirm: vi.fn(),
+  toast: vi.fn(),
+  transition: vi.fn(),
+}));
 
 // The session user drives role-gating; reset per test.
 let user: { _id?: string; email?: string; roles: string[] } | null = { roles: ['Editor'] };
@@ -10,15 +17,25 @@ vi.mock('@/stores/session', () => ({
   useSessionStore: (sel: (s: { user: typeof user }) => unknown) => sel({ user }),
 }));
 vi.mock('@/stores/i18n', () => ({
-  useI18nStore: (sel: (s: { t: (k: string) => string }) => unknown) => sel({ t: (k: string) => k }),
+  useI18nStore: (sel: (s: Record<string, unknown>) => unknown) =>
+    sel({ t: (k: string) => k, tOption: (_e: string, _f: string, v: string) => `state:${v}` }),
 }));
-vi.mock('@/lib/chrome-i18n', () => ({ useChrome: () => (k: string) => k }));
+// The keys stand for the texts; the params show which state a text is about.
+vi.mock('@/lib/chrome-i18n', () => ({
+  useChrome: () => (key: string, params?: Record<string, string | number>) => (params ? `${key} ${JSON.stringify(params)}` : key),
+}));
 vi.mock('@/components/overlay/DialogHost', () => ({
-  useDialogHost: () => ({ toast: vi.fn(), confirm: vi.fn().mockResolvedValue(true) }),
+  useDialogHost: () => ({ toast: mocks.toast, confirm: mocks.confirm }),
 }));
 vi.mock('@/hooks/useDocument', () => {
   const m = () => ({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false });
-  return { useSubmit: m, useCancel: m, useAmend: m, useTransition: m };
+  return {
+    useSubmit: m,
+    useCancel: m,
+    useAmend: m,
+    useCopy: m,
+    useTransition: () => ({ mutateAsync: mocks.transition, isPending: false }),
+  };
 });
 // WorkflowBar navigates to the new draft after an amend.
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
@@ -225,5 +242,84 @@ describe('WorkflowBar (generic, meta-driven)', () => {
     expect(renderBar(m, { status: 'draft', docstatus: 0, ready: false }).queryByText('Send')).toBeNull();
     cleanup();
     expect(renderBar(m, { status: 'draft', docstatus: 0, ready: true }).queryByText('Send')).not.toBeNull();
+  });
+});
+
+// A workshop lead taps "Ready for pickup" on a tablet. A transition with `confirm: true` asks
+// first and moves the state only after a yes; a no leaves the work order as it is. A transition
+// without `confirm` moves at once, as before.
+describe('WorkflowBar transition confirm', () => {
+  function drawBar(transition: TransitionDefinition, onApplied = vi.fn()) {
+    const meta = {
+      name: 'WorkOrder',
+      fields: [{ fieldname: 'status', fieldtype: 'Select', label: 'Status', options: ['in_progress', 'ready_for_pickup'] }],
+      permissions: [],
+      workflow_field: 'status',
+      states: [{ name: 'in_progress', is_initial: true }, { name: 'ready_for_pickup' }],
+      transitions: [transition],
+    } as unknown as EntityDefinition;
+    render(
+      <WorkflowBar entity="WorkOrder" meta={meta} name="WO-1" doc={{ status: 'in_progress' }} disabled={false} onApplied={onApplied} />,
+    );
+    return onApplied;
+  }
+
+  const toPickup: TransitionDefinition = {
+    from: 'in_progress',
+    to: 'ready_for_pickup',
+    action: 'Ready for pickup',
+    allowed_roles: ['Lead'],
+    confirm: true,
+  };
+
+  beforeEach(() => {
+    user = { roles: ['Lead'] };
+    mocks.confirm.mockReset();
+    mocks.toast.mockReset();
+    mocks.transition.mockReset().mockResolvedValue({ _id: 'WO-1', status: 'ready_for_pickup' });
+  });
+
+  describe('a transition with confirm', () => {
+    it('asks which state it moves to, and moves only after a yes', async () => {
+      let answer: (yes: boolean) => void = () => {};
+      mocks.confirm.mockReturnValue(new Promise<boolean>((resolve) => (answer = resolve)));
+      const onApplied = drawBar(toPickup);
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Ready for pickup' }));
+
+      await waitFor(() => expect(mocks.confirm).toHaveBeenCalledTimes(1));
+      expect(mocks.confirm.mock.calls[0]![0].title).toBe('ui.workflow.transitionConfirm {"state":"state:ready_for_pickup"}');
+      expect(mocks.transition).not.toHaveBeenCalled();
+
+      await act(async () => answer(true));
+
+      await waitFor(() => expect(mocks.transition).toHaveBeenCalledWith({ name: 'WO-1', to: 'ready_for_pickup' }));
+      await waitFor(() => expect(onApplied).toHaveBeenCalledWith({ _id: 'WO-1', status: 'ready_for_pickup' }));
+    });
+
+    it('leaves the document as it is after a no', async () => {
+      mocks.confirm.mockResolvedValue(false);
+      const onApplied = drawBar(toPickup);
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Ready for pickup' }));
+
+      await waitFor(() => expect(mocks.confirm).toHaveBeenCalledTimes(1));
+      await act(async () => {});
+      expect(mocks.transition).not.toHaveBeenCalled();
+      expect(onApplied).not.toHaveBeenCalled();
+      expect(mocks.toast).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a transition without confirm', () => {
+    it('moves the state at once, without a question', async () => {
+      const onApplied = drawBar({ from: 'in_progress', to: 'ready_for_pickup', action: 'Ready for pickup', allowed_roles: ['Lead'] });
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Ready for pickup' }));
+
+      await waitFor(() => expect(mocks.transition).toHaveBeenCalledWith({ name: 'WO-1', to: 'ready_for_pickup' }));
+      await waitFor(() => expect(onApplied).toHaveBeenCalled());
+      expect(mocks.confirm).not.toHaveBeenCalled();
+    });
   });
 });

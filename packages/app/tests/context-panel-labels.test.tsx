@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The context panel labels what a view returns in the session language, never by the keys of the
-// result: a section is headed by the text of `field.<view>.<section>`, a value by the text of
-// `field.<view>.<section>.<key>`, and a key without a text reads as words, not as the key.
+// result: a section is headed by the text of `view.<view>.<section>`, a value by the text of
+// `view.<view>.<section>.<key>`, and a key without a text reads as words, not as the key.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import type { EntityDefinition } from '@digitaplatform/shared';
@@ -52,18 +52,18 @@ function renderPanel(translations: Record<string, string>) {
 }
 
 const FRENCH = {
-  'field.customer360.customer': 'Client',
-  'field.customer360.customer.display_name': 'Nom affiché',
-  'field.customer360.open_orders': 'Commandes ouvertes',
+  'view.customer360.customer': 'Client',
+  'view.customer360.customer.display_name': 'Nom affiché',
+  'view.customer360.open_orders': 'Commandes ouvertes',
 };
 
 const GERMAN = {
-  'field.customer360.customer': 'Kunde',
-  'field.customer360.customer.display_name': 'Anzeigename',
-  'field.customer360.customer.customer_group': 'Kundengruppe',
-  'field.customer360.open_orders': 'Offene Aufträge',
-  'field.customer360.open_orders.order_no': 'Auftrag',
-  'field.customer360.open_orders.stage': 'Stufe',
+  'view.customer360.customer': 'Kunde',
+  'view.customer360.customer.display_name': 'Anzeigename',
+  'view.customer360.customer.customer_group': 'Kundengruppe',
+  'view.customer360.open_orders': 'Offene Aufträge',
+  'view.customer360.open_orders.order_no': 'Auftrag',
+  'view.customer360.open_orders.stage': 'Stufe',
 };
 
 describe('ContextPanel labels', () => {
@@ -106,6 +106,14 @@ describe('ContextPanel labels', () => {
 
     expect(await screen.findByText('Credit Limit')).toBeInTheDocument();
     expect(screen.queryByText('credit_limit')).not.toBeInTheDocument();
+  });
+
+  it('heads a section without a text by words, never by the key', async () => {
+    renderPanel({ 'view.customer360.customer': 'Kunde' });
+
+    await screen.findByText('Kunde');
+    expect(screen.getByText('Open Orders')).toBeInTheDocument();
+    expect(screen.queryByText('open_orders')).not.toBeInTheDocument();
   });
 
   it('follows the language the texts are in', async () => {

@@ -1,6 +1,6 @@
 {
   "name": "@digitaplatform/engine",
-  "version": "0.3.31",
+  "version": "0.3.35",
   "private": true,
   "type": "module",
   "main": "./dist/server.js",
@@ -37,7 +37,6 @@
     "ioredis": "^5.11.1",
     "jimp": "0.22.12",
     "jose": "^6.2.3",
-    "jsep": "^1.4.0",
     "mongodb": "^7.3.0",
     "otpauth": "^9.5.1",
     "pino": "^10.3.1",
@@ -52,6 +51,7 @@
     "@vitest/coverage-v8": "^4.1.9",
     "aws-sdk-client-mock": "^4.1.0",
     "dependency-cruiser": "^18.1.0",
+    "jsep": "^1.4.0",
     "mongodb-memory-server": "^11.2.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",

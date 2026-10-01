@@ -54,7 +54,7 @@ async function drawFooter(site: WebSite, contactEnabled: boolean): Promise<HTMLE
   await act(async () =>
     root!.render(
       <ConfigProvider value={siteConfig(contactEnabled)}>
-        <Footer locale="en" site={site} nav={footerNav} brand={{ name: "example" }} />
+        <Footer locale="en" site={site} nav={footerNav} brand={{ name: "example" }} contactEnabled={contactEnabled} />
         <SheetState />
       </ConfigProvider>,
     ),
@@ -83,6 +83,16 @@ describe("a #contact item of the footer menu", () => {
     const footer = await drawFooter({ _id: "example", site_name: "example" }, false);
     expect(footer.textContent).not.toContain("Write to us");
     expect([...footer.querySelectorAll("nav li")].map((item) => item.textContent)).toEqual(["Privacy"]);
+  });
+
+  it("PLANTED DEFECT: follows the layout's rule for the sheet, not a rule of its own, and leaves no empty line", async () => {
+    const footer = await drawFooter({ _id: "example", site_name: "example", contact_email: "hello@example.org" }, false);
+    expect([...footer.querySelectorAll("nav li")].map((item) => item.textContent)).toEqual(["Privacy"]);
+  });
+
+  it("PLANTED INNOCENT: keeps the item where the layout offers the sheet", async () => {
+    const footer = await drawFooter({ _id: "example", site_name: "example", contact_email: "hello@example.org" }, true);
+    expect([...footer.querySelectorAll("nav li")].map((item) => item.textContent)).toEqual(["Privacy", "Write to us"]);
   });
 
   it("leaves the footer's other items links", async () => {
@@ -123,9 +133,7 @@ const familyMenus = [
     name: "the family list of the phone menu",
     draw: (contactEnabled: boolean) =>
       drawOpened(
-        <MobileNav locale="en" items={[]} apps={[]} family={family} brand={{ name: "example" }} label="menu" navLabel="nav" openLabel="open" closeLabel="close" comingLabel="coming">
-          {null}
-        </MobileNav>,
+        <MobileNav locale="en" items={[]} apps={[]} family={family} brand={{ name: "example" }} label="menu" navLabel="nav" openLabel="open" closeLabel="close" comingLabel="coming" />,
         contactEnabled,
         "open",
       ),

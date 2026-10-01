@@ -55,6 +55,7 @@ vi.mock('@/hooks/useDocument', () => ({
   useCreate: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdate: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteDoc: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCopy: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('@/hooks/usePreview', () => ({
   usePreview: () => ({ data: undefined, status: 'idle', trigger: vi.fn() }),
@@ -82,13 +83,12 @@ vi.mock('@/stores/session', () => ({
 }));
 vi.mock('@/stores/i18n', () => ({
   useI18nStore: (
-    sel: (s: { t: (k: string) => string; tEntity: (e: string, fb?: string) => string; tField: (e: string, f: string, fb?: string) => string; tSection: (e: string, s: string, fb?: string) => string }) => unknown,
+    sel: (s: { t: (k: string) => string; tEntity: (e: string, fb?: string) => string; tField: (e: string, f: string, fb?: string) => string }) => unknown,
   ) =>
     sel({
       t: (k: string) => k,
       tEntity: (e: string, fb?: string) => fb ?? e,
       tField: (_e: string, f: string, fb?: string) => fb ?? f,
-      tSection: (_e: string, s: string, fb?: string) => fb ?? s,
     }),
 }));
 vi.mock('@/stores/record-title', () => ({

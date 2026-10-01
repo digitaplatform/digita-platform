@@ -5,7 +5,7 @@
 // dialog, also where the app ships `field.<Entity>.<field>` for a field of the same name. Where the
 // table has no key for the column, the key without the table still gives its text.
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ActionDefinition, EntityDefinition } from '@digitaplatform/shared';
 import { useI18nStore } from '@/stores/i18n';
 import { localizeAction, localizeMeta } from '@/lib/localize-meta';
@@ -74,6 +74,7 @@ const meta = {
       child_fields: [
         { fieldname: 'description', fieldtype: 'Data', label: 'Line description' },
         { fieldname: 'unit', fieldtype: 'Data', label: 'Unit' },
+        { fieldname: 'no_label_at_all', fieldtype: 'Data' },
       ],
     },
     {
@@ -163,37 +164,69 @@ describe.each([
   it('shows the text of the key without the table where the table has none', () => {
     expect(labels(onlyTheOldKey)).toEqual(expect.arrayContaining(['Line description', 'Einheit']));
   });
+
+  it('words the name of a column that has neither a label nor a text', () => {
+    expect(labels({})).toContain('No Label At All');
+  });
 });
+
+const ACTION_TEXTS = {
+  'action_field.Booking.accept.lines': 'Positionen',
+  'action_field.Booking.accept.lines.unit': 'Menge je Position',
+  'field.Booking.lines': 'Zeilen',
+  'field.Booking.unit': 'Einheit',
+};
+
+/** The Table of an action's dialog, localized for German, drawn as the dialog draws it. */
+function drawActionTable(table: Record<string, unknown>, readOnly: boolean) {
+  const accept = {
+    action: 'accept',
+    label: 'Accept',
+    dialog_fields: [
+      {
+        fieldname: 'lines',
+        fieldtype: 'Table',
+        label: 'Lines',
+        child_fields: [{ fieldname: 'unit', fieldtype: 'Data', label: 'Unit' }],
+        ...table,
+      },
+    ],
+  } as unknown as ActionDefinition;
+  useI18nStore.setState({ translations: ACTION_TEXTS, loaded: true });
+  render(
+    <TableControl
+      field={localizeAction('Booking', accept, ACTION_TEXTS).dialog_fields![0]!}
+      value={[{ _row_id: 'r1', unit: 'y' }]}
+      doc={{ docstatus: 0 }}
+      entity="Booking"
+      state={{ ...STATE, readOnly }}
+      onChange={() => {}}
+      controlId="lines"
+      labelId="lines-label"
+    />,
+  );
+}
 
 describe('a Table in the dialog of an action', () => {
   it('shows the action_field texts of the table and its columns over the texts of entity fields', () => {
-    const accept = {
-      action: 'accept',
-      label: 'Accept',
-      dialog_fields: [
-        { fieldname: 'lines', fieldtype: 'Table', label: 'Lines', child_fields: [{ fieldname: 'unit', fieldtype: 'Data', label: 'Unit' }] },
-      ],
-    } as unknown as ActionDefinition;
-    const translations = {
-      'action_field.Booking.accept.lines': 'Positionen',
-      'action_field.Booking.accept.lines.unit': 'Menge je Position',
-      'field.Booking.lines': 'Zeilen',
-      'field.Booking.unit': 'Einheit',
-    };
-    useI18nStore.setState({ translations, loaded: true });
-    render(
-      <TableControl
-        field={localizeAction('Booking', accept, translations).dialog_fields![0]!}
-        value={[{ _row_id: 'r1', unit: 'y' }]}
-        doc={{ docstatus: 0 }}
-        entity="Booking"
-        state={{ ...STATE, readOnly: true }}
-        onChange={() => {}}
-        controlId="lines"
-        labelId="lines-label"
-      />,
-    );
+    drawActionTable({}, true);
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Menge je Position']);
     expect(screen.getByLabelText('Positionen')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['an editable grid', {}],
+    ['a grid of line entry', { entry_flow: { sequence: ['unit'] } }],
+    ['a grid that edits its rows in a dialog', { row_detail_dialog: true }],
+  ])('names %s by the action_field text of the table', (_grid, table) => {
+    drawActionTable(table, false);
+    expect(screen.getByLabelText('Positionen')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Zeilen')).not.toBeInTheDocument();
+  });
+
+  it('titles the row dialog it opens by the action_field text of the table', async () => {
+    drawActionTable({ row_detail_dialog: true }, false);
+    fireEvent.click(screen.getByRole('button', { name: 'ui.table.editRow' }));
+    expect(await screen.findByRole('dialog', { name: 'Positionen' })).toBeInTheDocument();
   });
 });

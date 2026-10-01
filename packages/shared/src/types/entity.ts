@@ -710,7 +710,7 @@ export interface ActionDefinition {
    *  dialog is itself the confirmation). */
   confirm?: boolean;
   /** What running the action does, said in its confirm dialog under the title; read only with
-   *  `confirm`. Translated under `action_confirm_message.<Entity>.<action>`. */
+   *  `confirm`. Translated under `action.<Entity>.<action>.confirm_message`. */
   confirm_message?: string;
   show_if?: string;
   requires_permission?: string;
@@ -747,8 +747,9 @@ export interface EntityReportLink {
   param_map?: Record<string, string>;
   /**
    * Doc field path of the language to print in (e.g. "customer_language", fetched from the
-   * customer), sent as the render's `locale` with html, pdf and png, never with csv, on which the
-   * report service refuses one. A value with a region ("de-CH") prints with that region's formats;
+   * customer), sent as the render's `locale` with html, pdf and png, never with csv, to which a
+   * locale does not apply. The field must hold a BCP-47 tag: anything else ("fr_CH", a Link id)
+   * fails the print with 400. A value with a region ("de-CH") prints with that region's formats;
    * an empty value prints in the locale of the report definition.
    */
   locale?: string;
@@ -773,6 +774,8 @@ export interface LinkDefinition {
   label: string;
   entity: string;
   link_field: string;
+  /** Icon name resolved client-side to a lucide icon (see the UI icon registry).
+   *  Unknown/absent → label-only link. */
   icon?: string;
   show_count?: boolean;
   filters?: Record<string, unknown>;
@@ -1035,10 +1038,12 @@ export interface EntityDefinition {
    *  re-bootstrap — e.g. Setting / BrandingSetting. The engine does not act on it. */
   reload_boot_on_write?: boolean;
   /** Name of a `string[]` field holding role names that gate VISIBILITY of each
-   *  document: a row whose field is empty/absent is visible to everyone, otherwise
-   *  it is visible only to users whose roles intersect it. The engine enforces this
-   *  on list/read (defense-in-depth; Administrator bypasses). Generic — any entity
-   *  may opt in (e.g. Workspace → "roles"). */
+   *  document: a row whose field is empty/absent is visible to every user a
+   *  permission row lets read the entity, otherwise only to users whose roles
+   *  intersect it. A user whose roles no permission row names selects and reads, at
+   *  level 0, exactly the rows whose field lists one of its roles. The engine
+   *  enforces this on list/read (Administrator bypasses). Generic — any entity may
+   *  opt in (e.g. Workspace → "roles"). */
   role_visibility_field?: string;
 
   // Change tracking

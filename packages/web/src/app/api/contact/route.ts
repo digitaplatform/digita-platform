@@ -57,11 +57,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!site?.contact_email) return answer(503, { ok: false, message: "Contact is not configured" });
 
     // The engine stamps the site from its own SITE_ID and refuses a Link in the body.
-    const { status } = await createRecord(config.engineUrl, "ContactRequest", request, post.visitor);
+    const { status, code, field, retryAfter } = await createRecord(config.engineUrl, "ContactRequest", request, post.visitor);
+    if (status >= 200 && status < 300) return answer(200, { ok: true });
     // 403: the engine grants no Guest create on ContactRequest yet, so the sheet offers the address.
-    if (status === 403) return answer(503, { ok: false, message: "Contact is not configured" });
-    if (status < 200 || status >= 300) throw new Error(`the engine answered HTTP ${status} to the ContactRequest create`);
-    return answer(200, { ok: true });
+    // A 400 BAD_REQUEST names a key the route sends and the Guest row does not let Guest set: the
+    // site is not set up for the form either, and nothing the visitor typed is wrong.
+    if (status === 403 || (status === 400 && code === "BAD_REQUEST")) {
+      if (status === 400) console.error(`[digita-web] the engine refused a ContactRequest key: ${field ?? ""}`);
+      return answer(503, { ok: false, message: "Contact is not configured" });
+    }
+    // A value the engine refuses is the visitor's to correct, and the engine's own budget of creates
+    // names its wait: the sheet tells either as it tells the route's own.
+    if (status === 400) return answer(400, { ok: false, message: "Invalid request", ...(field === undefined ? {} : { field }) });
+    if (status === 429) return tellRetryAfter(answer(429, { ok: false, message: "Too many requests" }), retryAfter);
+    throw new Error(`the engine answered HTTP ${status} to the ContactRequest create`);
   } catch (err) {
     console.error("[digita-web] contact request failed:", err instanceof Error ? err.message : err);
     return answer(500, { ok: false, message: "The request could not be sent" });

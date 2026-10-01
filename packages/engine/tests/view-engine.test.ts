@@ -130,9 +130,37 @@ describe("ViewEngine — permission denial in section", () => {
     );
     expect((out.sections["addresses"] as unknown[]).length).toBe(1);
     expect(out.sections["recent_invoices"]).toEqual([]);
+    // Only a section that ran names the entity of its rows, so a denied one reveals no entity.
+    expect(out.entities).toEqual({ addresses: "customerAddress" });
     const msgs = ctx.getMessages();
     const warn = msgs.find((m) => m.path === "/sections/recent_invoices");
     expect(warn?.code).toBe("omitted_no_permission");
+  });
+});
+
+describe("ViewEngine — link section whose optional param the request omits", () => {
+  const linkView = () =>
+    makeView({
+      anchored: false,
+      source: undefined,
+      params: [{ name: "customer", type: "string" }],
+      sections: [{ key: "customer", kind: "link", entity: "customer", target: "$param.customer" }],
+    });
+
+  it("names no entity to a caller who may not read the section's entity", async () => {
+    const deps = makeDeps();
+    deps.permissionChecker.check.mockRejectedValue(new PermissionDeniedError("ada@example.com", "customer", "read"));
+    const out = await new ViewEngine(deps as never).execute(linkView(), { query: {} }, user, new ResponseContext());
+    expect(out.sections["customer"]).toBeNull();
+    expect(out.entities).toEqual({});
+    expect(deps.documentService.getDoc).not.toHaveBeenCalled();
+  });
+
+  it("names the entity to a caller who may read it, with no row", async () => {
+    const deps = makeDeps();
+    const out = await new ViewEngine(deps as never).execute(linkView(), { query: {} }, user, new ResponseContext());
+    expect(out.sections["customer"]).toBeNull();
+    expect(out.entities).toEqual({ customer: "customer" });
   });
 });
 

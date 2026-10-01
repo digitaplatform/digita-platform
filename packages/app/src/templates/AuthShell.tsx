@@ -35,6 +35,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
           <BrandMark
             name={appName}
             logoUrl={branding?.logo ? appUrl(branding.logo) : undefined}
+            logoDarkUrl={branding?.logo_dark ? appUrl(branding.logo_dark) : undefined}
             nameIsCustom={Boolean(branding?.app_name)}
             signature={getSignature(signatureId)}
           />

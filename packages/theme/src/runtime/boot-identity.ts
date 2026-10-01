@@ -32,6 +32,9 @@ export interface BootIdentityOptions {
    *  website's signature is the site's identity (its `theme`), the app's the tenant's look
    *  it drew last; neither is a choice of the visitor. */
   signature?: string;
+  /** The mode the page is drawn in, applied as it is; without one, the mode this browser
+   *  stored. The app passes `system` while its tenant allows no light/dark choice. */
+  mode?: ThemeMode;
   /** The tenant's branding, when the caller has it at boot (the website's server
    *  read it); the app applies it later, when /boot answers. */
   branding?: BrandingInput | null;
@@ -46,7 +49,8 @@ export interface BootIdentityOptions {
  * density this browser chose, in the order the
  * layers compose: the design (with its variant and the tint picked for it), the mode, the
  * signature, the tenant's branding over the signature, and the density last —
- * the signature's teardown clears it, and a stored density beats the branding's.
+ * the signature's teardown clears it, and a stored density beats the branding's, which
+ * beats the pointer default.
  * The app runs it when its theme store initialises; the website runs the same
  * function before first paint. App and website share one origin, so a design, mode or
  * density chosen in either shows in both.
@@ -58,13 +62,13 @@ export function bootIdentity(options: BootIdentityOptions = {}): BootedIdentity 
   for (const signature of options.signatures ?? []) registerSignature(signature);
   const design = resolveInitialDesign();
   applyDesign(design, target);
-  const mode = resolveInitialMode();
+  const mode = options.mode ?? resolveInitialMode();
   if (options.followSystemMode === false) paintMode(mode, target);
   else applyMode(mode, target);
   const signature = options.signature ?? DEFAULT_SIGNATURE_ID;
   applySignature(signature, target);
   if (options.branding) applyBranding(options.branding, target);
-  const density = resolveInitialDensity();
+  const density = resolveInitialDensity(undefined, options.branding?.density);
   applyDensity(density, target);
   return { design, mode, signature, density };
 }

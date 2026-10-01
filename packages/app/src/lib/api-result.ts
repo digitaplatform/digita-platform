@@ -42,7 +42,3 @@ export function toUiMessages(err: unknown, t: TFn): UiMessage[] {
   if (err instanceof Error) return [{ type: 'error', text: err.message }];
   return [{ type: 'error', text: String(err) }];
 }
-
-export function successMessages(res: ApiResponse, t: TFn): UiMessage[] {
-  return (res.messages ?? []).map((m) => ({ type: m.type, text: t(m.text), path: m.path }));
-}

@@ -65,7 +65,6 @@ export interface BootBranding {
   density?: 'comfortable' | 'compact';
   default_template?: string;
   default_signature?: string;
-  allow_user_template_override?: boolean;
   allow_user_theme_mode?: boolean;
   login_background?: string;
 }

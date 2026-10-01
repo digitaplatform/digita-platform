@@ -136,6 +136,7 @@ function RecordDialogForm({
 }) {
   const user = useSessionStore((s) => s.user);
   const t = useI18nStore((s) => s.t);
+  const tField = useI18nStore((s) => s.tField);
   const tc = useChrome();
 
   const computedSet = useMemo(() => deriveComputedSet(meta), [meta]);
@@ -181,10 +182,11 @@ function RecordDialogForm({
     const rhf = form.formState.errors as Record<string, unknown>;
     for (const k of Object.keys(rhf)) {
       const m = fieldErrorMessage(rhf[k]);
-      if (m) out[k] = t(m);
+      // An engine message such as field_required names its field through {field}.
+      if (m) out[k] = t(m, { field: tField(entity, k, meta.fields.find((f) => f.fieldname === k)?.label) });
     }
     return out;
-  }, [form.formState.errors, t]);
+  }, [form.formState.errors, t, tField, entity, meta]);
 
   const [serverMsgs, setServerMsgs] = useState<UiMessage[]>([]);
   const [conflict, setConflict] = useState(false);

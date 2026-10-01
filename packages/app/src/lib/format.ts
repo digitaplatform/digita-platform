@@ -197,13 +197,3 @@ export function parseDuration(text: string, units?: DurationUnits): number | und
   if (numbers.length > steps.length) return undefined;
   return numbers.reduce((sum, n, i) => sum + Number(n) * steps[i]!, Number(m[1] ?? 0) * 86400);
 }
-
-export function formatFileSize(bytes: unknown, locale?: string): string {
-  if (isBlank(bytes)) return EMPTY;
-  const b = typeof bytes === 'number' ? bytes : Number(bytes);
-  if (isNaN(b) || b === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(b) / Math.log(1024));
-  const n = b / Math.pow(1024, i);
-  return `${formatNumber(n, locale, { precision: i > 0 ? 1 : 0 })} ${units[i]}`;
-}

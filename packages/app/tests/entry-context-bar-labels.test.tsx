@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The bar under an entry grid labels the values of its view in the session language: each value by
-// the text of `field.<view>.<section>.<key>`, and a key without a text as words, never as the key.
+// the text of `view.<view>.<section>.<key>`, and a key without a text as words, never as the key.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { useI18nStore } from '@/stores/i18n';
@@ -32,9 +32,9 @@ function renderBar(translations: Record<string, string>) {
 describe('EntryContextBar labels', () => {
   it('labels each value by its text, not by the key', async () => {
     renderBar({
-      'field.partAvailability.stock.stock_qty': 'Lagerbestand',
-      'field.partAvailability.stock.bin_location': 'Lagerplatz',
-      'field.partAvailability.price.sale_price': 'Verkaufspreis',
+      'view.partAvailability.stock.stock_qty': 'Lagerbestand',
+      'view.partAvailability.stock.bin_location': 'Lagerplatz',
+      'view.partAvailability.price.sale_price': 'Verkaufspreis',
     });
 
     const bar = await screen.findByTestId('entry-context-bar', undefined, { timeout: 3000 });
@@ -65,8 +65,8 @@ describe('EntryContextBar labels', () => {
 
   it('keeps two sections that carry the same key apart, each with its own text', async () => {
     renderBar({
-      'field.partAvailability.stock.stock_qty': 'Lagerbestand',
-      'field.partAvailability.supplier.stock_qty': 'Bestand beim Lieferanten',
+      'view.partAvailability.stock.stock_qty': 'Lagerbestand',
+      'view.partAvailability.supplier.stock_qty': 'Bestand beim Lieferanten',
     });
 
     const bar = await screen.findByTestId('entry-context-bar', undefined, { timeout: 3000 });

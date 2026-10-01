@@ -22,10 +22,23 @@ const accept = {
   ],
 } as unknown as ActionDefinition;
 
+// A dialog laid out in a tab and a section whose names an entity field of the Quote also has.
+const sign = {
+  label: 'Sign',
+  action: 'sign',
+  opens_dialog: true,
+  dialog_fields: [
+    { fieldname: 'signer', fieldtype: 'SectionBreak', label: 'Signer' },
+    { fieldname: 'signed_by', fieldtype: 'Data', label: 'Signed by' },
+    { fieldname: 'witness', fieldtype: 'TabBreak', label: 'Witness' },
+    { fieldname: 'witness_name', fieldtype: 'Data', label: 'Witness name' },
+  ],
+} as unknown as ActionDefinition;
+
 // The engine's answer for the record's actions: the action as the entity file writes it.
 vi.mock('@/services/resource', async (orig) => ({
   ...(await orig<typeof import('@/services/resource')>()),
-  getActions: async () => ({ success: true, data: [accept] }),
+  getActions: async () => ({ success: true, data: [accept, sign] }),
   runAction: vi.fn(),
 }));
 vi.mock('@/components/overlay/DialogHost', () => ({
@@ -35,8 +48,11 @@ vi.mock('@/lib/chrome-i18n', () => ({ useChrome: () => (key: string) => key }));
 
 import { ActionBar } from '@/components/workflow/ActionBar';
 
-async function openDialog(translations: Record<string, string>) {
-  useI18nStore.setState({ translations: { 'action.Quote.accept': 'Annehmen', ...translations }, loaded: true });
+async function openDialog(translations: Record<string, string>, button = 'Annehmen') {
+  useI18nStore.setState({
+    translations: { 'action.Quote.accept': 'Annehmen', 'action.Quote.sign': 'Unterschreiben', ...translations },
+    loaded: true,
+  });
   const user = userEvent.setup();
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -45,7 +61,7 @@ async function openDialog(translations: Record<string, string>) {
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  await user.click(await screen.findByRole('button', { name: 'Annehmen' }));
+  await user.click(await screen.findByRole('button', { name: button }));
   const dialog = await screen.findByRole('dialog');
   // The controls load on demand, so the dialog draws its fields after it opens.
   const boxes = await within(dialog).findAllByRole('textbox');
@@ -67,6 +83,21 @@ describe('the field labels of the dialog an action opens on the record page', ()
     });
     expect(labels).toEqual(['Angenommen von', 'Note']);
     expect(screen.getByRole('heading', { level: 4 })).toHaveTextContent('Bedingungen');
+  });
+
+  it('head a tab and a section by the action_field text, not by an entity field of the same name', async () => {
+    await openDialog(
+      {
+        'action_field.Quote.sign.signer': 'Unterzeichner',
+        'field.Quote.signer': 'Unterschrift (Feld der Entität)',
+        'action_field.Quote.sign.witness': 'Zeuge',
+        'field.Quote.witness': 'Zeuge (Feld der Entität)',
+      },
+      'Unterschreiben',
+    );
+    expect(screen.getByRole('tab', { name: 'Zeuge' })).toBeInTheDocument();
+    expect(screen.getByText('Unterzeichner')).toBeInTheDocument();
+    expect(screen.queryByText(/Feld der Entität/)).not.toBeInTheDocument();
   });
 
   it('keep the text of the entity field of the same name where the dialog field has no key', async () => {

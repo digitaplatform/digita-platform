@@ -29,7 +29,8 @@ export function LinkEntryInput({ linkField, doc, onPick, inputRef, testId }: Lin
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const minChars = linkField.search_min_chars ?? 1;
-  const placeholder = tc('ui.link.searchEntity', { entity: linkField.target ?? '' });
+  // The label is already in the person's language: the meta localizer translates a table's child fields.
+  const placeholder = tc('ui.link.searchField', { field: linkField.label });
 
   return (
     <div className="mt-2">

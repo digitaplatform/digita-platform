@@ -51,6 +51,7 @@ export default function LinkControl({
   const [inputFocused, setInputFocused] = useState(false);
   // tree mode (hierarchical picker) state.
   const [treeOpen, setTreeOpen] = useState(false);
+  const [treeRowsWanted, setTreeRowsWanted] = useState(false);
   const [treeQuery, setTreeQuery] = useState('');
   const keptTreeExpandedIds = useUiStore((s) => (field.target ? s.treePickerExpandedIds[field.target] : undefined));
   const setTreePickerExpandedIds = useUiStore((s) => s.setTreePickerExpandedIds);
@@ -96,10 +97,13 @@ export default function LinkControl({
   // labels from the target meta; rows carry those column values.
   const targetMeta = useMeta(field.target);
   const treeCfg = targetMeta.data?.tree;
-  // Whole (small) tree loaded once the dialog opens, scoped by the resolved filters
-  // AND auto-scoped by the tree's own partition (`tree.group_by`, e.g. `domain`):
-  // a self-referential parent field on a partitioned tree must only offer nodes in
-  // the SAME partition (picking a "sales" group's parent shows only the sales
+  // The whole (small) tree loads once a pointer enters the field or the field takes focus, also when
+  // a person only tabs past it; a form a person only looks at loads none of it. Its rows are ready
+  // when the picker opens only if the pointer or the focus reached the field before the open: a quick
+  // tap on a touch screen sends the request as it opens the picker, which then shows its loading line
+  // until the rows land. The load is scoped by the resolved filters AND auto-scoped by the tree's own
+  // partition (`tree.group_by`, e.g. `domain`): a self-referential parent field on a partitioned tree
+  // must only offer nodes in the SAME partition (picking a "sales" group's parent shows only the sales
   // forest, not all four domains interleaved). Explicit target_filters win.
   const treeGroupBy = treeCfg?.group_by;
   const partitionValue =
@@ -113,7 +117,7 @@ export default function LinkControl({
   ) {
     treeFilters[treeGroupBy] = partitionValue;
   }
-  const treeList = useList(treeCfg && treeOpen ? field.target : undefined, {
+  const treeList = useList(treeCfg && (treeOpen || treeRowsWanted) ? field.target : undefined, {
     filters: Object.entries(treeFilters).map(([k, v]) => [k, '=', v] as [string, string, unknown]),
     page_size: 2000,
   });
@@ -135,6 +139,7 @@ export default function LinkControl({
     filters: resolvedFilters,
     fields: searchColumns,
     enabled: dialogOpen,
+    keepPreviousRows: true,
   });
   const dialogRows = (dialogResults.data ?? []).map((r) => ({
     _id: r._id,
@@ -159,6 +164,10 @@ export default function LinkControl({
     );
   }
 
+  // Every picker names the field a person fills by its label, which the meta localizer has already
+  // put in their language; the target's entity name is a code name in no language at all.
+  const searchPrompt = tc('ui.link.searchField', { field: field.label });
+
   // EVERY pick path commits: the onCommit contract exists precisely so a grid
   // cell editor can close and the entry-flow can advance after a Link pick.
   const select = (opt: { _id: string; display: string }) => {
@@ -171,7 +180,10 @@ export default function LinkControl({
   // ---- tree mode: target entity declares a tree → pick from the hierarchy ----
   if (treeCfg) {
     const parentField = treeCfg.parent_field;
-    const nodes: TreeViewNode[] = (treeList.data?.rows ?? []).map((r) => {
+    // Rows kept from the query of another partition are not this partition's nodes: offered, a
+    // click would store a group of the previous partition on this record.
+    const treeRows = treeList.isPlaceholderData ? [] : (treeList.data?.rows ?? []);
+    const nodes: TreeViewNode[] = treeRows.map((r) => {
       const parent = r[parentField];
       return {
         id: String(r._id),
@@ -211,7 +223,7 @@ export default function LinkControl({
     }
     return (
       <>
-        <div className="relative">
+        <div className="relative" onPointerEnter={() => setTreeRowsWanted(true)} onFocus={() => setTreeRowsWanted(true)}>
           <Input
             id={controlId}
             type="text"
@@ -223,7 +235,7 @@ export default function LinkControl({
             aria-required={state.required || undefined}
             aria-invalid={state.invalid || undefined}
             readOnly
-            placeholder={field.placeholder ?? tc('ui.link.searchEntity', { entity: field.target ?? '' })}
+            placeholder={field.placeholder ?? searchPrompt}
             value={fieldDisplay}
             title={pathFailure}
             // Open on CLICK or explicit keys only — never onFocus: the dialog's
@@ -262,8 +274,9 @@ export default function LinkControl({
         <BaseDialog
           open={treeOpen}
           onClose={() => setTreeOpen(false)}
-          title={tc('ui.link.searchEntity', { entity: field.target ?? '' })}
+          title={searchPrompt}
           size="lg"
+          height="fill"
         >
           <Input
             autoFocus
@@ -279,8 +292,9 @@ export default function LinkControl({
             nodes={nodes}
             selectedId={hasValue ? String(value) : null}
             query={treeQuery}
+            className="min-h-0 max-h-full flex-1"
             disabledIds={disabledIds}
-            emptyLabel={treeList.isLoading ? tc('ui.link.searching') : tc('ui.select.noResults')}
+            emptyLabel={treeList.isLoading || treeList.isPlaceholderData ? tc('ui.link.searching') : tc('ui.select.noResults')}
             // Groups open on a tap of their name and stay pickable: the tree's own parent field picks groups.
             expandOnNameClick
             selectLabel={tc('ui.tree.select')}
@@ -327,9 +341,7 @@ export default function LinkControl({
             aria-describedby={describedBy(describedById, errorId)}
             aria-required={state.required || undefined}
             aria-invalid={state.invalid || undefined}
-            placeholder={
-              field.placeholder ?? tc('ui.link.searchEntity', { entity: field.target ?? '' })
-            }
+            placeholder={field.placeholder ?? searchPrompt}
             value={displayValue}
             onFocus={() => {
               setInputFocused(true);
@@ -381,7 +393,7 @@ export default function LinkControl({
         <SearchDialog
           open={dialogOpen}
           onClose={() => setDialogOpen(false)}
-          title={tc('ui.link.searchEntity', { entity: field.target ?? '' })}
+          title={searchPrompt}
           query={dialogQuery}
           onQueryChange={setDialogQuery}
           columns={colDefs}
@@ -393,6 +405,8 @@ export default function LinkControl({
             select({ _id: r._id, display: String(r.display ?? r._id) });
           }}
           loading={dialogResults.isLoading}
+          // Stale from the keystroke on: the search for the typed text goes out only after the debounce.
+          stale={dialogResults.isPlaceholderData || dialogQuery.trim() !== dialogDebounced.trim()}
           searchPlaceholder={tc('ui.list.search')}
           emptyLabel={tc('ui.select.noResults')}
           loadingLabel={tc('ui.link.searching')}
@@ -413,7 +427,7 @@ export default function LinkControl({
       open={open}
       onOpenChange={setOpen}
       onPick={(opt) => select({ _id: opt.id, display: opt.label })}
-      placeholder={field.placeholder ?? (field.target ? tc('ui.link.searchEntity', { entity: field.target }) : tc('ui.list.search'))}
+      placeholder={field.placeholder ?? searchPrompt}
       loadingLabel={tc('ui.link.searching')}
       emptyLabel={tc('ui.select.noResults')}
       invalid={state.invalid}

@@ -2,7 +2,7 @@
  * Rule-expression adapter.
  *
  * Rules use the SAME expression grammar as the rest of the platform: the shared
- * jsep-allowlist walker in `core/expression/expression-evaluator.ts`. This file
+ * grammar of `@digitaplatform/shared`, read by `core/expression/expression-evaluator.ts`. This file
  * is a thin adapter that (1) binds the rule identifier namespace
  * ({doc,row,item,item_index,user,now}) and (2) handles VALUE-slot tokens
  * (`$now[±ISO-dur]`, `$root.*`, `$user.*`) via the shared view token resolver.

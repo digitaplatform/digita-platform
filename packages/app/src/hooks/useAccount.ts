@@ -28,9 +28,9 @@ export function useProfileUpdate() {
   return useMutation({
     mutationFn: (body: UpdateProfileRequest) => updateProfile(body),
     // /boot.user carries name/language → re-bootstrap to refresh the session identity.
-    onSuccess: () => {
-      void bootstrap();
-    },
+    // The caller's own onSuccess runs only after this boot has landed, so a boot it starts
+    // (a reset of the language) is never overtaken by this one.
+    onSuccess: () => bootstrap(),
   });
 }
 

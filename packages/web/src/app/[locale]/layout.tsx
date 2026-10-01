@@ -12,7 +12,7 @@ import { isLocale } from "@/config/locales";
 import { getConfig, publicConfig } from "@/config/env";
 import { ConfigProvider } from "@/config/ConfigProvider";
 import { t } from "@/i18n/messages";
-import { getSite, getNav, getBranding, listPublishedSlugs } from "@/lib/engine-client";
+import { getSite, getNav, getBranding, findWebsiteSignature, listPublishedSlugs } from "@/lib/engine-client";
 import { siteSignature } from "@/lib/identity";
 import { localePath } from "@/lib/nav";
 import { jsonForScript } from "@/lib/json-script";
@@ -42,21 +42,23 @@ export default async function LocaleLayout({
   const config = getConfig();
   if (!isLocale(locale, config.locales)) notFound();
 
-  const [site, headerNav, footerNav, familyNav, branding, publishedSlugs] = await Promise.all([
+  const [site, headerNav, footerNav, familyNav, branding, websiteLook, publishedSlugs] = await Promise.all([
     getSite(),
     getNav(locale, "header"),
     getNav(locale, "footer"),
     getNav(locale, "family"),
     getBranding(),
+    findWebsiteSignature(),
     listPublishedSlugs(),
   ]);
 
-  // The identity rendered on the server: the site's signature with the tenant's branding over it.
+  // The identity rendered on the server: the site's signature (its own `theme`, else the website
+  // look of the tenant's settings) with the tenant's branding over it.
   // Before first paint the app's own identity boot (IDENTITY_BOOT_SCRIPT, the bootIdentity the app
   // runs) applies this browser's stored design, tint, mode and density — app and website share one
   // origin, so one choice shows in both — and keeps the site's signature, which is the site's
   // identity, not a visitor's choice.
-  const signature = siteSignature(site?.theme);
+  const signature = siteSignature(site?.theme, websiteLook);
   const signatureStyles = signatureStyle(signature);
   const tenant = brandingStyle(branding);
   const attributes = { ...signatureStyles.attributes, ...tenant.attributes };
@@ -118,7 +120,7 @@ export default async function LocaleLayout({
               {children}
             </main>
             {site?.design_switcher && <DesignSwitcher {...identitySources} texts={designSwitcherTexts(locale)} />}
-            <Footer locale={locale as Locale} site={site} nav={footerNav} brand={brand} />
+            <Footer locale={locale as Locale} site={site} nav={footerNav} brand={brand} contactEnabled={siteConfig.contactEnabled} />
             {siteConfig.contactEnabled && site?.contact_email && (
               <ContactSheet
                 locale={locale}

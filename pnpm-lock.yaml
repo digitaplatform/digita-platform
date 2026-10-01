@@ -246,9 +246,6 @@ importers:
       jose:
         specifier: ^6.2.3
         version: 6.2.3
-      jsep:
-        specifier: ^1.4.0
-        version: 1.4.0
       mongodb:
         specifier: ^7.3.0
         version: 7.5.0
@@ -286,6 +283,9 @@ importers:
       dependency-cruiser:
         specifier: ^18.1.0
         version: 18.1.0
+      jsep:
+        specifier: ^1.4.0
+        version: 1.4.0
       mongodb-memory-server:
         specifier: ^11.2.0
         version: 11.2.0

@@ -99,9 +99,11 @@ function rowAdmits(p: EntityPermission, user: SessionUser, record: Record<string
   return true;
 }
 
-/** The engine's scope match: the record's value is the user's, or a list that holds it. */
+/** The engine's scope match: the record's value is the user's, or a list that holds it. A user
+ *  value that is a list matches through any of its members. */
 function scopeMatches(recordValue: unknown, userValue: unknown): boolean {
   if (userValue === null) return false;
+  if (Array.isArray(userValue)) return userValue.some((member) => scopeMatches(recordValue, member));
   return Array.isArray(recordValue) ? recordValue.includes(userValue) : recordValue === userValue;
 }
 

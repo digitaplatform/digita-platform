@@ -1,6 +1,34 @@
-import type { EntityDefinition } from "@digitaplatform/shared";
+import type { EntityDefinition, EntityPermission } from "@digitaplatform/shared";
 import { SYSTEM_ROLES } from "@digitaplatform/shared";
 import type { UserContext } from "./types.js";
+
+/**
+ * Whether `user` reads `entity` only through the role lists of its rows: the entity has a
+ * `role_visibility_field` and declares permission rows, none of which names the user's roles. A
+ * row there is meant for the roles it lists. A role that a declared row names keeps exactly what
+ * the declared rows grant, so a row's role list never widens them. An entity that declares no
+ * row stays closed, and Guest, the anonymous caller, never reads this way.
+ */
+export function readsThroughRoleList(entity: EntityDefinition, user: UserContext): boolean {
+  const declared = entity.permissions ?? [];
+  return (
+    !!entity.role_visibility_field &&
+    declared.length > 0 &&
+    !user.roles.includes(SYSTEM_ROLES.GUEST) &&
+    !declared.some((perm) => user.roles.includes(perm.role))
+  );
+}
+
+/**
+ * The permission rows of `entity` that a check of `user` weighs: the declared rows, or, for a
+ * user who reads the entity only through the role lists of its rows, one row per role of the
+ * user that selects and reads, at level 0, the rows whose list names one of the user's roles.
+ */
+export function permissionRowsFor(entity: EntityDefinition, user: UserContext): EntityPermission[] {
+  if (!readsThroughRoleList(entity, user)) return entity.permissions ?? [];
+  const field = entity.role_visibility_field!;
+  return user.roles.map((role) => ({ role, level: 0, select: 1, read: 1, scope: { field, user_field: "roles" } }));
+}
 
 /** Normalize a scope value for comparison: Date → epoch ms, ObjectId-like → String. */
 function normScope(v: unknown): unknown {
@@ -16,11 +44,14 @@ function normScope(v: unknown): unknown {
  * field-mask check so they agree with the Mongo list filter (which matches by
  * array membership). A `scope`-restricted read admits a doc when the doc's scope
  * value equals the user's — OR, when the doc value is an ARRAY, when the user's
- * value is a member (a doc belonging to several scopes is visible to each).
+ * value is a member (a doc belonging to several scopes is visible to each). A
+ * user value that is an ARRAY matches when one of its members does (a user
+ * belonging to several scopes sees each), as the list filter's `$in` does.
  * Returns false for a null/undefined user value (that role then grants nothing).
  */
 export function scopeValueMatches(docValue: unknown, userValue: unknown): boolean {
   if (userValue === null || userValue === undefined) return false;
+  if (Array.isArray(userValue)) return userValue.some((member) => scopeValueMatches(docValue, member));
   const u = normScope(userValue);
   if (Array.isArray(docValue)) return docValue.some((el) => normScope(el) === u);
   return normScope(docValue) === u;
@@ -33,9 +64,12 @@ export function scopeValueMatches(docValue: unknown, userValue: unknown): boolea
  * Semantics (D10c fix): a user sees the UNION (OR) of what each of their
  * read-granting roles allows — RBAC is additive across roles. Each applicable
  * `level 0` read permission contributes one condition:
- *   - `scope`     → `{ <scope.field>: <user[scope.user_field]> }`
+ *   - `scope`     → `{ <scope.field>: <user[scope.user_field]> }`, or
+ *                   `{ <scope.field>: { $in: <the list> } }` when the user's value is a list
  *   - `if_owner`  → `{ owner: <user.email> }`
  *   - neither     → unrestricted read via that role → no scope filter at all
+ * The conditions AND-combine with the caller's filters, so a caller's filter on
+ * a scoped field narrows the rows the scope admits instead of being replaced.
  *
  * Previously multiple scoped roles were AND-ed (and same-field scopes
  * overwrote each other), which was wrong (too restrictive / last-wins).
@@ -50,7 +84,7 @@ export function applyScopeFilters(
     return existingFilters;
   }
 
-  const readPerms = entity.permissions.filter(
+  const readPerms = permissionRowsFor(entity, user).filter(
     (p) => user.roles.includes(p.role) && p.level === 0 && p.read,
   );
 
@@ -72,7 +106,7 @@ export function applyScopeFilters(
       // scope configured but the user has no value → this role grants nothing
       // (mirrors single-doc, where an undefined userValue always denies).
       if (userValue === undefined || userValue === null) continue;
-      parts.push({ [perm.scope.field]: userValue });
+      parts.push({ [perm.scope.field]: Array.isArray(userValue) ? { $in: userValue } : userValue });
     }
     if (perm.if_owner) {
       parts.push({ owner: user.email });
@@ -91,10 +125,14 @@ export function applyScopeFilters(
     return { ...existingFilters, _id: { $in: [] as unknown[] } };
   }
 
-  // Single condition → merge flat. Multiple → OR them (union across roles),
-  // AND-combined with any pre-existing filters.
+  // Single condition → merge flat, unless it constrains a key the caller's filters do: a
+  // flat merge would replace the caller's condition, so the two AND instead. Multiple →
+  // OR them (union across roles), AND-combined with any pre-existing filters.
   if (conditions.length === 1) {
-    return { ...existingFilters, ...conditions[0] };
+    const condition = conditions[0]!;
+    return Object.keys(condition).some((key) => key in existingFilters)
+      ? { $and: [existingFilters, condition] }
+      : { ...existingFilters, ...condition };
   }
   const scopeOr = { $or: conditions };
   return Object.keys(existingFilters).length > 0

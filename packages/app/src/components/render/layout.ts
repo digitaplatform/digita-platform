@@ -190,8 +190,8 @@ function sectionDataCount(s: LayoutSection): number {
  *     never tabs. Nothing is reordered, nothing is hidden.
  *  3. Otherwise a single page — the dense intrinsic-span grid, every field shown.
  *
- * Pure + locale-free; tab labels resolve at render (promoted tabs reuse the
- * section i18n key-space; `_tab_general` uses the `ui.form.tabGeneral` chrome key).
+ * Pure + locale-free; a tab shows the label of the meta it is given, which localizeMeta has
+ * localized (a promoted tab shows its section's); `_tab_general` uses the `ui.form.tabGeneral` chrome key.
  */
 export function computeLayout(
   fields: FieldDefinition[],

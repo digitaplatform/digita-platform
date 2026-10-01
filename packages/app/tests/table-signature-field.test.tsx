@@ -69,7 +69,6 @@ vi.mock('@/components/render/ControlRenderer', async () => {
 vi.mock('@/stores/i18n', () => ({
   useI18nStore: (sel: (s: Record<string, unknown>) => unknown) =>
     sel({
-      tField: (_e: string, _f: string, label: string) => label,
       tOption: (_e: string, _f: string, v: string) => v,
     }),
 }));

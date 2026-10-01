@@ -11,13 +11,13 @@ import { toIdString } from "./id-codec.js";
 import { DocStatusEngine, DocStatusError } from "./docstatus-engine.js";
 import { validateEntityDataZod } from "../entity/entity-validator-zod.js";
 import { ZodSchemaBuilder } from "../entity/zod-schema-builder.js";
-import { IllegalTransitionError } from "../workflow/workflow-engine.js";
+import { IllegalTransitionError, stateLabel } from "../workflow/workflow-engine.js";
 import { getFieldTypeHandler, isStoredFieldType, FieldValueError, readStoredRow } from "../entity/field-types.js";
 import { foreignPasswordValue } from "../entity/password-cipher.js";
 import { copyDocumentData } from "./copy-service.js";
 import { projectFields } from "./project-fields.js";
 import { resolveDefaults, applyNewChildRowDefaults } from "../defaults/default-resolver.js";
-import { applyScopeFilters, applyRoleVisibilityFilter, isRoleVisible } from "../permissions/scope-filter.js";
+import { applyScopeFilters, applyRoleVisibilityFilter, isRoleVisible, readsThroughRoleList } from "../permissions/scope-filter.js";
 import { env } from "../config/env.js";
 import { PermissionDeniedError } from "../permissions/permission-checker.js";
 import { DocumentShareService } from "../permissions/document-share-service.js";
@@ -314,6 +314,10 @@ export class DocumentService {
    * Read access = an RBAC read permission OR an explicit DocShare on this
    * specific document (D10b). The share is checked lazily — only when the
    * normal permission check denies — so the common path stays one check.
+   * A user who reads the entity only through the role lists of its rows may
+   * read exactly the rows meant for its roles, so reading a stored row it may not
+   * read answers not found, as a missing one does: a read tells nothing of the
+   * row's existence. A write of such a row still answers 403.
    */
   private async assertReadAccess(
     user: UserContext,
@@ -330,6 +334,9 @@ export class DocumentService {
         (await this.documentShareService.hasShare(doctype, name, user.email, "read"))
       ) {
         return; // explicit share grants read on this doc
+      }
+      if (err instanceof PermissionDeniedError && data && readsThroughRoleList(this.registry.get(doctype), user)) {
+        throw new NotFoundError(doctype, name);
       }
       throw err;
     }
@@ -366,6 +373,14 @@ export class DocumentService {
   ): Promise<Array<{ viewed_by: string; timestamp: Date }>> {
     await this.loadReadableDoc(this.registry.get(doctype), doctype, name, user);
     return this.viewLogService.getViewLog(doctype, name, limit);
+  }
+
+  /**
+   * The stored document, for a user who may read it, as `getDoc` checks that. It logs no
+   * view: a route that only gates on read shows a panel beside the record, not the record.
+   */
+  async assertCanRead(doctype: string, name: string, user: UserContext = GUEST_USER): Promise<BaseDocument> {
+    return this.loadReadableDoc(this.registry.get(doctype), doctype, name, user);
   }
 
   /**
@@ -445,15 +460,27 @@ export class DocumentService {
     const doc = new BaseDocument(doctype, raw as Record<string, unknown>);
     doc._data = readStoredRow(entity, doc._data);
 
-    // Permission check on specific document (owner, condition, scope)
-    await this.assertReadAccess(user, doctype, name, doc._data);
+    await this.assertRowReadable(entity, doctype, name, user, doc._data);
+    return doc;
+  }
 
+  /** The row-level part of `getDoc`'s read check, on a row already loaded. */
+  private async assertRowReadable(
+    entity: EntityDefinition,
+    doctype: string,
+    name: string,
+    user: UserContext,
+    data: Record<string, unknown>,
+  ): Promise<void> {
     // Role-visibility (e.g. Workspace): a role-restricted document the user may not
-    // see is reported as not-found (same as RBAC elsewhere — don't leak its shape).
-    if (!isRoleVisible(entity, user, doc._data)) {
+    // see is reported as not-found (same as RBAC elsewhere — don't leak its shape),
+    // before the check on the document could refuse it and so tell that it exists.
+    if (!isRoleVisible(entity, user, data)) {
       throw new NotFoundError(doctype, name);
     }
-    return doc;
+
+    // Permission check on specific document (owner, condition, scope)
+    await this.assertReadAccess(user, doctype, name, data);
   }
 
   async getDoc(
@@ -1212,18 +1239,7 @@ export class DocumentService {
     if (this.workflowEngine && this.workflowEngine.hasWorkflow(entity)) {
       const wf = this.workflowEngine.getWorkflowField(entity);
       if (Object.prototype.hasOwnProperty.call(data, wf)) {
-        const from = doc._data[wf] as string | undefined;
-        const to = data[wf];
-        if (typeof to === "string" && from !== to) {
-          const authorizedTransition = this.workflowEngine.validateTransition(
-            entity,
-            doc._data,
-            from,
-            to,
-            user,
-          );
-          pendingTransition = { from, to, transition: authorizedTransition };
-        }
+        pendingTransition = this.workflowEngine.judgeFieldWrite(entity, doc._data, data[wf], user);
       }
     }
 
@@ -1597,18 +1613,7 @@ export class DocumentService {
         patch.set &&
         Object.prototype.hasOwnProperty.call(patch.set, workflowField)
       ) {
-        const from = doc._data[workflowField] as string | undefined;
-        const to = patch.set[workflowField];
-        if (typeof to === "string" && from !== to) {
-          const authorized = this.workflowEngine.validateTransition(
-            entity,
-            doc._data,
-            from,
-            to,
-            user,
-          );
-          pendingTransition = { from, to, transition: authorized };
-        }
+        pendingTransition = this.workflowEngine.judgeFieldWrite(entity, doc._data, patch.set[workflowField], user);
       }
 
       const childChanges: FieldChange[] = [];
@@ -2086,15 +2091,23 @@ export class DocumentService {
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
     const workflowField = entity.workflow_field ?? "status";
-    const doc = await this.loadDocInternal(doctype, name, sessionOverride);
     const hasWorkflow = !!this.workflowEngine?.hasWorkflow(entity);
+    // The workflow's judgement stands in for the write check, but not for the read check:
+    // a row the user may not read is answered as a read of it would be.
+    if (hasWorkflow) await this.assertReadAccess(user, doctype, name);
+    const doc = await this.loadDocInternal(doctype, name, sessionOverride);
+    if (hasWorkflow) await this.assertRowReadable(entity, doctype, name, user, doc._data);
+
+    // Without a workflow the move is a write, so the write check answers first: the refusal
+    // below names the record's state, which a caller who may not write must not learn.
+    if (!hasWorkflow) await this.permissionChecker.check(user, doctype, "write", doc._data);
 
     // The workflow judges only a target that names a state other than the current one, and
     // its judgement is what stands in for the write check; a move to no state or to the
     // current one would write without it.
     const from = doc._data[workflowField] as string | undefined;
     if (typeof toState !== "string" || toState === "" || (hasWorkflow && toState === from)) {
-      throw new IllegalTransitionError(entity.name, from, String(toState), "not_declared");
+      throw new IllegalTransitionError(entity.name, from, stateLabel(toState), "not_declared");
     }
 
     if (entity.is_submittable && doc.docstatus === DocStatus.Submitted) {

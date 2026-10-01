@@ -60,13 +60,14 @@ export function AddViaLinkSearch({
     filters: resolveLinkFilters(linkField.target_filters, doc),
     fields: columns,
     enabled: open,
+    keepPreviousRows: true,
   });
 
   return (
     <SearchDialog
       open={open}
       onClose={onClose}
-      title={tc('ui.link.searchEntity', { entity: linkField.target ?? '' })}
+      title={tc('ui.link.searchField', { field: linkField.label })}
       query={query}
       onQueryChange={setQuery}
       columns={columns.map((key) => ({
@@ -81,6 +82,8 @@ export function AddViaLinkSearch({
       getRowId={(r) => r._id}
       onPick={(r) => onPick(r._id, r.display)}
       loading={results.isLoading}
+      // Stale from the keystroke on: the search for the typed text goes out only after the debounce.
+      stale={results.isPlaceholderData || query.trim() !== debounced.trim()}
       searchPlaceholder={tc('ui.list.search')}
       emptyLabel={tc('ui.select.noResults')}
       loadingLabel={tc('ui.link.searching')}

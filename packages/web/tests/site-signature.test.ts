@@ -1,6 +1,6 @@
 // A site names its signature in `theme`; simetrix.ch wears the simetrix mark and the Veloluck site
 // one of Veloluck's three looks, not the family's.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { siteSignature } from "../src/lib/identity";
 
 describe("siteSignature", () => {
@@ -22,8 +22,11 @@ describe("siteSignature", () => {
   );
 
   it("PLANTED INNOCENT: the digita family and an unknown id keep the default", () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(siteSignature("digita").id).toBe("digita");
     expect(siteSignature(undefined).id).toBe("digita");
     expect(siteSignature("nobody").id).toBe("digita");
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining('"nobody"'));
+    logged.mockRestore();
   });
 });

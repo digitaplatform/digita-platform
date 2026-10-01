@@ -27,7 +27,7 @@ export interface ResolvedSection {
   status: 'loading' | 'ready' | 'error' | 'locked';
   data: ViewSectionData;
   message?: ResponseMessage;
-  /** The entity the section reads, from the view definition; unset when that failed to load. */
+  /** The entity the section read, from the view result; unset when the section failed. */
   entity?: string;
 }
 

@@ -2,13 +2,13 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useForm, type Resolver } from 'react-hook-form';
-import { Lock } from 'lucide-react';
+import { Copy, Lock } from 'lucide-react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { EntityDefinition } from '@digitaplatform/shared';
 import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from '@digitaplatform/shared';
 import { Badge, Button, PageHeader, findScrollContainer } from '@digitaplatform/components';
 import { useMeta } from '@/hooks/useMeta';
-import { useDocument, useSingle, useCreate, useUpdate, useDeleteDoc } from '@/hooks/useDocument';
+import { useDocument, useSingle, useCreate, useUpdate, useDeleteDoc, useCopy } from '@/hooks/useDocument';
 import { usePreview } from '@/hooks/usePreview';
 import { getDoc, getSingle } from '@/services/resource';
 import { qk } from '@/lib/query-keys';
@@ -375,10 +375,11 @@ function RecordForm({
     const rhf = form.formState.errors as Record<string, unknown>;
     for (const k of Object.keys(rhf)) {
       const m = fieldErrorMessage(rhf[k]);
-      if (m) out[k] = t(m);
+      // An engine message such as field_required names its field through {field}.
+      if (m) out[k] = t(m, { field: tField(entity, k, meta.fields.find((f) => f.fieldname === k)?.label) });
     }
     return out;
-  }, [form.formState.errors, t]);
+  }, [form.formState.errors, t, tField, entity, meta]);
 
   // Dirty-guard: block in-app navigation away from unsaved edits (data router).
   // `bypassGuardRef` lets a programmatic post-save/-delete navigation skip the guard.
@@ -590,6 +591,23 @@ function RecordForm({
     }
   };
 
+  const copyM = useCopy<Doc>(entity);
+  // The engine copies only for `create` on the entity and `read` on the source record.
+  const canCopy =
+    !isNew && !isSingle && hasEntityPermission(meta, user, 'create') && hasRecordPermission(meta, user, 'read', initial);
+  // The copy is a new draft with its own _id, so the page opens it as the amend flow does.
+  const onCopy = async () => {
+    if (!name) return;
+    try {
+      const created = await copyM.mutateAsync(name);
+      const id = created['_id'];
+      dialog.toast(tc('ui.record.created'), 'success');
+      if (typeof id === 'string') navigate(`/${entity}/${encodeURIComponent(id)}`);
+    } catch (e) {
+      dialog.toast(toUiMessages(e, t)[0]?.text ?? tc('ui.status.somethingWrong'), 'error');
+    }
+  };
+
   const title = isNew
     ? `${tEntity(entity, meta.label ?? entity)} · ${tc('ui.record.new')}`
     : (meta.title_field && watched[meta.title_field]
@@ -668,6 +686,19 @@ function RecordForm({
             disabled={form.formState.isDirty || saving}
             onApplied={(d) => form.reset(d)}
           />
+          {canCopy && (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={form.formState.isDirty || saving || copyM.isPending}
+              loading={copyM.isPending}
+              {...tid.action('copy')}
+              onClick={() => void onCopy()}
+            >
+              {!copyM.isPending && <Copy className="h-4 w-4" aria-hidden="true" />}
+              {tc('ui.record.copy')}
+            </Button>
+          )}
         </div>
       )}
       {!isNew && <RecordKpis entity={entity} meta={meta} doc={watched as Record<string, unknown>} />}

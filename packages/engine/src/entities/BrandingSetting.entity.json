@@ -19,15 +19,15 @@
     { "fieldname": "sb_theme", "fieldtype": "SectionBreak", "label": "Theme", "idx": 6 },
     { "fieldname": "primary_color", "fieldtype": "Color", "label": "Primary Color", "description": "Brand primary; snapped to the nearest accent palette at runtime.", "idx": 7 },
     { "fieldname": "accent_palette", "fieldtype": "Select", "label": "Secondary / Accent Palette", "options": ["blue", "pink", "purple", "green", "orange", "teal", "indigo", "cyan"], "idx": 8 },
-    { "fieldname": "density", "fieldtype": "Select", "label": "Density", "options": ["comfortable", "compact"], "default": "comfortable", "idx": 9 },
+    { "fieldname": "density", "fieldtype": "Select", "label": "Density", "description": "The density of everyone who chose none of their own. Empty: each device's default.", "options": ["comfortable", "compact"], "idx": 9 },
     { "fieldname": "default_template", "fieldtype": "Data", "label": "Default Template", "description": "Default shell template id (e.g. 'classic').", "idx": 10 },
-    { "fieldname": "default_signature", "fieldtype": "Select", "options_source": "signatures", "label": "Default Signature", "description": "The look (signature) every user of this app sees. Empty: Digita.", "idx": 11 },
+    { "fieldname": "default_signature", "fieldtype": "Select", "options_source": "signatures", "label": "App Signature", "description": "The look (signature) every user of this app sees. Empty: Digita.", "idx": 11 },
+    { "fieldname": "web_default_signature", "fieldtype": "Select", "options_source": "signatures", "label": "Website Signature", "description": "The look (signature) of every website of this tenant that names no look of its own. Empty: Digita.", "idx": 12 },
 
-    { "fieldname": "sb_login", "fieldtype": "SectionBreak", "label": "Login", "idx": 12 },
-    { "fieldname": "login_background", "fieldtype": "AttachImage", "label": "Login Background", "public": true, "idx": 13 },
+    { "fieldname": "sb_login", "fieldtype": "SectionBreak", "label": "Login", "idx": 13 },
+    { "fieldname": "login_background", "fieldtype": "AttachImage", "label": "Login Background", "public": true, "idx": 14 },
 
-    { "fieldname": "sb_user_options", "fieldtype": "SectionBreak", "label": "User Options", "idx": 14 },
-    { "fieldname": "allow_user_template_override", "fieldtype": "Check", "label": "Allow user template override", "default": true, "idx": 15 },
+    { "fieldname": "sb_user_options", "fieldtype": "SectionBreak", "label": "User Options", "idx": 15 },
     { "fieldname": "allow_user_theme_mode", "fieldtype": "Check", "label": "Allow user light/dark choice", "default": true, "idx": 16 }
   ],
   "permissions": [

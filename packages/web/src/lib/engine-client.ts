@@ -142,6 +142,10 @@ export async function getNav(locale: string, location: WebNavMenu["location"]): 
   return rows[0] ?? null;
 }
 
+/** How long a page waits for an engine's anonymous boot. Next caches only a successful answer, so
+ *  an engine that hangs would otherwise hold every page of the site. */
+const BOOT_TIMEOUT_MS = 5000;
+
 /** The tenant branding of this site's engine, from its anonymous boot. Null when the engine
  *  cannot answer: the page then renders in the signature's identity alone, and the log says why. */
 export async function getBranding(): Promise<WebBranding | null> {
@@ -149,6 +153,7 @@ export async function getBranding(): Promise<WebBranding | null> {
   try {
     const res = await fetch(`${engineUrl}/api/v1/boot`, {
       next: { revalidate: revalidateSeconds, tags: ["web:branding"] },
+      signal: AbortSignal.timeout(BOOT_TIMEOUT_MS),
     });
     if (!res.ok) {
       console.error(`[digita-web] boot answered HTTP ${res.status}; rendering without tenant branding`);
@@ -161,6 +166,54 @@ export async function getBranding(): Promise<WebBranding | null> {
     return null;
   }
 }
+
+/**
+ * The website look the tenant's settings name: `BrandingSetting.web_default_signature` of the
+ * tenant's apps (ENGINE_URLS), read from each app's anonymous boot. Site engines have no staff
+ * app, so in practice the one app a person administers names it. Apps that name a look must
+ * agree: when they name different ones, none is used and the log names them. An app that does not
+ * answer is logged and left out. Undefined: no app names one.
+ */
+export async function findWebsiteSignature(): Promise<string | undefined> {
+  const { engineUrls, revalidateSeconds } = getConfig();
+  const named = new Map<string, string>();
+  await Promise.all(
+    [...engineUrls].map(async ([app, engineUrl]) => {
+      try {
+        const res = await fetch(`${engineUrl}/api/v1/boot`, {
+          next: { revalidate: revalidateSeconds, tags: ["web:branding"] },
+          signal: AbortSignal.timeout(BOOT_TIMEOUT_MS),
+        });
+        if (!res.ok) {
+          console.error(`[digita-web] the boot of app "${app}" answered HTTP ${res.status}; its website look is left out`);
+          return;
+        }
+        const json = (await res.json()) as { data?: { branding?: { web_default_signature?: string } } };
+        const look = json.data?.branding?.web_default_signature;
+        if (look) named.set(app, look);
+      } catch (err) {
+        console.error(`[digita-web] the boot of app "${app}" is unreachable; its website look is left out:`, err);
+      }
+    }),
+  );
+  const looks = new Set(named.values());
+  if (looks.size > 1) {
+    // The apps answer in any order, so they are named in sorted order: one disagreement then reads
+    // the same on every request, and since every request renders the layout, it is logged once.
+    const which = [...named]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([app, look]) => `${app}: ${look}`)
+      .join(", ");
+    if (which !== loggedDisagreement) {
+      console.error(`[digita-web] the tenant's apps name different website looks (${which}); none is used`);
+      loggedDisagreement = which;
+    }
+    return undefined;
+  }
+  return [...looks][0];
+}
+
+let loggedDisagreement = "";
 
 /** The engine's answer to a public create: its status, the error code of a refusal, the field a 400
  *  names and the wait it asks of a visitor over its budget. */

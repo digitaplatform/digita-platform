@@ -32,6 +32,7 @@ vi.mock('@/hooks/useDocument', () => ({
   useCreate: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdate: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteDoc: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCopy: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('@/hooks/usePreview', () => ({
   usePreview: () => ({ data: undefined, status: 'idle', trigger: vi.fn() }),
@@ -53,7 +54,6 @@ vi.mock('@/stores/i18n', () => ({
       t: (k: string) => k,
       tEntity: (e: string, fb?: string) => fb ?? e,
       tField: (_e: string, _f: string, fb?: string) => fb ?? '',
-      tSection: (_e: string, _s: string, fb?: string) => fb ?? '',
       tOption: (_e: string, _f: string, v: string) => v,
     }),
 }));

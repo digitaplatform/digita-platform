@@ -159,8 +159,9 @@ function tableSchema(
     childShape[cf.fieldname] = buildFieldSchema(evalRequired.includes(cf) ? { ...cf, required: false } : cf);
   }
   const row = z.object(childShape).passthrough().superRefine((r, ctx) => {
-    if (isDefaultedOnSave(r)) return;
+    const defaulted = isDefaultedOnSave(r);
     for (const cf of evalRequired) {
+      if (defaulted && takesDefault(r[cf.fieldname])) continue;
       if (isEmptyValue(cf, r[cf.fieldname])) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: [cf.fieldname], message: 'field_required' });
       }
@@ -182,11 +183,24 @@ function buildFieldSchema(field: FieldDefinition): ZodTypeAny {
   return s.nullable().optional();
 }
 
+/** Mirrors the engine: it applies a default only where the value is missing, null or an empty string. */
+function takesDefault(v: unknown): boolean {
+  return v === undefined || v === null || v === '';
+}
+
 /** Mirrors the engine: whitespace, an unticked Check and a Rating of 0 are no value, so a required one refuses them. */
 function isEmptyValue(field: FieldDefinition, v: unknown): boolean {
   if (field.fieldtype === 'Check' && (v === false || v === 0)) return true;
   if (field.fieldtype === 'Rating' && Number(v) === 0) return true;
   return v === null || v === undefined || (typeof v === 'string' && v.trim() === '') || (Array.isArray(v) && v.length === 0);
+}
+
+/** A value the engine keeps instead of its default is refused here when the engine would refuse it. */
+function filledOnInsertSchema(field: FieldDefinition): ZodTypeAny {
+  return z
+    .unknown()
+    .refine((v) => takesDefault(v) || !isEmptyValue(field, v), 'field_required')
+    .pipe(buildFieldSchema({ ...field, required: false }));
 }
 
 /**
@@ -246,7 +260,8 @@ export function buildZodSchema(
     if (f.fieldtype === 'Table') {
       shape[f.fieldname] = tableSchema(f, rowDefaultedOnSave(stored, f.fieldname)).nullable().optional();
     } else {
-      shape[f.fieldname] = buildFieldSchema(isFilledOnInsert(f) ? { ...f, required: false } : f);
+      // Only a required field is refused for a value the engine keeps; any other field keeps its own schema.
+      shape[f.fieldname] = f.required && isFilledOnInsert(f) ? filledOnInsertSchema(f) : buildFieldSchema(f);
     }
   }
   // passthrough keeps engine-internal keys (_id/docstatus/owner/creation/modified/

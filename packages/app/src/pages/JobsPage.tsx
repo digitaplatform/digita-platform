@@ -56,12 +56,15 @@ interface DefinitionFailure {
 function useJobTasks(
   app: string | null,
   enabled: boolean,
-): { tasks: JobTask[]; failures: DefinitionFailure[]; isLoading: boolean; error: Error | null } {
+): { tasks: JobTask[]; failures: DefinitionFailure[]; isLoading: boolean; error: Error | null; reload: () => void } {
   const translations = useI18nStore((s) => s.translations);
+  const qc = useQueryClient();
   const metasQ = useQuery({
     queryKey: ['jobs-task-metas', app],
     enabled,
-    staleTime: 5 * 60_000,
+    // The read succeeds even when definitions failed, so TanStack never retries it: a result with
+    // failures must not count as fresh, or the next visit shows the same failure for five minutes.
+    staleTime: (q) => (q.state.data?.failures.length ? 0 : 5 * 60_000),
     queryFn: async () => {
       const entities = unwrap(await appEngine.catalog(app));
       const reads = await Promise.allSettled(entities.map(async (e) => unwrap(await appEngine.entity(app, e.name))));
@@ -92,7 +95,13 @@ function useJobTasks(
         .sort((a, b) => a.label.localeCompare(b.label)),
     [metasQ.data, translations],
   );
-  return { tasks, failures: metasQ.data?.failures ?? [], isLoading: metasQ.isLoading, error: metasQ.error };
+  return {
+    tasks,
+    failures: metasQ.data?.failures ?? [],
+    isLoading: metasQ.isLoading,
+    error: metasQ.error,
+    reload: () => void qc.invalidateQueries({ queryKey: ['jobs-task-metas', app] }),
+  };
 }
 
 interface DialogState {
@@ -121,7 +130,13 @@ export default function JobsPage() {
   // its own engine's tasks and every job, as it did before the jobs service named apps.
   const selectedApp =
     apps.length > 0 ? (chosenApp ?? defaultApp ?? (ownApp !== null && apps.includes(ownApp) ? ownApp : apps[0]!)) : null;
-  const { tasks, failures: definitionFailures, isLoading: tasksLoading, error: tasksError } = useJobTasks(selectedApp, appsQ.isSuccess);
+  const {
+    tasks,
+    failures: definitionFailures,
+    isLoading: tasksLoading,
+    error: tasksError,
+    reload: reloadTasks,
+  } = useJobTasks(selectedApp, appsQ.isSuccess);
   const jobsQ = useQuery({ queryKey: ['jobs'], queryFn: () => jobsApi.list(), refetchInterval: 15000 });
   const runsQ = useQuery({
     queryKey: ['jobs-runs'],
@@ -234,7 +249,12 @@ export default function JobsPage() {
       </div>
       {jobsQ.error && <ErrorBlock title={tc('ui.jobs.jobsLoadFailed')} detail={jobsQ.error.message} />}
       {definitionFailures.map((f) => (
-        <ErrorBlock key={f.entity} title={tc('ui.jobs.tasksLoadFailed', { entity: f.entity })} detail={f.message} />
+        <div key={f.entity} className="space-y-2">
+          <ErrorBlock title={tc('ui.jobs.tasksLoadFailed', { entity: f.entity })} detail={f.message} />
+          <Button variant="secondary" onClick={reloadTasks} {...tid.action('jobs-tasks-reload')}>
+            {tc('ui.action.reload')}
+          </Button>
+        </div>
       ))}
       {appsQ.error ? (
         <ErrorBlock detail={appsQ.error.message} />
@@ -514,7 +534,8 @@ function JobConfigDialog({
             max_attempts: job.max_attempts,
           });
         else await jobsApi.create(body);
-        toast(tc('ui.jobs.scheduleSaved'), 'success');
+        // Clearing the cron is how a schedule is stopped: say the job is now manual, not that a schedule was saved.
+        toast(tc(job?.schedule && !body.schedule ? 'ui.jobs.scheduleCleared' : 'ui.jobs.scheduleSaved'), 'success');
       } else {
         // Run now: reuse this task's manual job (schedule null) if one exists,
         // else create it — then trigger. Keeps one manual entry per task+doc.

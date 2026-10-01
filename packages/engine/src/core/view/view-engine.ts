@@ -49,6 +49,7 @@ export interface ViewExecutionInput {
 export interface ViewExecutionResult {
   source: Record<string, unknown> | null;
   sections: Record<string, unknown>;
+  entities: Record<string, string>;
 }
 
 export class ViewEngine {
@@ -107,6 +108,9 @@ export class ViewEngine {
     );
 
     const sections: Record<string, unknown> = {};
+    // The entity each section that ran read, so a reader labels its rows without the view's
+    // definition, which only a reader of View may open. A section that failed names none.
+    const entities: Record<string, string> = {};
     for (let i = 0; i < view.sections.length; i++) {
       const sec = view.sections[i]!;
       const result = settled[i]!;
@@ -114,6 +118,7 @@ export class ViewEngine {
 
       if (result.status === "fulfilled") {
         sections[sec.key] = result.value;
+        entities[sec.key] = sec.entity;
         continue;
       }
 
@@ -146,7 +151,7 @@ export class ViewEngine {
       ctx.addRaw(w, "info", false, { code: "token_unresolved" });
     }
 
-    return { source: rootDoc, sections };
+    return { source: rootDoc, sections, entities };
   }
 
   private async runSection(

@@ -27,11 +27,18 @@ function iconOf(item: NavItem): LucideIcon | undefined {
   return icon;
 }
 
+/** The widths from which the phone's top bar has room for each icon link, in the links' order:
+ *  measured in Chromium beside the brand's mark, the language menu, the mode button, a call to
+ *  action of seven letters and the menu button. A phone narrower than the first shows the links in
+ *  the menu only. Tailwind finds a class only where the source spells it out, so each is written whole. */
+const ICON_LINK_FROM = ["min-[380px]:flex", "min-[420px]:flex", "min-[460px]:flex", "min-[500px]:flex", "min-[540px]:flex"];
+
 /** Site header: the app's top bar (the kit's TopBar) with the app's brand precedence (BrandMark),
  *  the content-driven nav, the product family menu, the language menu, the mode button and the
  *  call to action. Every width shows the language menu and the mode button. Below lg a link whose
- *  data names an icon shows as that icon; a tablet shows the other links as text, and a phone
- *  keeps them, the tenant's apps and the family behind the menu button (MobileNav). */
+ *  data names an icon shows as that icon where the bar has room for it; a tablet shows the other
+ *  links as text, and a phone keeps them, the tenant's apps and the family behind the menu button
+ *  (MobileNav). */
 export function Header({
   locale,
   defaultLocale,
@@ -58,20 +65,17 @@ export function Header({
   const all = sortNav(nav?.items);
   const contact = all.find(isContactItem);
   const items = all.filter((item) => item !== contact);
-  const iconLinks = items.flatMap((item) => {
-    const icon = iconOf(item);
-    const href = navHref(locale, defaultLocale, item);
-    return icon && href ? [{ item, icon, href }] : [];
-  });
+  // A link past the bar's room shows as text on a tablet, as one that names no icon does.
+  const iconLinks = items
+    .flatMap((item) => {
+      const icon = iconOf(item);
+      const href = navHref(locale, defaultLocale, item);
+      return icon && href ? [{ item, icon, href }] : [];
+    })
+    .slice(0, ICON_LINK_FROM.length);
   const textItems = items.filter((item) => !iconLinks.some((link) => link.item === item));
   const familyItems = sortNav(family?.items);
   const comingLabel = t("familyComing", locale);
-  const controls = (
-    <>
-      <LocaleSwitcher current={locale} publishedSlugs={publishedSlugs} enabledLocales={enabledLocales} label={t("language", locale)} />
-      <ThemeToggle label={t("toggleTheme", locale)} />
-    </>
-  );
 
   return (
     <TopBar>
@@ -80,11 +84,11 @@ export function Header({
           <BrandMark {...brand} />
         </Link>
 
-        <nav className={cn(iconLinks.length > 0 ? "flex" : "hidden md:flex", "flex-1 items-center gap-1")} aria-label={t("navPrimary", locale)}>
+        <nav className={cn("hidden flex-1 items-center gap-1", iconLinks.length > 0 ? ICON_LINK_FROM[0] : "md:flex")} aria-label={t("navPrimary", locale)}>
           {iconLinks.length > 0 && (
             <div className="flex items-center gap-1 lg:hidden">
               {iconLinks.map(({ item, icon: Icon, href }, i) => (
-                <NavIconLink key={`${item.label}-${i}`} locale={locale} href={href} item={item}>
+                <NavIconLink key={`${item.label}-${i}`} locale={locale} href={href} item={item} className={cn("hidden", ICON_LINK_FROM[i])}>
                   <Icon className="h-5 w-5" aria-hidden="true" />
                 </NavIconLink>
               ))}
@@ -104,7 +108,8 @@ export function Header({
               <FamilySwitcher locale={locale} items={familyItems} domain={site?.domain} label={t("familyLabel", locale)} comingLabel={comingLabel} />
             </div>
           )}
-          {controls}
+          <LocaleSwitcher current={locale} publishedSlugs={publishedSlugs} enabledLocales={enabledLocales} label={t("language", locale)} />
+          <ThemeToggle label={t("toggleTheme", locale)} />
           {/* The header menu's item for the contact sheet; SheetButton draws nothing where the site offers no sheet. */}
           {contact && <SheetButton {...buttonAttributes({ size: "sm", className: "shrink-0" })}>{contact.label}</SheetButton>}
           <MobileNav
@@ -119,9 +124,7 @@ export function Header({
             openLabel={t("openMenu", locale)}
             closeLabel={t("closeMenu", locale)}
             comingLabel={comingLabel}
-          >
-            {controls}
-          </MobileNav>
+          />
         </div>
       </div>
     </TopBar>

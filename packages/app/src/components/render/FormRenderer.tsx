@@ -3,7 +3,6 @@ import DOMPurify from 'dompurify';
 import { Info, Snowflake, TriangleAlert } from 'lucide-react';
 import { Badge, FormRow, FormSection, TabPanel, Tabs, Tooltip, cn } from '@digitaplatform/components';
 import type { FieldDefinition, FormLayoutConfig } from '@digitaplatform/shared';
-import { useI18nStore } from '@/stores/i18n';
 import { fieldLabel } from '@/lib/localize-meta';
 import { useChrome } from '@/lib/chrome-i18n';
 import type { FieldControlState } from '@/controls/types';
@@ -65,7 +64,6 @@ export function FormRenderer({
   tabsRef,
 }: FormRendererProps) {
   const formId = useId();
-  const tSection = useI18nStore((s) => s.tSection);
   const tc = useChrome();
 
   const tabs = useMemo(() => computeLayout(fields, form), [fields, form]);
@@ -114,7 +112,6 @@ export function FormRenderer({
   const sections = current.sections.map((section) => (
     <SectionBlock
       key={section.key}
-      entity={entity}
       section={section}
       collapsed={!!(collapsed[section.key] ?? section.defaultCollapsed)}
       onToggle={() =>
@@ -156,7 +153,7 @@ export function FormRenderer({
           const errCount = errorsByTab[t.key] ?? 0;
           return {
             key: t.key,
-            label: t.key === '_tab_general' ? tc('ui.form.tabGeneral') : tSection(entity, t.key, t.label || t.key),
+            label: t.key === '_tab_general' ? tc('ui.form.tabGeneral') : t.label || t.key,
             badge:
               errCount > 0 ? (
                 <Badge variant="pill" size="sm" color="error" aria-label={`${errCount} error(s)`}>
@@ -174,22 +171,19 @@ export function FormRenderer({
 }
 
 function SectionBlock({
-  entity,
   section,
   collapsed,
   onToggle,
   columns,
   render,
 }: {
-  entity: string;
   section: LayoutSection;
   collapsed: boolean;
   onToggle: () => void;
   columns?: 1 | 2 | 3;
   render: (field: FieldDefinition, cellClassName?: string) => React.ReactNode;
 }) {
-  const tSection = useI18nStore((s) => s.tSection);
-  const label = section.label ? tSection(entity, section.key, section.label) : undefined;
+  const label = section.label || undefined;
   const cols = Math.min(Math.max(section.columns.length, 1), 3);
 
   return (

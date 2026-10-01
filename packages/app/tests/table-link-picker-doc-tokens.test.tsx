@@ -87,7 +87,7 @@ describe("a Table's add-via-link picker", () => {
   it('narrows the search by the owning record when the link entry field opens it', async () => {
     renderLoanLines({ entry_flow: { sequence: [] } });
     const user = userEvent.setup();
-    await user.type(screen.getByRole('textbox', { name: 'ui.link.searchEntity' }), 'dune{Enter}');
+    await user.type(screen.getByRole('textbox', { name: 'ui.link.searchField' }), 'dune{Enter}');
     expect(listSentFilters()).not.toHaveLength(0);
     for (const filters of listSentFilters()) expect(filters).toEqual({ library: 'LIB-2', format: 'print' });
   });

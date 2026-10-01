@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { BrandMark, Drawer, NavList, navLeafClass, railButtonClass, topBarButtonClass, type BrandMarkProps } from "@digitaplatform/components";
 import { useSiteConfig } from "@/config/ConfigProvider";
@@ -12,11 +12,11 @@ import { NavItemLink } from "./NavItemLink";
 import { isCurrentSite } from "./FamilySwitcher";
 
 /**
- * Mobile navigation — the phone counterpart to the desktop header, whose nav, family menu,
- * language menu and mode button are `hidden md:flex`. It opens the app's mobile drawer (the kit's
- * Drawer): a rail with the brand row, the nav items as the app's nav list, the tenant's apps as
- * plain links to `/<name>/`, the product family, and `children` (the language menu and the mode
- * button) at the foot. Closes on route change, on Escape and on a scrim tap.
+ * Mobile navigation — the phone counterpart to the desktop header, whose text links and family
+ * menu are `hidden md:flex`; the bar itself carries the language menu and the mode button on a
+ * phone. It opens the app's mobile drawer (the kit's Drawer): a rail with the brand row, the nav
+ * items as the app's nav list, the tenant's apps as plain links to `/<name>/`, and the product
+ * family. Closes on route change, on Escape and on a scrim tap.
  */
 export function MobileNav({
   locale,
@@ -30,7 +30,6 @@ export function MobileNav({
   openLabel,
   closeLabel,
   comingLabel,
-  children,
 }: {
   locale: string;
   items: NavItem[];
@@ -46,7 +45,6 @@ export function MobileNav({
   openLabel: string;
   closeLabel: string;
   comingLabel: string;
-  children: ReactNode;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -80,7 +78,15 @@ export function MobileNav({
                 const active = isActive(item);
                 return (
                   <li key={`${item.label}-${i}`}>
-                    <NavItemLink locale={locale} item={item} comingLabel={comingLabel} current={active} data-ui="nav-leaf" className={navLeafClass(active)} />
+                    <NavItemLink
+                      locale={locale}
+                      item={item}
+                      comingLabel={comingLabel}
+                      current={active}
+                      onSelect={() => setOpen(false)}
+                      data-ui="nav-leaf"
+                      className={navLeafClass(active)}
+                    />
                   </li>
                 );
               })}
@@ -102,14 +108,20 @@ export function MobileNav({
                         {item.label}
                       </span>
                     ) : (
-                      <NavItemLink locale={locale} item={item} comingLabel={comingLabel} data-ui="nav-leaf" className={navLeafClass(false)} />
+                      <NavItemLink
+                        locale={locale}
+                        item={item}
+                        comingLabel={comingLabel}
+                        onSelect={() => setOpen(false)}
+                        data-ui="nav-leaf"
+                        className={navLeafClass(false)}
+                      />
                     )}
                   </li>
                 ))}
               </NavList>
             )}
           </nav>
-          <div className="flex shrink-0 items-center gap-1 border-t border-border p-2">{children}</div>
         </div>
       </Drawer>
     </div>

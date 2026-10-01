@@ -6,6 +6,9 @@ export interface BrandMarkProps {
   name: string;
   /** The tenant's own logo (a URL the caller resolved); it always wins. */
   logoUrl?: string;
+  /** The tenant's logo for dark mode (a URL the caller resolved). Each of the two logos stands in
+   *  for the other where it is missing, so a tenant logo never gives way to the monogram. */
+  logoDarkUrl?: string;
   /** Whether the tenant set `name` itself: a custom name renders as text, never
    *  under a signature wordmark that spells another brand. */
   nameIsCustom?: boolean;
@@ -24,7 +27,8 @@ export interface BrandMarkProps {
  * neither a logo nor a name; otherwise the tenant's logo, else the signature's
  * monogram, else the name's initial on a primary tile — each followed by the name.
  */
-export function BrandMark({ name, logoUrl, nameIsCustom = false, signature, fill = false }: BrandMarkProps) {
+export function BrandMark({ name, logoUrl: lightLogoUrl, logoDarkUrl, nameIsCustom = false, signature, fill = false }: BrandMarkProps) {
+  const logoUrl = lightLogoUrl ?? logoDarkUrl;
   // ponytail: the digita signature package predates `Signature.family`; until the
   // published @digitaplatform/digita sets `family: 'digita'`, its id stands in.
   const family = signature?.family ?? (signature?.id === 'digita' ? 'digita' : undefined);
@@ -55,7 +59,12 @@ export function BrandMark({ name, logoUrl, nameIsCustom = false, signature, fill
     );
   }
 
-  const mark = logoUrl ? (
+  const mark = logoUrl && logoDarkUrl ? (
+    <>
+      <img src={logoUrl} alt="" className="h-7 w-7 shrink-0 rounded dark:hidden" />
+      <img src={logoDarkUrl} alt="" className="hidden h-7 w-7 shrink-0 rounded dark:block" />
+    </>
+  ) : logoUrl ? (
     <img src={logoUrl} alt="" className="h-7 w-7 shrink-0 rounded" />
   ) : signature?.monogram ? (
     <div

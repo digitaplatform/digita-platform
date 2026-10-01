@@ -27,6 +27,9 @@ export class UnknownDoctypeError extends Error {
   }
 }
 
+/** The paths the app serves its own pages at (/account, /app/*, /login). */
+const RESERVED_ENTITY_NAMES = ["account", "app", "login"];
+
 /** Levenshtein distance (inputs are short doctype names, so the naive DP is fine). */
 function editDistance(a: string, b: string): number {
   if (a === b) return 0;
@@ -174,6 +177,14 @@ export class EntityRegistry {
     try {
       const content = await readFile(filePath, "utf-8");
       const entity: EntityDefinition = JSON.parse(content);
+      // The app matches its own pages case-sensitively, so an entity with exactly one of
+      // these names would lose its list page to them; `Account` and its kin stay free.
+      if (RESERVED_ENTITY_NAMES.includes(entity.name)) {
+        throw new Error(
+          `Entity name "${entity.name}" is reserved for the app's own pages (${RESERVED_ENTITY_NAMES.join(", ")}); ` +
+            "rename the entity, for example with a capital letter",
+        );
+      }
 
       if (defaultDatabase) {
         if (entity.database && entity.database !== defaultDatabase) {

@@ -83,6 +83,23 @@ describe('bootIdentity', () => {
     expect(root().getAttribute('data-density')).toBe('spacious');
   });
 
+  it('applies the mode it is given over the one this browser stored', () => {
+    localStorage.setItem(MODE_STORAGE_KEY, 'dark');
+    const booted = bootIdentity({ signatures: [brand], mode: 'light' });
+    expect(booted.mode).toBe('light');
+    expect(root().classList.contains('dark')).toBe(false);
+  });
+
+  it("takes the tenant's density on a browser that stored none, and the stored one over it", () => {
+    const booted = bootIdentity({ signatures: [brand], branding: { density: 'compact' } });
+    expect(booted.density).toBe('compact');
+    expect(root().getAttribute('data-density')).toBe('compact');
+
+    localStorage.setItem(DENSITY_STORAGE_KEY, 'spacious');
+    expect(bootIdentity({ signatures: [brand], branding: { density: 'compact' } }).density).toBe('spacious');
+    expect(root().getAttribute('data-density')).toBe('spacious');
+  });
+
   it('falls back to the default design and the pointer density when nothing is stored', () => {
     const booted = bootIdentity({ signatures: [brand] });
 

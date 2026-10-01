@@ -73,7 +73,7 @@ vi.mock('@/components/render/cells', () => ({
 }));
 vi.mock('@/stores/i18n', () => ({
   useI18nStore: (sel: (s: Record<string, unknown>) => unknown) =>
-    sel({ tField: (_e: string, _f: string, label: string) => label }),
+    sel({}),
 }));
 vi.mock('@/stores/session', () => ({
   useSessionStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ user: {}, locale: undefined }),
@@ -163,5 +163,21 @@ describe('a Date cell of a Table grid', () => {
 
     await waitFor(() => expect(trigger).not.toBeInTheDocument());
     expect(screen.getByText('2026-09-28')).toBeInTheDocument();
+  });
+
+  it('names the picker trigger and its calendar by the column label', async () => {
+    const user = userEvent.setup();
+    render(<Host onSubmit={() => {}} />);
+
+    const trigger = await openDateEditor(user);
+    expect(trigger).toHaveAccessibleName('Due');
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('dialog', { name: 'Due' })).toBeInTheDocument();
+  });
+
+  it('names each column header by its own label only (innocent case)', () => {
+    render(<Host onSubmit={() => {}} />);
+    expect(screen.getByRole('columnheader', { name: 'Item' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Due' })).toBeInTheDocument();
   });
 });

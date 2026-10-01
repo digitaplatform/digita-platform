@@ -634,12 +634,19 @@ describe("Resource API Integration", () => {
 
     // The engine also keeps an Administrator's undeclared keys, so the PUT above passes without
     // the declaration; the form only offers the field when the meta names it.
-    it("the meta of BrandingSetting offers default_signature as a Select of the app's signatures", async () => {
+    it("the meta of BrandingSetting offers the app's and the website's signature as Selects of the app's signatures", async () => {
       const res = await app.inject({ method: "GET", url: "/api/v1/meta/BrandingSetting", headers: authHeaders() });
       expect(res.statusCode).toBe(200);
-      expect(res.json().data.fields).toContainEqual(
-        expect.objectContaining({ fieldname: "default_signature", fieldtype: "Select", options_source: "signatures" }),
-      );
+      for (const fieldname of ["default_signature", "web_default_signature"]) {
+        expect(res.json().data.fields).toContainEqual(
+          expect.objectContaining({ fieldname, fieldtype: "Select", options_source: "signatures" }),
+        );
+      }
+    });
+
+    it("the meta of BrandingSetting offers no user template override, which no menu reads", async () => {
+      const res = await app.inject({ method: "GET", url: "/api/v1/meta/BrandingSetting", headers: authHeaders() });
+      expect(res.json().data.fields.map((f: { fieldname: string }) => f.fieldname)).not.toContain("allow_user_template_override");
     });
   });
 

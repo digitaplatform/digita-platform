@@ -1,4 +1,4 @@
-import { getSite } from "@/lib/engine-client";
+import { findWebsiteSignature, getSite } from "@/lib/engine-client";
 import { siteSignature } from "@/lib/identity";
 
 const NODES = [
@@ -12,11 +12,12 @@ const NODES = [
 const BOX = { x: 96, y: 30, width: 366.3, height: 500.4 };
 
 /**
- * The site's own mark, the monogram of the signature its `theme` names, with a pulsing aura and
+ * The site's own mark, the monogram of the signature the site is drawn in, with a pulsing aura and
  * four nodes wired to it. A site whose signature has no monogram gets no figure.
  */
 export default async function BrandMark() {
-  const monogram = siteSignature((await getSite())?.theme).monogram;
+  const [site, websiteLook] = await Promise.all([getSite(), findWebsiteSignature()]);
+  const monogram = siteSignature(site?.theme, websiteLook).monogram;
   if (!monogram) return null;
   // The monogram paints in currentColor, which a gradient cannot reach, so its shape is an alpha
   // mask over the colour: navy in light mode, the primary gradient in dark mode.

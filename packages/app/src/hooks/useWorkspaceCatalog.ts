@@ -4,10 +4,11 @@ import { useList } from '@/hooks/useList';
 import { useSessionStore } from '@/stores/session';
 
 /**
- * Enabled workspaces (priority-asc) the user may SEE — same role logic the engine
- * boot resolver uses (consistency). Empty/absent roles = all; malformed roles =
- * visible-to-none + dev log. Workspace defs are non-secret (the card DATA is the
- * View-engine-gated boundary), so visibility is client-filtered.
+ * Enabled workspaces (priority-asc) the user may SEE: those whose roles name one of the
+ * user's roles, and those with empty/absent roles, which the engine lists only to a user a
+ * permission row lets read workspaces, never to a user who holds only roles of the app. The
+ * engine hands an Administrator every row, so the role match is repeated here; malformed
+ * roles = visible-to-none + dev log.
  */
 export function useWorkspaceCatalog() {
   const user = useSessionStore((s) => s.user);
