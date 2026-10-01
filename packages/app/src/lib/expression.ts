@@ -238,8 +238,8 @@ export function evaluateExpr(expr: string, scope: EvalScope): EvalResult {
   try {
     const lex = new Lexer(src);
     const value = isTruthy(parseOr(lex, scope));
-    // The grammar stops at the first token it does not know, as in `doc.a === 1`; the value of
-    // the part before it is not the expression's.
+    // The grammar stops at the first token or word it does not know, as in `doc.a === 1` or
+    // `doc.status == On hold`; the value of the part before it is not the expression's.
     lex.skipWs();
     if (!lex.done()) throw new Error(`unexpected "${src.slice(lex.pos())}" at ${lex.pos()}`);
     return { value };

@@ -69,6 +69,15 @@ describe('the show_if of a report link', () => {
   it('offers the link when the rule does not parse, because the report service is the real gate', () => {
     expect(visible("(doc.status == 'Open'", { status: 'Closed' })).toBe(true);
   });
+
+  it('offers the link when text is left after the rule, instead of comparing its first word', () => {
+    expect(visible('doc.status == On hold', { status: 'On hold' })).toBe(true);
+    expect(visible('doc.status == Zurückgestellt', { status: 'Zurückgestellt' })).toBe(true);
+    expect(visible('doc.status == Pre-paid', { status: 'Pre-paid' })).toBe(true);
+    expect(visible("doc.status == 'Open' and doc.member", { status: 'Open', member: 'M-17' })).toBe(true);
+    // Quoted, the same text is one value and the rule still decides.
+    expect(visible("doc.status == 'On hold'", { status: 'Open' })).toBe(false);
+  });
 });
 
 describe('the print buttons of a document under a show_if with &&', () => {
