@@ -38,6 +38,7 @@ describe('a demo visitor\'s theme picks (#404)', () => {
     await useSessionStore.getState().bootstrap();
     useThemeStore.getState().setMode('dark');
     useThemeStore.getState().setDensity('compact');
+    useThemeStore.getState().setDesign('minimal');
 
     expect(getUserPreference).not.toHaveBeenCalled();
     expect(setUserPreference).not.toHaveBeenCalled();
@@ -48,8 +49,14 @@ describe('a demo visitor\'s theme picks (#404)', () => {
     bootAs(false);
     await useSessionStore.getState().bootstrap();
     useThemeStore.getState().setMode('dark');
+    useThemeStore.getState().setDensity('compact');
+    useThemeStore.getState().setDesign('minimal');
 
     expect(getUserPreference).toHaveBeenCalled();
-    expect(setUserPreference).toHaveBeenCalledWith('ui.theme_mode', 'dark');
+    expect(setUserPreference.mock.calls).toEqual([
+      ['ui.theme_mode', 'dark'],
+      ['ui.density', 'compact'],
+      ['ui.design', 'minimal'],
+    ]);
   });
 });
