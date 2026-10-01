@@ -42,9 +42,11 @@ export const FormRow = forwardRef<HTMLDivElement, FormRowProps>(function FormRow
           title={label}
         >
           {/* Only the text truncates, so a long label stays one line while the
-              required star and the icon stay visible; the title tooltip carries the full text. */}
+              required star and the icon stay visible; the title tooltip carries the full text.
+              The star is for the eye only: a control that adds the label to its own name through
+              aria-labelledby (a Clear beside a signature) would read it as part of the name. */}
           <span className="truncate">{label}</span>
-          {required && <span className="text-error">*</span>}
+          {required && <span className="text-error" aria-hidden="true">*</span>}
           {labelIcon}
         </label>
         {labelAction}
