@@ -172,16 +172,26 @@ export function applySignature(
   writeIdentityStyle(signatureStyle(getSignature(id)), target);
 }
 
-/** The localStorage key of the per-browser signature choice. */
+/** The localStorage key a person's own signature pick was kept under, before the tenant's
+ *  look replaced it: nothing in the app or the website reads it, and bootIdentity removes it. */
 export const SIGNATURE_STORAGE_KEY = 'digita-app:signature';
 
-/** Initial signature from localStorage, else the default. A stored id is honoured
- *  as-is (it may be a DELIVERED signature not yet registered at this moment), and
- *  the default is the intended active signature (digita) — delivered, not baked.
- *  getSignature() resolves both to a real config (or the NONE floor) safely. */
-export function resolveInitialSignature(keyPrefix = SIGNATURE_STORAGE_KEY): string {
+/** Remove a person's former signature pick from this browser. */
+export function removeFormerSignaturePick(): void {
   try {
-    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(keyPrefix) : null;
+    localStorage.removeItem(SIGNATURE_STORAGE_KEY);
+  } catch {
+    /* storage unavailable (private mode): nothing stored */
+  }
+}
+
+/** The signature a frontend that keeps its own pick stored under `key`, else the default.
+ *  A stored id is honoured as-is (it may be a DELIVERED signature not yet registered at
+ *  this moment), and the default is the intended active signature (digita) — delivered,
+ *  not baked. getSignature() resolves both to a real config (or the NONE floor) safely. */
+export function resolveInitialSignature(key: string): string {
+  try {
+    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
     if (stored) return stored;
   } catch {
     /* ignore */

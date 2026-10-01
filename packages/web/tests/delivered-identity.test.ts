@@ -86,17 +86,17 @@ describe("loadDeliveredIdentity", () => {
     expect(await loading).toBe(true);
 
     expect(calls[0]?.url).toContain("/erp/api/v1/resource/UserPreference?");
-    expect(decodeURIComponent(calls[0]!.url)).toContain('["pref_key","in",["ui.theme_mode","ui.density","ui.design","ui.signature"]]');
+    expect(decodeURIComponent(calls[0]!.url)).toContain('["pref_key","in",["ui.theme_mode","ui.density","ui.design"]]');
     expect(calls[0]?.init).toMatchObject({ credentials: "include" });
     expect(localStorage.getItem(MODE_STORAGE_KEY)).toBe("dark");
-    expect(localStorage.getItem(SIGNATURE_STORAGE_KEY)).toBe("aurora");
+    expect(localStorage.getItem(SIGNATURE_STORAGE_KEY)).toBeNull();
     expect(root().classList.contains("dark")).toBe(true);
     expect(stylesheet("material")?.getAttribute("href")).toBe("/erp/api/v1/plugin-assets/material/1.0.0/material.css");
     expect(root().getAttribute("data-design")).toBe("material");
     expect(root().getAttribute("data-design-variant")).toBe("material");
   });
 
-  it("keeps the site's signature when the visitor's stored one differs", async () => {
+  it("keeps the site's signature and stores no signature of the visitor's", async () => {
     // As in production: the pre-paint boot registered the page's signature in its own module
     // instance, so this chunk's registry is empty and the page's signatures are all it has.
     // The site's signature is not the default: were the page's signature dropped, the stored
@@ -113,7 +113,7 @@ describe("loadDeliveredIdentity", () => {
     expect(await loadDeliveredIdentity(sources)).toBe(true);
 
     expect(calls).toHaveLength(1);
-    expect(localStorage.getItem(SIGNATURE_STORAGE_KEY)).toBe("aurora");
+    expect(localStorage.getItem(SIGNATURE_STORAGE_KEY)).toBeNull();
     expect(root().classList.contains("dark")).toBe(true);
     expect(root().getAttribute("data-signature")).toBe("simetrix");
   });

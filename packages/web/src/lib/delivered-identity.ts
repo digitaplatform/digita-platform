@@ -16,7 +16,6 @@ import {
   resolveInitialDensity,
   resolveInitialDesign,
   resolveInitialMode,
-  resolveInitialSignature,
   storeIdentityPreferences,
   type IdentityChoices,
 } from "@digitaplatform/theme";
@@ -33,10 +32,9 @@ export interface DeliveredIdentitySources {
 
 /**
  * Put a signed-in visitor's page into the identity the app shows them, the way the app does it:
- * the choices the server keeps for them (mode, density, design, signature) become this browser's
- * own, and a design the page does not bundle is loaded from the composition of the tenant's app,
- * whose entitlement check decides. A page drawn in its site's signature keeps it: the visitor's
- * signature is stored for the app on the same origin, not applied here. Without a session cookie
+ * the choices the server keeps for them (mode, density, design) become this browser's own, and a
+ * design the page does not bundle is loaded from the composition of the tenant's app, whose
+ * entitlement check decides. A page keeps its site's signature. Without a session cookie
  * nothing is asked and the default stays, as in the app before login. When anything changed, every
  * identity layer is applied again in its order. Returns whether anything changed.
  */
@@ -98,7 +96,7 @@ async function loadDesignFrom(base: string, plugins: PluginSource[], design: str
 }
 
 const currentChoices = () =>
-  [resolveInitialMode(), resolveInitialDensity(), resolveInitialDesign(), resolveInitialSignature()].join("|");
+  [resolveInitialMode(), resolveInitialDensity(), resolveInitialDesign()].join("|");
 
 const csrfCookieName = ({ authCookieSuffix }: DeliveredIdentitySources) =>
   sessionCookieNames(authCookieSuffix ?? undefined).CSRF;
@@ -122,7 +120,6 @@ async function findIdentityPreferences(
     mode: value(IDENTITY_PREFERENCE_KEYS.mode),
     density: value(IDENTITY_PREFERENCE_KEYS.density),
     design: value(IDENTITY_PREFERENCE_KEYS.design),
-    signature: value(IDENTITY_PREFERENCE_KEYS.signature),
   };
 }
 

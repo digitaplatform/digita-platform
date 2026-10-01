@@ -45,13 +45,12 @@ beforeEach(() => {
 });
 
 describe('bootIdentity', () => {
-  it('applies the stored design, tint, mode, signature and density', () => {
+  it('applies the stored design, tint, mode and density, and the signature it is given', () => {
     localStorage.setItem(MODE_STORAGE_KEY, 'dark');
     localStorage.setItem(`${TINT_STORAGE_KEY_PREFIX}:${DEFAULT_DESIGN_ID}`, 'teal');
-    localStorage.setItem(SIGNATURE_STORAGE_KEY, 'brand1');
     localStorage.setItem(DENSITY_STORAGE_KEY, 'spacious');
 
-    const booted = bootIdentity({ signatures: [brand] });
+    const booted = bootIdentity({ signature: 'brand1', signatures: [brand] });
 
     expect(booted).toEqual({ design: DEFAULT_DESIGN_ID, mode: 'dark', signature: 'brand1', density: 'spacious' });
     expect(root().classList.contains('dark')).toBe(true);
@@ -61,7 +60,7 @@ describe('bootIdentity', () => {
     expect(root().style.getPropertyValue('--sig-grid-d')).toBe('url(d)');
   });
 
-  it("PLANTED DEFECT: applies the page's signature over the stored one, because a site's signature is not a visitor's choice", () => {
+  it("PLANTED DEFECT: applies the page's signature over a person's former pick, because a site's signature is not a visitor's choice", () => {
     localStorage.setItem(SIGNATURE_STORAGE_KEY, 'digita');
     localStorage.setItem(MODE_STORAGE_KEY, 'dark');
 
@@ -91,6 +90,16 @@ describe('bootIdentity', () => {
     expect(booted.density).toBe('comfortable');
     expect(root().getAttribute('data-density')).toBe('comfortable');
   });
+
+  it("drops a person's former signature pick, so a boot without a signature draws the default", () => {
+    localStorage.setItem(SIGNATURE_STORAGE_KEY, 'brand1');
+
+    const booted = bootIdentity({ signatures: [brand] });
+
+    expect(booted.signature).toBe('digita');
+    expect(root().getAttribute('data-signature')).not.toBe('brand1');
+    expect(localStorage.getItem(SIGNATURE_STORAGE_KEY)).toBeNull();
+  });
   it("moves the choices stored under the app's former name to the current keys, where a current one wins", () => {
     localStorage.clear();
     localStorage.setItem('digita-ui:theme-mode', 'dark');
@@ -109,11 +118,10 @@ describe('the pre-paint script', () => {
   it('boots the identity from the data the server wrote into the page', async () => {
     localStorage.setItem(MODE_STORAGE_KEY, 'dark');
     localStorage.setItem(DESIGN_STORAGE_KEY, DEFAULT_DESIGN_ID);
-    localStorage.setItem(SIGNATURE_STORAGE_KEY, 'brand1');
     const data = document.createElement('script');
     data.type = 'application/json';
     data.id = 'digita-identity';
-    data.textContent = JSON.stringify({ signatures: [brand], branding: { fonts: { mono: "'JetBrains Mono', monospace" } } });
+    data.textContent = JSON.stringify({ signature: 'brand1', signatures: [brand], branding: { fonts: { mono: "'JetBrains Mono', monospace" } } });
     document.head.appendChild(data);
 
     vi.resetModules();
@@ -125,7 +133,7 @@ describe('the pre-paint script', () => {
     data.remove();
   });
 
-  it("keeps the page's signature over the one this browser stored", async () => {
+  it("keeps the page's signature over a person's former pick in this browser", async () => {
     localStorage.setItem(SIGNATURE_STORAGE_KEY, 'brand1');
     const data = document.createElement('script');
     data.type = 'application/json';

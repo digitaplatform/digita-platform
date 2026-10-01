@@ -8,7 +8,6 @@ import { Breadcrumbs } from '@/components/layout/Breadcrumbs';
 import { AppMenu } from '@/components/layout/AppMenu';
 import { DensityMenu } from '@/components/layout/DensityMenu';
 import { DesignMenu } from '@/components/layout/DesignMenu';
-import { SignatureMenu } from '@/components/layout/SignatureMenu';
 
 /**
  * Universal host chrome: breadcrumbs, the command-palette search trigger, language,
@@ -51,7 +50,6 @@ export function Topbar({ showMenuButton = true }: { showMenuButton?: boolean }) 
         </button>
         <LanguageSwitcher onChosen={saveLanguage} />
         <DesignMenu />
-        <SignatureMenu />
         <DensityMenu />
         <ModeButton
           mode={mode}

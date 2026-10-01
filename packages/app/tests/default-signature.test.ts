@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-// The signature a person starts on, through the boot App() runs: /boot answers with the tenant's
-// branding, the person's own choices roam in from UserPreference without being awaited, and the
-// plugin composition registers the signatures this app delivers. Each case loads the stores and
-// the theme's signature registry afresh, so no case sees a signature another case registered.
+// The signature a person sees, through the boot App() runs: the first paint wears the look this
+// app drew last, /boot answers with the tenant's branding, and the plugin composition registers
+// the signatures a plugin delivers. Each case loads the stores and the theme's signature registry
+// afresh, so no case sees a signature another case registered.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PluginInventory } from '@digitaplatform/plugins';
 import type { BootBranding, BootData } from '@/types';
@@ -20,7 +20,10 @@ vi.mock('@/services/userPreference', () => ({
   setUserPreference: services.setUserPreference,
 }));
 
-const SIGNATURE_KEY = 'digita-app:signature';
+// The look this app drew last, cached so the first paint wears it; and the key a person's own
+// pick was kept under before the tenant's look replaced it.
+const CACHE_KEY = 'digita-app:signature-cache';
+const FORMER_PICK_KEY = 'digita-app:signature';
 const YARD = '#B8541E';
 
 // What the image stages from plugins.lock.json: two full looks of one company, neither of them
@@ -86,8 +89,8 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('the signature a person starts on', () => {
-  it("a person without a pick starts on the tenant's default signature once the composition registers it", async () => {
+describe('the signature a person sees', () => {
+  it("the app draws the tenant's default signature once the composition registers it", async () => {
     const app = await loadApp({ default_signature: 'harbor-yard' });
     await app.bootstrap();
     await app.loadAppComposition('internal');
@@ -99,20 +102,78 @@ describe('the signature a person starts on', () => {
     );
   });
 
-  it('the default is never stored as the person\'s pick, so a changed default reaches them', async () => {
+  it('a changed default reaches everyone at the next draw, and no signature roams', async () => {
     const app = await loadApp({ default_signature: 'harbor-yard' });
     await app.bootstrap();
     await app.loadAppComposition('internal');
-    expect(localStorage.getItem(SIGNATURE_KEY)).toBeNull();
 
     app.useThemeStore.getState().setBranding({ default_signature: 'harbor-dock' });
     expect(app.useThemeStore.getState().signature).toBe('harbor-dock');
-    expect(localStorage.getItem(SIGNATURE_KEY)).toBeNull();
     expect(services.setUserPreference).not.toHaveBeenCalled();
+    expect(services.getUserPreference).not.toHaveBeenCalledWith('ui.signature');
   });
 
-  it('a pick the app does not offer draws digita until /boot answers, then the tenant default', async () => {
-    localStorage.setItem(SIGNATURE_KEY, 'aurora');
+  it('a pick a person made before is dropped and no longer overrides the tenant default', async () => {
+    localStorage.setItem(FORMER_PICK_KEY, 'harbor-dock');
+    services.getUserPreference.mockImplementation(async (key: string) =>
+      key === 'ui.signature' ? 'harbor-dock' : undefined,
+    );
+    const app = await loadApp({ default_signature: 'harbor-yard' });
+    await app.bootstrap();
+    await app.loadAppComposition('internal');
+    await app.useThemeStore.getState().loadRemotePrefs();
+
+    expect(app.useThemeStore.getState().signature).toBe('harbor-yard');
+    expect(drawn()).toBe('harbor-yard');
+    expect(localStorage.getItem(FORMER_PICK_KEY)).toBeNull();
+  });
+
+  it('the first paint wears the look this app drew last, before /boot answers', async () => {
+    localStorage.setItem(CACHE_KEY, 'veloluck-lakeside');
+    const app = await loadApp({ default_signature: 'veloluck-workbench' });
+
+    expect(app.useThemeStore.getState().signature).toBe('veloluck-lakeside');
+    expect(drawn()).toBe('veloluck-lakeside');
+  });
+
+  it('/boot replaces a stale cached look with the tenant default and caches the default', async () => {
+    localStorage.setItem(CACHE_KEY, 'veloluck-lakeside');
+    const app = await loadApp({ default_signature: 'veloluck-workbench' });
+    await app.bootstrap();
+
+    expect(app.useThemeStore.getState().signature).toBe('veloluck-workbench');
+    expect(drawn()).toBe('veloluck-workbench');
+    expect(localStorage.getItem(CACHE_KEY)).toBe('veloluck-workbench');
+  });
+
+  it('a composition that arrives before /boot keeps the cached look instead of drawing digita', async () => {
+    localStorage.setItem(CACHE_KEY, 'veloluck-lakeside');
+    const app = await loadApp({ default_signature: 'veloluck-workbench' });
+    await app.loadAppComposition('internal');
+
+    expect(drawn()).toBe('veloluck-lakeside');
+    await app.bootstrap();
+    expect(drawn()).toBe('veloluck-workbench');
+  });
+
+  it('each app of the origin keeps its own cache under its base path', async () => {
+    const page = window as unknown as Record<string, unknown>;
+    page.__APP_BASE_PATH__ = '/workshop';
+    try {
+      localStorage.setItem(CACHE_KEY, 'veloluck-lakeside');
+      const app = await loadApp({ default_signature: 'veloluck-workbench' });
+
+      expect(drawn()).toBe('digita');
+      await app.bootstrap();
+      expect(localStorage.getItem(`${CACHE_KEY}/workshop`)).toBe('veloluck-workbench');
+      expect(localStorage.getItem(CACHE_KEY)).toBe('veloluck-lakeside');
+    } finally {
+      delete page.__APP_BASE_PATH__;
+    }
+  });
+
+  it('a cached look the app does not offer draws digita until /boot answers, then the tenant default', async () => {
+    localStorage.setItem(CACHE_KEY, 'aurora');
     const app = await loadApp({ default_signature: 'harbor-yard' });
     expect(app.useThemeStore.getState().signature).toBe('digita');
     await app.bootstrap();
@@ -120,77 +181,6 @@ describe('the signature a person starts on', () => {
 
     expect(app.useThemeStore.getState().signature).toBe('harbor-yard');
     expect(drawn()).toBe('harbor-yard');
-  });
-
-  it('clicking the look already drawn stores no pick', async () => {
-    const app = await loadApp({ default_signature: 'harbor-yard' });
-    await app.bootstrap();
-    await app.loadAppComposition('internal');
-
-    app.useThemeStore.getState().setSignature('harbor-yard');
-    expect(localStorage.getItem(SIGNATURE_KEY)).toBeNull();
-    expect(services.setUserPreference).not.toHaveBeenCalled();
-  });
-
-  it('clicking the look drawn over a pick the app does not offer stores the click, so that pick never returns', async () => {
-    localStorage.setItem(SIGNATURE_KEY, 'aurora');
-    const app = await loadApp({ default_signature: 'harbor-yard' });
-    await app.bootstrap();
-    await app.loadAppComposition('internal');
-
-    app.useThemeStore.getState().setSignature('harbor-yard');
-    expect(localStorage.getItem(SIGNATURE_KEY)).toBe('harbor-yard');
-    expect(services.setUserPreference).toHaveBeenCalledWith('ui.signature', 'harbor-yard');
-  });
-
-  it('a pick in the menu is stored and drawn, and wins over the tenant default', async () => {
-    const app = await loadApp({ default_signature: 'harbor-yard' });
-    await app.bootstrap();
-    await app.loadAppComposition('internal');
-
-    app.useThemeStore.getState().setSignature('harbor-dock');
-    expect(app.useThemeStore.getState().signature).toBe('harbor-dock');
-    expect(localStorage.getItem(SIGNATURE_KEY)).toBe('harbor-dock');
-    expect(services.setUserPreference).toHaveBeenCalledWith('ui.signature', 'harbor-dock');
-  });
-
-  it('a pick stored in this browser wins over the tenant default', async () => {
-    localStorage.setItem(SIGNATURE_KEY, 'harbor-dock');
-    const app = await loadApp({ default_signature: 'harbor-yard' });
-    await app.bootstrap();
-    await app.loadAppComposition('internal');
-
-    expect(app.useThemeStore.getState().signature).toBe('harbor-dock');
-  });
-
-  it('a pick roamed from ui.signature wins over the tenant default when it arrives before the composition', async () => {
-    services.getUserPreference.mockImplementation(async (key: string) =>
-      key === 'ui.signature' ? 'harbor-dock' : undefined,
-    );
-    const app = await loadApp({ default_signature: 'harbor-yard' });
-    await app.bootstrap();
-    await vi.waitFor(() => expect(localStorage.getItem(SIGNATURE_KEY)).toBe('harbor-dock'));
-    await app.loadAppComposition('internal');
-
-    expect(app.useThemeStore.getState().signature).toBe('harbor-dock');
-    expect(drawn()).toBe('harbor-dock');
-  });
-
-  it('a pick roamed from ui.signature wins over the tenant default when it arrives after the composition', async () => {
-    let roam!: () => void;
-    const roamed = new Promise<void>((resolve) => (roam = resolve));
-    services.getUserPreference.mockImplementation(async (key: string) => {
-      await roamed;
-      return key === 'ui.signature' ? 'harbor-dock' : undefined;
-    });
-    const app = await loadApp({ default_signature: 'harbor-yard' });
-    await app.bootstrap();
-    await app.loadAppComposition('internal');
-    expect(app.useThemeStore.getState().signature).toBe('harbor-yard');
-
-    roam();
-    await vi.waitFor(() => expect(app.useThemeStore.getState().signature).toBe('harbor-dock'));
-    expect(drawn()).toBe('harbor-dock');
   });
 
   it('without a tenant default, digita stays', async () => {

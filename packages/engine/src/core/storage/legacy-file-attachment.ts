@@ -1,6 +1,7 @@
 import { DIGITA } from "@digitaplatform/shared";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
+import { runForwardMigrationOnce } from "../database/forward-migration.js";
 import { collectAttachFileIds, FILE_FIELD_TYPES } from "./file-cleanup.js";
 import { createLogger } from "../logging/logger.js";
 
@@ -8,9 +9,6 @@ const log = createLogger("legacy-file-attachment");
 
 const FILE = DIGITA.COLLECTIONS.FILE;
 const CORE = DIGITA.DATABASES.CORE;
-/** A forward data migration that ran on a database leaves its row here, so it runs once. */
-const MIGRATIONS = "_migrations";
-const MIGRATION_ID = "attach-legacy-loose-files";
 
 export interface LegacyLooseFilesReport {
   attached: number;
@@ -20,9 +18,7 @@ export interface LegacyLooseFilesReport {
 
 /** Run attachLegacyLooseFiles once per database; its row in `_migrations` keeps the run's counts. */
 export async function attachLegacyLooseFilesOnce(db: MongoDBService, entities: ReadonlyArray<EntityDefinition>): Promise<void> {
-  if (await db.findOne(MIGRATIONS, MIGRATION_ID, CORE)) return;
-  const report = await attachLegacyLooseFiles(db, entities);
-  await db.upsertOne(MIGRATIONS, MIGRATION_ID, { ran_at: new Date(), ...report }, CORE);
+  await runForwardMigrationOnce(db, "attach-legacy-loose-files", () => attachLegacyLooseFiles(db, entities));
 }
 
 /**

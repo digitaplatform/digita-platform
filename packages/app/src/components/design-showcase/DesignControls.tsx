@@ -19,7 +19,7 @@ const LOCKED_DESIGN_IDS = [...Object.keys(pluginsLock.free), ...Object.keys(plug
  */
 export function DesignControls() {
   const tc = useChrome();
-  const { design, mode, density, signature, setDesign, setMode, setDensity, setSignature } = useThemeStore();
+  const { design, mode, density, signature, setDesign, setMode, setDensity, previewSignature } = useThemeStore();
   const designs = useDesignList();
   const signatures = useSyncExternalStore(subscribeRuntimeSignatures, getRuntimeSignatures, getRuntimeSignatures);
 
@@ -65,7 +65,7 @@ export function DesignControls() {
         <Select
           label={tc('ui.signature.label')}
           value={signature}
-          onChange={setSignature}
+          onChange={previewSignature}
           options={signatures.map((s) => ({ value: s.id, label: s.name }))}
         />
       </div>

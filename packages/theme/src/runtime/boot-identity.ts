@@ -12,10 +12,10 @@ import {
   type Density,
   type ThemeMode,
 } from './runtime.js';
-import { applySignature, resolveInitialSignature, type Signature } from '../signatures/index.js';
+import { applySignature, DEFAULT_SIGNATURE_ID, removeFormerSignaturePick, type Signature } from '../signatures/index.js';
 import { registerSignature } from '../signatures/runtime-registry.js';
 
-/** The choices bootIdentity applied: what this browser stored, or the page's own signature. */
+/** The choices bootIdentity applied: what this browser stored, and the signature it was given. */
 export interface BootedIdentity {
   design: string;
   mode: ThemeMode;
@@ -24,14 +24,13 @@ export interface BootedIdentity {
 }
 
 export interface BootIdentityOptions {
-  /** Registered before the signature is applied, so the page's own signature, or in the
-   *  app the stored or default one, lands with its full identity (the website bundles the
-   *  site's signature, the app the default one). */
+  /** Registered before the signature is applied, so the given signature lands with its
+   *  full identity (the website bundles the site's signatures, the app the looks a tenant
+   *  may name). */
   signatures?: readonly Signature[];
-  /** The signature the page is drawn in, applied as it is. A website's signature is the
-   *  site's identity (its `theme`), not a choice of the visitor: the stored id and the
-   *  default belong to the app, which delivers no page signature and resolves it from
-   *  storage. */
+  /** The signature the page is drawn in, applied as it is; without one, the default. A
+   *  website's signature is the site's identity (its `theme`), the app's the tenant's look
+   *  it drew last; neither is a choice of the visitor. */
   signature?: string;
   /** The tenant's branding, when the caller has it at boot (the website's server
    *  read it); the app applies it later, when /boot answers. */
@@ -43,8 +42,8 @@ export interface BootIdentityOptions {
 }
 
 /**
- * Put a page into its identity: the signature it delivers, or in the app the one this
- * browser chose, and the design, mode and density this browser chose, in the order the
+ * Put a page into its identity: the signature it is given, and the design, mode and
+ * density this browser chose, in the order the
  * layers compose: the design (with its variant and the tint picked for it), the mode, the
  * signature, the tenant's branding over the signature, and the density last —
  * the signature's teardown clears it, and a stored density beats the branding's.
@@ -55,13 +54,14 @@ export interface BootIdentityOptions {
 export function bootIdentity(options: BootIdentityOptions = {}): BootedIdentity {
   const target = options.target ?? document.documentElement;
   moveFormerStorageKeys();
+  removeFormerSignaturePick();
   for (const signature of options.signatures ?? []) registerSignature(signature);
   const design = resolveInitialDesign();
   applyDesign(design, target);
   const mode = resolveInitialMode();
   if (options.followSystemMode === false) paintMode(mode, target);
   else applyMode(mode, target);
-  const signature = options.signature ?? resolveInitialSignature();
+  const signature = options.signature ?? DEFAULT_SIGNATURE_ID;
   applySignature(signature, target);
   if (options.branding) applyBranding(options.branding, target);
   const density = resolveInitialDensity();

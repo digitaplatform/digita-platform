@@ -174,7 +174,7 @@ function stageOne(section, id, version) {
   // applySignature(). No entry / url / integrity — nothing is fetched beyond
   // these inlined fields. The manifest's `name` becomes the record's `title`:
   // it is the name the same signature shows when a host imports its package,
-  // and without it the signature menu lists the id.
+  // and without it the settings list of signatures shows the id.
   if (manifest.type === 'signature') {
     const identity = {};
     if (typeof manifest.name === 'string' && manifest.name.length > 0) identity.title = manifest.name;

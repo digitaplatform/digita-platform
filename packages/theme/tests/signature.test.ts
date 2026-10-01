@@ -57,13 +57,13 @@ describe('branding fonts + signature runtime', () => {
     expect(root.getAttribute('data-signature')).toBe(null);
   });
 
-  it('resolveInitialSignature() returns the default (digita, delivered) and honours a stored id as-is', () => {
+  it('resolveInitialSignature(key) returns the default (digita, delivered) and honours a stored id as-is', () => {
     expect(DEFAULT_SIGNATURE_ID).toBe('digita');
-    expect(resolveInitialSignature()).toBe('digita');
+    expect(resolveInitialSignature('frontend:signature')).toBe('digita');
     // A stored id is honoured verbatim — it may be a DELIVERED signature not yet
     // registered at boot; getSignature resolves it (or the NONE floor) safely.
-    localStorage.setItem('digita-app:signature', 'anything');
-    expect(resolveInitialSignature()).toBe('anything');
+    localStorage.setItem('frontend:signature', 'anything');
+    expect(resolveInitialSignature('frontend:signature')).toBe('anything');
   });
 
   it('applySignature applies a FULL delivered signature: stamp + colour world + graphics', () => {

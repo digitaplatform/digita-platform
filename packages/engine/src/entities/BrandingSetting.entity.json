@@ -21,7 +21,7 @@
     { "fieldname": "accent_palette", "fieldtype": "Select", "label": "Secondary / Accent Palette", "options": ["blue", "pink", "purple", "green", "orange", "teal", "indigo", "cyan"], "idx": 8 },
     { "fieldname": "density", "fieldtype": "Select", "label": "Density", "options": ["comfortable", "compact"], "default": "comfortable", "idx": 9 },
     { "fieldname": "default_template", "fieldtype": "Data", "label": "Default Template", "description": "Default shell template id (e.g. 'classic').", "idx": 10 },
-    { "fieldname": "default_signature", "fieldtype": "Select", "options_source": "signatures", "label": "Default Signature", "description": "The look (signature) every user of this app starts on until they pick their own in the Signature menu. Empty: Digita.", "idx": 11 },
+    { "fieldname": "default_signature", "fieldtype": "Select", "options_source": "signatures", "label": "Default Signature", "description": "The look (signature) every user of this app sees. Empty: Digita.", "idx": 11 },
 
     { "fieldname": "sb_login", "fieldtype": "SectionBreak", "label": "Login", "idx": 12 },
     { "fieldname": "login_background", "fieldtype": "AttachImage", "label": "Login Background", "public": true, "idx": 13 },

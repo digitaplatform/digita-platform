@@ -80,6 +80,7 @@ import { registerImportExportRoutes } from "./core/api/import-export-router.js";
 import { registerUploadRoutes } from "./core/api/upload-router.js";
 import { createStoragePort } from "./core/storage/storage-factory.js";
 import { attachLegacyLooseFilesOnce } from "./core/storage/legacy-file-attachment.js";
+import { removeSignaturePreferencesOnce } from "./core/database/signature-preferences.js";
 import { publishFilesOfPublicFields } from "./core/storage/public-field-files.js";
 import { registerSidebarRoutes } from "./core/api/sidebar-router.js";
 import { RelatedDocService } from "./core/related/related-doc-service.js";
@@ -686,9 +687,11 @@ export async function createApp(
     //     reads every entity's records, those defined in the database too, so it runs after 5.
     //     The files of a public attach field move forward to public after it: a file moves only
     //     from the document it is attached to, which the attachment names for a legacy upload.
+    //     A person's former signature pick, the UserPreference ui.signature, goes once too.
     if (env.AUTO_MIGRATE) {
       await attachLegacyLooseFilesOnce(db, registry.getAll());
       await publishFilesOfPublicFields(db, registry.getAll());
+      await removeSignaturePreferencesOnce(db);
     }
 
     // 5b. Snapshot coverage audit — every Link on a submittable entity

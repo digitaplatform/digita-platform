@@ -14,7 +14,6 @@ import {
   MODE_STORAGE_KEY,
   DENSITY_STORAGE_KEY,
   DESIGN_STORAGE_KEY,
-  SIGNATURE_STORAGE_KEY,
   type ThemeMode,
   type Density,
 } from '@digitaplatform/theme';
@@ -25,8 +24,16 @@ import { signature as veloluckPrecise } from '@digitaplatform/veloluck-precise';
 import { signature as veloluckWorkbench } from '@digitaplatform/veloluck-workbench';
 import { nextMode } from '@digitaplatform/components';
 import { getUserPreference, setUserPreference } from '@/services/userPreference';
+import { APP_BASE_PATH } from '@/lib/appBase';
 
 const TEMPLATE_KEY = 'digita-app:template';
+
+// The signature this app drew last in this browser, kept only as a CACHE so the first
+// paint, before /boot answers, wears the tenant's look instead of flashing digita. It
+// is never a person's pick: /boot's answer replaces it at the next draw. Apps of one
+// tenant share the origin and may wear different looks, so each app caches its own
+// under its base path.
+const SIGNATURE_CACHE_KEY = `digita-app:signature-cache${APP_BASE_PATH}`;
 
 interface ThemeState {
   mode: ThemeMode;
@@ -35,8 +42,8 @@ interface ThemeState {
   /** Active design id (the token plugin selected via data-design). */
   design: string;
   /** The signature drawn (the identity overlay riding the branding layer — it
-   *  COMPOSES on top of the design, never replaces it): always the answer of
-   *  drawnSignature, so the menus check the look the person sees. */
+   *  COMPOSES on top of the design, never replaces it): the answer of
+   *  drawnSignature, or a look the design showcase previews. */
   signature: string;
   /** Per-user template override (else resolved from branding.default_template). */
   templateOverride: string | null;
@@ -45,9 +52,11 @@ interface ThemeState {
   cycleMode: () => void;
   setDensity: (density: Density) => void;
   setDesign: (design: string) => void;
-  setSignature: (id: string) => void;
-  /** Draw the signature drawnSignature answers now — call after the plugin
-   *  composition loads, so a DELIVERED pick or tenant default (registered by the
+  /** Draw signature `id` on this page until the next draw, for the design
+   *  showcase: nothing is cached or stored, so the tenant's look returns. */
+  previewSignature: (id: string) => void;
+  /** Draw the signature drawnSignature answers now and cache it — call after the
+   *  plugin composition loads, so a DELIVERED tenant default (registered by the
    *  host loader) replaces the boot-time fallback and its full brand world lands. */
   reapplySignature: () => void;
   setTemplateOverride: (key: string) => void;
@@ -74,20 +83,19 @@ interface ThemeState {
 // arrive later via the composition.
 const initial = bootIdentity({
   signatures: [digitaSignature, simetrixSignature, veloluckWorkbench, veloluckLakeside, veloluckPrecise],
+  signature: localStorage.getItem(SIGNATURE_CACHE_KEY) ?? undefined,
 });
 
-// The signature a person sees, by one rule: their own pick, stored in this browser
-// (where a pick roamed from UserPreference is written too), if this app offers it;
-// else the tenant's BrandingSetting.default_signature if this app offers it; else
-// digita. An app offers a signature once it is registered: digita at start, a
-// delivered one when the composition loads. /boot, a roamed pick and the
-// composition arrive in any order and each re-runs the rule, so the last of them,
-// which sees every registered signature, decides.
+// The signature everyone sees, by one rule: once /boot answered, the tenant's
+// BrandingSetting.default_signature if this app offers it; before that, the look
+// this app drew last (its cache) if this app offers it; else digita. An app offers
+// a signature once it is registered: the bundled looks at start, a delivered one
+// when the composition loads. /boot and the composition arrive in any order and
+// each re-runs the rule, so the last of them, which sees every registered
+// signature, decides.
 function drawnSignature(branding: BootBranding | null): string {
-  const offered = [localStorage.getItem(SIGNATURE_STORAGE_KEY), branding?.default_signature].find(
-    (id) => getRuntimeSignature(id) !== undefined,
-  );
-  return offered ?? DEFAULT_SIGNATURE_ID;
+  const id = branding ? branding.default_signature : localStorage.getItem(SIGNATURE_CACHE_KEY);
+  return id && getRuntimeSignature(id) ? id : DEFAULT_SIGNATURE_ID;
 }
 
 // Apply signature `id`, then re-assert the tenant's branding on top: a tenant's
@@ -129,19 +137,14 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     set({ design });
     void setUserPreference(IDENTITY_PREFERENCE_KEYS.design, design).catch(() => {});
   },
-  setSignature: (id) => {
-    // Picking the signature already drawn stores nothing, so a person who never
-    // picked one keeps following the tenant's default when it changes. A stored
-    // pick the app does not offer is replaced, or it would return once delivered.
-    const stored = localStorage.getItem(SIGNATURE_STORAGE_KEY);
-    if (id === get().signature && (stored === null || stored === id)) return;
-    localStorage.setItem(SIGNATURE_STORAGE_KEY, id);
-    get().reapplySignature();
-    void setUserPreference(IDENTITY_PREFERENCE_KEYS.signature, id).catch(() => {});
+  previewSignature: (id) => {
+    applySignatureLayered(id, get);
+    set({ signature: id });
   },
   reapplySignature: () => {
     const signature = drawnSignature(get().branding);
     applySignatureLayered(signature, get);
+    localStorage.setItem(SIGNATURE_CACHE_KEY, signature);
     set({ signature });
   },
   setTemplateOverride: (key) => {
@@ -157,13 +160,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   },
   loadRemotePrefs: async () => {
     try {
-      const [mode, density, design, signature] = await Promise.all([
+      const [mode, density, design] = await Promise.all([
         getUserPreference(IDENTITY_PREFERENCE_KEYS.mode),
         getUserPreference(IDENTITY_PREFERENCE_KEYS.density),
         getUserPreference(IDENTITY_PREFERENCE_KEYS.design),
-        getUserPreference(IDENTITY_PREFERENCE_KEYS.signature),
       ]);
-      const stored = storeIdentityPreferences({ mode, density, design, signature });
+      const stored = storeIdentityPreferences({ mode, density, design });
       if (stored.mode) {
         applyMode(stored.mode);
         set({ mode: stored.mode });
@@ -176,7 +178,6 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         applyDesign(stored.design);
         set({ design: stored.design });
       }
-      if (stored.signature) get().reapplySignature();
     } catch {
       /* offline or unset — keep the localStorage default */
     }
