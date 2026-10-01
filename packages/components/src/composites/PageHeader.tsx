@@ -242,6 +242,8 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
     back
   );
 
+  const barIsEmpty = !back && !actions && !collapsed;
+
   return (
     <header
       ref={setRefs}
@@ -260,10 +262,12 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
         // under the TopBar, to the band the header leaves visible. Without a back link and
         // actions the bar holds nothing until the header sticks, and its background would
         // stand as a blank band above the title; it keeps its height, so the collapse never
-        // changes the header's size.
+        // changes the header's size. data-empty names that state to a design that paints
+        // the bar itself, whose rule outranks bg-transparent.
+        data-empty={barIsEmpty ? 'true' : undefined}
         className={cn(
           'sticky top-[var(--topbar-h,0px)] z-20 flex min-h-12 items-center gap-2 px-3',
-          !back && !actions && !collapsed ? 'bg-transparent' : 'bg-surface',
+          barIsEmpty ? 'bg-transparent' : 'bg-surface',
         )}
       >
         {backNode}
