@@ -1465,6 +1465,51 @@ describe("Upload API Integration", () => {
       });
     });
 
+    describe("an amendment of a cancelled document with an attachment", () => {
+      beforeAll(() => {
+        registry.register({
+          name: "TestSubBook",
+          module: "test",
+          database: "core",
+          naming: { strategy: "uuid" },
+          is_submittable: true,
+          storage_path: "subbooks",
+          fields: [
+            { fieldname: "title", fieldtype: "Data", label: "Title" },
+            { fieldname: "letter", fieldtype: "Attach", label: "Letter" },
+          ],
+          permissions: [{ role: "System User", level: 0, select: 1, read: 1, write: 1, create: 1, submit: 1, cancel: 1, amend: 1 }],
+        } as unknown as EntityDefinition);
+      });
+
+      it("gives the amendment its own clone of the letter, which a reader of the amendment may open", async () => {
+        const letter = await uploadAsApp(ownerToken, "letter", "%PDF a letter of a cancelled order", "TestSubBook");
+        const created = await app.inject({
+          method: "POST",
+          url: "/api/v1/resource/TestSubBook",
+          headers: authHeaders(ownerToken),
+          payload: { title: "Order", letter: letter.file_url },
+        });
+        expect(created.statusCode).toBe(201);
+        const id = created.json().data._id as string;
+        for (const verb of ["submit", "cancel"]) {
+          const res = await app.inject({ method: "POST", url: `/api/v1/resource/TestSubBook/${id}/${verb}`, headers: authHeaders(ownerToken) });
+          expect(res.statusCode, verb).toBe(200);
+        }
+        const amended = await app.inject({ method: "POST", url: `/api/v1/resource/TestSubBook/${id}/amend`, headers: authHeaders(ownerToken) });
+        expect(amended.statusCode).toBe(201);
+        const amendment = amended.json().data as { _id: string; letter: string };
+        expect(amendment._id).not.toBe(id);
+        const cloneId = /\/file\/([^/]+)\/download/.exec(amendment.letter)![1]!;
+        expect(cloneId).not.toBe(letter._id);
+        const clone = (await db.findOne(DIGITA.COLLECTIONS.FILE, cloneId, "core")) as Record<string, unknown>;
+        expect(clone["attached_to_name"]).toBe(amendment._id);
+        expect((await downloadAs(salesToken, cloneId)).statusCode).toBe(200);
+        // The cancelled document keeps its own letter.
+        expect(((await db.findOne(DIGITA.COLLECTIONS.FILE, letter._id, "core")) as Record<string, unknown>)["attached_to_name"]).toBe(id);
+      });
+    });
+
     describe("a document with a system id, reached through its id in upper case", () => {
       beforeAll(() => {
         registry.register({
@@ -1536,6 +1581,7 @@ describe("Upload API Integration", () => {
       });
 
       it("PLANTED INNOCENT: does the same through the stored id", async () => {
+
         const { letter, id } = await sysBookWithLetter("%PDF system book, deleted lower");
         const deleted = await app.inject({ method: "DELETE", url: `/api/v1/resource/TestSysBook/${id}`, headers: authHeaders(ownerToken) });
         expect(deleted.statusCode).toBe(200);
