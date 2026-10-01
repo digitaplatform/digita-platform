@@ -24,6 +24,7 @@ import { EntryContextBar } from '@/controls/EntryContextBar';
 import { ScanField, type ScanHit } from '@/controls/ScanField';
 import { tid } from '@/lib/testid';
 import { CellValue } from '@/components/render/cells';
+import { useAmountColumnWidth } from '@/lib/amount-width';
 import { RowDetailDialog } from '@/controls/RowDetailDialog';
 import { AddViaLinkSearch } from '@/controls/AddViaLinkSearch';
 import { LinkEntryInput } from '@/controls/LinkEntryInput';
@@ -67,6 +68,10 @@ const CELL_KIND: Record<string, DataGridCellKind> = {
 };
 function cellKindFor(fieldtype: string): DataGridCellKind {
   return CELL_KIND[fieldtype] ?? 'text';
+}
+
+function maxWidth(a: number | undefined, b: number | undefined): number | undefined {
+  return a === undefined ? b : b === undefined ? a : Math.max(a, b);
 }
 
 /** Parse a FieldDefinition width string ("120", "120px") into pixels. */
@@ -144,6 +149,7 @@ export default function TableControl(props: FieldControlProps) {
   const addField = field.child_fields?.find((c) => c.fieldname === field.add_via_link);
   const apiRef = useRef<DataGridApi | null>(null);
   const linkInputRef = useRef<HTMLInputElement>(null);
+  const amountWidth = useAmountColumnWidth();
 
   if (!field.child_fields || field.child_fields.length === 0) {
     return <div role="alert" className={ERR}>Table “{field.fieldname}” declares no child_fields</div>;
@@ -179,13 +185,18 @@ export default function TableControl(props: FieldControlProps) {
 
   const gridColumns: DataGridColumn[] = cols.map((c) => {
     const kind = cellKindFor(c.fieldtype);
+    // A column's total stands under it, so it needs the room of the total as well.
+    const total = field.footer?.find((f) => f.column === c.fieldname);
+    const amounts = total
+      ? [...rows, { [c.fieldname]: doc[total.field], ...(c.currency_field ? { [c.currency_field]: doc[total.currency_field ?? c.currency_field] } : {}) }]
+      : rows;
     return {
       key: c.fieldname,
       label: fieldLabel(c),
       kind,
       align: kind === 'number' || kind === 'currency' ? ('end' as const) : undefined,
       tooltip: c.description,
-      width: parseGridWidth(c.width),
+      width: maxWidth(parseGridWidth(c.width), amountWidth(c, amounts)),
       stepper: c.stepper,
       editable: c.display_formula || ROW_DIALOG_ONLY_TYPES.has(c.fieldtype) ? false : undefined,
       required: !!(c.required || c.mandatory_depends_on),

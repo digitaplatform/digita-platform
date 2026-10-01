@@ -20,6 +20,7 @@ import { tid } from '@/lib/testid';
 import { useViewportHeight } from '@/hooks/useViewportHeight';
 import { EmptyState } from '@/components/status';
 import { CellValue, RecordImage, workflowBadge } from './cells';
+import { useAmountColumnWidth } from '@/lib/amount-width';
 
 type Row = Record<string, unknown>;
 
@@ -129,6 +130,7 @@ export function ListRenderer({
   const tField = useI18nStore((s) => s.tField);
   const tOption = useI18nStore((s) => s.tOption);
   const tc = useChrome();
+  const amountWidth = useAmountColumnWidth();
 
   const primaryKey = meta.title_field || '_id';
   const dataFields = useMemo(
@@ -166,6 +168,7 @@ export function ListRenderer({
         sortable: true,
         tooltip: tc('ui.list.sortHint'),
         align: NUMERIC_FIELD_TYPES.includes(f.fieldtype) ? 'end' : 'start',
+        width: amountWidth(f, rows),
         headerProps: tid.col(f.fieldname),
       });
     }
@@ -176,7 +179,7 @@ export function ListRenderer({
       defs.push({ key: ACTIONS_COLUMN, label: '', kind: 'actions', align: 'end' });
     }
     return defs;
-  }, [meta, entity, primaryKey, dataFields, wfInColumns, hasStates, rowActions, tField, tc]);
+  }, [meta, entity, primaryKey, dataFields, wfInColumns, hasStates, rowActions, tField, tc, amountWidth, rows]);
 
   const sort = useMemo<DataGridSort[]>(
     () => parseSort(orderBy).map((s) => ({ key: s.field, dir: s.dir })),
