@@ -29,13 +29,8 @@ describe('series_field on a chart card', () => {
     );
   });
 
-  it('PLANTED INNOCENT: passes a chart card without it, and a links card with icons on its entries', () => {
-    const links = {
-      id: 'shortcuts',
-      kind: 'links',
-      label: 'Shortcuts',
-      links: [{ label: 'Books', to: '/Book', icon: 'book' }],
-    };
-    expect(validateWorkspaceCards([CHART, links])).toEqual([CHART, links]);
+  it('PLANTED INNOCENT: passes a chart card without it, and a stacked chart card', () => {
+    const stacked = { ...CHART, id: 'genres-stacked', chart_type: 'bar', stacked: true };
+    expect(validateWorkspaceCards([CHART, stacked])).toEqual([CHART, stacked]);
   });
 });

@@ -71,7 +71,7 @@ export interface ShortcutCard extends WorkspaceCardBase {
 
 export interface LinksCard extends WorkspaceCardBase {
   kind: 'links';
-  links: Array<{ label: string; to?: string; href?: string; icon?: string }>;
+  links: Array<{ label: string; to?: string; href?: string }>;
 }
 
 export type WorkspaceCard = NumberCard | ChartCard | ListCard | ShortcutCard | LinksCard;

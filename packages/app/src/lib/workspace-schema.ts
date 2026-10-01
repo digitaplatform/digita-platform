@@ -68,7 +68,10 @@ const linksCard = z.object({
       label: z.string(),
       to: z.string().optional(),
       href: z.string().optional(),
-      icon: z.string().optional(),
+      // Refused by name as series_field is: the card draws an entry as its label and no icon.
+      icon: z
+        .never({ invalid_type_error: 'a links card draws each entry as its label, with no icon' })
+        .optional(),
     }),
   ),
 });
