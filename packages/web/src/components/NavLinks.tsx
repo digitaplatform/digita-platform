@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { navLeafClass } from "@digitaplatform/components";
+import type { ReactNode } from "react";
+import { cn, navLeafClass, topBarButtonClass } from "@digitaplatform/components";
 import { useSiteConfig } from "@/config/ConfigProvider";
 import type { NavItem } from "@/lib/types";
-import { localePath, navHref } from "@/lib/nav";
+import { isExternalHref, localePath, navHref } from "@/lib/nav";
 import { NavItemLink } from "./NavItemLink";
 
 /** Whether `href` is the current page: home matches exactly, other items match the page or any of
@@ -53,5 +55,32 @@ export function NavLinks({ locale, items, apps, comingLabel }: { locale: string;
         </a>
       ))}
     </>
+  );
+}
+
+/** A header link as its icon, where the top bar has no room for its label: a site path in the
+ *  page's locale, marked as the current page as the text links are, or a web link in a new tab.
+ *  The label names the link and shows as its tooltip. The server draws the icon as `children`,
+ *  since a component cannot cross into a client component. */
+export function NavIconLink({ locale, href, item, children }: { locale: string; href: string; item: NavItem; children: ReactNode }) {
+  const isActive = useActiveItem(locale);
+  if (isExternalHref(href)) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" aria-label={item.label} title={item.label} className={topBarButtonClass}>
+        {children}
+      </a>
+    );
+  }
+  const active = isActive(item);
+  return (
+    <Link
+      href={href}
+      aria-label={item.label}
+      title={item.label}
+      aria-current={active ? "page" : undefined}
+      className={cn(topBarButtonClass, active && "bg-bgHover text-primary-600")}
+    >
+      {children}
+    </Link>
   );
 }

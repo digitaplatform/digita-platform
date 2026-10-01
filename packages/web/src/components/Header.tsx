@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { icons, type LucideIcon } from "lucide-react";
-import { BrandMark, TopBar, buttonAttributes, cn, topBarButtonClass, type BrandMarkProps } from "@digitaplatform/components";
+import { BrandMark, TopBar, buttonAttributes, cn, type BrandMarkProps } from "@digitaplatform/components";
 import type { Locale } from "@/i18n/config";
 import type { NavItem, WebNavMenu, WebSite } from "@/lib/types";
-import { isContactItem, isExternalHref, localePath, navHref, sortNav } from "@/lib/nav";
+import { isContactItem, localePath, navHref, sortNav } from "@/lib/nav";
 import { t } from "@/i18n/messages";
 import { SheetButton } from "@/blocks/marketing/SheetButton";
-import { NavLinks } from "./NavLinks";
+import { NavIconLink, NavLinks } from "./NavLinks";
 import { MobileNav } from "./MobileNav";
 import { FamilySwitcher } from "./FamilySwitcher";
 import { LocaleSwitcher } from "./LocaleSwitcher";
@@ -38,24 +38,6 @@ function iconOf(item: NavItem): LucideIcon | undefined {
   const icon = (icons as Record<string, LucideIcon | undefined>)[key];
   if (!icon) console.error(`[digita-web] the menu item "${item.label}" names the icon "${item.icon}", which lucide does not have`);
   return icon;
-}
-
-/** A header link as its icon, where the top bar has no room for its label: a site path in the
- *  page's locale, a web link in a new tab. The label names the link and shows as its tooltip. */
-function IconLink({ href, item, icon: Icon }: { href: string; item: NavItem; icon: LucideIcon }) {
-  const glyph = <Icon className="h-5 w-5" aria-hidden="true" />;
-  if (isExternalHref(href)) {
-    return (
-      <a href={href} target="_blank" rel="noopener noreferrer" aria-label={item.label} title={item.label} className={topBarButtonClass}>
-        {glyph}
-      </a>
-    );
-  }
-  return (
-    <Link href={href} aria-label={item.label} title={item.label} className={topBarButtonClass}>
-      {glyph}
-    </Link>
-  );
 }
 
 /** Site header: the app's top bar (the kit's TopBar) with the app's brand precedence (BrandMark),
@@ -116,8 +98,10 @@ export function Header({
         <nav className={cn(iconLinks.length > 0 ? "flex" : "hidden md:flex", "flex-1 items-center gap-1")} aria-label={t("navPrimary", locale)}>
           {iconLinks.length > 0 && (
             <div className="flex items-center gap-1 lg:hidden">
-              {iconLinks.map(({ item, icon, href }, i) => (
-                <IconLink key={`${item.label}-${i}`} href={href} item={item} icon={icon} />
+              {iconLinks.map(({ item, icon: Icon, href }, i) => (
+                <NavIconLink key={`${item.label}-${i}`} locale={locale} href={href} item={item}>
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </NavIconLink>
               ))}
             </div>
           )}

@@ -14,7 +14,8 @@ import type { NavItem, WebSite } from "../src/lib/types";
 
 vi.mock("server-only", () => ({}));
 vi.mock("../src/i18n/messages", () => ({ t: (key: string) => key }));
-vi.mock("next/navigation", () => ({ usePathname: () => "/", useRouter: () => ({ push: () => {} }) }));
+const browser = vi.hoisted(() => ({ pathname: "/" }));
+vi.mock("next/navigation", () => ({ usePathname: () => browser.pathname, useRouter: () => ({ push: () => {} }) }));
 
 const screens: Record<"sm" | "md" | "lg" | "xl" | "2xl", string> = defaultTheme.screens;
 const breakpoints: Record<string, string | undefined> = screens;
@@ -81,6 +82,7 @@ function drawHeader(items: NavItem[]) {
 
 afterEach(() => {
   document.body.innerHTML = "";
+  browser.pathname = "/";
   vi.restoreAllMocks();
 });
 
@@ -127,6 +129,24 @@ describe("the top bar on phones and tablets", () => {
         expect(links[0]!.textContent).toBe("");
         expect(links[0]!.querySelector(`svg.lucide-${icon}`), href).not.toBeNull();
       }
+    });
+  }
+
+  for (const viewport of [390, 768]) {
+    it(`PLANTED DEFECT: marks the icon of the page the visitor is on as current at ${viewport} px`, () => {
+      browser.pathname = "/events";
+      drawHeader(ITEMS);
+      const [events] = shown('a[href="/events"]', viewport);
+      expect(events!.getAttribute("aria-current")).toBe("page");
+      expect(events!.className).toContain("text-primary-600");
+    });
+
+    it(`PLANTED INNOCENT: leaves the icon of another page unmarked at ${viewport} px`, () => {
+      browser.pathname = "/events";
+      drawHeader(ITEMS);
+      const [about] = shown('a[href="/about"]', viewport);
+      expect(about!.hasAttribute("aria-current")).toBe(false);
+      expect(about!.className).not.toContain("text-primary-600");
     });
   }
 
