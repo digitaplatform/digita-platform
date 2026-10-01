@@ -100,6 +100,14 @@ describe('Groups page search', () => {
     expect(screen.getByText('Germany')).toBeInTheDocument();
     expect(screen.getByText('Online')).toBeInTheDocument();
   });
+
+  it('says that no group matches a query that finds none', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(findSearchBox(), 'zzz');
+    expect(screen.queryAllByRole('treeitem')).toHaveLength(0);
+    expect(screen.getByText('ui.select.noResults')).toBeInTheDocument();
+  });
 });
 
 describe('Groups page row actions on a filtered tree', () => {

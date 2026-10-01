@@ -213,7 +213,8 @@ export function TreeView({
     }
   };
 
-  if (nodes.length === 0) {
+  // A query that hides every row leaves no node to show, as an empty list does.
+  if (flat.length === 0) {
     return (
       <div className={cn('px-3 py-6 text-center text-sm text-textMuted', className)}>{emptyLabel}</div>
     );

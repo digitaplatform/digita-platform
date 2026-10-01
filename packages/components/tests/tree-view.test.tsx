@@ -79,6 +79,20 @@ describe('TreeView drag source (getNodeDragData)', () => {
   });
 });
 
+describe('TreeView empty label', () => {
+  it('says so when a query hides every row', () => {
+    render(<TreeView nodes={nodes} query="zzz" emptyLabel="No results" />);
+    expect(screen.queryAllByRole('treeitem')).toHaveLength(0);
+    expect(screen.getByText('No results')).toBeInTheDocument();
+  });
+
+  it('keeps it away while a query still finds a row', () => {
+    render(<TreeView nodes={nodes} query="total" emptyLabel="No results" />);
+    expect(screen.getAllByRole('treeitem')).toHaveLength(2);
+    expect(screen.queryByText('No results')).toBeNull();
+  });
+});
+
 const groups: TreeViewNode[] = [
   { id: 'main', label: 'Main group', parentId: null },
   { id: 'sub', label: 'Sub group', parentId: 'main' },
