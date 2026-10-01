@@ -164,9 +164,9 @@ interface ValueControlProps {
  * Comma-separated multi-value entry (`in` / `not in`). Keeps the RAW typed text
  * in local state so a trailing comma isn't erased by an `arr.join`→split→filter
  * round-trip on every keystroke (H17). The parsed array is applied once typing
- * pauses, as a quick filter's typed value is: each applied value rewrites the URL
- * and sends a list request. The display re-syncs from the external value only
- * while the field isn't focused.
+ * pauses, as a quick filter's typed value is, or at once on blur or Enter: each
+ * applied value rewrites the URL and sends a list request. The display re-syncs
+ * from the external value only while the field isn't focused.
  */
 export function MultiValueInput({
   id,
@@ -191,6 +191,23 @@ export function MultiValueInput({
     if (!focused) setText(joined);
   }, [joined, focused]);
   useEffect(() => () => clearTimeout(pending.current), []);
+  const apply = (typed: string) => {
+    pending.current = undefined;
+    onValue(
+      typed
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => castScalar(s, numeric)),
+    );
+  };
+  // The filter panel unmounts this input when it closes, which clears a running pause: Done
+  // takes the focus first, so a blur or an Enter applies what is still waiting for the pause.
+  const applyPending = () => {
+    if (pending.current === undefined) return;
+    clearTimeout(pending.current);
+    apply(text);
+  };
   return (
     <Input
       id={id}
@@ -199,22 +216,18 @@ export function MultiValueInput({
       placeholder={placeholder}
       value={text}
       onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
+      onBlur={() => {
+        applyPending();
+        setFocused(false);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') applyPending();
+      }}
       onChange={(e) => {
         const typed = e.target.value;
         setText(typed);
         clearTimeout(pending.current);
-        pending.current = setTimeout(
-          () =>
-            onValue(
-              typed
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean)
-                .map((s) => castScalar(s, numeric)),
-            ),
-          300,
-        );
+        pending.current = setTimeout(() => apply(typed), 300);
       }}
     />
   );

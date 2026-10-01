@@ -82,6 +82,55 @@ describe('MultiValueInput (H17: multi-value `in` entry)', () => {
     expect(onValue).toHaveBeenCalledWith(['red']);
   });
 
+  // The filter panel closes on Done, which takes the focus first, and unmounts the input with
+  // the pause still running: what was typed must be applied by then.
+  it('applies the typed list when the field loses focus, before the pause', () => {
+    vi.useFakeTimers();
+    const onValue = vi.fn();
+    const { getByRole, unmount } = render(
+      <MultiValueInput arr={[]} numeric={false} ariaLabel="value" placeholder="p" onValue={onValue} />,
+    );
+    const input = getByRole('textbox');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'red, blue' } });
+    fireEvent.blur(input);
+    expect(onValue).toHaveBeenCalledWith(['red', 'blue']);
+    unmount();
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(onValue).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies the typed list on Enter, before the pause', () => {
+    vi.useFakeTimers();
+    const onValue = vi.fn();
+    const { getByRole } = render(
+      <MultiValueInput arr={[]} numeric={false} ariaLabel="value" placeholder="p" onValue={onValue} />,
+    );
+    const input = getByRole('textbox');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'red' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onValue).toHaveBeenCalledWith(['red']);
+    pause();
+    expect(onValue).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies nothing when the field loses focus with nothing typed', () => {
+    vi.useFakeTimers();
+    const onValue = vi.fn();
+    const { getByRole } = render(
+      <MultiValueInput arr={['red']} numeric={false} ariaLabel="value" placeholder="p" onValue={onValue} />,
+    );
+    const input = getByRole('textbox');
+    fireEvent.focus(input);
+    fireEvent.blur(input);
+    fireEvent.keyDown(input, { key: 'Enter' });
+    pause();
+    expect(onValue).not.toHaveBeenCalled();
+  });
+
   it('takes the id a label points at', () => {
     const { getByLabelText } = render(
       <>
