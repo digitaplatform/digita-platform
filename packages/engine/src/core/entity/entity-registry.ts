@@ -30,6 +30,9 @@ export class UnknownDoctypeError extends Error {
 /** The paths the app serves its own pages at (/account, /app/*, /login). */
 const RESERVED_ENTITY_NAMES = ["account", "app", "login"];
 
+/** Hook keys no engine code runs: an entity that declares one restricts and changes nothing. */
+const NEVER_RUN_HOOKS = ["has_permission", "on_list_load"];
+
 /** Levenshtein distance (inputs are short doctype names, so the naive DP is fine). */
 function editDistance(a: string, b: string): number {
   if (a === b) return 0;
@@ -204,6 +207,7 @@ export class EntityRegistry {
       this.applyDefaults(entity);
       this.expandFlattenDirectives(entity);
       entity.fields.sort((a, b) => (a.idx ?? 0) - (b.idx ?? 0));
+      this.validateHooks(entity);
       this.validateSnapshotManifest(entity);
       this.validateTimeSeriesConfig(entity);
       this.validatePeriodCheckConfig(entity);
@@ -240,6 +244,16 @@ export class EntityRegistry {
       throw err instanceof Error
         ? new Error(`Malformed entity definition ${filePath}: ${err.message}`, { cause: err })
         : err;
+    }
+  }
+
+  private validateHooks(entity: EntityDefinition): void {
+    const declared = NEVER_RUN_HOOKS.filter((key) => entity.hooks && key in entity.hooks);
+    if (declared.length > 0) {
+      throw new Error(
+        `Entity "${entity.name}" declares ${declared.map((key) => `hooks.${key}`).join(", ")}, ` +
+          "which the engine never runs; remove the declaration",
+      );
     }
   }
 
