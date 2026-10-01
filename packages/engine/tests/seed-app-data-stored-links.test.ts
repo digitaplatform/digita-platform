@@ -90,4 +90,14 @@ describe("a seed pass links a new row to the stored row of its business key (#16
       expect(inserted["Author"]).toBeUndefined();
     });
   }
+
+  it("never lends a seed row's own _id when a stored row holds its business key", async () => {
+    // The insert of this row collides on the business key, so its _id is never stored.
+    await writeFile(join(dir, "Author.seed.json"), JSON.stringify([{ _id: "AU-NEW", name: "Ursula" }]), "utf-8");
+    const { db, inserted } = mockDb();
+
+    await seedAppData(db, registry("system"), {} as NamingService, [dir]);
+
+    expect(inserted["Book"]?.map((b) => b["author"])).toEqual([STORED_AUTHOR._id]);
+  });
 });
