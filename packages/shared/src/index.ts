@@ -174,6 +174,7 @@ export {
   DATE_FIELD_TYPES,
   LINK_FIELD_TYPES,
   FILE_FIELD_TYPES,
+  UPLOAD_FIELD_TYPES,
   DATA_FORMAT_OPTIONS,
 } from "./constants/field-types.js";
 export type { DataFormatOption } from "./constants/field-types.js";

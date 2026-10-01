@@ -17,6 +17,7 @@ import { mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import type { EntityDefinition } from "@digitaplatform/shared";
+import { UPLOAD_FIELD_TYPES } from "@digitaplatform/shared";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { isValidStoragePath } from "../src/core/storage/storage-path.js";
@@ -57,6 +58,22 @@ describe("isValidStoragePath", () => {
 });
 
 describe("EntityRegistry.auditAttachStoragePaths (boot lint)", () => {
+  it("PLANTED DEFECT: reports each upload field type of the shared set without a storage_path", () => {
+    expect(UPLOAD_FIELD_TYPES.length).toBeGreaterThan(0);
+    for (const fieldtype of UPLOAD_FIELD_TYPES) {
+      const reg = new EntityRegistry();
+      reg.register(entity({ name: "Supplier", fields: [{ fieldname: "file", fieldtype, label: "File" }] } as EntityDefinition));
+      expect(reg.auditAttachStoragePaths(), fieldtype).toHaveLength(1);
+    }
+  });
+
+  it("PLANTED INNOCENT: needs no storage_path for an Image field, which takes no upload", () => {
+    expect(UPLOAD_FIELD_TYPES).not.toContain("Image");
+    const reg = new EntityRegistry();
+    reg.register(entity({ name: "Part", fields: [{ fieldname: "catalog_image", fieldtype: "Image", label: "Catalog picture" }] } as EntityDefinition));
+    expect(reg.auditAttachStoragePaths()).toEqual([]);
+  });
+
   it("reports an entity with a top-level Attach field but no storage_path", () => {
     const reg = new EntityRegistry();
     reg.register(
