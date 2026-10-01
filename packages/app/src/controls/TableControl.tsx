@@ -357,12 +357,21 @@ export default function TableControl(props: FieldControlProps) {
   const presentation = field.presentation ?? 'auto';
   const detailMode = presentation === 'cards' || (presentation !== 'grid' && !!field.row_detail_dialog);
   const addViaLink = !!addField;
-  const detailFieldDefs = (
+  const listedDetailFields = (
     field.detail_fields ??
     allCols.filter((c) => !c.read_only && !c.display_formula).map((c) => c.fieldname)
   )
     .map((n) => byName.get(n))
     .filter((c): c is FieldDefinition => !!c);
+  // A grid column that can be edited only in the row dialog joins it even where detail_fields
+  // leave it out; otherwise nothing can fill it.
+  const detailFieldDefs = [
+    ...listedDetailFields,
+    ...cols.filter(
+      (c) =>
+        ROW_DIALOG_ONLY_TYPES.has(c.fieldtype) && !c.read_only && !c.display_formula && !listedDetailFields.includes(c),
+    ),
+  ];
   const editingRow = editRowId != null ? rows.find((r) => stableRowId(r) === editRowId) : undefined;
   const saveDetail = (updated: Row) =>
     onChange(rows.map((r) => (stableRowId(r) === editRowId ? updated : r)));
