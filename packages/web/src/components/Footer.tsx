@@ -18,16 +18,18 @@ export function Footer({
   site,
   nav,
   brand,
+  contactEnabled,
 }: {
   locale: Locale;
   site: WebSite | null;
   nav: WebNavMenu | null;
   brand: BrandMarkProps;
+  /** Whether the page offers the contact sheet, by the layout's rule the header and the drawer
+   *  read too (publicConfig): a server component cannot read the site config's context. */
+  contactEnabled: boolean;
 }) {
-  // The layout draws the contact sheet for a site that names its contact address; without the
-  // sheet an item for it would lead nowhere, so it is left out.
-  const offersContactSheet = Boolean(site?.contact_email);
-  const items = sortNav(nav?.items).filter((item) => offersContactSheet || !isContactItem(item));
+  // Without the sheet an item for it would lead nowhere, so it is left out.
+  const items = sortNav(nav?.items).filter((item) => contactEnabled || !isContactItem(item));
 
   return (
     <footer className="mt-auto border-t border-border">

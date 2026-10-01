@@ -118,7 +118,7 @@ export default async function LocaleLayout({
               {children}
             </main>
             {site?.design_switcher && <DesignSwitcher {...identitySources} texts={designSwitcherTexts(locale)} />}
-            <Footer locale={locale as Locale} site={site} nav={footerNav} brand={brand} />
+            <Footer locale={locale as Locale} site={site} nav={footerNav} brand={brand} contactEnabled={siteConfig.contactEnabled} />
             {siteConfig.contactEnabled && site?.contact_email && (
               <ContactSheet
                 locale={locale}
