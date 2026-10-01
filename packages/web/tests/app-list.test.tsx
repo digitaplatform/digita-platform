@@ -1,6 +1,6 @@
 // The app list draws one card per app of the tenant, from the list the header links, so an app the
 // tenant adds appears with no change to the site; each card enters its app, and on a demo tenant
-// also through the IdP's one-click entry. A tenant without apps gets the empty line.
+// also through the IdP's one-click entry. A site whose renderer is not told the tenant's apps says so.
 import { describe, it, expect, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { setSiteEnv } from "./site-env";
@@ -38,20 +38,37 @@ describe("the app_list block", () => {
     expect(workshop).toContain("Veloluck Werkstatt");
     expect(workshop).toContain("Eine Velowerkstatt vom Auftrag bis zur Rechnung.");
     expect(workshop).toContain('href="/workshop/"');
-    // PLANTED DEFECT: an app the site's texts do not name yet still appears, under its own name,
-    // so a new app needs no change to the seed; a list filtered by the texts goes red here.
-    expect(events).toContain(">events<");
+    // PLANTED DEFECT: an app the site's texts do not name yet still appears, under a readable form
+    // of its name, so a new app needs no change to the seed; a list filtered by the texts goes red here.
+    expect(events).toContain(">Events<");
+    expect(events).not.toContain(">events<");
     expect(events).toContain('href="/events/"');
     // An app the texts name but the tenant does not run is not offered.
     expect(html).not.toContain("/erp/");
     expect(html).toContain(">Öffnen<");
   });
 
-  it("shows the empty line on a site whose tenant links no apps", async () => {
+  it("PLANTED DEFECT: says the apps are not known on a site whose renderer is not told the tenant's apps, not that there are none", async () => {
     const html = await render({});
     expect(cards(html)).toHaveLength(0);
     expect(html).toContain("Die Demos");
-    expect(html).toContain("Noch keine Apps.");
+    expect(html).toContain("Die Apps sind auf dieser Website nicht aufgeführt.");
+    expect(html).not.toContain("Noch keine Apps.");
+  });
+
+  it("PLANTED INNOCENT: shows no such line where the renderer is told the tenant's apps", async () => {
+    const html = await render({ TENANT_APPS: "workshop" });
+    expect(cards(html)).toHaveLength(1);
+    expect(html).not.toContain("Die Apps sind auf dieser Website nicht aufgeführt.");
+  });
+
+  it("names an app without the block's text in words, never by its raw name", async () => {
+    const html = await render({ TENANT_APPS: "time-tracking, field_service" }, {});
+    const [timeTracking, fieldService] = cards(html);
+    expect(timeTracking).toContain(">Time tracking<");
+    expect(fieldService).toContain(">Field service<");
+    expect(html).not.toMatch(/>time-tracking<|>field_service</);
+    expect(timeTracking).toContain('href="/time-tracking/"');
   });
 
   it("PLANTED DEFECT: offers the one-click demo entry on a demo tenant, and goes on to the app", async () => {
@@ -76,7 +93,7 @@ describe("the app_list block", () => {
 
   it("takes the site's own texts in the page's language where the block names no labels", async () => {
     const html = await render({ TENANT_APPS: "workshop", AUTH_URL: "https://show.example.org/auth", DEMO_TENANT: "1" }, {}, "en");
-    expect(html).toContain(">workshop<");
+    expect(html).toContain(">Workshop<");
     expect(html).toContain(">Enter the demo<");
     expect(html).toContain(">Open<");
   });
