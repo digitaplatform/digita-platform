@@ -38,9 +38,7 @@
       "description": "Human-readable display name. Can be renamed without affecting references.",
       "idx": 2
     },
-    { "fieldname": "desk_access", "fieldtype": "Check", "label": "Desk Access", "default": true, "in_list_view": true, "idx": 3 },
-    { "fieldname": "disabled", "fieldtype": "Check", "label": "Disabled", "default": false, "in_list_view": true, "in_standard_filter": true, "idx": 4 },
-    { "fieldname": "is_custom", "fieldtype": "Check", "label": "Custom Role", "default": true, "read_only": true, "idx": 5 }
+    { "fieldname": "is_custom", "fieldtype": "Check", "label": "Custom Role", "default": true, "read_only": true, "idx": 3 }
   ],
   "indexes": [
     { "fields": ["name"], "name": "idx_name", "unique": true }
