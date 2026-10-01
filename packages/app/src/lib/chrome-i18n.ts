@@ -22,11 +22,22 @@ export type ChromeTranslate = (key: string, params?: Record<string, string | num
 
 export function useChrome(): ChromeTranslate {
   const locale = useI18nStore((s) => s.locale);
-  const loaded = translator;
-  if (!loaded) throw new Error('chrome-i18n: loadChromeTexts() has not resolved yet');
-  return (key, params) => {
-    const text = loaded.t(key, params, locale);
-    if (text === key && import.meta.env.DEV) console.warn(`[chrome-i18n] missing key "${key}"`);
-    return text;
-  };
+  const loaded = loadedTranslator();
+  return (key, params) => translate(loaded, key, params, locale);
+}
+
+/** The same texts outside React, in the session language at the time of the call: the plugin
+ *  host's t() answers a plugin's ui.* keys with it. */
+export const chromeT: ChromeTranslate = (key, params) =>
+  translate(loadedTranslator(), key, params, useI18nStore.getState().locale);
+
+function loadedTranslator(): Translator {
+  if (!translator) throw new Error('chrome-i18n: loadChromeTexts() has not resolved yet');
+  return translator;
+}
+
+function translate(loaded: Translator, key: string, params: Record<string, string | number> | undefined, locale: string): string {
+  const text = loaded.t(key, params, locale);
+  if (text === key && import.meta.env.DEV) console.warn(`[chrome-i18n] missing key "${key}"`);
+  return text;
 }
