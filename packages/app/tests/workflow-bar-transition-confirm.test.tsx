@@ -33,6 +33,7 @@ vi.mock('@/hooks/useDocument', () => {
     useSubmit: other,
     useCancel: other,
     useAmend: other,
+    useCopy: other,
     useTransition: () => ({ mutateAsync: mocks.transition, isPending: false }),
   };
 });

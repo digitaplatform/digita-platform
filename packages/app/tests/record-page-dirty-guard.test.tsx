@@ -50,6 +50,7 @@ vi.mock('@/hooks/useDocument', () => ({
   useCreate: () => ({ mutateAsync: createMock, isPending: false }),
   useUpdate: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteDoc: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCopy: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('@/hooks/usePreview', () => ({
   usePreview: () => ({ data: undefined, status: 'idle', trigger: vi.fn() }),
