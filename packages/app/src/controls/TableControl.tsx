@@ -605,6 +605,7 @@ export default function TableControl(props: FieldControlProps) {
             addField ? (
               <LinkEntryInput
                 linkField={addField}
+                doc={doc}
                 onPick={addLinkRow}
                 inputRef={linkInputRef}
                 testId={tid.entry(entity, field.fieldname)}
@@ -667,6 +668,7 @@ export default function TableControl(props: FieldControlProps) {
             open={addOpen}
             onClose={() => setAddOpen(false)}
             linkField={addField}
+            doc={doc}
             onPick={addRowFromPick}
           />
         )}
