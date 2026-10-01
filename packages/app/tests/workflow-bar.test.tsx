@@ -10,7 +10,8 @@ vi.mock('@/stores/session', () => ({
   useSessionStore: (sel: (s: { user: typeof user }) => unknown) => sel({ user }),
 }));
 vi.mock('@/stores/i18n', () => ({
-  useI18nStore: (sel: (s: { t: (k: string) => string }) => unknown) => sel({ t: (k: string) => k }),
+  useI18nStore: (sel: (s: { t: (k: string) => string; tOption: (e: string, f: string, v: string) => string }) => unknown) =>
+    sel({ t: (k: string) => k, tOption: (_e: string, _f: string, v: string) => v }),
 }));
 vi.mock('@/lib/chrome-i18n', () => ({ useChrome: () => (k: string) => k }));
 vi.mock('@/components/overlay/DialogHost', () => ({
