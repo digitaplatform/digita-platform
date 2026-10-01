@@ -208,6 +208,7 @@ export class EntityRegistry {
       this.validateTimeSeriesConfig(entity);
       this.validatePeriodCheckConfig(entity);
       this.validateAllowOnSubmit(entity);
+      this.validateDialogDefaults(entity);
 
       // Surface a name redefined from a DIFFERENT file (silent last-write-wins
       // before). Intentional app-over-core overrides are a documented feature, so
@@ -570,6 +571,24 @@ export class EntityRegistry {
                 "updateSubmitted would reject it at runtime",
             );
           }
+        }
+      }
+    }
+  }
+
+  /**
+   * Refuse an `eval:` default on an action dialog field. Such a default reads a document being
+   * saved: the app leaves it unset, and the engine runs the action with the params as sent, so the
+   * hook would get no value. Evaluating it here would need a second meaning of `doc`.
+   */
+  private validateDialogDefaults(entity: EntityDefinition): void {
+    for (const action of entity.actions ?? []) {
+      for (const field of action.dialog_fields ?? []) {
+        if (typeof field.default === "string" && field.default.startsWith("eval:")) {
+          throw new Error(
+            `Action "${action.action}" of entity "${entity.name}": dialog field "${field.fieldname}" has an eval: default, ` +
+              "which no action dialog evaluates; use a fixed value or a token such as __today__ or __user__",
+          );
         }
       }
     }
