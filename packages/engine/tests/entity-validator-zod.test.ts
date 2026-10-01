@@ -416,6 +416,24 @@ describe("validateEntityDataZod — numeric empty-guard (A10)", () => {
     builder.invalidate("TestDoc");
     expect(validateEntityDataZod(e, { amount: "42" }, builder).valid).toBe(true);
   });
+  // A required field's blank value is refused by the blank check before the guard, so the blank
+  // string the guard refuses is an optional field's.
+  it("refuses a blank string, a boolean and an array in a numeric field, required or not", () => {
+    for (const required of [false, true]) {
+      const e = entity([{ fieldname: "amount", fieldtype: "Currency", label: "Amount", required }]);
+      for (const bad of required ? [true, false, [], [5]] : ["", "  ", true, false, [], [5]]) {
+        builder.invalidate("TestDoc");
+        expect(validateEntityDataZod(e, { amount: bad }, builder).valid).toBe(false);
+      }
+    }
+  });
+  it("lets an optional numeric field be null or missing", () => {
+    const e = entity([{ fieldname: "amount", fieldtype: "Currency", label: "Amount" }]);
+    builder.invalidate("TestDoc");
+    expect(validateEntityDataZod(e, { amount: null }, builder).valid).toBe(true);
+    builder.invalidate("TestDoc");
+    expect(validateEntityDataZod(e, {}, builder).valid).toBe(true);
+  });
 });
 
 describe("validateEntityDataZod — Duration is whole non-negative seconds (A6)", () => {
@@ -499,6 +517,23 @@ describe("validateEntityDataZod — a blank value is no value", () => {
     ]);
     builder.invalidate("TestDoc");
     expect(validateEntityDataZod(e, { lines: [{ email: "   " }] }, builder).errors).toEqual([]);
+  });
+
+  // Date and Datetime are no string schema, so the blank preprocess of an optional text field does
+  // not reach them: their own rule accepts the blank string.
+  it("an optional Date or Datetime cell of a Table row accepts a blank string", () => {
+    for (const fieldtype of ["Date", "Datetime"]) {
+      const e = entity([
+        {
+          fieldname: "lines",
+          fieldtype: "Table",
+          label: "Lines",
+          child_fields: [{ fieldname: "on", fieldtype, label: "On" }],
+        },
+      ]);
+      builder.invalidate("TestDoc");
+      expect(validateEntityDataZod(e, { lines: [{ on: "" }] }, builder).errors).toEqual([]);
+    }
   });
 
   it("a required Data or Time field with a value passes", () => {
