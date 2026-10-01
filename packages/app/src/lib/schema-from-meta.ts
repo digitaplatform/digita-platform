@@ -1,6 +1,7 @@
 import { z, type ZodTypeAny } from 'zod';
 import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
 import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from '@digitaplatform/shared';
+import { isEvalDefault } from '@/lib/default-tokens';
 
 /**
  * Build a Zod schema from an EntityDefinition for react-hook-form validation.
@@ -173,18 +174,23 @@ function isEmptyValue(field: FieldDefinition, v: unknown): boolean {
 /**
  * @param requiredResolver live `(fieldname) => boolean` from the field-state sweep.
  *        Pass via a ref so the returned schema instance is stable.
+ * @param isNew the form holds a record the engine has not inserted yet.
  */
 export function buildZodSchema(
   entity: Pick<EntityDefinition, 'fields'>,
   requiredResolver?: (fieldname: string) => boolean,
+  isNew = false,
 ): ZodTypeAny {
+  // The engine evaluates an `eval:` default on insert and refuses the field there when the
+  // expression yields nothing; the form cannot evaluate it, so it must not refuse the field first.
+  const isFilledOnInsert = (f: FieldDefinition) => isNew && isEvalDefault(f.default);
   const shape: Record<string, ZodTypeAny> = {};
   for (const f of entity.fields) {
     if (!isStored(f.fieldtype)) continue;
     if (f.fieldtype === 'Table') {
       shape[f.fieldname] = tableSchema(f).nullable().optional();
     } else {
-      shape[f.fieldname] = buildFieldSchema(f);
+      shape[f.fieldname] = buildFieldSchema(isFilledOnInsert(f) ? { ...f, required: false } : f);
     }
   }
   // passthrough keeps engine-internal keys (_id/docstatus/owner/creation/modified/
@@ -194,7 +200,7 @@ export function buildZodSchema(
 
   return base.superRefine((data, ctx) => {
     for (const f of entity.fields) {
-      if (!isStored(f.fieldtype) || f.fieldtype === 'Table') continue;
+      if (!isStored(f.fieldtype) || f.fieldtype === 'Table' || isFilledOnInsert(f)) continue;
       if (requiredResolver(f.fieldname) && isEmptyValue(f, (data as Record<string, unknown>)[f.fieldname])) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: [f.fieldname], message: 'field_required' });
       }

@@ -282,7 +282,7 @@ function RecordForm({
   // Live required resolver via a ref → the zod schema instance stays stable.
   const stateRef = useRef<FieldStateMap>({});
   const requiredResolver = useRef((fn: string) => stateRef.current[fn]?.required ?? false).current;
-  const schema = useMemo(() => buildZodSchema(meta, requiredResolver), [meta, requiredResolver]);
+  const schema = useMemo(() => buildZodSchema(meta, requiredResolver, isNew), [meta, requiredResolver, isNew]);
   // zodResolver runs a v3 schema correctly at runtime; the monorepo hoists a zod v4
   // whose ZodType the resolver's .d.ts references, so cast the arg (type-only friction).
   const resolver = useMemo(

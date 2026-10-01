@@ -145,7 +145,7 @@ function RecordDialogForm({
 
   const stateRef = useRef<FieldStateMap>({});
   const requiredResolver = useRef((fn: string) => stateRef.current[fn]?.required ?? false).current;
-  const schema = useMemo(() => buildZodSchema(meta, requiredResolver), [meta, requiredResolver]);
+  const schema = useMemo(() => buildZodSchema(meta, requiredResolver, isNew), [meta, requiredResolver, isNew]);
   const resolver = useMemo(
     () => zodResolver(schema as never) as unknown as Resolver<Doc>,
     [schema],
