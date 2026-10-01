@@ -45,6 +45,7 @@ export interface DatePickerProps {
   disabled?: boolean;
   invalid?: boolean;
   id?: string;
+  /** The field label: it names the trigger and the calendar dialog. */
   'aria-labelledby'?: string;
   'aria-describedby'?: string;
   'aria-required'?: boolean;
@@ -157,10 +158,14 @@ export function DatePicker({
     : '';
   const title = new Date(my.y, my.m, 1).toLocaleDateString(locale, { month: 'long', year: 'numeric' });
   const weekdays = useMemo(() => {
-    // Monday-start localized two-letter weekday row.
-    return Array.from({ length: 7 }, (_, i) =>
-      new Date(2024, 0, i + 1).toLocaleDateString(locale, { weekday: 'short' }).slice(0, 2),
-    );
+    // Monday-start localized two-letter weekday row, each named in full for a screen reader.
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = new Date(2024, 0, i + 1);
+      return {
+        short: date.toLocaleDateString(locale, { weekday: 'short' }).slice(0, 2),
+        long: date.toLocaleDateString(locale, { weekday: 'long' }),
+      };
+    });
   }, [locale]);
 
   const off = (new Date(my.y, my.m, 1).getDay() + 6) % 7;
@@ -226,81 +231,89 @@ export function DatePicker({
       </button>
 
       <Popover open={open} anchorRef={anchorRef} onRequestClose={close} className="dg-datepicker w-76 p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <button
-            type="button"
-            aria-expanded={view === 'my'}
-            onClick={() => setView((v) => (v === 'my' ? 'days' : 'my'))}
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm font-semibold text-textMain hover:bg-bgHover"
-          >
-            {title}
-            <Chevron dir="right" className={cn('h-3.5 w-3.5 text-primary-600 transition-transform duration-base', view === 'my' && 'rotate-90')} />
-          </button>
-          <div className="flex items-center gap-0.5">
-            <button type="button" aria-label={previousLabel} onClick={() => page(-1)} className="flex h-7 w-7 items-center justify-center rounded-btn text-textMuted hover:bg-bgHover"><Chevron dir="left" className="h-4 w-4" /></button>
-            <button type="button" aria-label={nextLabel} onClick={() => page(1)} className="flex h-7 w-7 items-center justify-center rounded-btn text-textMuted hover:bg-bgHover"><Chevron dir="right" className="h-4 w-4" /></button>
-          </div>
-        </div>
-
-        {view === 'days' ? (
-          <>
-            <div className="mb-1 grid grid-cols-7">
-              {weekdays.map((w, i) => (
-                <span key={i} className="text-center text-micro font-medium text-textMuted">{w}</span>
-              ))}
-            </div>
-            <div ref={gridRef} onKeyDown={moveDay} className="grid grid-cols-7 gap-0.5">
-              {Array.from({ length: Math.ceil((off + days) / 7) * 7 }, (_, i) => {
-                const d = i - off + 1;
-                if (d < 1 || d > days) return <span key={i} aria-hidden="true" />;
-                const isSel = !!selected && selected.y === my.y && selected.m === my.m && selected.d === d;
-                const isToday = now.getFullYear() === my.y && now.getMonth() === my.m && now.getDate() === d;
-                return (
-                  <button key={i} type="button" aria-pressed={isSel} tabIndex={d === tabDay ? 0 : -1} onClick={() => pick({ y: my.y, m: my.m, d })}
-                    className={cn(DAY_BTN, isSel && SEL, !isSel && isToday && TODAY)}>
-                    {d}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="mb-2 grid grid-cols-4 gap-0.5">
-              {Array.from({ length: 12 }, (_, mi) => (
-                <button key={mi} type="button" aria-pressed={mi === my.m}
-                  onClick={() => { setMy((s) => ({ ...s, m: mi })); setView('days'); focusDayNext.current = true; }}
-                  className={cn(DAY_BTN, 'min-h-9', mi === my.m && SEL)}>
-                  {new Date(2000, mi, 1).toLocaleDateString(locale, { month: 'short' })}
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-4 gap-0.5 border-t border-border pt-2">
-              {Array.from({ length: 12 }, (_, i) => {
-                const yr = yearBase + i;
-                return (
-                  <button key={yr} type="button" aria-pressed={yr === my.y}
-                    onClick={() => setMy((s) => ({ ...s, y: yr }))}
-                    className={cn(DAY_BTN, 'min-h-9', yr === my.y && SEL, yr !== my.y && yr === now.getFullYear() && TODAY)}>
-                    {yr}
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        )}
-
-        {selected && (
-          <div className="mt-2 flex justify-end border-t border-border pt-2">
+        <div role="dialog" aria-labelledby={ariaLabelledby}>
+          <div className="mb-2 flex items-center justify-between">
             <button
               type="button"
-              onClick={() => { onChange(undefined); close(); }}
-              className="rounded-btn px-2 py-1 text-sm text-textMuted hover:bg-bgHover hover:text-textMain"
+              aria-expanded={view === 'my'}
+              onClick={() => setView((v) => (v === 'my' ? 'days' : 'my'))}
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-sm font-semibold text-textMain hover:bg-bgHover"
             >
-              {clearLabel}
+              {title}
+              <Chevron dir="right" className={cn('h-3.5 w-3.5 text-primary-600 transition-transform duration-base', view === 'my' && 'rotate-90')} />
             </button>
+            <div className="flex items-center gap-0.5">
+              <button type="button" aria-label={previousLabel} onClick={() => page(-1)} className="flex h-7 w-7 items-center justify-center rounded-btn text-textMuted hover:bg-bgHover"><Chevron dir="left" className="h-4 w-4" /></button>
+              <button type="button" aria-label={nextLabel} onClick={() => page(1)} className="flex h-7 w-7 items-center justify-center rounded-btn text-textMuted hover:bg-bgHover"><Chevron dir="right" className="h-4 w-4" /></button>
+            </div>
           </div>
-        )}
+
+          {view === 'days' ? (
+            // A screen reader leaves the arrow keys to a grid, where it keeps them on plain buttons.
+            <div ref={gridRef} role="grid" aria-label={title} onKeyDown={moveDay} className="flex flex-col gap-0.5">
+              <div role="row" className="mb-0.5 grid grid-cols-7">
+                {weekdays.map((w, i) => (
+                  <span key={i} role="columnheader" aria-label={w.long} className="text-center text-micro font-medium text-textMuted">{w.short}</span>
+                ))}
+              </div>
+              {Array.from({ length: Math.ceil((off + days) / 7) }, (_, week) => (
+                <div key={week} role="row" className="grid grid-cols-7 gap-0.5">
+                  {Array.from({ length: 7 }, (_, col) => {
+                    const d = week * 7 + col - off + 1;
+                    // An empty cell keeps the days under their weekday for a screen reader as well.
+                    if (d < 1 || d > days) return <span key={col} role="gridcell" />;
+                    const isSel = !!selected && selected.y === my.y && selected.m === my.m && selected.d === d;
+                    const isToday = now.getFullYear() === my.y && now.getMonth() === my.m && now.getDate() === d;
+                    return (
+                      <button key={col} type="button" role="gridcell" aria-selected={isSel}
+                        aria-label={new Date(my.y, my.m, d).toLocaleDateString(locale, { dateStyle: 'full' })}
+                        tabIndex={d === tabDay ? 0 : -1} onClick={() => pick({ y: my.y, m: my.m, d })}
+                        className={cn(DAY_BTN, isSel && SEL, !isSel && isToday && TODAY)}>
+                        {d}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="mb-2 grid grid-cols-4 gap-0.5">
+                {Array.from({ length: 12 }, (_, mi) => (
+                  <button key={mi} type="button" aria-pressed={mi === my.m}
+                    onClick={() => { setMy((s) => ({ ...s, m: mi })); setView('days'); focusDayNext.current = true; }}
+                    className={cn(DAY_BTN, 'min-h-9', mi === my.m && SEL)}>
+                    {new Date(2000, mi, 1).toLocaleDateString(locale, { month: 'short' })}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-4 gap-0.5 border-t border-border pt-2">
+                {Array.from({ length: 12 }, (_, i) => {
+                  const yr = yearBase + i;
+                  return (
+                    <button key={yr} type="button" aria-pressed={yr === my.y}
+                      onClick={() => setMy((s) => ({ ...s, y: yr }))}
+                      className={cn(DAY_BTN, 'min-h-9', yr === my.y && SEL, yr !== my.y && yr === now.getFullYear() && TODAY)}>
+                      {yr}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {selected && (
+            <div className="mt-2 flex justify-end border-t border-border pt-2">
+              <button
+                type="button"
+                onClick={() => { onChange(undefined); close(); }}
+                className="rounded-btn px-2 py-1 text-sm text-textMuted hover:bg-bgHover hover:text-textMain"
+              >
+                {clearLabel}
+              </button>
+            </div>
+          )}
+        </div>
       </Popover>
     </div>
   );

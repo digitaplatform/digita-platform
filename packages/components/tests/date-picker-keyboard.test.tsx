@@ -14,8 +14,10 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const day = (n: number) => screen.getByRole('button', { name: String(n) });
-const queryDay = (n: number) => screen.queryByRole('button', { name: String(n) });
+/** A day of the shown month by the number it shows; its accessible name is the full date. */
+const byNumber = (n: number) => (_name: string, cell: Element) => cell.textContent === String(n);
+const day = (n: number) => screen.getByRole('gridcell', { name: byNumber(n) });
+const queryDay = (n: number) => screen.queryByRole('gridcell', { name: byNumber(n) });
 const trigger = (name: string) => screen.getByRole('button', { name });
 
 /** Tab onto the trigger, then open the calendar the way a keyboard does. */

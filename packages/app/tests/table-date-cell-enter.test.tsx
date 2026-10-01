@@ -147,7 +147,7 @@ describe('a Date cell of a Table grid', () => {
 
     expect(trigger).toBeInTheDocument();
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    await user.click(screen.getByRole('button', { name: '15' }));
+    await user.click(screen.getByRole('gridcell', { name: (_name, cell) => cell.textContent === '15' }));
 
     await waitFor(() => expect(trigger).not.toBeInTheDocument());
     expect(screen.getByText('2026-09-15')).toBeInTheDocument();

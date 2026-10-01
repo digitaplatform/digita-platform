@@ -434,7 +434,7 @@ describe('Date', () => {
     expect(trigger).toHaveTextContent('28/09/2026');
 
     await user.click(trigger);
-    await user.click(screen.getByRole('button', { name: '15' }));
+    await user.click(screen.getByRole('gridcell', { name: /^Tuesday,? 15 September 2026$/ }));
     expect(onFieldChange).toHaveBeenLastCalledWith('thing', '2026-09-15');
     expect(trigger).toHaveTextContent('15/09/2026');
   });
@@ -456,7 +456,7 @@ describe('Date', () => {
     const trigger = await screen.findByRole('button', { name: 'Thing' });
     expect(trigger).toBeDisabled();
     await user.click(trigger);
-    expect(screen.queryByRole('button', { name: '15' })).toBeNull();
+    expect(screen.queryByRole('grid')).toBeNull();
     expect(onFieldChange).not.toHaveBeenCalled();
   });
 });
