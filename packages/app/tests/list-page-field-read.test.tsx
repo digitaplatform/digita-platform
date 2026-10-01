@@ -7,7 +7,8 @@ import type { EntityDefinition, EntityPermission } from '@digitaplatform/shared'
 /**
  * The engine leaves a field out of every row of a list when no read row of the user's roles
  * opens it. The list leaves such a column out instead of showing it empty on every row; a
- * user who reads the field's level still sees the column.
+ * user who reads the field's level still sees the column, and so does a level-0 field where
+ * the list can hold rows shared with the user.
  */
 
 const state = vi.hoisted(() => ({
@@ -68,7 +69,7 @@ const PERMISSIONS: EntityPermission[] = [
   { role: 'Lead', level: 1, read: 1 },
 ];
 
-function renderParts(roles: string[], rows: Record<string, unknown>[]) {
+function renderParts(roles: string[], rows: Record<string, unknown>[], permissions = PERMISSIONS) {
   state.roles = roles;
   state.rows = rows;
   state.meta = {
@@ -80,7 +81,7 @@ function renderParts(roles: string[], rows: Record<string, unknown>[]) {
       { fieldname: 'stock', fieldtype: 'Int', label: 'Stock', in_list_view: true },
       { fieldname: 'purchase_price', fieldtype: 'Currency', label: 'Purchase price', in_list_view: true, perm_level: 1 },
     ],
-    permissions: PERMISSIONS,
+    permissions,
   } as unknown as EntityDefinition;
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -102,5 +103,22 @@ describe('ListPage and the fields a user may not read', () => {
   it('shows the column of a level-1 field to a reader of level 1', () => {
     renderParts(['Lead'], [{ _id: 'P-1', part_name: 'Brake pad', stock: 4, purchase_price: 549.86 }]);
     expect(screen.getByRole('columnheader', { name: /Purchase price/ })).toBeInTheDocument();
+  });
+
+  // The engine lists the rows shared with the user and shows what a level-0 read shows on them.
+  it('shows the level-0 columns to a user who may select but not read, for the rows shared with them', () => {
+    renderParts(['Guest'], [{ _id: 'P-1', part_name: 'Brake pad', stock: 4 }], [{ role: 'Guest', level: 0, select: 1 }]);
+    expect(screen.getByRole('columnheader', { name: /Stock/ })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: /Purchase price/ })).toBeNull();
+  });
+
+  // A conditional read row makes the engine re-check every row's read, which drops the shared rows.
+  it('leaves out a level-0 column no read row opens where a conditional read row keeps shared rows out', () => {
+    renderParts(
+      ['Guest'],
+      [{ _id: 'P-1', part_name: 'Brake pad' }],
+      [{ role: 'Guest', level: 0, select: 1, read: 1, condition: "doc.stock > 0", fields: ['part_name'] }],
+    );
+    expect(screen.queryByRole('columnheader', { name: /Stock/ })).toBeNull();
   });
 });
