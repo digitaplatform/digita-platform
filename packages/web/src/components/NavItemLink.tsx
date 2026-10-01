@@ -20,6 +20,7 @@ export function NavItemLink({
   className,
   current = false,
   role,
+  onSelect,
   "data-ui": ui,
 }: {
   locale: string;
@@ -31,6 +32,9 @@ export function NavItemLink({
   current?: boolean;
   /** "menuitem" inside a kit Menu, whose arrow keys move focus over the items. */
   role?: AriaRole;
+  /** Closes the menu or drawer the item sits in when the item opens the contact sheet, which
+   *  would otherwise open behind it. */
+  onSelect?: () => void;
   /** The kit element a design restyles, as `nav-leaf` for the app's nav items. */
   "data-ui"?: string;
 }) {
@@ -41,7 +45,7 @@ export function NavItemLink({
 
   if (isContactItem(item)) {
     return (
-      <SheetButton data-ui={ui} role={role} tabIndex={tabIndex} className={className}>
+      <SheetButton data-ui={ui} role={role} tabIndex={tabIndex} className={className} onOpen={onSelect}>
         {item.label}
       </SheetButton>
     );

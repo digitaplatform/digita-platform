@@ -60,7 +60,7 @@ export function FamilySwitcher({
         </>
       }
     >
-      {() =>
+      {(close) =>
         items.map((item, i) =>
           isCurrentSite(item, domain) ? (
             <span key={`${item.label}-${i}`} role="menuitem" aria-current="true" tabIndex={-1} className={`${ITEM} font-semibold`}>
@@ -68,7 +68,15 @@ export function FamilySwitcher({
               <Check className="ml-auto h-4 w-4 text-primary-600" aria-hidden="true" />
             </span>
           ) : (
-            <NavItemLink key={`${item.label}-${i}`} locale={locale} item={item} comingLabel={comingLabel} role="menuitem" className={ITEM} />
+            <NavItemLink
+              key={`${item.label}-${i}`}
+              locale={locale}
+              item={item}
+              comingLabel={comingLabel}
+              role="menuitem"
+              onSelect={close}
+              className={ITEM}
+            />
           ),
         )
       }
