@@ -989,6 +989,8 @@ export class DocumentService {
      * opening its own. Used by the Rule Engine so rule-created documents
      * roll back with their triggering submit. */
     sessionOverride?: import("mongodb").ClientSession,
+    /** What only the engine sets on a new document: an amendment's `amended_from`. */
+    engineSet: { amended_from?: string } = {},
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
 
@@ -1000,7 +1002,8 @@ export class DocumentService {
     // Write-field-level permissions: strip fields the user may not write
     // (perm_level / read_only) from the raw input BEFORE defaults / fetch_from /
     // computed fill in — those are system-set and must not be filtered.
-    const writeData = this.permissionChecker.filterFieldsForWrite(user, doctype, data);
+    // amended_from names the cancelled original an amendment replaces; only amend sets it.
+    const { amended_from: _amendedFrom, ...writeData } = this.permissionChecker.filterFieldsForWrite(user, doctype, data);
     this.refuseForeignPasswordValues(entity, writeData);
 
     // Resolve defaults
@@ -1026,7 +1029,7 @@ export class DocumentService {
 
     // Build document for hooks
     const doc = new BaseDocument(doctype);
-    doc._data = { ...serialized };
+    doc._data = { ...serialized, ...(engineSet.amended_from ? { amended_from: engineSet.amended_from } : {}) };
     doc._isNew = true;
     // Stamp _row_id on every Table-row so sub-row Links (target_path)
     // can resolve any row inserted via raw-data assignment, not just
@@ -2555,7 +2558,7 @@ export class DocumentService {
     const newDoc = await this.db.withTransaction(async (session) => {
       const copyData = copyDocumentData(entity, doc._data, stored);
       await this.cloneAttachments(entity, doc._id, copyData, user, session);
-      return this.insert(doctype, { ...copyData, ...amendData }, user, ctx, session);
+      return this.insert(doctype, copyData, user, ctx, session, amendData);
     });
 
     // The "Amended" entry is supplemental to the "Created" entry that
