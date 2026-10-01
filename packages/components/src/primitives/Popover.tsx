@@ -33,7 +33,8 @@ export interface PopoverProps {
  * bookkeeping). Escape is CONSUMED (preventDefault + stopPropagation, capture
  * phase): [[BaseDialog]] deliberately listens in the bubble phase and checks
  * `defaultPrevented`, so an open popover never closes its host dialog.
- * Non-modal: no focus trap — the anchor input keeps focus (combobox pattern).
+ * No focus trap of its own: a combobox keeps the focus on its anchor input, and a host that moves
+ * the focus into the panel (the DatePicker) keeps Tab inside it itself.
  */
 export function Popover({
   open,

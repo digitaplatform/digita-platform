@@ -24,8 +24,8 @@ import { Popover } from '../primitives/Popover.js';
  *
  * Keyboard: opening puts the focus on the selected day (today without one). The arrow keys move it
  * a day or a week, Home and End to the ends of the week, PageUp and PageDown a month (with Shift a
- * year), across the edges of the month; Enter picks. A panel that held the focus hands it back to
- * the trigger when it closes.
+ * year), across the edges of the month; Enter picks. Tab and Shift+Tab wrap inside the open panel. A
+ * panel that held the focus hands it back to the trigger when it closes.
  *
  * Value contract: 'YYYY-MM-DD' string or undefined (matches DateControl).
  * Week starts Monday (format-locale follow-up: derive from Intl.Locale).
@@ -203,6 +203,18 @@ export function DatePicker({
     focusDayNext.current = true;
   };
 
+  // The panel is portaled to the end of the page, past the Tab trap of a dialog it opens from, so it
+  // keeps Tab inside itself, as a modal dialog does.
+  const keepTab = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Tab') return;
+    const stops = e.currentTarget.querySelectorAll<HTMLElement>('button:not([tabindex="-1"])');
+    const first = stops[0];
+    const last = stops[stops.length - 1];
+    if (document.activeElement !== (e.shiftKey ? first : last)) return;
+    e.preventDefault();
+    (e.shiftKey ? last : first)?.focus();
+  };
+
   return (
     <div ref={anchorRef} className="relative">
       <button
@@ -231,7 +243,7 @@ export function DatePicker({
       </button>
 
       <Popover open={open} anchorRef={anchorRef} onRequestClose={close} className="dg-datepicker w-76 p-3">
-        <div role="dialog" aria-labelledby={ariaLabelledby}>
+        <div role="dialog" aria-modal="true" aria-labelledby={ariaLabelledby} onKeyDown={keepTab}>
           <div className="mb-2 flex items-center justify-between">
             <button
               type="button"

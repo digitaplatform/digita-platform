@@ -2,6 +2,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { useRef } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { BaseDialog } from '../src/composites/BaseDialog.js';
 import { DatePicker } from '../src/composites/DatePicker.js';
 
 /** A person who works by keyboard, or in German, opens the calendar of a Date field: the paging
@@ -287,5 +288,80 @@ describe('DatePicker hands the focus back', () => {
     await user.click(day(3));
     expect(onChange).toHaveBeenCalledWith('2026-09-03');
     expect(queryDay(3)).toBeNull();
+  });
+});
+
+/** The open calendar is a modal dialog of its own, portaled to the end of the page: Tab and Shift+Tab
+ *  wrap inside it, also when it opens from a row dialog, whose own trap does not reach the panel. */
+describe('DatePicker keeps Tab in the open calendar', () => {
+  function RowDialog({ value }: { value?: string }) {
+    return (
+      <BaseDialog open onClose={vi.fn()} title="Edit row">
+        <DatePicker value={value} onChange={vi.fn()} locale="en-GB" placeholder="Due" clearLabel="Clear date" />
+        <button type="button">Save</button>
+      </BaseDialog>
+    );
+  }
+
+  it('wraps Tab from the last control of the panel to the first, inside a row dialog', async () => {
+    const user = userEvent.setup();
+    render(<RowDialog value="2026-09-28" />);
+    await user.click(trigger('28/09/2026'));
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Clear date' })).toHaveFocus();
+
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'September 2026' })).toHaveFocus();
+    expect(screen.getByRole('grid')).toBeInTheDocument();
+  });
+
+  it('wraps Shift+Tab from the first control of the panel to the last', async () => {
+    const user = userEvent.setup();
+    render(<RowDialog value="2026-09-28" />);
+    await user.click(trigger('28/09/2026'));
+    await user.tab({ shift: true });
+    await user.tab({ shift: true });
+    await user.tab({ shift: true });
+    expect(screen.getByRole('button', { name: 'September 2026' })).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(screen.getByRole('button', { name: 'Clear date' })).toHaveFocus();
+  });
+
+  it('wraps from the day when no date is set and the panel has no Clear', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 8, 17, 12));
+    const user = userEvent.setup();
+    render(<RowDialog />);
+    await user.click(trigger('Due'));
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'September 2026' })).toHaveFocus();
+  });
+
+  it('marks the panel modal, as its Tab stays inside', async () => {
+    const user = userEvent.setup();
+    render(<DatePicker value="2026-09-28" onChange={vi.fn()} locale="en-GB" />);
+    await openByKeyboard(user);
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
+  });
+
+  it('still moves Tab between the controls inside the panel (innocent case)', async () => {
+    const user = userEvent.setup();
+    render(<RowDialog value="2026-09-28" />);
+    await user.click(trigger('28/09/2026'));
+    await user.tab({ shift: true });
+    expect(screen.getByRole('button', { name: 'Next' })).toHaveFocus();
+    await user.tab();
+    expect(day(28)).toHaveFocus();
+  });
+
+  it('leaves the row dialog its own Tab trap once the calendar is closed (innocent case)', async () => {
+    const user = userEvent.setup();
+    render(<RowDialog value="2026-09-28" />);
+    await user.click(trigger('28/09/2026'));
+    await user.keyboard('{Escape}');
+    expect(trigger('28/09/2026')).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveFocus();
   });
 });
