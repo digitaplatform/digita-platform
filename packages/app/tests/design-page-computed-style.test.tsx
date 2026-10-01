@@ -147,6 +147,8 @@ function measure(): Record<string, string[]> {
 }
 
 describe('/_design computed style per design and mode', () => {
+  // It renders the whole showcase per design and mode in jsdom: seconds alone, and the suite's other
+  // workers and parallel test runs on the machine stretch that past the 5 s default, so it declares 30 s.
   it('matches the snapshot, and a removed theme rule changes it while a comment does not', async () => {
     const style = document.createElement('style');
     style.textContent = THEME_CSS;
@@ -165,5 +167,5 @@ describe('/_design computed style per design and mode', () => {
     // Planted innocent change: a comment added.
     style.textContent = `/* reviewed */\n${THEME_CSS}`;
     expect(measure()).toEqual(full);
-  });
+  }, 30_000);
 });
