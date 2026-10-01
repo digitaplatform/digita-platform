@@ -197,7 +197,7 @@ describe("ViewEngine — link section", () => {
 
   it("gives a caller who may not read the target no row, a warning and no entity", async () => {
     const deps = makeDeps();
-    deps.documentService.getDoc.mockRejectedValue(new PermissionDeniedError("ada@example.com", "customer", "read"));
+    deps.documentService.getDoc.mockRejectedValue(PermissionDeniedError.forAction("customer", "read"));
     const ctx = new ResponseContext();
     const out = await new ViewEngine(deps as never).execute(linkView(), { query: { customer: "CUST-1" } }, user, ctx);
     expect(out.sections["customer"]).toBeNull();
