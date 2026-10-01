@@ -102,7 +102,7 @@ export function registerBootRoutes(
       DIGITA.COLLECTIONS.LANGUAGE,
       {
         filters: [{ enabled: true }],
-        fields: ["_id", "native_name", "flag_emoji"],
+        fields: ["_id", "native_name", "flag_emoji", "direction"],
         order_by: "name asc",
       },
       DIGITA.DATABASES.CORE,
@@ -149,6 +149,10 @@ export function registerBootRoutes(
           code: l["_id"],
           native_name: l["native_name"],
           flag_emoji: l["flag_emoji"],
+          // A switch lays the page out by it without reading the Language row, which
+          // only some roles may read. A row without one is left to right, as the
+          // LocaleResolver reads it.
+          direction: l["direction"] ?? "ltr",
         })),
         system_settings: {
           platform_name: settingsData["platform_name"] ?? "Digita Platform",

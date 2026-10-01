@@ -32,6 +32,7 @@ export interface BootLanguage {
   code: string;
   native_name: string;
   flag_emoji?: string;
+  direction?: 'ltr' | 'rtl';
 }
 
 /** Locale resolved by the engine (mirrors the engine LocaleResolver output). */
