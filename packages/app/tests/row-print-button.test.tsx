@@ -139,7 +139,7 @@ describe('RowPrintButton', () => {
     expect(screen.getByRole('button', { name: 'Print invoice' })).toBeInTheDocument();
 
     rerender(<RowPrintButton link={{ report: 'invoice' }} doc={{}} onPrint={() => {}} />);
-    expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ui.action.print' })).toBeInTheDocument();
   });
 
   it('hands its row to onPrint without reaching the row it sits in', async () => {

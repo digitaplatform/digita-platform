@@ -4,6 +4,7 @@ import { IconButton } from '@digitaplatform/components';
 import { Printer } from 'lucide-react';
 import { useI18nStore } from '@/stores/i18n';
 import { reportLinkLabel, reportLinkVisible } from '@/lib/report-link';
+import { useChrome } from '@/lib/chrome-i18n';
 import { tid } from '@/lib/testid';
 
 type Doc = Record<string, unknown>;
@@ -27,13 +28,14 @@ export function RowPrintButton({
   // The list page takes its entity from the route, so the button keys the link's label by it too.
   const { entity } = useParams<{ entity: string }>();
   const translations = useI18nStore((s) => s.translations);
+  const tc = useChrome();
   if (!reportLinkVisible(link, doc)) return null;
   const label = entity ? reportLinkLabel(entity, link, translations) : link.label;
   return (
     <IconButton
       size="sm"
       variant="ghost"
-      label={label ?? 'Print'}
+      label={label ?? tc('ui.action.print')}
       icon={<Printer className="h-4 w-4" aria-hidden="true" />}
       onClick={(e) => {
         e.stopPropagation();

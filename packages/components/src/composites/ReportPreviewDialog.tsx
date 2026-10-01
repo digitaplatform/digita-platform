@@ -37,6 +37,11 @@ export interface ReportPreviewDialogProps {
    *  cannot print an iframe). */
   printHref?: string;
   downloads?: ReportDownload[];
+  /** Names of the dialog's own buttons; the caller owns the language, as it does for `title`. */
+  printLabel?: string;
+  reloadLabel?: string;
+  openLabel?: string;
+  closeLabel?: string;
 }
 
 /**
@@ -51,13 +56,17 @@ export function ReportPreviewDialog({
   src,
   printHref,
   downloads = [],
+  printLabel = 'Print',
+  reloadLabel = 'Reload preview',
+  openLabel = 'Open in new tab',
+  closeLabel,
 }: ReportPreviewDialogProps) {
   const [loaded, setLoaded] = useState(false);
   // Bump to force an iframe reload without closing the dialog.
   const [reload, setReload] = useState(0);
 
   return (
-    <BaseDialog open={open} onClose={onClose} title={title} size="xl" className="w-[92vw] max-w-[92vw]">
+    <BaseDialog open={open} onClose={onClose} title={title} size="xl" className="w-[92vw] max-w-[92vw]" closeLabel={closeLabel}>
       <div className="flex h-[80vh] min-h-0 flex-col" data-testid="report-preview:dialog">
         <div className="flex items-center gap-1.5 border-b border-border pb-2">
           {printHref && (
@@ -68,7 +77,7 @@ export function ReportPreviewDialog({
               data-testid="report-preview:print"
               onClick={() => window.open(printHref, '_blank', 'noopener')}
             >
-              Print
+              {printLabel}
             </Button>
           )}
           {downloads.map((d) => (
@@ -87,7 +96,7 @@ export function ReportPreviewDialog({
           <IconButton
             size="sm"
             variant="ghost"
-            label="Reload preview"
+            label={reloadLabel}
             icon={<Glyph d={RELOAD} />}
             data-testid="report-preview:reload"
             onClick={() => {
@@ -98,7 +107,7 @@ export function ReportPreviewDialog({
           <IconButton
             size="sm"
             variant="ghost"
-            label="Open in new tab"
+            label={openLabel}
             icon={<Glyph d={EXTERNAL} />}
             data-testid="report-preview:open"
             onClick={() => window.open(src, '_blank', 'noopener')}
