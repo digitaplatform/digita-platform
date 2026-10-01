@@ -8,6 +8,7 @@ import {
   submitDoc,
   cancelDoc,
   amendDoc,
+  copyDoc,
   transitionDoc,
 } from '@/services/resource';
 import type { EntityDefinition } from '@digitaplatform/shared';
@@ -141,6 +142,20 @@ export function useAmend<T = Doc>(doctype: string) {
       const id = (doc as Doc)['_id'];
       if (typeof id === 'string') qc.setQueryData(qk.doc(doctype, id), doc);
       void qc.invalidateQueries({ queryKey: qkPrefix.entity(doctype) });
+    },
+  });
+}
+
+/** Copy a saved doc into a new draft. Like amend it creates a doc with its own `_id`,
+ *  so the new doc is seeded under that id and the source doc's cache stays as it is. */
+export function useCopy<T = Doc>(doctype: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (name: string) => unwrap(await copyDoc<T>(doctype, name)),
+    onSuccess: (doc) => {
+      const id = (doc as Doc)['_id'];
+      if (typeof id === 'string') qc.setQueryData(qk.doc(doctype, id), doc);
+      void qc.invalidateQueries({ queryKey: qkPrefix.lists(doctype) });
     },
   });
 }

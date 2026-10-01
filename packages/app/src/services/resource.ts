@@ -133,6 +133,12 @@ export function amendDoc<T = Doc>(entity: string, name: string): Promise<ApiResp
   return api.post<ApiResponse<T>>(`${RESOURCE}/${enc(entity, name)}/amend`, {});
 }
 
+/** Copy a saved doc: the engine creates a fresh draft from it, without the `no_copy`
+ *  fields and the business key, and returns that NEW doc (201) with its own `_id`. */
+export function copyDoc<T = Doc>(entity: string, name: string): Promise<ApiResponse<T>> {
+  return api.post<ApiResponse<T>>(`${RESOURCE}/${enc(entity, name)}/copy`, {});
+}
+
 export function transitionDoc<T = Doc>(entity: string, name: string, to: string): Promise<ApiResponse<T>> {
   return api.post<ApiResponse<T>>(`${RESOURCE}/${enc(entity, name)}/transition`, { to });
 }
