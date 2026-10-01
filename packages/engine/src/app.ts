@@ -597,6 +597,10 @@ export async function createApp(
     // 3d. An entity a visitor can read is cached by the website renderer, which must hear of
     //     every save.
     await revalidateNotifier.assertSettings(registry.getAll());
+    // 3e. A Link names an entity that is loaded, or boot stops, instead of the first save with a value
+    //     in that field answering 404. Only the entity files are checked: a definition POST /meta
+    //     wrote reaches the registry at 5, and refusing it would lock its tenant out of the engine.
+    registry.assertLinkTargetsLoaded();
 
     // 4. Run first-time setup (seed data, migrate schemas)
     await firstRun(db, registry, translationService);

@@ -1007,6 +1007,41 @@ export class EntityRegistry {
     return offenders;
   }
 
+  // ─── Link Target Assertion ─────────────────────────────
+
+  /**
+   * Throws when a `Link` field, top-level or in a Table's `child_fields`, names an entity this
+   * registry does not hold, listing every one with its entity, field and target. Without it a typo
+   * in `target` boots, and the first save with a value in that field answers 404 for an entity the
+   * person never asked for.
+   */
+  assertLinkTargetsLoaded(): void {
+    const names = this.getAllNames();
+    const missing: string[] = [];
+    const check = (field: FieldDefinition, owner: string): void => {
+      if (field.fieldtype !== "Link" || !field.target || this.entities.has(field.target)) return;
+      const { suggestion } = unknownDoctypeError(field.target, names);
+      missing.push(
+        `  - ${owner}.${field.fieldname} links to "${field.target}", which no loaded entity has` +
+          (suggestion ? ` (did you mean "${suggestion}"?)` : ""),
+      );
+    };
+
+    for (const entity of this.entities.values()) {
+      for (const field of entity.fields) {
+        check(field, entity.name);
+        if (field.fieldtype !== "Table") continue;
+        for (const child of field.child_fields ?? []) check(child, `${entity.name}.${field.fieldname}`);
+      }
+    }
+
+    if (missing.length > 0) {
+      throw new Error(
+        `${missing.length} Link field(s) name an entity that no loaded entity directory has:\n${missing.join("\n")}`,
+      );
+    }
+  }
+
   // ─── Field Query Methods ───────────────────────────────
 
   getFields(name: string): FieldDefinition[] {
