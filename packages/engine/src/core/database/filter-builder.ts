@@ -76,12 +76,13 @@ export function assertFieldAllowed(field: string, allowedFields?: Set<string>): 
 }
 
 /** Reject a caller's object-form filter `{ field: value }` whose key assertFieldAllowed refuses,
- *  or whose value is a list: the object form compares one value, and takes a list only inside
- *  an operator such as `{ $in: [...] }`. */
+ *  or whose value is a list or an object: the object form compares one value, and an object
+ *  would reach the database as operators that skip the guards of the list route, such as the
+ *  check of a caller's regex. */
 export function assertObjectFilterAllowed(filter: Record<string, unknown>, allowedFields: Set<string>): void {
   for (const [field, value] of Object.entries(filter)) {
     assertFieldAllowed(field, allowedFields);
-    if (Array.isArray(value)) throw new MalformedFilterValueError("=", value);
+    if (Array.isArray(value) || isSubDocument(value)) throw new MalformedFilterValueError("=", value);
   }
 }
 
