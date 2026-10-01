@@ -27,6 +27,7 @@ export default function LinkControl({
   field,
   value,
   doc,
+  parentDoc,
   state,
   onChange,
   onCommit,
@@ -74,10 +75,11 @@ export default function LinkControl({
     ? (titles?.[field.fieldname] ?? (picked && picked.id === value ? picked.label : String(value)))
     : '';
 
-  // Dynamic `$doc.<field>` tokens in target_filters resolve against the current doc.
+  // Dynamic `$doc.<field>` tokens in target_filters resolve against the record: in a Table row the
+  // owning record, as the Table's add-via-link picker reads them, so a row and a new row pick alike.
   const resolvedFilters = resolveLinkFilters(
     field.target_filters as Record<string, unknown> | undefined,
-    doc,
+    parentDoc ?? doc,
   );
 
   const results = useSearchLink({

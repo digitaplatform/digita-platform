@@ -33,7 +33,8 @@ export interface FieldControlProps {
   doc: Record<string, unknown>;
   /** Set ONLY inside a MetaGrid cell: the child row (carries _row_id). doc === row there. */
   row?: Record<string, unknown>;
-  /** The owning record when inside a Table cell — for sub-row Link target_path. */
+  /** The owning record when inside a Table cell — for sub-row Link target_path and the `$doc.`
+   *  tokens of a Link's target_filters. */
   parentDoc?: Record<string, unknown>;
   /** True ONLY when the control is a DataGrid cell editor (TableControl.renderEditor).
    *  The grid seeds the first typed char as the cell value THEN mounts+focuses the
