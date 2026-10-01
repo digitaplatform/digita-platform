@@ -97,9 +97,3 @@ export function evaluateExpr(expr: string, scope: EvalScope): EvalResult {
     return { value: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
-
-/** Convenience boolean: parse errors degrade to `true` (back-compat with the admin port). */
-export function evaluateSafe(expr: string, scope: EvalScope): boolean {
-  const r = evaluateExpr(expr, scope);
-  return r.error ? true : r.value;
-}

@@ -26,8 +26,6 @@ import { nextMode } from '@digitaplatform/components';
 import { getUserPreference, setUserPreference } from '@/services/userPreference';
 import { APP_BASE_PATH } from '@/lib/appBase';
 
-const TEMPLATE_KEY = 'digita-app:template';
-
 // The signature this app drew last in this browser, kept only as a CACHE so the first
 // paint, before /boot answers, wears the tenant's look instead of flashing digita. It
 // is never a person's pick: /boot's answer replaces it at the next draw. Apps of one
@@ -45,8 +43,6 @@ interface ThemeState {
    *  COMPOSES on top of the design, never replaces it): the answer of
    *  drawnSignature, or a look the design showcase previews. */
   signature: string;
-  /** Per-user template override (else resolved from branding.default_template). */
-  templateOverride: string | null;
   branding: BootBranding | null;
   setMode: (mode: ThemeMode) => void;
   cycleMode: () => void;
@@ -59,7 +55,6 @@ interface ThemeState {
    *  plugin composition loads, so a DELIVERED tenant default (registered by the
    *  host loader) replaces the boot-time fallback and its full brand world lands. */
   reapplySignature: () => void;
-  setTemplateOverride: (key: string) => void;
   setBranding: (branding: BootBranding) => void;
   /** Pull mode + density + design from UserPreference (server) so they roam across
    *  devices. Called once authenticated; the server value wins over the localStorage
@@ -116,7 +111,6 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   density: initial.density,
   design: initial.design,
   signature: drawnSignature(null),
-  templateOverride: localStorage.getItem(TEMPLATE_KEY),
   branding: null,
   setMode: (mode) => {
     localStorage.setItem(MODE_STORAGE_KEY, mode);
@@ -146,10 +140,6 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     applySignatureLayered(signature, get);
     localStorage.setItem(SIGNATURE_CACHE_KEY, signature);
     set({ signature });
-  },
-  setTemplateOverride: (key) => {
-    localStorage.setItem(TEMPLATE_KEY, key);
-    set({ templateOverride: key });
   },
   // The branding may name another default signature, so the signature is drawn
   // again, and applySignatureLayered puts the tenant's overrides and the per-user
