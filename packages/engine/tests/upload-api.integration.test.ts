@@ -66,7 +66,8 @@ import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import type { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { attachLegacyLooseFiles, attachLegacyLooseFilesOnce } from "../src/core/storage/legacy-file-attachment.js";
-import { IMAGE_VARIANT_WIDTHS } from "../src/core/api/public-router.js";
+import sharp from "sharp";
+import { IMAGE_VARIANT_WIDTHS } from "../src/core/storage/image-variants.js";
 
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
@@ -1680,6 +1681,113 @@ describe("Upload API Integration", () => {
     it("cleanup: delete the public + private fixtures", async () => {
       await app.inject({ method: "DELETE", url: `/api/v1/file/${publicId}`, headers: authHeaders() });
       await app.inject({ method: "DELETE", url: `/api/v1/file/${privateId}`, headers: authHeaders() });
+    });
+  });
+
+  describe("width variants of a public image", () => {
+    let photo: Buffer;
+    let photoId: string;
+    let photoUrl: string;
+    let photoKey: string;
+    const onDisk = (key: string) => join(uploadDir, ...key.split("/"));
+    const variantOnDisk = (width: number, format: string) => {
+      const [dir, name] = [photoKey.slice(0, photoKey.lastIndexOf("/")), photoKey.slice(photoKey.lastIndexOf("/") + 1)];
+      return onDisk(`${dir}/w${width}-${name.slice(0, name.lastIndexOf("."))}.${format}`);
+    };
+    const exists = (path: string) => access(path).then(() => true, () => false);
+
+    beforeAll(async () => {
+      const img = await new Promise<Jimp>((res, rej) =>
+        new Jimp(2400, 30, 0x996633ff, (e, im) => (e ? rej(e) : res(im))),
+      );
+      photo = await img.getBufferAsync(Jimp.MIME_PNG);
+      const { payload, contentType } = multipartPayload("photo.png", "image/png", photo, {
+        attached_to_entity: "TestCustomer",
+        attached_to_name: "CUST-000001",
+        attached_to_field: "public_banner",
+      });
+      const up = await app.inject({
+        method: "POST",
+        url: "/api/v1/upload",
+        headers: { ...authHeaders(), "content-type": contentType },
+        payload,
+      });
+      expect(up.statusCode).toBe(201);
+      photoId = up.json().data._id;
+      photoUrl = up.json().data.file_url;
+      photoKey = up.json().data.storage_key;
+    });
+
+    it("answers each width of the set with a WebP of that width, made on the first request", async () => {
+      for (const w of IMAGE_VARIANT_WIDTHS) {
+        expect(await exists(variantOnDisk(w, "webp")), `before w=${w}`).toBe(false);
+        const res = await app.inject({ method: "GET", url: `${photoUrl}?w=${w}`, headers: { accept: "image/webp,*/*" } });
+        expect(res.statusCode, `w=${w}`).toBe(200);
+        expect(res.headers["content-type"]).toBe("image/webp");
+        expect(res.headers["vary"]).toBe("Accept");
+        const meta = await sharp(Buffer.from(res.rawPayload)).metadata();
+        expect(meta.format).toBe("webp");
+        expect(meta.width, `w=${w}`).toBe(w);
+        expect(await exists(variantOnDisk(w, "webp")), `after w=${w}`).toBe(true);
+      }
+    });
+
+    it("reads a variant from storage on the second request instead of making it again", async () => {
+      const stored = await readFile(variantOnDisk(640, "webp"));
+      const marker = await sharp({ create: { width: 7, height: 7, channels: 3, background: "#00ff00" } }).webp().toBuffer();
+      await writeFile(variantOnDisk(640, "webp"), marker);
+      const res = await app.inject({ method: "GET", url: `${photoUrl}?w=640` });
+      expect(Buffer.from(res.rawPayload).equals(marker)).toBe(true);
+      await writeFile(variantOnDisk(640, "webp"), stored);
+    });
+
+    it("answers AVIF where Accept names it, and WebP where it does not", async () => {
+      const avif = await app.inject({ method: "GET", url: `${photoUrl}?w=320`, headers: { accept: "image/avif,image/webp,*/*;q=0.8" } });
+      expect(avif.headers["content-type"]).toBe("image/avif");
+      const meta = await sharp(Buffer.from(avif.rawPayload)).metadata();
+      expect(meta.format).toBe("heif");
+      expect(meta.width).toBe(320);
+      expect(await exists(variantOnDisk(320, "avif"))).toBe(true);
+
+      const plain = await app.inject({ method: "GET", url: `${photoUrl}?w=320`, headers: { accept: "*/*" } });
+      expect(plain.headers["content-type"]).toBe("image/webp");
+    });
+
+    it("answers the original without a width", async () => {
+      const res = await app.inject({ method: "GET", url: photoUrl });
+      expect(res.headers["content-type"]).toContain("image/png");
+      expect(Buffer.from(res.rawPayload).equals(photo)).toBe(true);
+    });
+
+    it("deletes the old variants when the file's content is replaced", async () => {
+      const oldVariant = variantOnDisk(640, "webp");
+      expect(await exists(oldVariant)).toBe(true);
+      const img = await new Promise<Jimp>((res, rej) =>
+        new Jimp(1000, 30, 0x336699ff, (e, im) => (e ? rej(e) : res(im))),
+      );
+      const { payload, contentType } = multipartPayload("photo2.png", "image/png", await img.getBufferAsync(Jimp.MIME_PNG));
+      const put = await app.inject({
+        method: "PUT",
+        url: `/api/v1/file/${photoId}`,
+        headers: { ...authHeaders(), "content-type": contentType },
+        payload,
+      });
+      expect(put.statusCode).toBe(200);
+      expect(await exists(oldVariant)).toBe(false);
+      photoKey = put.json().data.storage_key;
+      const res = await app.inject({ method: "GET", url: `${photoUrl}?w=640` });
+      expect((await sharp(Buffer.from(res.rawPayload)).metadata()).width).toBe(640);
+      expect(await exists(variantOnDisk(640, "webp"))).toBe(true);
+    });
+
+    it("deletes the variants with the file", async () => {
+      await app.inject({ method: "GET", url: `${photoUrl}?w=320`, headers: { accept: "image/avif" } });
+      expect(await exists(variantOnDisk(320, "avif"))).toBe(true);
+      const del = await app.inject({ method: "DELETE", url: `/api/v1/file/${photoId}`, headers: authHeaders() });
+      expect(del.statusCode).toBe(200);
+      expect(await exists(onDisk(photoKey))).toBe(false);
+      expect(await exists(variantOnDisk(640, "webp"))).toBe(false);
+      expect(await exists(variantOnDisk(320, "avif"))).toBe(false);
     });
   });
 
