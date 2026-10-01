@@ -1843,6 +1843,7 @@ export class DocumentService {
         entity.database,
         session,
       );
+      await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
 
       await this.hookRunner.run(doctype, "on_submitted_update", doc, ctx, session, user);
 
@@ -1884,6 +1885,14 @@ export class DocumentService {
         },
         session,
       );
+
+      // As in update(): the files this patch removed go once the transaction commits.
+      const storage = this.storage;
+      const after = new Set(collectAttachFileIds(entity.fields, doc._data));
+      const orphans = [...attachFilesBefore].filter((fileId) => !after.has(fileId));
+      if (storage && orphans.length > 0) {
+        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, storage, orphans, { entity: entity.name, name: doc._id }, user));
+      }
     };
 
     if (options.sessionOverride) {

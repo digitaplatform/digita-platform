@@ -32,6 +32,8 @@ import { SYSTEM_ROLES, DIGITA } from "@digitaplatform/shared";
 import type { UserContext } from "../src/core/permissions/types.js";
 import type { BaseDocument } from "../src/core/document/base-document.js";
 import { env } from "../src/core/config/env.js";
+import type { StoragePort } from "../src/core/storage/storage-port.js";
+import { mayReadFile } from "../src/core/storage/file-access.js";
 
 let replSet: MongoMemoryReplSet;
 let db: MongoDBService;
@@ -952,5 +954,58 @@ describe("updateSubmitted — an attach cell of a Table in the band", () => {
     await expect(patchScan(await uploadedBy("colleague@test.local"))).rejects.toBeInstanceOf(PermissionDeniedError);
     await expect(patchScan("/api/v1/file/FILE-RD9999/download")).rejects.toBeInstanceOf(PermissionDeniedError);
     await expect(patchScan(await uploadedBy(clerk.email))).resolves.toBeDefined();
+  });
+
+  it("binds the patcher's own upload so a colleague may read it, and deletes it when a later patch removes it", async () => {
+    const colleague: UserContext = { _id: "colleague-001", email: "colleague@test.local", roles: ["System User"] };
+    const deleted: string[] = [];
+    const storage = { delete: async (key: string) => void deleted.push(key) } as unknown as StoragePort;
+    const service = docService as unknown as { storage?: StoragePort };
+    service.storage = storage;
+    try {
+      const doc = await docService.insert("ReceiptDoc", { title: "Paid", receipts: [{ scan: null }] }, admin);
+      await docService.submit("ReceiptDoc", doc._id, admin);
+      const rowId = ((await db.findOne("ReceiptDoc", doc._id, "app"))?.["receipts"] as Array<Record<string, unknown>>)[0]!["_row_id"] as string;
+      const patchScan = (scan: string | null) =>
+        docService.updateSubmitted("ReceiptDoc", doc._id, { children: [{ table: "receipts", row_id: rowId, set: { scan } }] }, clerk);
+      const scan = await uploadedBy(clerk.email);
+      const fileId = scan.split("/")[4]!;
+      await db.updateOne(DIGITA.COLLECTIONS.FILE, fileId, { storage_key: `receipts/${fileId}` }, "core");
+
+      await patchScan(scan);
+      const file = (await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, "core")) as Record<string, unknown>;
+      expect(file["attached_to_name"]).toBe(doc._id);
+      const access = { db, registry, permissionChecker: new PermissionChecker(registry) };
+      expect(await mayReadFile(access, colleague, file)).toBe(true);
+
+      await patchScan(null);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, "core")).toBeNull();
+      expect(deleted).toEqual([`receipts/${fileId}`]);
+    } finally {
+      service.storage = undefined;
+    }
+  });
+
+  it("PLANTED INNOCENT: binds no colleague's file a patch names, and deletes none it removes", async () => {
+    const deleted: string[] = [];
+    const service = docService as unknown as { storage?: StoragePort };
+    service.storage = { delete: async (key: string) => void deleted.push(key) } as unknown as StoragePort;
+    try {
+      const doc = await docService.insert("ReceiptDoc", { title: "Paid", receipts: [{ scan: null }] }, admin);
+      await docService.submit("ReceiptDoc", doc._id, admin);
+      const rowId = ((await db.findOne("ReceiptDoc", doc._id, "app"))?.["receipts"] as Array<Record<string, unknown>>)[0]!["_row_id"] as string;
+      const scan = await uploadedBy("colleague@test.local");
+      const fileId = scan.split("/")[4]!;
+      // An Administrator may read every file, so the patch is taken, but the file stays its uploader's.
+      await docService.updateSubmitted("ReceiptDoc", doc._id, { children: [{ table: "receipts", row_id: rowId, set: { scan } }] }, admin);
+      expect(((await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, "core")) as Record<string, unknown>)["attached_to_name"]).toBeUndefined();
+      await docService.updateSubmitted("ReceiptDoc", doc._id, { children: [{ table: "receipts", row_id: rowId, set: { scan: null } }] }, admin);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, "core")).not.toBeNull();
+      expect(deleted).toEqual([]);
+    } finally {
+      service.storage = undefined;
+    }
   });
 });
