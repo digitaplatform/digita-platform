@@ -368,6 +368,14 @@ export class DocumentService {
   }
 
   /**
+   * The stored document, for a user who may read it, as `getDoc` checks that. It logs no
+   * view: a route that only gates on read shows a panel beside the record, not the record.
+   */
+  async assertCanRead(doctype: string, name: string, user: UserContext = GUEST_USER): Promise<BaseDocument> {
+    return this.loadReadableDoc(this.registry.get(doctype), doctype, name, user);
+  }
+
+  /**
    * Overlay per-document data translations onto a single document's data for the
    * given locale. Generic: only the entity's `translatable` fields that are
    * present are looked up; a missing translation keeps the stored value. No-op

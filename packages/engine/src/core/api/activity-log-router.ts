@@ -11,13 +11,14 @@ export function registerActivityLogRoutes(
   activityLogService: ActivityLogService,
   documentService: DocumentService,
 ): void {
-  // Shared read gate (mirrors the H1 sidebar fix). getDoc enforces the exact
+  // Shared read gate (mirrors the H1 sidebar fix). It enforces the exact
   // same read authorization a direct document read gets (RBAC + condition +
   // scope + if_owner + role-visibility + doc-share) and throws 403/404 on
   // denial — so a user who cannot read the document cannot enumerate its
-  // activity stream (who did what, when).
+  // activity stream (who did what, when). Reading the stream is no view of
+  // the document, so it logs none.
   const assertCanRead = (request: FastifyRequest, doctype: string, name: string) =>
-    documentService.getDoc(doctype, name, request.user as UserContext | undefined);
+    documentService.assertCanRead(doctype, name, request.user as UserContext | undefined);
 
   // Get activity for a specific document
   app.get(

@@ -20,12 +20,13 @@ export function registerSidebarRoutes(
 ): void {
   const basePath = `${prefix}/resource`;
 
-  // Shared read gate (H1). getDoc enforces the exact same read authorization a
+  // Shared read gate (H1). It enforces the exact same read authorization a
   // direct document read gets (RBAC + condition + scope + if_owner +
   // role-visibility + doc-share) and throws 403/404 on denial — so a user who
   // cannot read the document cannot enumerate its versions / shares / related.
+  // It logs no view, as opening these panels is no read of the record.
   const assertCanRead = (request: FastifyRequest, doctype: string, name: string) =>
-    documentService.getDoc(doctype, name, request.user as UserContext | undefined);
+    documentService.assertCanRead(doctype, name, request.user as UserContext | undefined);
 
   // ─── Related Documents ────────────────────────────────
   app.get(
