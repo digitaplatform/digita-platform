@@ -1,4 +1,4 @@
-import type { EntityDefinition, EntityPermission, FieldDefinition } from '@digitaplatform/shared';
+import type { EntityDefinition, EntityPermission, FieldDefinition, PermissionAction } from '@digitaplatform/shared';
 import { SYSTEM_ROLES, canGrantActionTo } from '@digitaplatform/shared';
 import type { SessionUser } from '@/types';
 import { evaluateExpr } from '@/lib/expression';
@@ -11,21 +11,8 @@ import { resolveWorkflowField } from '@/lib/workflow-field';
  * bypasses, mirroring the engine.
  */
 
-export type PermAction =
-  | 'select'
-  | 'read'
-  | 'write'
-  | 'create'
-  | 'delete'
-  | 'submit'
-  | 'cancel'
-  | 'amend'
-  | 'print'
-  | 'email'
-  | 'export'
-  | 'import'
-  | 'share'
-  | 'report';
+/** An action a permission row can grant, named as in PermissionAction. */
+export type PermAction = `${PermissionAction}`;
 
 export function isAdministrator(user: SessionUser | null | undefined): boolean {
   return !!user?.roles?.includes(SYSTEM_ROLES.ADMINISTRATOR);

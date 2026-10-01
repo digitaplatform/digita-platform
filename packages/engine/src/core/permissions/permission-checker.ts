@@ -1,5 +1,5 @@
 import type { EntityDefinition, EntityPermission, FieldDefinition, StatePermissionOverride } from "@digitaplatform/shared";
-import { ROW_ID_FIELD, SYSTEM_ROLES, canGrantActionTo } from "@digitaplatform/shared";
+import { PermissionAction, ROW_ID_FIELD, SYSTEM_ROLES, canGrantActionTo } from "@digitaplatform/shared";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import { docFieldsOf, evaluateExpression } from "../expression/expression-evaluator.js";
 import { permissionRowsFor, scopeValueMatches } from "./scope-filter.js";
@@ -7,6 +7,9 @@ import type { UserContext, PermissionCheckResult } from "./types.js";
 import { createLogger } from "../logging/logger.js";
 
 const log = createLogger("permission-checker");
+
+/** Every action a permission row can grant, each a flag of EntityPermission named alike. */
+const PERMISSION_ACTIONS: ReadonlySet<string> = new Set(Object.values(PermissionAction));
 
 export class PermissionDeniedError extends Error {
   constructor(
@@ -256,15 +259,15 @@ export class PermissionChecker {
    *  (those not in StatePermissionOverride) cannot be stripped — fall through. */
   private stateOverrideStrips(override: StatePermissionOverride, action: string): boolean {
     switch (action) {
-      case "read":
+      case PermissionAction.Read:
         return override.read === 0;
-      case "write":
+      case PermissionAction.Write:
         return override.write === 0;
-      case "submit":
+      case PermissionAction.Submit:
         return override.submit === 0;
-      case "cancel":
+      case PermissionAction.Cancel:
         return override.cancel === 0;
-      case "delete":
+      case PermissionAction.Delete:
         return override.delete === 0;
       default:
         return false;
@@ -758,38 +761,7 @@ export class PermissionChecker {
   }
 
   private permissionGrantsAction(perm: EntityPermission, action: string): boolean {
-    switch (action) {
-      case "select":
-        return perm.select === 1;
-      case "read":
-        return perm.read === 1;
-      case "write":
-        return perm.write === 1;
-      case "create":
-        return perm.create === 1;
-      case "delete":
-        return perm.delete === 1;
-      case "submit":
-        return perm.submit === 1;
-      case "cancel":
-        return perm.cancel === 1;
-      case "amend":
-        return perm.amend === 1;
-      case "print":
-        return perm.print === 1;
-      case "email":
-        return perm.email === 1;
-      case "export":
-        return perm.export === 1;
-      case "import":
-        return perm.import === 1;
-      case "share":
-        return perm.share === 1;
-      case "report":
-        return perm.report === 1;
-      default:
-        return false;
-    }
+    return PERMISSION_ACTIONS.has(action) && perm[action as `${PermissionAction}`] === 1;
   }
 }
 
