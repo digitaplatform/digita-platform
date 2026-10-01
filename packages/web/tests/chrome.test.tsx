@@ -99,18 +99,17 @@ const nav = {
   ],
 };
 
-const renderHeader = (contactEnabled: boolean, headerSite: WebSite = site, publishedSlugs: Record<string, string[]> = { en: [""], de: [""] }) =>
+const renderHeader = (contactEnabled: boolean, publishedSlugs: Record<string, string[]> = { en: [""], de: [""] }) =>
   renderToStaticMarkup(
     <ConfigProvider value={siteConfig(contactEnabled)}>
       <Header
         locale="de"
         defaultLocale="en"
-        site={headerSite}
+        site={site}
         nav={nav}
         family={null}
         apps={[]}
         brand={{ name: "example" }}
-        contactEnabled={contactEnabled}
         publishedSlugs={publishedSlugs}
         enabledLocales={[]}
       />
@@ -176,9 +175,9 @@ describe("the language menu", () => {
   });
 
   it("PLANTED INNOCENT: the header shows the menu on a home page published in two locales", () => {
-    expect(renderHeader(false, site, { en: [""], de: [""] })).toContain('aria-label="language"');
+    expect(renderHeader(false, { en: [""], de: [""] })).toContain('aria-label="language"');
     // The header renders the de home; with only de published there is nowhere to switch to.
-    expect(renderHeader(false, site, { de: [""] })).not.toContain('aria-label="language"');
+    expect(renderHeader(false, { de: [""] })).not.toContain('aria-label="language"');
   });
 });
 
@@ -190,14 +189,9 @@ describe("the header", () => {
     expect(html).toContain('href="/de/about"');
   });
 
-  it("mails the site's address when the site offers no contact sheet", () => {
+  it("PLANTED DEFECT: shows no call to action where the site offers no contact sheet, not even a mail link", () => {
     const html = renderHeader(false);
-    expect(html).toMatch(/<a href="mailto:hello@example.org"[^>]*>Book a call<\/a>/);
-    expect(html).not.toMatch(/<button[^>]*>Book a call/);
-  });
-
-  it("PLANTED INNOCENT: offers no call to action that leads nowhere", () => {
-    const html = renderHeader(false, { ...site, contact_email: undefined });
+    expect(html).not.toContain("mailto:");
     expect(html).not.toContain("Book a call");
   });
 });

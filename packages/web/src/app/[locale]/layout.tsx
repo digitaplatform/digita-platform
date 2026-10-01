@@ -111,7 +111,6 @@ export default async function LocaleLayout({
               family={familyNav}
               apps={site?.link_apps === false ? [] : config.tenantApps}
               brand={brand}
-              contactEnabled={siteConfig.contactEnabled}
               publishedSlugs={publishedSlugs}
               enabledLocales={(site?.enabled_locales ?? []).filter(Boolean)}
             />

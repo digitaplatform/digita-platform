@@ -12,19 +12,6 @@ import { FamilySwitcher } from "./FamilySwitcher";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 import { ThemeToggle } from "./ThemeToggle";
 
-/** The call to action of the header, the header menu's item for the contact sheet: the contact
- *  sheet where the site offers it, else a mail to the site's address, else nothing. */
-function ContactButton({ item, contactEnabled, contactEmail }: { item: NavItem; contactEnabled: boolean; contactEmail?: string }) {
-  const attributes = buttonAttributes({ size: "sm", className: "shrink-0" });
-  if (contactEnabled) return <SheetButton {...attributes}>{item.label}</SheetButton>;
-  if (!contactEmail) return null;
-  return (
-    <a href={`mailto:${contactEmail}`} {...attributes}>
-      {item.label}
-    </a>
-  );
-}
-
 /** The lucide icon a menu item names, in kebab or Pascal case. The site's data names it, so the
  *  renderer keeps no list of icons; a name lucide lacks is reported, and the item shows as one
  *  that names no icon. */
@@ -53,7 +40,6 @@ export function Header({
   family,
   apps,
   brand,
-  contactEnabled,
   publishedSlugs,
   enabledLocales,
 }: {
@@ -64,7 +50,6 @@ export function Header({
   family: WebNavMenu | null;
   apps: string[];
   brand: BrandMarkProps;
-  contactEnabled: boolean;
   /** The published pages per locale, as slugs, handed to the language menu. */
   publishedSlugs: Record<string, string[]>;
   /** The site's own narrowing of the served locales; empty means all of them. */
@@ -120,7 +105,8 @@ export function Header({
             </div>
           )}
           {controls}
-          {contact && <ContactButton item={contact} contactEnabled={contactEnabled} contactEmail={site?.contact_email} />}
+          {/* The header menu's item for the contact sheet; SheetButton draws nothing where the site offers no sheet. */}
+          {contact && <SheetButton {...buttonAttributes({ size: "sm", className: "shrink-0" })}>{contact.label}</SheetButton>}
           <MobileNav
             locale={locale}
             items={items}

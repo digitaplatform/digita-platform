@@ -72,7 +72,6 @@ function drawHeader(items: NavItem[]) {
         family={null}
         apps={[]}
         brand={{ name: "example" }}
-        contactEnabled={false}
         publishedSlugs={{ en: [""], de: [""] }}
         enabledLocales={[]}
       />
