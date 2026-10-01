@@ -189,6 +189,8 @@ export default function TableControl(props: FieldControlProps) {
       stepper: c.stepper,
       editable: c.display_formula || ROW_DIALOG_ONLY_TYPES.has(c.fieldtype) ? false : undefined,
       required: !!(c.required || c.mandatory_depends_on),
+      // The header is the label a cell editor points at, which names its control and its popup.
+      headerProps: { id: colId(c) },
     };
   });
   const fieldByName = byName;
