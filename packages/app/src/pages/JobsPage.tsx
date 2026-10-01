@@ -43,10 +43,20 @@ const STATUS_TONE: Record<JobRun['status'], string> = {
   interrupted: 'bg-warning-light text-warning',
 };
 
+/** An entity of the catalog whose definition the engine did not answer: its tasks are missing. */
+interface DefinitionFailure {
+  entity: string;
+  message: string;
+}
+
 /** The job-capable task catalog of one app's engine (appEngine; null = this app's own): every
  *  `long_running` action across all entities, with labels/params localized reactively on the
- *  active locale. Waits for the apps, so the page never lists another engine's tasks first. */
-function useJobTasks(app: string | null, enabled: boolean): { tasks: JobTask[]; isLoading: boolean; error: Error | null } {
+ *  active locale. Waits for the apps, so the page never lists another engine's tasks first.
+ *  One unreadable definition costs only its own entity's tasks, and `failures` names it. */
+function useJobTasks(
+  app: string | null,
+  enabled: boolean,
+): { tasks: JobTask[]; failures: DefinitionFailure[]; isLoading: boolean; error: Error | null } {
   const translations = useI18nStore((s) => s.translations);
   const metasQ = useQuery({
     queryKey: ['jobs-task-metas', app],
@@ -54,21 +64,20 @@ function useJobTasks(app: string | null, enabled: boolean): { tasks: JobTask[]; 
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const entities = unwrap(await appEngine.catalog(app));
-      const metas = await Promise.all(
-        entities.map(async (e) => {
-          try {
-            return unwrap(await appEngine.entity(app, e.name));
-          } catch {
-            return null;
-          }
-        }),
-      );
-      return metas.filter((m): m is NonNullable<typeof m> => !!m);
+      const reads = await Promise.allSettled(entities.map(async (e) => unwrap(await appEngine.entity(app, e.name))));
+      return {
+        metas: reads.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : [])),
+        failures: reads.flatMap((r, i): DefinitionFailure[] =>
+          r.status === 'rejected'
+            ? [{ entity: entities[i]!.name, message: r.reason instanceof Error ? r.reason.message : String(r.reason) }]
+            : [],
+        ),
+      };
     },
   });
   const tasks = useMemo(
     () =>
-      (metasQ.data ?? [])
+      (metasQ.data?.metas ?? [])
         .flatMap((raw) => {
           const m = localizeMeta(raw, translations);
           return longRunningActions(m.actions).map((a) => ({
@@ -83,7 +92,7 @@ function useJobTasks(app: string | null, enabled: boolean): { tasks: JobTask[]; 
         .sort((a, b) => a.label.localeCompare(b.label)),
     [metasQ.data, translations],
   );
-  return { tasks, isLoading: metasQ.isLoading, error: metasQ.error };
+  return { tasks, failures: metasQ.data?.failures ?? [], isLoading: metasQ.isLoading, error: metasQ.error };
 }
 
 interface DialogState {
@@ -112,7 +121,7 @@ export default function JobsPage() {
   // its own engine's tasks and every job, as it did before the jobs service named apps.
   const selectedApp =
     apps.length > 0 ? (chosenApp ?? defaultApp ?? (ownApp !== null && apps.includes(ownApp) ? ownApp : apps[0]!)) : null;
-  const { tasks, isLoading: tasksLoading, error: tasksError } = useJobTasks(selectedApp, appsQ.isSuccess);
+  const { tasks, failures: definitionFailures, isLoading: tasksLoading, error: tasksError } = useJobTasks(selectedApp, appsQ.isSuccess);
   const jobsQ = useQuery({ queryKey: ['jobs'], queryFn: () => jobsApi.list(), refetchInterval: 15000 });
   const runsQ = useQuery({
     queryKey: ['jobs-runs'],
@@ -171,9 +180,10 @@ export default function JobsPage() {
     }
   };
 
+  // Until the saved jobs are read, no task can say it has none.
   const renderSavedJobs = (list: JobDef[]) =>
     list.length === 0 ? (
-      <div className="text-caption text-textMuted">{tc('ui.jobs.noSchedules')}</div>
+      jobsQ.isSuccess && <div className="text-caption text-textMuted">{tc('ui.jobs.noSchedules')}</div>
     ) : (
       <ul className="space-y-1.5">
         {list.map((j) => (
@@ -216,6 +226,10 @@ export default function JobsPage() {
           </div>
         )}
       </div>
+      {jobsQ.error && <ErrorBlock title={tc('ui.jobs.jobsLoadFailed')} detail={jobsQ.error.message} />}
+      {definitionFailures.map((f) => (
+        <ErrorBlock key={f.entity} title={tc('ui.jobs.tasksLoadFailed', { entity: f.entity })} detail={f.message} />
+      ))}
       {appsQ.error ? (
         <ErrorBlock detail={appsQ.error.message} />
       ) : appsQ.isPending || tasksLoading ? (
@@ -223,7 +237,7 @@ export default function JobsPage() {
       ) : tasksError ? (
         <ErrorBlock detail={tasksError.message} />
       ) : tasks.length === 0 && ungrouped.length === 0 ? (
-        <EmptyState testId="jobs-empty" title={tc('ui.jobs.noTasks')} />
+        definitionFailures.length === 0 && <EmptyState testId="jobs-empty" title={tc('ui.jobs.noTasks')} />
       ) : (
         <div className={cn(tableSkin.frame, 'divide-y divide-border')}>
           {tasks.map((t) => (
@@ -262,10 +276,11 @@ export default function JobsPage() {
 
       <section className="space-y-2">
         <h2 className="text-h2 text-textMain">{tc('ui.jobs.recentRuns')}</h2>
+        {runsQ.error && <ErrorBlock title={tc('ui.jobs.runsLoadFailed')} detail={runsQ.error.message} />}
         {runsQ.isLoading ? (
           <TableSkeleton columns={5} rows={3} />
         ) : runs.length === 0 ? (
-          <EmptyState testId="runs-empty" title={tc('ui.jobs.noRuns')} />
+          runsQ.isSuccess && <EmptyState testId="runs-empty" title={tc('ui.jobs.noRuns')} />
         ) : (
           <div className={cn('overflow-x-auto', tableSkin.frame)}>
             <table className="w-full text-sm">
