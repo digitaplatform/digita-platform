@@ -333,40 +333,6 @@ describe("globalErrorHandler – DocStatusError", () => {
   });
 });
 
-// ─── Login failed ──────────────────────────────────────────────────────────
-
-describe("globalErrorHandler – login_failed", () => {
-  it("returns 401 with LOGIN_FAILED code", () => {
-    const error = new Error("login_failed");
-    const reply = mockReply();
-
-    globalErrorHandler(error, mockRequest(), reply);
-
-    expect(reply.statusCode).toBe(401);
-    expect(reply.sentData.error.code).toBe("LOGIN_FAILED");
-    expect(reply.sentData.success).toBe(false);
-  });
-
-  it("puts login_failed in messages", () => {
-    const error = new Error("login_failed");
-    const reply = mockReply();
-
-    globalErrorHandler(error, mockRequest(), reply);
-
-    expect(reply.sentData.messages[0].text).toBe("login_failed");
-  });
-
-  it("passes the trace_id through", () => {
-    const error = new Error("login_failed");
-    const req = mockRequest({ traceId: "trace-login" });
-    const reply = mockReply();
-
-    globalErrorHandler(error, req, reply);
-
-    expect(reply.sentData.error.trace_id).toBe("trace-login");
-  });
-});
-
 // ─── Rate limit ────────────────────────────────────────────────────────────
 
 describe("globalErrorHandler – rate limit (statusCode 429)", () => {

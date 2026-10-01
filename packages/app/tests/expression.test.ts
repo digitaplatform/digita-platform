@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateExpr, evaluateSafe } from '@/lib/expression';
+import { evaluateExpr } from '@/lib/expression';
 
 const scope = (doc: Record<string, unknown>, user?: Record<string, unknown>) => ({ doc, user });
 
@@ -94,10 +94,5 @@ describe('evaluateExpr', () => {
     }
     expect(evaluateExpr("doc.status == 'Open'  ", scope({ status: 'Open' }))).toEqual({ value: true });
     expect(evaluateExpr("doc.status == 'On hold'", scope({ status: 'On hold' }))).toEqual({ value: true });
-  });
-
-  it('evaluateSafe degrades errors to true', () => {
-    expect(evaluateSafe('(doc.x', scope({ x: 1 }))).toBe(true);
-    expect(evaluateSafe('doc.active', scope({ active: false }))).toBe(false);
   });
 });

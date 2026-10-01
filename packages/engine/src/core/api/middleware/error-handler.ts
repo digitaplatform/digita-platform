@@ -405,18 +405,6 @@ export function globalErrorHandler(
     return;
   }
 
-  if (error.message === "login_failed") {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 401,
-      data: null,
-      messages: [{ text: "login_failed", type: "error", show: true }],
-      error: { code: "LOGIN_FAILED", detail: "Invalid credentials", trace_id: traceId },
-    };
-    reply.code(401).send(response);
-    return;
-  }
-
   // Rate limit error
   if ("statusCode" in error && (error as FastifyError).statusCode === 429) {
     const response: ApiResponse<null> = {
