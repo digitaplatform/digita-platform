@@ -189,7 +189,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (data.branding) useThemeStore.getState().setBranding(data.branding);
       // Roam per-user theme/density from UserPreference (localStorage was the
       // fast pre-auth default; the server value wins once we're authenticated).
-      if (data.user) void useThemeStore.getState().loadRemotePrefs();
+      // A demo session's user is every visitor's, so nothing roams there.
+      if (data.user) {
+        useThemeStore.setState({ roams: !data.user.demo });
+        if (!data.user.demo) void useThemeStore.getState().loadRemotePrefs();
+      }
     };
 
     let res = await getBoot().catch(() => null);

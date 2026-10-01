@@ -51,6 +51,9 @@ interface ThemeState {
    *  drawnSignature, or a look the design showcase previews. */
   signature: string;
   branding: BootBranding | null;
+  /** Whether mode, density and design roam with the person through UserPreference. Not on a
+   *  demo session: every visitor shares its user, so a visitor's pick stays on their device. */
+  roams: boolean;
   setMode: (mode: ThemeMode) => void;
   cycleMode: () => void;
   setDensity: (density: Density) => void;
@@ -136,25 +139,26 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   design: initial.design,
   signature: drawnSignature(null),
   branding: null,
+  roams: true,
   setMode: (mode) => {
     if (isModeLocked(get().branding)) return;
     localStorage.setItem(MODE_STORAGE_KEY, mode);
     applyMode(mode);
     set({ mode });
-    void setUserPreference(IDENTITY_PREFERENCE_KEYS.mode, mode).catch(() => {});
+    if (get().roams) void setUserPreference(IDENTITY_PREFERENCE_KEYS.mode, mode).catch(() => {});
   },
   cycleMode: () => get().setMode(nextMode(get().mode)),
   setDensity: (density) => {
     localStorage.setItem(DENSITY_STORAGE_KEY, density);
     applyDensity(density);
     set({ density });
-    void setUserPreference(IDENTITY_PREFERENCE_KEYS.density, density).catch(() => {});
+    if (get().roams) void setUserPreference(IDENTITY_PREFERENCE_KEYS.density, density).catch(() => {});
   },
   setDesign: (design) => {
     localStorage.setItem(DESIGN_STORAGE_KEY, design);
     applyDesign(design);
     set({ design });
-    void setUserPreference(IDENTITY_PREFERENCE_KEYS.design, design).catch(() => {});
+    if (get().roams) void setUserPreference(IDENTITY_PREFERENCE_KEYS.design, design).catch(() => {});
   },
   previewSignature: (id) => {
     applySignatureLayered(id, get);
