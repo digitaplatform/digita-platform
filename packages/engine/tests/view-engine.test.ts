@@ -138,6 +138,32 @@ describe("ViewEngine — permission denial in section", () => {
   });
 });
 
+describe("ViewEngine — link section whose optional param the request omits", () => {
+  const linkView = () =>
+    makeView({
+      anchored: false,
+      source: undefined,
+      params: [{ name: "customer", type: "string" }],
+      sections: [{ key: "customer", kind: "link", entity: "customer", target: "$param.customer" }],
+    });
+
+  it("names no entity to a caller who may not read the section's entity", async () => {
+    const deps = makeDeps();
+    deps.permissionChecker.check.mockRejectedValue(new PermissionDeniedError("ada@example.com", "customer", "read"));
+    const out = await new ViewEngine(deps as never).execute(linkView(), { query: {} }, user, new ResponseContext());
+    expect(out.sections["customer"]).toBeNull();
+    expect(out.entities).toEqual({});
+    expect(deps.documentService.getDoc).not.toHaveBeenCalled();
+  });
+
+  it("names the entity to a caller who may read it, with no row", async () => {
+    const deps = makeDeps();
+    const out = await new ViewEngine(deps as never).execute(linkView(), { query: {} }, user, new ResponseContext());
+    expect(out.sections["customer"]).toBeNull();
+    expect(out.entities).toEqual({ customer: "customer" });
+  });
+});
+
 describe("ViewEngine — root resolution", () => {
   it("bubbles NotFoundError when root is missing", async () => {
     const deps = makeDeps();
