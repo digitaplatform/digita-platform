@@ -11,7 +11,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
 }));
 
 import type { EntityDefinition } from "@digitaplatform/shared";
-import { SYSTEM_ROLES } from "@digitaplatform/shared";
+import { PermissionAction, SYSTEM_ROLES } from "@digitaplatform/shared";
 import { PermissionChecker, PermissionDeniedError } from "../src/core/permissions/permission-checker.js";
 import type { UserContext } from "../src/core/permissions/types.js";
 
@@ -67,6 +67,21 @@ describe("PermissionChecker", () => {
   beforeEach(() => {
     registry = new MockEntityRegistry();
     checker = new PermissionChecker(registry as never);
+  });
+
+  // ── The actions of a permission row ───────────────────────────────────────
+
+  describe("the actions of a permission row", () => {
+    it("grants each action of PermissionAction through the row flag of the same name, and no other (#188)", async () => {
+      for (const action of Object.values(PermissionAction)) {
+        registry.register(makeEntity({ permissions: [{ role: "System User", level: 0, [action]: 1 }] }));
+        expect([action, (await checker.hasPermission(makeUser(), "TestDoc", action)).allowed]).toEqual([action, true]);
+        registry.register(makeEntity({ permissions: [{ role: "System User", level: 0, [action]: 0 }] }));
+        expect([action, (await checker.hasPermission(makeUser(), "TestDoc", action)).allowed]).toEqual([action, false]);
+      }
+      registry.register(makeEntity({ permissions: [{ role: "System User", level: 0, read: 1 }] }));
+      expect((await checker.hasPermission(makeUser(), "TestDoc", "fly")).allowed).toBe(false);
+    });
   });
 
   // ── Administrator bypass ──────────────────────────────────────────────────
