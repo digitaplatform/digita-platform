@@ -247,6 +247,22 @@ describe('the quick filters of a list', () => {
     expect(within(quickFilters()).getByLabelText('Due at')).toHaveValue('2026-07-02T09:00');
   });
 
+  it('filter a Tag field by its typed list once typing pauses, under its own label', async () => {
+    const tags = { fieldname: 'tags', fieldtype: 'Tag', label: 'Tags', in_standard_filter: true };
+    shown.meta = { ...BOOK, fields: [...BOOK.fields, tags] };
+    const user = userEvent.setup();
+    const router = renderList('/Book');
+    await waitFor(() => expect(getList).toHaveBeenCalled());
+    const before = getList.mock.calls.length;
+
+    await user.type(within(quickFilters()).getByLabelText('Tags'), 'red, blue');
+
+    await waitFor(() => expect(urlFilters(router)).toEqual([['tags', 'in', ['red', 'blue']]]));
+    await waitFor(() => expect(lastRequestedFilters()).toEqual([['tags', 'in', ['red', 'blue']]]));
+    // One request for the list typed, none for each letter on the way.
+    expect(getList.mock.calls.length - before).toBe(1);
+  });
+
   it('are not drawn for an entity that flags no field', async () => {
     shown.meta = { ...BOOK, fields: BOOK.fields.map((field) => ({ ...field, in_standard_filter: false })) };
     renderList('/Book');

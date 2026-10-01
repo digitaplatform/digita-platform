@@ -517,6 +517,7 @@ function QuickFilterControl({ id, meta, field, op, label, value, onValue }: Quic
   if (arity === 'multi') {
     return (
       <MultiValueInput
+        id={id}
         arr={Array.isArray(value) ? value : []}
         numeric={false}
         ariaLabel={label}
