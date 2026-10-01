@@ -12,9 +12,10 @@ vi.mock("server-only", () => ({}));
 setSiteEnv();
 
 const site = vi.hoisted(() => ({ theme: "simetrix" as string | undefined }));
+const website = vi.hoisted(() => ({ look: undefined as string | undefined }));
 vi.mock("@/lib/engine-client", () => ({
   getSite: async () => ({ _id: "example", theme: site.theme }),
-  findWebsiteSignature: async () => undefined,
+  findWebsiteSignature: async () => website.look,
 }));
 
 // A plugin that shows what it was handed, in place of the code-split registry a static render cannot wait for.
@@ -66,6 +67,18 @@ describe("the brand-mark plugin", () => {
     expect(html).toContain(`href="data:image/svg+xml,${encodeURIComponent(siteSignature("simetrix").monogram!)}"`);
     site.theme = "digita";
     expect(renderToStaticMarkup(await BrandMark())).toContain(encodeURIComponent(siteSignature("digita").monogram!));
+  });
+
+  it("draws the monogram of the website look for a site without a theme of its own", async () => {
+    site.theme = undefined;
+    website.look = "veloluck-workbench";
+    try {
+      // React writes a quote in an attribute as &#x27;, which encodeURIComponent leaves as it is.
+      const html = renderToStaticMarkup(await BrandMark()).replace(/&#x27;/g, "'");
+      expect(html).toContain(encodeURIComponent(siteSignature("veloluck-workbench").monogram!));
+    } finally {
+      website.look = undefined;
+    }
   });
 
   it("PLANTED INNOCENT: a site whose signature has no monogram gets no figure", async () => {

@@ -142,6 +142,10 @@ export async function getNav(locale: string, location: WebNavMenu["location"]): 
   return rows[0] ?? null;
 }
 
+/** How long a page waits for an engine's anonymous boot. Next caches only a successful answer, so
+ *  an engine that hangs would otherwise hold every page of the site. */
+const BOOT_TIMEOUT_MS = 5000;
+
 /** The tenant branding of this site's engine, from its anonymous boot. Null when the engine
  *  cannot answer: the page then renders in the signature's identity alone, and the log says why. */
 export async function getBranding(): Promise<WebBranding | null> {
@@ -149,6 +153,7 @@ export async function getBranding(): Promise<WebBranding | null> {
   try {
     const res = await fetch(`${engineUrl}/api/v1/boot`, {
       next: { revalidate: revalidateSeconds, tags: ["web:branding"] },
+      signal: AbortSignal.timeout(BOOT_TIMEOUT_MS),
     });
     if (!res.ok) {
       console.error(`[digita-web] boot answered HTTP ${res.status}; rendering without tenant branding`);
@@ -177,6 +182,7 @@ export async function findWebsiteSignature(): Promise<string | undefined> {
       try {
         const res = await fetch(`${engineUrl}/api/v1/boot`, {
           next: { revalidate: revalidateSeconds, tags: ["web:branding"] },
+          signal: AbortSignal.timeout(BOOT_TIMEOUT_MS),
         });
         if (!res.ok) {
           console.error(`[digita-web] the boot of app "${app}" answered HTTP ${res.status}; its website look is left out`);
@@ -193,11 +199,17 @@ export async function findWebsiteSignature(): Promise<string | undefined> {
   const looks = new Set(named.values());
   if (looks.size > 1) {
     const which = [...named].map(([app, look]) => `${app}: ${look}`).join(", ");
-    console.error(`[digita-web] the tenant's apps name different website looks (${which}); none is used`);
+    // Every request renders the layout, so one disagreement is logged once, not on every page.
+    if (which !== loggedDisagreement) {
+      console.error(`[digita-web] the tenant's apps name different website looks (${which}); none is used`);
+      loggedDisagreement = which;
+    }
     return undefined;
   }
   return [...looks][0];
 }
+
+let loggedDisagreement = "";
 
 /** The engine's answer to a public create: its status, the error code of a refusal, the field a 400
  *  names and the wait it asks of a visitor over its budget. */

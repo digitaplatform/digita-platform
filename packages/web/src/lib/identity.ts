@@ -1,4 +1,4 @@
-import { getSignature, registerSignature, type Signature } from "@digitaplatform/theme";
+import { getRuntimeSignature, getSignature, registerSignature, type Signature } from "@digitaplatform/theme";
 import { signature as digita } from "@digitaplatform/digita";
 import { signature as simetrix } from "@digitaplatform/simetrix";
 import { signature as veloluckLakeside } from "@digitaplatform/veloluck-lakeside";
@@ -16,8 +16,19 @@ registerSignature(veloluckLakeside);
 registerSignature(veloluckPrecise);
 
 /** The signature a site is drawn in: the one its `theme` names, else the website look the
- *  tenant's settings name (findWebsiteSignature), else the default. getSignature falls back to the
- *  default for an id nobody registered. */
+ *  tenant's settings name (findWebsiteSignature), else the default. An id the renderer does not
+ *  bundle passes to the next one and is logged once, since every request renders the layout. */
 export function siteSignature(theme: string | undefined, websiteLook?: string): Signature {
-  return getSignature(theme || websiteLook);
+  for (const id of [theme, websiteLook]) {
+    if (!id) continue;
+    const signature = getRuntimeSignature(id);
+    if (signature) return signature;
+    if (!unbundledLooks.has(id)) {
+      console.error(`[digita-web] the signature "${id}" is not bundled in the renderer; drawing the next look`);
+      unbundledLooks.add(id);
+    }
+  }
+  return getSignature(undefined);
 }
+
+const unbundledLooks = new Set<string>();

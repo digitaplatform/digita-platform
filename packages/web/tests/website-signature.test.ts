@@ -26,11 +26,13 @@ Object.assign(process.env, {
 const { findWebsiteSignature } = await import("../src/lib/engine-client");
 const { siteSignature } = await import("../src/lib/identity");
 
-/** The website look each engine's settings name, by the first label of its host; an Error: no answer. */
-let looks: Record<string, string | Error> = {};
-const fetchMock = vi.fn(async (url: string) => {
+/** The website look each engine's settings name, by the first label of its host; an Error: no
+ *  answer; a Response: that answer. */
+let looks: Record<string, string | Error | Response> = {};
+const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
   const look = looks[new URL(url).hostname.split(".")[0]!];
   if (look instanceof Error) throw look;
+  if (look instanceof Response) return look;
   return Response.json({ success: true, data: { branding: look ? { web_default_signature: look } : {} } });
 });
 
@@ -75,6 +77,33 @@ describe("the website look", () => {
     looks = {};
     expect(await findWebsiteSignature()).toBeUndefined();
     expect(siteSignature(undefined, undefined).id).toBe("digita");
+  });
+
+  it("asks every app with a time limit, so an app that hangs cannot hold the page", async () => {
+    looks = { workshop: "veloluck-workbench" };
+    await findWebsiteSignature();
+    for (const [, init] of fetchMock.mock.calls) expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("an app that answers with an error is logged, and the others still name the look", async () => {
+    looks = { crm: new Response("", { status: 503 }), workshop: "veloluck-workbench" };
+    expect(await findWebsiteSignature()).toBe("veloluck-workbench");
+    expect(vi.mocked(console.error).mock.calls.flat().join(" ")).toMatch(/"crm".*503/);
+  });
+
+  it("logs a disagreement once, not on every page", async () => {
+    looks = { workshop: "veloluck-workbench", crm: "simetrix" };
+    await findWebsiteSignature();
+    await findWebsiteSignature();
+    const logged = vi.mocked(console.error).mock.calls.filter((call) => String(call[0]).includes("different website looks"));
+    expect(logged).toHaveLength(1);
+  });
+
+  it("a site theme the renderer does not bundle falls to the website look, and is logged once", async () => {
+    expect(siteSignature("acme", "veloluck-workbench").id).toBe("veloluck-workbench");
+    expect(siteSignature("acme", undefined).id).toBe("digita");
+    const logged = vi.mocked(console.error).mock.calls.filter((call) => String(call[0]).includes('"acme"'));
+    expect(logged).toHaveLength(1);
   });
 
   it("an app that does not answer is logged, and the others still name the look", async () => {
