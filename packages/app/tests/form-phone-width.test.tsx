@@ -11,6 +11,8 @@ import resolveConfig from 'tailwindcss/resolveConfig';
 import type { FieldDefinition } from '@digitaplatform/shared';
 import type { FieldStateMap } from '@/lib/evaluate-field';
 import { FormRenderer } from '@/components/render/FormRenderer';
+import { RecordSkeleton } from '@/components/render/RecordSkeleton';
+import type { EntityDefinition } from '@digitaplatform/shared';
 import tailwindConfig from '../tailwind.config.js';
 
 // A Link and a Table control read the engine. The grid, not the control, sizes a cell, so they
@@ -160,5 +162,33 @@ describe('a section without ColumnBreak on a 390 px phone', () => {
       expect(gridAt(cell!.parentElement!.className, viewport)).toEqual(gridAt(TABLET_AND_DESKTOP_GRID, viewport));
     }
     expect(gridAt(cell!.parentElement!.className, 768)).toEqual({ tracks: 12, columnGap: 32 });
+  });
+});
+
+// The skeleton stands where the form settles, so it lays out the cells of a section as the form does.
+describe('the loading skeleton of a record on a 360 px phone', () => {
+  function skeletonCells(): HTMLElement[] {
+    const meta = { name: 'WorkOrder', fields: INTAKE, permissions: [] } as unknown as EntityDefinition;
+    const { container } = render(<RecordSkeleton meta={meta} />);
+    const grid = container.querySelector<HTMLElement>('section > .grid');
+    if (!grid) throw new Error('the skeleton draws no section grid');
+    return Array.from(grid.children) as HTMLElement[];
+  }
+
+  it('draws every bar of the section inside the card', () => {
+    const cells = skeletonCells();
+    expect(cells).toHaveLength(INTAKE.length);
+    cells.forEach((cell, i) => {
+      expect(cellWidth(cell.parentElement!.className, cell.className, PHONE_FORM, PHONE), INTAKE[i]!.fieldname).toBeLessThanOrEqual(
+        PHONE_FORM,
+      );
+    });
+  });
+
+  it('keeps the grid of md and lg', () => {
+    const [cell] = skeletonCells();
+    for (const viewport of [768, 1024, 1280]) {
+      expect(gridAt(cell!.parentElement!.className, viewport)).toEqual(gridAt(TABLET_AND_DESKTOP_GRID, viewport));
+    }
   });
 });
