@@ -262,6 +262,69 @@ describe('the Jobs page of a tenant with several apps', () => {
   });
 });
 
+// The definitions of a catalog are read together, and one that fails does not fail the read: the
+// page must read it again on Reload and must not keep a result with failures as fresh.
+describe('a definition read that fails on the Jobs page', () => {
+  /** Mounts the page on a client the test keeps, so a second mount sees what the first one cached. */
+  function mountJobs(qc: QueryClient) {
+    return render(
+      <QueryClientProvider client={qc}>
+        <DialogHostProvider>
+          <JobsPage />
+        </DialogHostProvider>
+      </QueryClientProvider>,
+    );
+  }
+
+  /** Answers the Customer definition with a failure the first `failures` times, then with the definition. */
+  function countCustomerReads(failures: number): { count: number } {
+    const reads = { count: 0 };
+    const answer = routes['/erp/api/v1/meta/Customer']!;
+    routes['/erp/api/v1/meta/Customer'] = () => {
+      reads.count += 1;
+      return reads.count <= failures
+        ? new Response(JSON.stringify({ message: 'meta store unavailable' }), { status: 500 })
+        : answer();
+    };
+    return reads;
+  }
+
+  it('shows the error, and the task after Reload', async () => {
+    countCustomerReads(1);
+    mountJobs(new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+    expect(await screen.findByText('Failed to load the tasks of Customer')).toBeInTheDocument();
+    expect(screen.queryByTestId('row:sendDunning')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('action:jobs-tasks-reload'));
+    expect(await screen.findByTestId('row:sendDunning')).toBeInTheDocument();
+    expect(screen.queryByText('Failed to load the tasks of Customer')).toBeNull();
+  });
+
+  it('reads a result with failures again when the page opens again', async () => {
+    const reads = countCustomerReads(1);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const first = mountJobs(qc);
+    expect(await screen.findByText('Failed to load the tasks of Customer')).toBeInTheDocument();
+    first.unmount();
+
+    mountJobs(qc);
+    expect(await screen.findByTestId('row:sendDunning')).toBeInTheDocument();
+    expect(reads.count).toBe(2);
+  });
+
+  it('reads a catalog without failures once', async () => {
+    const reads = countCustomerReads(0);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const first = mountJobs(qc);
+    expect(await screen.findByTestId('row:sendDunning')).toBeInTheDocument();
+    first.unmount();
+
+    mountJobs(qc);
+    expect(await screen.findByTestId('row:sendDunning')).toBeInTheDocument();
+    expect(reads.count).toBe(1);
+  });
+});
+
 // A jobs release without GET /api/v1/apps (before digita-jobs 0.3.004) answers 404; a tenant without
 // apps (ENGINE_URLS unset, a legacy render) answers no apps. Either way the page has no app to name
 // and works as it did before: this app's engine's tasks, every job, saves without `app`.
