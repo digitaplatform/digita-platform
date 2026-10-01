@@ -59,7 +59,7 @@ export async function runAggregateSection(
   // security $match, and a row cannot be re-checked after a reshaping stage.
   await deps.permissionChecker.check(user, section.entity, "select");
   if (deps.permissionChecker.hasConditionalRowRead(user, section.entity)) {
-    throw new PermissionDeniedError(user.email, section.entity, "aggregate_bypasses_read_condition");
+    throw new PermissionDeniedError("aggregate_bypasses_read_condition", { doctype: section.entity });
   }
 
   // 1b. RBAC on every $lookup.from in the pipeline (depth-first).
@@ -69,7 +69,7 @@ export async function runAggregateSection(
     // routing (e.g. read the identity/system collections), so forbid it
     // rather than silently skipping the check.
     if (!deps.registry.has(fromEntity)) {
-      throw new PermissionDeniedError(user.email ?? String(user._id), fromEntity, "select");
+      throw PermissionDeniedError.forAction(fromEntity, "select");
     }
     await deps.permissionChecker.check(user, fromEntity, "select");
     // H3: the security $match is built only for the ROOT section entity, so a
@@ -78,10 +78,10 @@ export async function runAggregateSection(
     // — otherwise the join returns rows outside their scope.
     const fromDef = deps.registry.get(fromEntity);
     if (Object.keys(applyScopeFilters(fromDef, user, {})).length > 0) {
-      throw new PermissionDeniedError(user.email, fromEntity, "lookup_bypasses_row_scope");
+      throw new PermissionDeniedError("lookup_bypasses_row_scope", { doctype: fromEntity });
     }
     if (deps.permissionChecker.hasConditionalRowRead(user, fromEntity)) {
-      throw new PermissionDeniedError(user.email, fromEntity, "lookup_bypasses_read_condition");
+      throw new PermissionDeniedError("lookup_bypasses_read_condition", { doctype: fromEntity });
     }
   }
 
@@ -117,7 +117,7 @@ export async function runAggregateSection(
     // that names the field, as a source or as an output name, is refused for
     // every reader, an Administrator included.
     if (deps.registry.has(ref.entity) && passwordFields(deps.registry.get(ref.entity)).includes(ref.field)) {
-      throw new PermissionDeniedError(user.email, ref.entity, "aggregation_references_protected_field");
+      throw new PermissionDeniedError("aggregation_references_protected_field", { doctype: ref.entity });
     }
     const readable = readableByEntity.get(ref.entity);
     if (readable === null || readable === undefined) continue; // null = all readable (admin/missing); permissive
@@ -126,11 +126,7 @@ export async function runAggregateSection(
 
     if (ref.origin === "source") {
       if (!readable.has(ref.field)) {
-        throw new PermissionDeniedError(
-          user.email,
-          ref.entity,
-          "aggregation_references_protected_field",
-        );
+        throw new PermissionDeniedError("aggregation_references_protected_field", { doctype: ref.entity });
       }
       continue;
     }
@@ -139,11 +135,7 @@ export async function runAggregateSection(
     // source field on the same entity.
     const allFields = allFieldsByEntity.get(ref.entity);
     if (allFields?.has(ref.field) && !readable.has(ref.field)) {
-      throw new PermissionDeniedError(
-        user.email,
-        ref.entity,
-        "aggregation_references_protected_field",
-      );
+      throw new PermissionDeniedError("aggregation_references_protected_field", { doctype: ref.entity });
     }
   }
 

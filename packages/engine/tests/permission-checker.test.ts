@@ -441,16 +441,15 @@ describe("PermissionChecker", () => {
       await expect(checker.check(makeUser(), "TestDoc", "read")).resolves.toBeUndefined();
     });
 
-    it("throws PermissionDeniedError with correct user/entity/action", async () => {
+    it("throws PermissionDeniedError with the action's code and the entity, never a sentence (#24)", async () => {
       registry.register(makeEntity({
         permissions: [{ role: "System User", level: 0, read: 0 }],
       }));
       const err = await checker.check(makeUser(), "TestDoc", "read").catch((e) => e);
       expect(err).toBeInstanceOf(PermissionDeniedError);
-      expect(err.user).toBe("user@example.com");
-      expect(err.entity).toBe("TestDoc");
-      expect(err.action).toBe("read");
-      expect(err.message).toContain("Permission denied");
+      expect([err.code, err.params, err.status, err.message]).toEqual([
+        "permission_denied_read", { doctype: "TestDoc" }, 403, "permission_denied_read",
+      ]);
     });
   });
 

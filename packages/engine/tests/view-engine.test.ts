@@ -114,7 +114,7 @@ describe("ViewEngine — permission denial in section", () => {
     // First call (addresses) succeeds, second (recent_invoices) denies.
     deps.documentService.getList
       .mockResolvedValueOnce({ data: [{ _id: "A" }], total: 1, page: 1, page_size: 5, total_pages: 1 })
-      .mockRejectedValueOnce(new PermissionDeniedError("ada@example.com", "salesInvoice", "select"));
+      .mockRejectedValueOnce(PermissionDeniedError.forAction("salesInvoice", "select"));
 
     const view = makeView({
       sections: [
@@ -149,7 +149,7 @@ describe("ViewEngine — link section whose optional param the request omits", (
 
   it("names no entity to a caller who may not read the section's entity", async () => {
     const deps = makeDeps();
-    deps.permissionChecker.check.mockRejectedValue(new PermissionDeniedError("ada@example.com", "customer", "read"));
+    deps.permissionChecker.check.mockRejectedValue(PermissionDeniedError.forAction("customer", "read"));
     const out = await new ViewEngine(deps as never).execute(linkView(), { query: {} }, user, new ResponseContext());
     expect(out.sections["customer"]).toBeNull();
     expect(out.entities).toEqual({});
@@ -222,7 +222,7 @@ describe("ViewEngine — section-level fallback policy", () => {
     const deps = makeDeps();
     deps.documentService.getDoc.mockResolvedValue({ toJSON: () => ({ _id: "CUST-1" }) });
     deps.documentService.getList.mockRejectedValue(
-      new PermissionDeniedError("ada", "salesInvoice", "select"),
+      PermissionDeniedError.forAction("salesInvoice", "select"),
     );
     const view = makeView({
       sections: [{
@@ -243,7 +243,7 @@ describe("ViewEngine — section-level fallback policy", () => {
     const deps = makeDeps();
     deps.documentService.getDoc.mockResolvedValue({ toJSON: () => ({ _id: "CUST-1" }) });
     deps.documentService.getList.mockRejectedValue(
-      new PermissionDeniedError("ada", "salesInvoice", "select"),
+      PermissionDeniedError.forAction("salesInvoice", "select"),
     );
     const view = makeView({
       sections: [{

@@ -1,4 +1,5 @@
 import type { EntityDefinition, ActionDefinition, TransitionDefinition, SubmittedPatch, DeclaredClientError } from "@digitaplatform/shared";
+import { EngineError } from "../errors/engine-error.js";
 import { LAYOUT_FIELD_TYPES, DIGITA, DocStatus } from "@digitaplatform/shared";
 import { calculateChanges, deepEqual, type FieldChange } from "./change-tracker.js";
 import type { DocumentServiceDeps } from "./service-deps.js";
@@ -55,13 +56,12 @@ export class GatedListTooBroadError extends Error {
   }
 }
 
-export class NotFoundError extends Error {
+export class NotFoundError extends EngineError {
   constructor(
     public doctype: string,
     public documentName: string,
   ) {
-    super(`${doctype} ${documentName} not found`);
-    this.name = "NotFoundError";
+    super("not_found", { doctype, name: documentName }, 404, "NOT_FOUND");
   }
 }
 
@@ -356,7 +356,7 @@ export class DocumentService {
     } catch (err) {
       if (!(err instanceof PermissionDeniedError)) throw err;
       if (user.email && (await this.documentShareService.hasShare(doctype, name, user.email, "share"))) return;
-      throw new PermissionDeniedError(user.email, doctype, "share");
+      throw PermissionDeniedError.forAction(doctype, "share");
     }
   }
 

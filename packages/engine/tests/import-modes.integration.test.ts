@@ -355,3 +355,21 @@ describe("The resource API refuses a Table write that repeats a _row_id", () => 
     expect(stored.map((l) => l.amount)).toEqual([1]);
   });
 });
+
+describe("An engine error reaches a person in their language (#24)", () => {
+  const german = (tok: string) => ({ ...bearer(tok), "accept-language": "de-CH,de;q=0.9" });
+
+  it("answers a missing document and a refused delete in German, as a code with params", async () => {
+    const missing = await app.inject({ method: "GET", url: "/api/v1/resource/Item/NOPE-1", headers: german(adminTok) });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json().messages[0].text).toBe("Item NOPE-1 nicht gefunden");
+    expect(missing.json().error).toMatchObject({ code: "NOT_FOUND", detail: "not_found" });
+
+    const item = (await findOne("Item", { item_no: "IT1" }))!;
+    const refused = await app.inject({ method: "DELETE", url: `/api/v1/resource/Item/${String(item._id)}`, headers: german(editorTok) });
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().messages[0].text).toBe("Du hast keine Berechtigung, Item zu löschen");
+    expect(refused.json().error).toMatchObject({ code: "PERMISSION_DENIED", detail: "permission_denied_delete" });
+    expect(JSON.stringify(refused.json())).not.toContain("ed@d");
+  });
+});

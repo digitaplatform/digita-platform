@@ -8,7 +8,6 @@ import {
   MongoWriteConcernError,
 } from "mongodb";
 import {
-  NotFoundError,
   ValidationFailedError,
   ConcurrentModificationError,
   DeleteBlockedError,
@@ -24,13 +23,14 @@ import {
   AmbiguousPeriodError,
   DateOutsidePeriodError,
 } from "../../period/period-close-validator.js";
-import { PermissionDeniedError } from "../../permissions/permission-checker.js";
 import { DocStatusError } from "../../document/docstatus-engine.js";
 import { ViewNotFoundError, BadRequestError } from "../../view/view-engine.js";
 import { UnknownDoctypeError } from "../../entity/entity-registry.js";
 import { FilterFieldNotAllowedError, MalformedFieldsError, MalformedFilterValueError } from "../../database/filter-builder.js";
 import { FieldValueError } from "../../entity/field-types.js";
 import { PasswordKeyNotListedError } from "../../entity/password-cipher.js";
+import { EngineError } from "../../errors/engine-error.js";
+import { englishText } from "../../../i18n.js";
 import { createLogger } from "../../logging/logger.js";
 import { urlPath } from "../../logging/url-path.js";
 
@@ -54,6 +54,24 @@ export function globalErrorHandler(
     },
     "Request error",
   );
+
+  // Every EngineError answers alike: its code with its params as the message, which the response
+  // hook translates into the requester's language, and its status. The log reads it in English.
+  if (error instanceof EngineError) {
+    log.debug(
+      { trace_id: traceId, code: error.code, params: error.params, text: englishText(error.code, error.params) },
+      "Request refused",
+    );
+    const response: ApiResponse<null> = {
+      success: false,
+      status_code: error.status,
+      data: null,
+      messages: [{ text: error.code, type: "error", show: true, params: error.params }],
+      error: { code: error.responseCode, detail: error.code, trace_id: traceId },
+    };
+    reply.code(error.status).send(response);
+    return;
+  }
 
   if (error instanceof ViewNotFoundError) {
     const response: ApiResponse<null> = {
@@ -138,18 +156,6 @@ export function globalErrorHandler(
     return;
   }
 
-  if (error instanceof NotFoundError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 404,
-      data: null,
-      messages: [{ text: error.message, type: "error", show: true }],
-      error: { code: "NOT_FOUND", detail: error.message, trace_id: traceId },
-    };
-    reply.code(404).send(response);
-    return;
-  }
-
   // Unknown doctype — EntityRegistry.get throws a typed UnknownDoctypeError
   // carrying the requested name + closest registered match. Surface both so the
   // 404 is self-diagnosing ("…\"userMenu\" — did you mean \"UserMenu\"?") — the
@@ -208,18 +214,6 @@ export function globalErrorHandler(
       },
     };
     reply.code(400).send(response);
-    return;
-  }
-
-  if (error instanceof PermissionDeniedError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 403,
-      data: null,
-      messages: [{ text: error.message, type: "error", show: true }],
-      error: { code: "PERMISSION_DENIED", detail: error.message, trace_id: traceId },
-    };
-    reply.code(403).send(response);
     return;
   }
 
