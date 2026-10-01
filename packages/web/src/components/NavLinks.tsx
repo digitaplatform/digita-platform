@@ -62,11 +62,24 @@ export function NavLinks({ locale, items, apps, comingLabel }: { locale: string;
  *  page's locale, marked as the current page as the text links are, or a web link in a new tab.
  *  The label names the link and shows as its tooltip. The server draws the icon as `children`,
  *  since a component cannot cross into a client component. */
-export function NavIconLink({ locale, href, item, children }: { locale: string; href: string; item: NavItem; children: ReactNode }) {
+export function NavIconLink({
+  locale,
+  href,
+  item,
+  className,
+  children,
+}: {
+  locale: string;
+  href: string;
+  item: NavItem;
+  /** Which widths show the link. */
+  className?: string;
+  children: ReactNode;
+}) {
   const isActive = useActiveItem(locale);
   if (isExternalHref(href)) {
     return (
-      <a href={href} target="_blank" rel="noopener noreferrer" aria-label={item.label} title={item.label} className={topBarButtonClass}>
+      <a href={href} target="_blank" rel="noopener noreferrer" aria-label={item.label} title={item.label} className={cn(topBarButtonClass, className)}>
         {children}
       </a>
     );
@@ -78,7 +91,7 @@ export function NavIconLink({ locale, href, item, children }: { locale: string; 
       aria-label={item.label}
       title={item.label}
       aria-current={active ? "page" : undefined}
-      className={cn(topBarButtonClass, active && "bg-bgHover text-primary-600")}
+      className={cn(topBarButtonClass, className, active && "bg-bgHover text-primary-600")}
     >
       {children}
     </Link>

@@ -35,7 +35,8 @@ function shownAt(element: Element, viewport: number): boolean {
       if (variants.length > 1) throw new Error(`the rule reads at most one breakpoint per class: ${token}`);
       let from = 0;
       if (variants.length === 1) {
-        const minWidth = breakpoints[variants[0]!];
+        // An arbitrary breakpoint, as `min-[380px]:flex`, names its width itself.
+        const minWidth = variants[0]!.match(/^min-\[(\d+px)\]$/)?.[1] ?? breakpoints[variants[0]!];
         if (minWidth === undefined || !/^\d+px$/.test(minWidth)) throw new Error(`not a min-width breakpoint: ${token}`);
         from = parseInt(minWidth, 10);
       }
@@ -97,6 +98,12 @@ describe("the rule of what a viewport shows", () => {
     expect(shown("button", 768)).toHaveLength(1);
   });
 
+  it("finds a control that an arbitrary breakpoint shows", () => {
+    document.body.innerHTML = '<div class="hidden min-[380px]:flex"><button aria-label="language"></button></div>';
+    expect(shown("button", 379)).toHaveLength(0);
+    expect(shown("button", 380)).toHaveLength(1);
+  });
+
   it("passes a control that every width shows", () => {
     document.body.innerHTML = '<div class="flex items-center"><button aria-label="language"></button></div>';
     expect(shown("button", 390)).toHaveLength(1);
@@ -115,7 +122,9 @@ describe("the top bar on phones and tablets", () => {
       expect(shown('button[aria-label="language"]', viewport)).toHaveLength(1);
       expect(shown('button[aria-label="toggleTheme"]', viewport)).toHaveLength(1);
     });
+  }
 
+  for (const viewport of [430, 768]) {
     it(`shows each link as the icon its data names at ${viewport} px`, () => {
       drawHeader(ITEMS);
       for (const [href, label, icon] of [
@@ -131,7 +140,7 @@ describe("the top bar on phones and tablets", () => {
     });
   }
 
-  for (const viewport of [390, 768]) {
+  for (const viewport of [430, 768]) {
     it(`PLANTED DEFECT: marks the icon of the page the visitor is on as current at ${viewport} px`, () => {
       browser.pathname = "/events";
       drawHeader(ITEMS);
@@ -168,5 +177,67 @@ describe("the top bar from lg on", () => {
     expect(shown('a[href="/about"]', 1024).map((link) => link.textContent)).toEqual(["About"]);
     expect(shown('a[href="/events"]', 1024).map((link) => link.textContent)).toEqual(["Events"]);
     expect(shown("a svg[class*=lucide-]", 1024)).toHaveLength(0);
+  });
+});
+
+/**
+ * What the phone's top bar takes, in px, as Chromium lays it out: the row's padding (px-4 on both
+ * sides); the language menu, the mode button, a call to action of seven letters ("Contact"), the
+ * menu button and the gap before them; the brand's mark with the first letters of its name; and
+ * per icon link its button (p-1.5 around h-5) and the gap-1 before it, the first one the nav's
+ * gap-6 instead.
+ */
+const BAR = { padding: 32, controls: 227, brand: 61, icon: 32, iconGap: 4, navGap: 24 };
+
+/** The phone widths at which the bar, as drawn in the document, needs more room than the screen
+ *  has: each shown icon link takes its share beside what every phone bar carries. */
+function overflowingWidths(widths: number[]): number[] {
+  return widths.filter((viewport) => {
+    const icons = shown("nav a[aria-label]", viewport).length;
+    const iconRow = icons ? BAR.navGap + icons * BAR.icon + (icons - 1) * BAR.iconGap : 0;
+    return BAR.padding + BAR.controls + BAR.brand + iconRow > viewport;
+  });
+}
+
+/** Every phone width, 320 px up to the tablet's 768. */
+const PHONE_WIDTHS = Array.from({ length: 768 - 320 }, (_, i) => 320 + i);
+
+const FIVE_ICONS: NavItem[] = [
+  { label: "About", href: "/about", order: 0, icon: "info" },
+  { label: "Events", href: "/events", order: 1, icon: "calendar-days" },
+  { label: "Shop", href: "/shop", order: 2, icon: "shopping-cart" },
+  { label: "Blog", href: "/blog", order: 3, icon: "newspaper" },
+  { label: "Team", href: "/team", order: 4, icon: "users" },
+  { label: "Contact", href: "#contact", order: 5 },
+];
+
+describe("the top bar's icon links on a phone", () => {
+  it("fit beside the brand and the controls at every width from 320 px, with five icons and the call to action", () => {
+    drawHeader(FIVE_ICONS);
+    expect(overflowingWidths(PHONE_WIDTHS)).toEqual([]);
+  });
+
+  it("show none at 320 px, where the menu holds them, and more as the screen widens", () => {
+    drawHeader(FIVE_ICONS);
+    expect(shown("nav a[aria-label]", 320)).toHaveLength(0);
+    expect(shown("nav a[aria-label]", 390).map((link) => link.getAttribute("aria-label"))).toEqual(["About"]);
+    expect(shown("nav a[aria-label]", 640)).toHaveLength(5);
+  });
+
+  it("show an icon link past the bar's room as text on a tablet, so no width loses it", () => {
+    const six: NavItem[] = [...FIVE_ICONS, { label: "Jobs", href: "/jobs", order: 6, icon: "briefcase" }];
+    drawHeader(six);
+    expect(shown('a[href="/jobs"]', 640)).toHaveLength(0);
+    expect(shown('a[href="/jobs"]', 768).map((link) => link.textContent)).toEqual(["Jobs"]);
+  });
+
+  it("PLANTED DEFECT: the fit check finds a bar that shows five icons at every width", () => {
+    document.body.innerHTML = `<nav class="flex">${'<a aria-label="x" class="p-1.5"></a>'.repeat(5)}</nav>`;
+    expect(overflowingWidths([320, 390, 460])).toEqual([320, 390, 460]);
+  });
+
+  it("PLANTED INNOCENT: the fit check passes a bar that shows one icon from 380 px", () => {
+    document.body.innerHTML = '<nav class="flex"><a aria-label="x" class="hidden min-[380px]:flex"></a></nav>';
+    expect(overflowingWidths([320, 379, 380, 390])).toEqual([]);
   });
 });
