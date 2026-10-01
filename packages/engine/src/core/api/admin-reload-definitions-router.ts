@@ -11,6 +11,7 @@ import type { DomainDirectory } from "../database/app-db-discovery.js";
 import { seedRulesFromFiles, clearRuleCache } from "../rules/rule-loader.js";
 import { seedViewsFromFiles } from "../view/view-loader.js";
 import { successResponse } from "./response-model.js";
+import { BadRequestError } from "../view/view-engine.js";
 import { createLogger } from "../logging/logger.js";
 
 const log = createLogger("admin-reload-definitions-router");
@@ -100,6 +101,15 @@ async function performReload(deps: AdminReloadDefinitionsDeps): Promise<ReloadSu
   }
   for (const d of domainDirs) {
     await registry.loadAll(join(d.root, "entities"), { defaultDatabase: d.dbName });
+  }
+
+  // 1b. Boot refuses a Link to an entity no file loaded, so replacing the stored definitions with
+  //     files that carry one would leave an engine that cannot start again. Nothing is written
+  //     before this check, and the answer names every entity, field and target.
+  try {
+    registry.assertLinkTargetsLoaded();
+  } catch (err) {
+    throw new BadRequestError((err as Error).message);
   }
 
   // 2. Wipe the admin-side `entities` collection and re-write
