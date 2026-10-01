@@ -12,13 +12,15 @@ import type { FieldControlState } from '@/controls/types';
 
 type SearchAnswer = Array<{ _id: string; display: string; fields?: Record<string, unknown> }>;
 const engine = vi.hoisted(() => ({
-  searches: [] as Array<{ q: string; land: (rows: SearchAnswer) => void }>,
+  searches: [] as Array<{ q: string; filters?: Record<string, unknown>; land: (rows: SearchAnswer) => void }>,
   lists: [] as Array<{ pageSize?: number; land: (rows: Array<Record<string, unknown>>) => void }>,
 }));
 vi.mock('@/services/resource', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/services/resource')>()),
-  searchLinks: (_entity: string, params: { q: string }) =>
-    new Promise((resolve) => engine.searches.push({ q: params.q, land: (rows) => resolve({ data: rows }) })),
+  searchLinks: (_entity: string, params: { q: string; filters?: Record<string, unknown> }) =>
+    new Promise((resolve) =>
+      engine.searches.push({ q: params.q, filters: params.filters, land: (rows) => resolve({ data: rows }) }),
+    ),
   getList: (_entity: string, params: { page_size?: number }) =>
     new Promise((resolve) =>
       engine.lists.push({
@@ -84,22 +86,26 @@ const SIZE_OF_SCREEN = ['h-dvh', 'sm:h-[90vh]'];
 
 function renderWithEngine(ui: React.ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return render(ui, { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> });
 }
 
-function renderField(field: FieldDefinition) {
-  return renderWithEngine(
+function buildField(field: FieldDefinition, doc: Record<string, unknown> = {}) {
+  return (
     <LinkControl
       field={field}
       value={null}
-      doc={{}}
+      doc={doc}
       entity="WorkOrder"
       state={STATE}
       onChange={() => {}}
       controlId="field"
       labelId="field-label"
-    />,
+    />
   );
+}
+
+function renderField(field: FieldDefinition, doc?: Record<string, unknown>) {
+  return renderWithEngine(buildField(field, doc));
 }
 
 /** Lands the engine's answer to every search for `q` sent so far. */
@@ -154,6 +160,44 @@ describe('the search dialog of a Link field', () => {
     await within(panel).findByText('Zug Pharma');
     expect(within(panel).queryByText('Alpine Hotel')).toBeNull();
     expect(within(panel).getByRole('table')).not.toHaveAttribute('aria-busy');
+  });
+});
+
+describe('the rows a search dialog keeps while the next answer loads', () => {
+  const COMPANY_FIELD = { ...CUSTOMER_FIELD, target_filters: { company: '$doc.company' } } as FieldDefinition;
+
+  it('are the rows of another text of the same search, under the same filter', async () => {
+    const user = userEvent.setup();
+    renderField(COMPANY_FIELD, { company: 'A' });
+    await user.click(screen.getByRole('button', { name: 'ui.list.search' }));
+    const panel = screen.getByRole('dialog');
+    await landSearch('', FIRST_ANSWER);
+    await within(panel).findByText('Alpine Hotel');
+
+    await user.type(within(panel).getByRole('searchbox'), 'zug');
+    await waitFor(() => expect(engine.searches.some((s) => s.q === 'zug')).toBe(true));
+    expect(within(panel).getByText('Alpine Hotel')).toBeInTheDocument();
+    expect(within(panel).getByRole('table')).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('are never the rows of another filter: the dialog for company B shows no customer of company A', async () => {
+    const user = userEvent.setup();
+    const view = renderField(COMPANY_FIELD, { company: 'A' });
+    await user.click(screen.getByRole('button', { name: 'ui.list.search' }));
+    await landSearch('', FIRST_ANSWER);
+    await within(screen.getByRole('dialog')).findByText('Alpine Hotel');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    view.rerender(buildField(COMPANY_FIELD, { company: 'B' }));
+    await user.click(screen.getByRole('button', { name: 'ui.list.search' }));
+    const panel = screen.getByRole('dialog');
+    await waitFor(() => expect(engine.searches.map((s) => s.filters)).toEqual([{ company: 'A' }, { company: 'B' }]));
+    expect(within(panel).queryByText('Alpine Hotel')).toBeNull();
+    expect(within(panel).getByText('ui.link.searching')).toBeInTheDocument();
+
+    await landSearch('', ZUG_ANSWER);
+    await within(panel).findByText('Zug Pharma');
   });
 });
 
