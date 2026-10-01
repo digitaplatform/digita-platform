@@ -976,9 +976,9 @@ describe("Upload API Integration", () => {
     });
 
     /** The call shape of the app's uploadFile: the entity and the field, never the document. */
-    async function uploadAsApp(token: string, field: string, body: string) {
+    async function uploadAsApp(token: string, field: string, body: string, entity = "TestBook") {
       const { payload, contentType } = multipartPayload(`${field}.pdf`, "application/pdf", Buffer.from(body), {
-        attached_to_entity: "TestBook",
+        attached_to_entity: entity,
         attached_to_field: field,
       });
       const res = await app.inject({
@@ -1462,6 +1462,85 @@ describe("Upload API Integration", () => {
         await plantBook(ownerToken, { title: "After", letter: letter.file_url });
         await attachLegacyLooseFilesOnce(db, registry.getAll());
         expect(await attachedTo(letter._id)).toBeUndefined();
+      });
+    });
+
+    describe("a document with a system id, reached through its id in upper case", () => {
+      beforeAll(() => {
+        registry.register({
+          name: "TestSysBook",
+          module: "test",
+          database: "core",
+          naming: { strategy: "system" },
+          storage_path: "sysbooks",
+          fields: [
+            { fieldname: "title", fieldtype: "Data", label: "Title" },
+            { fieldname: "letter", fieldtype: "Attach", label: "Letter" },
+          ],
+          permissions: [{ role: "System User", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 }],
+        } as unknown as EntityDefinition);
+      });
+
+      async function sysBookWithLetter(body: string) {
+        const letter = await uploadAsApp(ownerToken, "letter", body, "TestSysBook");
+        const created = await app.inject({
+          method: "POST",
+          url: "/api/v1/resource/TestSysBook",
+          headers: authHeaders(ownerToken),
+          payload: { title: "System book", letter: letter.file_url },
+        });
+        expect(created.statusCode).toBe(201);
+        const id = created.json().data._id as string;
+        expect(id).toMatch(/^[0-9a-f]{24}$/);
+        const row = (await db.findOne(DIGITA.COLLECTIONS.FILE, letter._id, "core")) as Record<string, unknown>;
+        expect(row["attached_to_name"]).toBe(id);
+        return { letter, id };
+      }
+
+      const cleanupDone = () => new Promise((resolve) => setTimeout(resolve, 100));
+
+      it("deletes the bound file with the document", async () => {
+        const { letter, id } = await sysBookWithLetter("%PDF system book, deleted upper");
+        const deleted = await app.inject({ method: "DELETE", url: `/api/v1/resource/TestSysBook/${id.toUpperCase()}`, headers: authHeaders(ownerToken) });
+        expect(deleted.statusCode).toBe(200);
+        await cleanupDone();
+        expect(await db.findOne(DIGITA.COLLECTIONS.FILE, letter._id, "core")).toBeNull();
+      });
+
+      it("binds the saver's new upload to the stored id and deletes the file it replaces", async () => {
+        const { letter, id } = await sysBookWithLetter("%PDF system book, replaced upper");
+        const next = await uploadAsApp(ownerToken, "letter", "%PDF system book, the new letter", "TestSysBook");
+        const saved = await app.inject({
+          method: "PUT",
+          url: `/api/v1/resource/TestSysBook/${id.toUpperCase()}`,
+          headers: authHeaders(ownerToken),
+          payload: { letter: next.file_url },
+        });
+        expect(saved.statusCode).toBe(200);
+        await cleanupDone();
+        const row = (await db.findOne(DIGITA.COLLECTIONS.FILE, next._id, "core")) as Record<string, unknown>;
+        expect(row["attached_to_name"]).toBe(id);
+        expect((await downloadAs(salesToken, next._id)).statusCode).toBe(200);
+        expect(await db.findOne(DIGITA.COLLECTIONS.FILE, letter._id, "core")).toBeNull();
+      });
+
+      it("gives a copy its own clone of the source's bound file", async () => {
+        const { letter, id } = await sysBookWithLetter("%PDF system book, copied upper");
+        const copied = await app.inject({ method: "POST", url: `/api/v1/resource/TestSysBook/${id.toUpperCase()}/copy`, headers: authHeaders(ownerToken) });
+        expect(copied.statusCode).toBe(201);
+        const copy = copied.json().data as { _id: string; letter: string };
+        expect(copy.letter).not.toBe(letter.file_url);
+        const cloneId = /\/file\/([^/]+)\/download/.exec(copy.letter)![1]!;
+        const clone = (await db.findOne(DIGITA.COLLECTIONS.FILE, cloneId, "core")) as Record<string, unknown>;
+        expect(clone["attached_to_name"]).toBe(copy._id);
+      });
+
+      it("PLANTED INNOCENT: does the same through the stored id", async () => {
+        const { letter, id } = await sysBookWithLetter("%PDF system book, deleted lower");
+        const deleted = await app.inject({ method: "DELETE", url: `/api/v1/resource/TestSysBook/${id}`, headers: authHeaders(ownerToken) });
+        expect(deleted.statusCode).toBe(200);
+        await cleanupDone();
+        expect(await db.findOne(DIGITA.COLLECTIONS.FILE, letter._id, "core")).toBeNull();
       });
     });
   });
