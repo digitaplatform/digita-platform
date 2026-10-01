@@ -495,8 +495,11 @@ export default function TableControl(props: FieldControlProps) {
     // carries a static `default` (which `makeRow()` already pre-populated
     // above) — otherwise the default silently survives and the scanned
     // value is discarded. Matches the merge branch above, which likewise
-    // treats a hit's mapped fields as ground truth.
-    for (const [hitKey, rowField] of Object.entries(fieldMap)) seed[rowField] = hit.fields[hitKey];
+    // treats a hit's mapped fields as ground truth. A value the hit does not
+    // carry leaves the default: an emptied default goes out as a clear.
+    for (const [hitKey, rowField] of Object.entries(fieldMap)) {
+      if (hit.fields[hitKey] != null) seed[rowField] = hit.fields[hitKey];
+    }
     if (quantityField) seed[quantityField] = multiplier;
     if (entryFlow?.defaults) {
       for (const [k, v] of Object.entries(entryFlow.defaults)) {

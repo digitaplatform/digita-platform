@@ -220,6 +220,16 @@ describe('entry_flow.defaults on a scan hit', () => {
     expect(row.warehouse).toBe('MAIN');
   });
 
+  it("keeps the field's default where the hit carries no mapped value", async () => {
+    // The form sends a seeded default the row lost as null, an explicit clear, so a hit without
+    // the value must leave the default in place.
+    getViewMock.mockResolvedValue({ data: { sections: { hit: [{ partId: 'PART-9' }] } } });
+    const user = userEvent.setup();
+    render(<Host field={buildLinesField({ sequence: ['quantity'] }, SCAN_ENTRY)} />);
+    const row = await scanCode(user, '4012345678901');
+    expect([row.part, row.unit]).toEqual(['PART-9', 'pcs']);
+  });
+
   it('adds no value the flow does not declare', async () => {
     const user = userEvent.setup();
     render(<Host field={buildLinesField({ sequence: ['quantity'] }, SCAN_ENTRY)} />);
