@@ -35,7 +35,7 @@ import { ApiClientError } from '@/lib/errors';
 import { useSessionStore } from '@/stores/session';
 import { useI18nStore } from '@/stores/i18n';
 import { FormRenderer } from '@/components/render/FormRenderer';
-import { workflowBadge } from '@/components/render/cells';
+import { RecordImage, recordImageUrl, workflowBadge } from '@/components/render/cells';
 import { ContextPanel } from '@/components/record/ContextPanel';
 import { LinksPanel } from '@/components/record/LinksPanel';
 import { HistoryPanel } from '@/components/record/HistoryPanel';
@@ -659,6 +659,7 @@ function RecordForm({
         }
         eyebrow={tEntity(entity, meta.label ?? entity)}
         title={title}
+        media={recordImageUrl(meta, watched) ? <RecordImage meta={meta} row={watched} className="h-16 w-16" /> : undefined}
         status={
           stateBadge || docLocked ? (
             <>

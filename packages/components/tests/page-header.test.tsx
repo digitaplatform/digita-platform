@@ -31,6 +31,18 @@ describe('PageHeader', () => {
     expect(mirror).toHaveTextContent('Invoices');
   });
 
+  it('draws media before the heading in the title block, never in the bar, and nothing without it', () => {
+    const { unmount } = render(<PageHeader title="Bike 7" media={<img alt="" src="/bike.png" />} />);
+    const media = document.querySelector('[data-ui="page-header-media"]');
+    expect(media).toContainElement(document.querySelector('img'));
+    expect(document.querySelector('[data-ui="page-header-title"]')).toContainElement(media as HTMLElement);
+    expect(document.querySelector('[data-ui="page-header-bar"]')).not.toContainElement(media as HTMLElement);
+    expect(media!.compareDocumentPosition(screen.getByRole('heading'))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    unmount();
+    render(<PageHeader title="Bike 7" />);
+    expect(document.querySelector('[data-ui="page-header-media"]')).toBeNull();
+  });
+
   it('renders the back action named after the previous page and fires onClick', () => {
     const onClick = vi.fn();
     render(<PageHeader title="Invoice 4711" back={{ label: 'Invoices', onClick }} />);

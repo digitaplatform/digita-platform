@@ -19,7 +19,7 @@ import { parseSort } from '@/lib/sort';
 import { tid } from '@/lib/testid';
 import { useViewportHeight } from '@/hooks/useViewportHeight';
 import { EmptyState } from '@/components/status';
-import { CellValue, workflowBadge } from './cells';
+import { CellValue, RecordImage, workflowBadge } from './cells';
 
 type Row = Record<string, unknown>;
 
@@ -202,14 +202,17 @@ export function ListRenderer({
     switch (column.key) {
       case primaryKey:
         return (
-          <button
-            type="button"
-            {...tid.row(entity, rowId(row))}
-            onClick={() => onRowClick(rowId(row))}
-            className="font-medium text-primary-600 hover:underline"
-          >
-            {primaryLabel(row) || '—'}
-          </button>
+          <span className="flex items-center gap-2">
+            <RecordImage meta={meta} row={row} className="h-8 w-8" />
+            <button
+              type="button"
+              {...tid.row(entity, rowId(row))}
+              onClick={() => onRowClick(rowId(row))}
+              className="font-medium text-primary-600 hover:underline"
+            >
+              {primaryLabel(row) || '—'}
+            </button>
+          </span>
         );
       case STATUS_COLUMN:
         return statusBadge(row);
@@ -273,7 +276,10 @@ export function ListRenderer({
         renderCard={(r) => (
           <>
             <div className="flex items-center justify-between gap-2">
-              <span className="font-medium text-primary-600">{primaryLabel(r)}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <RecordImage meta={meta} row={r} className="h-10 w-10" />
+                <span className="font-medium text-primary-600">{primaryLabel(r)}</span>
+              </span>
               {hasStates && statusBadge(r)}
             </div>
             <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-textMuted">

@@ -241,6 +241,40 @@ const CELL_STATE: FieldControlState = {
   updating: false,
 };
 
+describe('the picture image_field names, in a list', () => {
+  const fields = [
+    { fieldname: 'name', fieldtype: 'Data' as const, label: 'Name' },
+    { fieldname: 'photo', fieldtype: 'AttachImage' as const, label: 'Photo' },
+  ];
+  const rows = [
+    { _id: 'b1', name: 'Roadster', photo: '/api/v1/public/file/FILE-9' },
+    { _id: 'b2', name: 'Plain' },
+  ];
+  const renderList = (m: EntityDefinition) =>
+    render(
+      <ListRenderer entity="Widget" meta={m} rows={rows} page={1} total={2} totalPages={1} onRowClick={noop} onSort={noop} onPageChange={noop} />,
+    );
+  const picturesIn = (hook: string) =>
+    [...document.querySelectorAll(`[data-ui="${hook}"]`)].map(
+      (row) => row.querySelector('[data-component="record-image"]')?.getAttribute('src') ?? null,
+    );
+
+  it('stands beside the title in a list row', () => {
+    renderList(meta(fields, { image_field: 'photo' }));
+    expect(picturesIn('table-row')).toEqual(['/api/v1/public/file/FILE-9?thumb=1', null]);
+  });
+
+  it('stands beside the title in a card', () => {
+    renderList(meta(fields, { image_field: 'photo' }));
+    expect(picturesIn('list-row')).toEqual(['/api/v1/public/file/FILE-9?thumb=1', null]);
+  });
+
+  it('is not drawn for an entity that names no image_field', () => {
+    renderList(meta(fields));
+    expect(document.querySelector('[data-component="record-image"]')).toBeNull();
+  });
+});
+
 describe('TableControl per-row required indicator', () => {
   it("marks a column with mandatory_depends_on (or static required) with an asterisk", () => {
     const field = {

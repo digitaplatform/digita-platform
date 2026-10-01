@@ -1,5 +1,5 @@
 import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
-import type { BadgeProps } from '@digitaplatform/components';
+import { cn, type BadgeProps } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
 import { useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
@@ -21,6 +21,37 @@ type Row = Record<string, unknown>;
 function thumbSrc(url: string): string {
   if (!/\/(public\/)?file\//.test(url)) return url;
   return url.includes('?') ? `${url}&thumb=1` : `${url}?thumb=1`;
+}
+
+/** The picture of a record: the value of the field its entity names as `image_field`, or null
+ *  when the entity names no field or the record has no picture. */
+export function recordImageUrl(meta: EntityDefinition, row: Row): string | null {
+  const value = meta.image_field ? row[meta.image_field] : undefined;
+  return typeof value === 'string' && value ? value : null;
+}
+
+/** The record's picture beside its title in a list row, a card and the record header. Nothing
+ *  without one, so such a record keeps its plain title. */
+export function RecordImage({
+  meta,
+  row,
+  className,
+}: {
+  meta: EntityDefinition;
+  row: Row;
+  className: string;
+}) {
+  const url = recordImageUrl(meta, row);
+  if (!url) return null;
+  return (
+    <img
+      src={thumbSrc(url)}
+      alt=""
+      loading="lazy"
+      data-component="record-image"
+      className={cn('shrink-0 rounded border border-border bg-subtle object-cover', className)}
+    />
+  );
 }
 
 /** Read-only formatted cell value, shared by the desktop table + the mobile cards.
