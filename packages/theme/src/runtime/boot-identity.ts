@@ -46,7 +46,8 @@ export interface BootIdentityOptions {
  * density this browser chose, in the order the
  * layers compose: the design (with its variant and the tint picked for it), the mode, the
  * signature, the tenant's branding over the signature, and the density last —
- * the signature's teardown clears it, and a stored density beats the branding's.
+ * the signature's teardown clears it, and a stored density beats the branding's, which
+ * beats the pointer default.
  * The app runs it when its theme store initialises; the website runs the same
  * function before first paint. App and website share one origin, so a design, mode or
  * density chosen in either shows in both.
@@ -64,7 +65,7 @@ export function bootIdentity(options: BootIdentityOptions = {}): BootedIdentity 
   const signature = options.signature ?? DEFAULT_SIGNATURE_ID;
   applySignature(signature, target);
   if (options.branding) applyBranding(options.branding, target);
-  const density = resolveInitialDensity();
+  const density = resolveInitialDensity(undefined, options.branding?.density);
   applyDensity(density, target);
   return { design, mode, signature, density };
 }

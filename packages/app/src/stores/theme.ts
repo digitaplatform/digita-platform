@@ -8,6 +8,7 @@ import {
   applySignature,
   bootIdentity,
   getRuntimeSignature,
+  resolveInitialDensity,
   storeIdentityPreferences,
   DEFAULT_SIGNATURE_ID,
   IDENTITY_PREFERENCE_KEYS,
@@ -163,13 +164,17 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     set({ templateOverride: key });
   },
   // The branding may name another default signature, so the signature is drawn
-  // again, and applySignatureLayered puts the tenant's overrides and the per-user
-  // density back over it. A tenant that allows no light/dark choice puts everyone
-  // on the system mode.
+  // again, and applySignatureLayered puts the tenant's overrides and the density
+  // back over it: a person's own density, else the tenant's. A tenant that allows
+  // no light/dark choice puts everyone on the system mode.
   setBranding: (branding) => {
     const isModeLocked = branding.allow_user_theme_mode === false;
     if (isModeLocked) applyMode('system');
-    set({ branding, ...(isModeLocked ? { mode: 'system' as const } : {}) });
+    set({
+      branding,
+      density: resolveInitialDensity(undefined, branding.density),
+      ...(isModeLocked ? { mode: 'system' as const } : {}),
+    });
     showFavicon(branding.favicon ? appUrl(branding.favicon) : faviconUrl);
     get().reapplySignature();
   },

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // What an Administrator sets in Appearance & Branding reaches the screen once /boot hands the
-// branding to the theme store: the tenant's favicon, and a lock on the light/dark choice. Each
-// case loads the stores afresh.
+// branding to the theme store: the tenant's density for everyone who chose none, the tenant's
+// favicon, and a lock on the light/dark choice. Each case loads the stores afresh.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const services = vi.hoisted(() => ({ getUserPreference: vi.fn(), setUserPreference: vi.fn() }));
@@ -32,6 +32,19 @@ afterEach(() => {
 });
 
 describe('the branding a tenant sets', () => {
+  it("gives everyone who chose no density the tenant's density, and keeps a person's own", async () => {
+    let store = await loadThemeStore();
+    store.getState().setBranding({ density: 'compact' });
+    expect(store.getState().density).toBe('compact');
+    expect(root().getAttribute('data-density')).toBe('compact');
+
+    localStorage.setItem('digita-app:density', 'spacious');
+    store = await loadThemeStore();
+    store.getState().setBranding({ density: 'compact' });
+    expect(store.getState().density).toBe('spacious');
+    expect(root().getAttribute('data-density')).toBe('spacious');
+  });
+
   it("shows the tenant's favicon, and the platform's when the tenant sets none", async () => {
     const store = await loadThemeStore();
     store.getState().setBranding({ favicon: '/files/favicon.png' });
