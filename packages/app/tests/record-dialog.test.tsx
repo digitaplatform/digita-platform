@@ -19,6 +19,7 @@ vi.mock('@/hooks/useDocument', () => ({
   useDocument: () => ({ data: undefined, isLoading: false, isError: false }),
   useCreate: () => ({ mutateAsync: createMock, isPending: false }),
   useUpdate: () => ({ mutateAsync: updateMock, isPending: false }),
+  useCopy: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('@/components/render/FormRenderer', () => ({ FormRenderer: () => null }));
 vi.mock('@/lib/chrome-i18n', () => ({ useChrome: () => (k: string) => k }));

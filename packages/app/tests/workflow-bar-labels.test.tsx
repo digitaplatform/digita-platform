@@ -20,7 +20,7 @@ vi.mock('@/components/overlay/DialogHost', () => ({
 }));
 vi.mock('@/hooks/useDocument', () => {
   const m = () => ({ mutateAsync: vi.fn().mockResolvedValue({}), isPending: false });
-  return { useSubmit: m, useCancel: m, useAmend: m, useTransition: m };
+  return { useSubmit: m, useCancel: m, useAmend: m, useTransition: m, useCopy: m };
 });
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
