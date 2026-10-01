@@ -88,8 +88,12 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
     case "Data":
     case "Phone":
     case "Barcode":
-    case "Signature":
       return dataLikeSchema(field);
+    case "Signature":
+      return z
+        .string()
+        .max(SIGNATURE_MAX_LENGTH, "field_max_length")
+        .refine(isPngDataUrl, "field_invalid_type");
     case "Attach":
     case "AttachImage":
     case "Image":
@@ -203,6 +207,20 @@ function isSafeAttachValue(v: string): boolean {
     lower.startsWith("https://") ||
     lower.startsWith("data:image/")
   );
+}
+
+/**
+ * The signature pad sends its drawing as a PNG data URL, 5 to 15 KB for a normal
+ * signature. The bound, in characters of the data URL, leaves room for dense strokes
+ * at a high pixel ratio and keeps an API client from storing megabytes in one field.
+ */
+const SIGNATURE_MAX_LENGTH = 1024 * 1024;
+const PNG_DATA_URL_PREFIX = "data:image/png;base64,";
+
+function isPngDataUrl(v: string): boolean {
+  if (!v.startsWith(PNG_DATA_URL_PREFIX)) return false;
+  const payload = v.slice(PNG_DATA_URL_PREFIX.length);
+  return payload.length > 0 && payload.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(payload);
 }
 
 function dataLikeSchema(field: FieldDefinition): ZodTypeAny {

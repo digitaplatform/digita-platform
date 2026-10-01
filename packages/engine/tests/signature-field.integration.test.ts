@@ -210,3 +210,49 @@ describe("a Signature field holds a drawn signature's PNG data URL whole", () =>
     expect(await storedSignature(name)).toBe(drawn);
   });
 });
+
+describe("a Signature field refuses a value that is no drawn signature", () => {
+  async function create(value: unknown) {
+    return app.inject({
+      method: "POST",
+      url: "/api/v1/resource/SignatureProbe",
+      headers: authHeaders(),
+      payload: { signature: value },
+    });
+  }
+
+  it.each([
+    ["a remote URL", "https://example.com/signature.png"],
+    ["a data URL of another image type", `data:image/svg+xml;base64,${Buffer.from("<svg/>").toString("base64")}`],
+    ["a PNG data URL whose payload is no base64", "data:image/png;base64,not base64!"],
+    ["a PNG data URL whose base64 is cut short", "data:image/png;base64,iVBORw0KGgo"],
+  ])("refuses %s with 400 naming the field", async (_case, value) => {
+    const res = await create(value);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().messages).toContainEqual(
+      expect.objectContaining({ text: "signature has an invalid type", path: "signature" }),
+    );
+  });
+
+  it("refuses a PNG data URL over 1 MiB with 400 naming the field and the bound", async () => {
+    const oversized = `data:image/png;base64,${randomBytes(800 * 1024).toString("base64")}`;
+    expect(oversized.length).toBeGreaterThan(1024 * 1024);
+    const res = await create(oversized);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().messages).toContainEqual(
+      expect.objectContaining({ text: `signature cannot exceed ${1024 * 1024} characters`, path: "signature" }),
+    );
+  });
+
+  it("refuses the same values on an update", async () => {
+    const created = await create(signature());
+    expect(created.statusCode).toBe(201);
+    const res = await app.inject({
+      method: "PUT",
+      url: `/api/v1/resource/SignatureProbe/${created.json().data._id as string}`,
+      headers: authHeaders(),
+      payload: { signature: "https://example.com/signature.png" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
