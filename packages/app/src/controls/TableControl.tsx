@@ -10,8 +10,8 @@ import {
   type DataGridEditArgs,
 } from '@digitaplatform/components';
 import type { FieldControlProps, FieldControlState } from '@/controls/types';
-import { useI18nStore } from '@/stores/i18n';
 import { useChrome } from '@/lib/chrome-i18n';
+import { fieldLabel } from '@/lib/localize-meta';
 import { useSessionStore } from '@/stores/session';
 import { buildDefaults } from '@/lib/default-tokens';
 import { sweepRowStates, type FieldStateMap } from '@/lib/evaluate-field';
@@ -130,7 +130,6 @@ function stableRowId(row: Row): string {
 export default function TableControl(props: FieldControlProps) {
   const { field, value, doc, state, entity, onChange } = props;
   const tableId = useId();
-  const tField = useI18nStore((s) => s.tField);
   const tc = useChrome();
   const user = useSessionStore((s) => s.user);
 
@@ -182,7 +181,7 @@ export default function TableControl(props: FieldControlProps) {
     const kind = cellKindFor(c.fieldtype);
     return {
       key: c.fieldname,
-      label: tField(entity, c.fieldname, c.label),
+      label: fieldLabel(c),
       kind,
       align: kind === 'number' || kind === 'currency' ? ('end' as const) : undefined,
       tooltip: c.description,
@@ -260,7 +259,7 @@ export default function TableControl(props: FieldControlProps) {
           renderDisplay={renderReadOnlyCell}
           cellClassName={cellClassName}
           footer={footer}
-          aria-label={tField(entity, field.fieldname, field.label)}
+          aria-label={fieldLabel(field)}
         />
         <ul className="space-y-2 md:hidden">
           {rows.map((row, i) => (
@@ -268,7 +267,7 @@ export default function TableControl(props: FieldControlProps) {
               <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
                 {cols.map((c) => (
                   <div key={c.fieldname} className="truncate">
-                    <dt className="text-textMuted">{tField(entity, c.fieldname, c.label)}</dt>
+                    <dt className="text-textMuted">{fieldLabel(c)}</dt>
                     <dd className="text-textMain">
                       <CellValue field={c} row={row} entity={entity} />
                     </dd>
@@ -371,7 +370,7 @@ export default function TableControl(props: FieldControlProps) {
     <RowDetailDialog
       open={editRowId !== null}
       onClose={() => setEditRowId(null)}
-      title={tField(entity, field.fieldname, field.label)}
+      title={fieldLabel(field)}
       fields={detailFieldDefs}
       stateMap={rowState(editingRow)}
       row={editingRow}
@@ -614,7 +613,7 @@ export default function TableControl(props: FieldControlProps) {
           }
           removeRowLabel={tc('ui.table.removeRow')}
           editRowLabel={tc('ui.table.editRow')}
-          aria-label={tField(entity, field.fieldname, field.label)}
+          aria-label={fieldLabel(field)}
         />
         {rowDialog}
         {field.entry_context_view && field.entry_context_params && contextRowId && (
@@ -660,7 +659,7 @@ export default function TableControl(props: FieldControlProps) {
           addRowLabel={addViaLink ? tc('ui.table.addViaLink') : tc('ui.table.addRow')}
           removeRowLabel={tc('ui.table.removeRow')}
           editRowLabel={tc('ui.table.editRow')}
-          aria-label={tField(entity, field.fieldname, field.label)}
+          aria-label={fieldLabel(field)}
         />
         {rowDialog}
         {addViaLink && addField && (
@@ -702,7 +701,7 @@ export default function TableControl(props: FieldControlProps) {
         removeRowLabel={tc('ui.table.removeRow')}
         duplicateRowLabel={tc('ui.table.duplicateRow')}
         editRowLabel={tc('ui.table.editRow')}
-        aria-label={tField(entity, field.fieldname, field.label)}
+        aria-label={fieldLabel(field)}
       />
       {rowDialog}
     </>

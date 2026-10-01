@@ -5,7 +5,7 @@ import type { FieldControlState } from '@/controls/types';
 import type { FieldStateMap } from '@/lib/evaluate-field';
 import { ControlRenderer } from '@/components/render/ControlRenderer';
 import { useChrome } from '@/lib/chrome-i18n';
-import { useI18nStore } from '@/stores/i18n';
+import { fieldLabel } from '@/lib/localize-meta';
 
 type Row = Record<string, unknown>;
 
@@ -54,7 +54,6 @@ export function RowDetailDialog({
   onSave,
 }: RowDetailDialogProps) {
   const tc = useChrome();
-  const tField = useI18nStore((s) => s.tField);
   const baseId = useId();
   const [draft, setDraft] = useState<Row>(row);
 
@@ -100,7 +99,7 @@ export function RowDetailDialog({
               key={f.fieldname}
               controlId={id}
               labelId={labelId}
-              label={tField(entity, f.fieldname, f.label)}
+              label={fieldLabel(f)}
               required={st.required}
             >
               <ControlRenderer
