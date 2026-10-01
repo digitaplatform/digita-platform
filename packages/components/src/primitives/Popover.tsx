@@ -110,7 +110,7 @@ export function Popover({
       ref={panelRef}
       data-ui="popover"
       className={cn(
-        'anim-pop-in fixed z-popover overflow-hidden rounded-card border border-border bg-surfaceGlass shadow-md backdrop-blur-md',
+        'anim-pop-in fixed z-dropdown overflow-hidden rounded-card border border-border bg-surfaceGlass shadow-md backdrop-blur-md',
         className,
       )}
     >

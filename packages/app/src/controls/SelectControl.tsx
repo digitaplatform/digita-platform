@@ -1,5 +1,5 @@
 import { Select } from '@digitaplatform/components';
-import { useI18nStore } from '@/stores/i18n';
+import { useOptionText } from '@/lib/option-text';
 import { useChrome } from '@/lib/chrome-i18n';
 import type { FieldControlProps } from '@/controls/types';
 import { describedBy } from '@/controls/control-styles';
@@ -13,7 +13,8 @@ export function optionList(options: unknown): string[] {
 }
 
 /** Single-choice select. Options are a string[] or a newline-delimited string;
- *  labels localize via the i18n store (option.{Entity}.{field}.{value}). */
+ *  labels localize via the i18n store (option.{Entity}.{field}.{value}, or the action's key in an
+ *  action dialog). */
 export default function SelectControl({
   field,
   value,
@@ -25,7 +26,7 @@ export default function SelectControl({
   describedById,
   errorId,
 }: FieldControlProps) {
-  const tOption = useI18nStore((s) => s.tOption);
+  const tOption = useOptionText();
   const tc = useChrome();
   // Build options: a leading clear sentinel, then de-duped non-empty choices
   // (an empty option would collide with the sentinel + break the value key).
