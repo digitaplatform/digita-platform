@@ -1,8 +1,8 @@
-import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
+import { vi, describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 
 // A Link whose target no entity file loaded stops the boot, and stops a reload of the definitions
-// before it replaces anything. The env mock is side-panel-read-gate.integration.test.ts's, with the
-// fixture app set per test.
+// before it changes what the engine serves or stores. The env mock is
+// side-panel-read-gate.integration.test.ts's, with the fixture app set per test.
 vi.mock("../src/core/config/env.js", () => {
   return { env: {
     NODE_ENV: "test", APP_VERSION: "0.1.0", SERVICE_NAME: "digita-test", PORT: 0, HOST: "127.0.0.1",
@@ -68,12 +68,13 @@ const dirs: string[] = [];
 const writeJson = (path: string, data: unknown) => writeFile(path, JSON.stringify(data), "utf-8");
 
 /** An app of two entities: a Book whose `author` Link names `authorTarget`, and an Author. */
-async function writeBook(root: string, authorTarget: string): Promise<void> {
+async function writeBook(root: string, authorTarget: string, extraFields: unknown[] = []): Promise<void> {
   await writeJson(join(root, "library", "entities", "book.entity.json"), {
     name: "Book", module: "library", database: DB, naming: { strategy: "system" },
     fields: [
       { fieldname: "title", fieldtype: "Data", label: "Title" },
       { fieldname: "author", fieldtype: "Link", label: "Author", target: authorTarget },
+      ...extraFields,
     ],
     permissions: [ADMIN],
   });
@@ -116,35 +117,76 @@ describe("the boot of an app whose Link names no loaded entity", () => {
   }, 60000);
 });
 
-describe("POST /admin/reload-definitions of an app whose Link names no loaded entity", () => {
-  it("answers the entity, the field and the target and replaces no stored definition", async () => {
-    const root = await writeApp("Author");
-    (env as { APP_DIRS: string[] }).APP_DIRS = [root];
-    const ta = await buildTestAuth();
-    const result = await createApp({ authn: ta.authn });
-    try {
-      await result.startup();
-      await result.app.ready();
-      const bearer = { authorization: `Bearer ${await ta.sign({ sub: "a", email: "admin@digita.local", roles: ["Administrator", "System User"] })}` };
-      const reload = () => result.app.inject({ method: "POST", url: "/api/v1/admin/reload-definitions", headers: bearer });
-      const storedTarget = async () => {
-        const stored = await result.db.findOne(DIGITA.COLLECTIONS.ENTITY, "Book", DIGITA.DATABASES.CORE);
-        return (stored?.["fields"] as Array<{ fieldname: string; target?: string }>).find((f) => f.fieldname === "author")?.target;
-      };
-
-      // Innocent: the files as they stand reload.
-      expect((await reload()).statusCode).toBe(200);
-      expect(await storedTarget()).toBe("Author");
-
-      // Planted: the same file with its target mistyped.
-      await writeBook(root, "Autor");
-      const refused = await reload();
-      expect(refused.statusCode).toBe(400);
-      expect(refused.json().error.detail).toContain(MISTYPED);
-      expect(await storedTarget()).toBe("Author");
-    } finally {
+/** A running app with valid files, and the calls of an administrator against it. */
+async function startAdminApp() {
+  const root = await writeApp("Author");
+  (env as { APP_DIRS: string[] }).APP_DIRS = [root];
+  const ta = await buildTestAuth();
+  const result = await createApp({ authn: ta.authn });
+  await result.startup();
+  await result.app.ready();
+  const headers = { authorization: `Bearer ${await ta.sign({ sub: "a", email: "admin@digita.local", roles: ["Administrator", "System User"] })}` };
+  const authorTargetOf = (fields: Array<{ fieldname: string; target?: string }>) => fields.find((f) => f.fieldname === "author")?.target;
+  return {
+    root,
+    reload: () => result.app.inject({ method: "POST", url: "/api/v1/admin/reload-definitions", headers }),
+    createDefinition: (payload: unknown) => result.app.inject({ method: "POST", url: "/api/v1/meta", headers, payload: payload as object }),
+    storedTarget: async () => {
+      const stored = await result.db.findOne(DIGITA.COLLECTIONS.ENTITY, "Book", DIGITA.DATABASES.CORE);
+      return authorTargetOf(stored?.["fields"] as Array<{ fieldname: string; target?: string }>);
+    },
+    servedTarget: async () => {
+      const served = await result.app.inject({ method: "GET", url: "/api/v1/meta/Book", headers });
+      return authorTargetOf(served.json().data.fields);
+    },
+    close: async () => {
       await result.app.close();
       await result.db.disconnect();
-    }
+    },
+  };
+}
+
+describe("POST /admin/reload-definitions", () => {
+  let running: Awaited<ReturnType<typeof startAdminApp>>;
+  beforeEach(async () => { running = await startAdminApp(); }, 60000);
+  afterEach(async () => { await running.close(); });
+
+  it("answers the entity, the field and the target of a Link no file has and replaces no stored definition", async () => {
+    // Innocent: the files as they stand reload.
+    expect((await running.reload()).statusCode).toBe(200);
+    expect(await running.storedTarget()).toBe("Author");
+
+    // Planted: the same file with its target mistyped.
+    await writeBook(running.root, "Autor");
+    const refused = await running.reload();
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error.detail).toContain(MISTYPED);
+    expect(await running.storedTarget()).toBe("Author");
+  }, 120000);
+
+  it("keeps serving the definition it served before a refused reload", async () => {
+    expect(await running.servedTarget()).toBe("Author");
+
+    await writeBook(running.root, "Autor");
+    expect((await running.reload()).statusCode).toBe(400);
+    expect(await running.servedTarget()).toBe("Author");
+  }, 120000);
+
+  it("is not refused for a Link of a definition POST /meta wrote, which boot does not check either", async () => {
+    const created = await running.createDefinition({
+      name: "Loan", module: "library", database: DB, naming: { strategy: "system" },
+      fields: [{ fieldname: "borrower", fieldtype: "Link", label: "Borrower", target: "Nobody" }],
+      permissions: [ADMIN],
+    });
+    expect(created.statusCode).toBe(201);
+
+    expect((await running.reload()).statusCode).toBe(200);
+  }, 120000);
+
+  it("answers 400 with the message for a file boot refuses for another defect", async () => {
+    await writeBook(running.root, "Author", [{ fieldname: "owner", fieldtype: "Data", label: "Owner" }]);
+    const refused = await running.reload();
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error.detail).toContain('Field "owner" of entity "Book" is named after a system field');
   }, 120000);
 });
