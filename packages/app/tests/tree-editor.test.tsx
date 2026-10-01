@@ -33,6 +33,7 @@ import { TreeEditor } from '@/components/render/TreeEditor';
 import { DialogHostProvider } from '@/components/overlay/DialogHost';
 import { updateDoc } from '@/services/resource';
 import { useUiStore } from '@/stores/ui';
+import { useSessionStore } from '@/stores/session';
 
 const META = { name: 'CustomerGroup', title_field: 'name', fields: [] } as unknown as EntityDefinition;
 const TREE: TreeConfig = { parent_field: 'parent', label_field: 'name' };
@@ -60,6 +61,8 @@ const tree = () => screen.getByRole('tree');
 beforeEach(() => {
   listState.rows = ROWS;
   useUiStore.setState({ treeEditorCollapsedIds: {} });
+  // The entity withholds its permission matrix, so a signed-in person is offered every action.
+  useSessionStore.setState({ user: { _id: 'u', email: 'u@demo.test', roles: ['System User'] } });
   vi.mocked(updateDoc).mockClear();
 });
 

@@ -50,6 +50,7 @@ import GroupsPage from '@/pages/GroupsPage';
 import { DialogHostProvider } from '@/components/overlay/DialogHost';
 import { deleteDoc, updateDoc } from '@/services/resource';
 import { useUiStore } from '@/stores/ui';
+import { useSessionStore } from '@/stores/session';
 
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -69,6 +70,8 @@ beforeEach(() => {
   listState.rows = ROWS;
   recordDialog.props = null;
   useUiStore.setState({ treeEditorCollapsedIds: {} });
+  // The entity withholds its permission matrix, so a signed-in person is offered every action.
+  useSessionStore.setState({ user: { _id: 'u', email: 'u@demo.test', roles: ['System User'] } });
   vi.mocked(updateDoc).mockClear();
   vi.mocked(deleteDoc).mockClear();
 });
