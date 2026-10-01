@@ -3,7 +3,6 @@ import type { Locale } from "@/i18n/config";
 import type { WebNavMenu, WebSite } from "@/lib/types";
 import { isContactItem, sortNav } from "@/lib/nav";
 import { t } from "@/i18n/messages";
-import { SheetButton } from "@/blocks/marketing/SheetButton";
 import { NavItemLink } from "./NavItemLink";
 
 const LINK = "inline-flex w-fit items-center gap-1 text-sm text-textMain transition-colors hover:text-primary-600";
@@ -49,11 +48,7 @@ export function Footer({
               <ul className="gap-x-8 sm:columns-2 lg:columns-3">
                 {items.map((item, i) => (
                   <li key={`${item.label}-${i}`} className="mb-2.5 break-inside-avoid">
-                    {isContactItem(item) ? (
-                      <SheetButton className={LINK}>{item.label}</SheetButton>
-                    ) : (
-                      <NavItemLink locale={locale} item={item} comingLabel={t("familyComing", locale)} className={LINK} />
-                    )}
+                    <NavItemLink locale={locale} item={item} comingLabel={t("familyComing", locale)} className={LINK} />
                   </li>
                 ))}
               </ul>

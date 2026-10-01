@@ -4,7 +4,9 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Menu, X } from "lucide-react";
 import { BrandMark, Drawer, NavList, navLeafClass, railButtonClass, topBarButtonClass, type BrandMarkProps } from "@digitaplatform/components";
+import { useSiteConfig } from "@/config/ConfigProvider";
 import type { NavItem } from "@/lib/types";
+import { isContactItem } from "@/lib/nav";
 import { useActiveItem } from "./NavLinks";
 import { NavItemLink } from "./NavItemLink";
 import { isCurrentSite } from "./FamilySwitcher";
@@ -49,6 +51,9 @@ export function MobileNav({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const isActive = useActiveItem(locale);
+  // Without the contact sheet the family's item for it would lead nowhere, so it is left out, as the footer leaves it out.
+  const { contactEnabled } = useSiteConfig();
+  const familyItems = family.filter((item) => contactEnabled || !isContactItem(item));
 
   // Close when the route changes (a link inside the drawer was followed).
   useEffect(() => {
@@ -87,10 +92,10 @@ export function MobileNav({
                 </li>
               ))}
             </NavList>
-            {family.length > 0 && <div aria-hidden="true" className="my-2 h-px bg-border" />}
-            {family.length > 0 && (
+            {familyItems.length > 0 && <div aria-hidden="true" className="my-2 h-px bg-border" />}
+            {familyItems.length > 0 && (
               <NavList>
-                {family.map((item, i) => (
+                {familyItems.map((item, i) => (
                   <li key={`${item.label}-${i}`}>
                     {isCurrentSite(item, domain) ? (
                       <span aria-current="true" className={navLeafClass(true)}>

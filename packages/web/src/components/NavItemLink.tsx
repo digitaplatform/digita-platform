@@ -5,11 +5,13 @@ import { ArrowUpRight } from "lucide-react";
 import type { AriaRole } from "react";
 import { useSiteConfig } from "@/config/ConfigProvider";
 import type { NavItem } from "@/lib/types";
-import { isExternalHref, navHref } from "@/lib/nav";
+import { isContactItem, isExternalHref, navHref } from "@/lib/nav";
+import { SheetButton } from "@/blocks/marketing/SheetButton";
 
 /**
  * One menu item, the same way in every menu of the site: a site path in the page's locale, a web
- * link in a new tab with an arrow, and an item without a link as its label marked coming.
+ * link in a new tab with an arrow, an item without a link as its label marked coming, and the item
+ * for the contact sheet as the button that opens it, since no page holds a `#contact` anchor.
  */
 export function NavItemLink({
   locale,
@@ -37,6 +39,13 @@ export function NavItemLink({
   // Inside a Menu every item takes programmatic focus; outside, only the links are tab stops.
   const tabIndex = role ? -1 : undefined;
 
+  if (isContactItem(item)) {
+    return (
+      <SheetButton data-ui={ui} role={role} tabIndex={tabIndex} className={className}>
+        {item.label}
+      </SheetButton>
+    );
+  }
   if (!href) {
     return (
       <span data-ui={ui} role={role} aria-disabled={role ? true : undefined} tabIndex={tabIndex} className={className}>
