@@ -26,16 +26,7 @@ const fixtures = vi.hoisted(() => ({
       { id: 'small-chart', kind: 'chart', label: 'Small chart', section: 'per_genre', chart_type: 'bar', x_field: 'genre', y_fields: ['books'], width: 1 },
     ],
   },
-  view: {
-    _id: 'library-overview',
-    name: 'library-overview',
-    anchored: false,
-    sections: [
-      { key: 'book_count', kind: 'aggregate', entity: 'Book', pipeline: [] },
-      { key: 'per_genre', kind: 'aggregate', entity: 'Book', pipeline: [] },
-      { key: 'recent_books', kind: 'list', entity: 'Book' },
-    ],
-  },
+  entities: { book_count: 'Book', per_genre: 'Book', recent_books: 'Book' },
   meta: {
     name: 'Book',
     label: 'Book',
@@ -67,13 +58,10 @@ vi.mock('@/hooks/useWorkspaceCatalog', () => ({
   useWorkspaceCatalog: () => ({ isLoading: false, visible: [{ _id: 'library-home' }] }),
 }));
 vi.mock('@/services/resource', () => ({
-  getDoc: async (entity: string) => ({
-    success: true,
-    data: structuredClone(entity === 'Workspace' ? fixtures.workspace : fixtures.view),
-  }),
+  getDoc: async () => ({ success: true, data: structuredClone(fixtures.workspace) }),
   getView: async () => {
     await viewGate.opened;
-    return { success: true, data: { source: null, sections: fixtures.sections }, messages: [] };
+    return { success: true, data: { source: null, sections: fixtures.sections, entities: fixtures.entities }, messages: [] };
   },
 }));
 vi.mock('@/services/meta', () => ({

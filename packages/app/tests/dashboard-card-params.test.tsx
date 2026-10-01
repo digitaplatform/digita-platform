@@ -25,19 +25,7 @@ const fixtures = vi.hoisted(() => ({
       { id: 'german-poems', kind: 'number', label: 'Poems in German', section: 'book_count', value_field: 'total', params: { lang: 'de', genre: 'poetry' } },
     ],
   },
-  view: {
-    _id: 'library-overview',
-    name: 'library-overview',
-    anchored: false,
-    params: [
-      { name: 'genre', type: 'string' },
-      { name: 'lang', type: 'string' },
-    ],
-    sections: [
-      { key: 'book_count', kind: 'aggregate', entity: 'Book', pipeline: [] },
-      { key: 'recent_books', kind: 'list', entity: 'Book' },
-    ],
-  },
+  entities: { book_count: 'Book', recent_books: 'Book' },
   meta: {
     name: 'Book',
     label: 'Book',
@@ -58,7 +46,7 @@ const getView = vi.hoisted(() =>
     );
     return {
       success: true,
-      data: { source: null, sections: { book_count: { total: books.length }, recent_books: books } },
+      data: { source: null, sections: { book_count: { total: books.length }, recent_books: books }, entities: fixtures.entities },
       messages: [],
     };
   }),
@@ -76,10 +64,7 @@ vi.mock('@/hooks/useWorkspaceCatalog', () => ({
   useWorkspaceCatalog: () => ({ isLoading: false, visible: [{ _id: 'library-home' }] }),
 }));
 vi.mock('@/services/resource', () => ({
-  getDoc: async (entity: string) => ({
-    success: true,
-    data: structuredClone(entity === 'Workspace' ? fixtures.workspace : fixtures.view),
-  }),
+  getDoc: async () => ({ success: true, data: structuredClone(fixtures.workspace) }),
   getView,
 }));
 vi.mock('@/services/meta', () => ({

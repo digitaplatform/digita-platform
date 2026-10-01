@@ -130,6 +130,8 @@ describe("ViewEngine — permission denial in section", () => {
     );
     expect((out.sections["addresses"] as unknown[]).length).toBe(1);
     expect(out.sections["recent_invoices"]).toEqual([]);
+    // Only a section that ran names the entity of its rows, so a denied one reveals no entity.
+    expect(out.entities).toEqual({ addresses: "customerAddress" });
     const msgs = ctx.getMessages();
     const warn = msgs.find((m) => m.path === "/sections/recent_invoices");
     expect(warn?.code).toBe("omitted_no_permission");

@@ -106,4 +106,7 @@ export type ViewSectionData = Record<string, unknown> | Array<Record<string, unk
 export interface ViewResult {
   source: Record<string, unknown> | null;
   sections: Record<string, ViewSectionData>;
+  /** The entity each section that ran read, by section key, whose field labels name its row
+   *  keys. A section that failed has none. */
+  entities: Record<string, string>;
 }

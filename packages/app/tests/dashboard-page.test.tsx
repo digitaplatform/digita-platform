@@ -71,6 +71,7 @@ const fixtures = vi.hoisted(() => {
           ],
           nothing_rows: [],
         },
+        entities: { due_today: 'WorkOrder', nothing_rows: 'WorkOrder' },
       },
     } as Record<string, unknown>,
     current: { workspace: 'workshop-home' },
@@ -97,19 +98,7 @@ vi.mock('@/hooks/useWorkspaceCatalog', () => ({
 }));
 vi.mock('@/lib/chrome-i18n', () => ({ useChrome: () => (key: string) => key }));
 vi.mock('@/services/resource', () => ({
-  getDoc: async (entity: string, name: string) => {
-    if (entity === 'Workspace') return { success: true, data: structuredClone(fixtures.workspaces[name]) };
-    return {
-      success: true,
-      data: {
-        name,
-        sections: [
-          { key: 'due_today', kind: 'list', entity: 'WorkOrder' },
-          { key: 'nothing_rows', kind: 'list', entity: 'WorkOrder' },
-        ],
-      },
-    };
-  },
+  getDoc: async (_entity: string, name: string) => ({ success: true, data: structuredClone(fixtures.workspaces[name]) }),
   getView: async (name: string) => {
     if (name === 'broken-view') return { success: false, status_code: 500, error: { detail: 'The view is broken' } };
     return { success: true, data: { source: null, ...structuredClone(fixtures.views[name] as object) }, messages: [] };

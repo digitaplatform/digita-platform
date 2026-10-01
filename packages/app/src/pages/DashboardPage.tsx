@@ -2,15 +2,14 @@ import { useMemo } from 'react';
 import { hashKey, useQueries } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutDashboard } from 'lucide-react';
-import type { ViewDefinition, ViewResult, ResponseMessage } from '@digitaplatform/shared';
+import type { ViewResult, ResponseMessage } from '@digitaplatform/shared';
 import { useSessionStore } from '@/stores/session';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useWorkspaceCatalog } from '@/hooks/useWorkspaceCatalog';
 import { useWorkspace } from '@/hooks/useWorkspace';
-import { getDoc, getView } from '@/services/resource';
+import { getView } from '@/services/resource';
 import { qk } from '@/lib/query-keys';
 import { ApiClientError } from '@/lib/errors';
-import { unwrap } from '@/lib/api-result';
 import { cardSpan, renderCard, type CardResolve, type ResolvedSection, type ViewParams } from '@/components/dashboard';
 import { ErrorBlock, EmptyState } from '@/components/status';
 import { CardsSkeleton } from '@digitaplatform/components';
@@ -92,9 +91,6 @@ export default function DashboardPage() {
     return [...reads.values()];
   }, [ws.data]);
 
-  // A view's definition is the same whatever params a card sends it.
-  const viewNames = useMemo(() => [...new Set(viewReads.map((read) => read.name))], [viewReads]);
-
   const viewQueries = useQueries({
     queries: viewReads.map((read) => ({
       queryKey: read.queryKey,
@@ -110,15 +106,6 @@ export default function DashboardPage() {
     })),
   });
 
-  // A view's definition names the entity each section reads; its field labels head a card's columns.
-  const viewDefinitions = useQueries({
-    queries: viewNames.map((name) => ({
-      queryKey: qk.doc('View', name),
-      staleTime: 5 * 60_000,
-      queryFn: async () => unwrap(await getDoc<ViewDefinition>('View', name)),
-    })),
-  });
-
   const byRead = useMemo(() => {
     const m = new Map<string, (typeof viewQueries)[number]>();
     viewReads.forEach((read, i) => m.set(read.key, viewQueries[i]!));
@@ -131,8 +118,7 @@ export default function DashboardPage() {
       return { status: 'error', data: null, message: { text: tc('ui.dashboard.cardError'), type: 'error', show: true } };
     }
     const q = byRead.get(viewRead(effective, params).key);
-    const definition = viewDefinitions[viewNames.indexOf(effective)];
-    if (!q || q.isPending || definition?.isPending) return { status: 'loading', data: null };
+    if (!q || q.isPending) return { status: 'loading', data: null };
     if (q.isError) {
       return { status: 'error', data: null, message: { text: tc('ui.dashboard.cardError'), type: 'error', show: true } };
     }
@@ -142,7 +128,8 @@ export default function DashboardPage() {
       status: message ? 'locked' : 'ready',
       data: section in sections ? sections[section]! : null,
       message,
-      entity: definition?.data?.sections.find((s) => s.key === section)?.entity,
+      // The entity the section read; its field labels head a card's columns.
+      entity: q.data?.result?.entities[section],
     };
     return result;
   };

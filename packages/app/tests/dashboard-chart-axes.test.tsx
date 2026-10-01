@@ -23,15 +23,7 @@ const fixtures = vi.hoisted(() => ({
       { id: 'sales-areas', kind: 'chart', label: 'Sales in areas', section: 'monthly_sales', chart_type: 'area', x_field: 'month', y_fields: ['revenue', 'units', 'returns'] },
     ],
   },
-  view: {
-    _id: 'shop-overview',
-    name: 'shop-overview',
-    anchored: false,
-    sections: [
-      { key: 'order_count', kind: 'aggregate', entity: 'Order', pipeline: [] },
-      { key: 'monthly_sales', kind: 'aggregate', entity: 'Order', pipeline: [] },
-    ],
-  },
+  entities: { order_count: 'Order', monthly_sales: 'Order' },
   meta: {
     name: 'Order',
     label: 'Order',
@@ -67,11 +59,12 @@ vi.mock('@/hooks/useWorkspaceCatalog', () => ({
   useWorkspaceCatalog: () => ({ isLoading: false, visible: [{ _id: 'shop-home' }] }),
 }));
 vi.mock('@/services/resource', () => ({
-  getDoc: async (entity: string) => ({
+  getDoc: async () => ({ success: true, data: structuredClone(fixtures.workspace) }),
+  getView: async () => ({
     success: true,
-    data: structuredClone(entity === 'Workspace' ? fixtures.workspace : fixtures.view),
+    data: { source: null, sections: fixtures.sections, entities: fixtures.entities },
+    messages: [],
   }),
-  getView: async () => ({ success: true, data: { source: null, sections: fixtures.sections }, messages: [] }),
 }));
 vi.mock('@/services/meta', () => ({
   getEntityMeta: async () => {
