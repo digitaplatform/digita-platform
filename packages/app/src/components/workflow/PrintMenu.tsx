@@ -45,7 +45,7 @@ export function PrintMenu({ meta, doc }: { meta: EntityDefinition; doc: Doc }) {
       required === 'print' && !printModelled
         ? hasEntityPermission(meta, user, 'read')
         : hasEntityPermission(meta, user, required);
-    return permitted && reportLinkVisible(link, doc);
+    return permitted && reportLinkVisible(link, doc, user);
   });
   if (links.length === 0) return null;
 

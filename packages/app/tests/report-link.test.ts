@@ -170,7 +170,7 @@ describe('reportLinkVisible', () => {
   });
 
   it('offers a link whose rule it cannot read, because the report service is the real gate', () => {
-    expect(reportLinkVisible(buildLink({ show_if: 'doc.total > 100' }), draft)).toBe(true);
-    expect(reportLinkVisible(buildLink({ show_if: 'user.role == "Clerk"' }), draft)).toBe(true);
+    expect(reportLinkVisible(buildLink({ show_if: "(doc.status == 'Submitted'" }), draft)).toBe(true);
+    expect(reportLinkVisible(buildLink({ show_if: "doc.status in ['Draft'" }), submitted)).toBe(true);
   });
 });

@@ -3,6 +3,7 @@ import type { EntityReportLink } from '@digitaplatform/shared';
 import { IconButton } from '@digitaplatform/components';
 import { Printer } from 'lucide-react';
 import { useI18nStore } from '@/stores/i18n';
+import { useSessionStore } from '@/stores/session';
 import { reportLinkLabel, reportLinkVisible } from '@/lib/report-link';
 import { useChrome } from '@/lib/chrome-i18n';
 import { tid } from '@/lib/testid';
@@ -29,7 +30,8 @@ export function RowPrintButton({
   const { entity } = useParams<{ entity: string }>();
   const translations = useI18nStore((s) => s.translations);
   const tc = useChrome();
-  if (!reportLinkVisible(link, doc)) return null;
+  const user = useSessionStore((s) => s.user);
+  if (!reportLinkVisible(link, doc, user)) return null;
   const label = entity ? reportLinkLabel(entity, link, translations) : link.label;
   return (
     <IconButton

@@ -1,4 +1,6 @@
 import type { EntityReportLink } from '@digitaplatform/shared';
+import type { SessionUser } from '@/types';
+import { evaluateExpr } from '@/lib/expression';
 
 /**
  * Entity↔report links (metadata-driven print buttons): URL building and
@@ -76,33 +78,13 @@ export function reportRenderUrl(
 }
 
 /**
- * Affordance-only show_if for report links: supports the eval subset the
- * shipped links use (`doc.field == literal`, `!=`, bare truthiness).
- * Unknown expressions fail OPEN — the engine/report service stays the
- * security boundary; this only hides obviously-inapplicable buttons.
+ * Affordance-only show_if for report links, read with the grammar of an action's show_if: the doc
+ * as `doc`, the signed-in user as `user`. A rule that does not parse fails OPEN — the report
+ * service stays the security boundary; this only hides obviously-inapplicable buttons.
  */
-export function reportLinkVisible(link: EntityReportLink, doc: Doc): boolean {
+export function reportLinkVisible(link: EntityReportLink, doc: Doc, user?: SessionUser | null): boolean {
   const expr = link.show_if?.replace(/^eval:/, '').trim();
   if (!expr) return true;
-  const m = /^doc\.([\w.]+)\s*(==|!=)\s*(.+)$/.exec(expr);
-  if (m) {
-    const [, path, op, rawLit] = m;
-    let value: unknown = doc;
-    for (const seg of (path as string).split('.')) {
-      value = (value as Doc | undefined)?.[seg];
-    }
-    const lit = (rawLit as string).trim().replace(/^['"]|['"]$/g, '');
-    const litValue: unknown = lit === 'true' ? true : lit === 'false' ? false : /^-?\d+(\.\d+)?$/.test(lit) ? Number(lit) : lit;
-    const equal = value === litValue || String(value) === String(litValue);
-    return op === '==' ? equal : !equal;
-  }
-  const bare = /^doc\.([\w.]+)$/.exec(expr);
-  if (bare) {
-    let value: unknown = doc;
-    for (const seg of (bare[1] as string).split('.')) {
-      value = (value as Doc | undefined)?.[seg];
-    }
-    return Boolean(value);
-  }
-  return true;
+  const result = evaluateExpr(expr, { doc, user: user ? (user as unknown as Doc) : undefined });
+  return result.error ? true : result.value;
 }
