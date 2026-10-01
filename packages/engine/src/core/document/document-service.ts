@@ -26,6 +26,7 @@ import { resolveStatusIndicator } from "../status/status-resolver.js";
 import type { StoragePort } from "../storage/storage-port.js";
 import { collectAttachFileIds, cleanupDocumentAttachments, parseFileId, FILE_FIELD_TYPES } from "../storage/file-cleanup.js";
 import { assertAttachFilesReadable, mayReadFile } from "../storage/file-access.js";
+import { usePublicUrlsOfPublicFiles } from "../storage/public-field-files.js";
 import {
   buildMongoFilter,
   assertFieldAllowed,
@@ -1078,6 +1079,7 @@ export class DocumentService {
       doc.creation = now;
       doc.modified = now;
 
+      await usePublicUrlsOfPublicFiles(this.db, entity, doc._data, session);
       await assertAttachFilesReadable(this.fileAccess(), entity, doc._data, new Set(), user, session);
 
       // Store in DB
@@ -1362,6 +1364,7 @@ export class DocumentService {
       doc.modified = new Date();
       doc.modified_by = user.email;
 
+      for (const field of await usePublicUrlsOfPublicFiles(this.db, entity, doc._data, session)) doc._dirty.add(field);
       await assertAttachFilesReadable(this.fileAccess(), entity, doc._data, new Set(attachFilesBefore), user, session);
 
       // Save to DB
