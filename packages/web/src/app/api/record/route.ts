@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getConfig } from "@/config/env";
 import { createRecord } from "@/lib/engine-client";
 import { admitFormPost, answer } from "@/lib/form-post";
+import { postMatchesForm, readSignedForm } from "@/lib/form-signature";
 import { refuseOversizedBody } from "@/app/api/body-limit";
 import { OWN_BUDGET_WAIT_SECONDS, tellRetryAfter } from "@/app/api/retry-after";
 
@@ -36,7 +37,9 @@ function parse(fields: Record<string, unknown>): { record: RecordPost } | { fiel
  * create of the engine that holds it, as Guest. A form that names a tenant app posts to that app's
  * engine (ENGINE_URLS); one that names none posts to the site's own engine, which stamps the site
  * on a site-scoped entity as it does for the contact sheet. The entity's Guest row decides what
- * lands, and the protections are every form's (src/lib/form-post.ts).
+ * lands, and the protections are every form's (src/lib/form-post.ts). The post must carry the
+ * signature its form was rendered with (src/lib/form-signature.ts), so it names only the app, entity
+ * and fields of a form the site placed, and its render time is the server's.
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const oversized = await refuseOversizedBody(req);
@@ -49,6 +52,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const { record } = parsed;
 
   const config = getConfig();
+  if (!config.formSigningKey) return answer(503, { ok: false, message: "The form is not configured" });
+  const form = readSignedForm(config.formSigningKey, post.fields.form);
+  if (!form || !postMatchesForm(form, { app: record.app, entity: record.entity, keys: Object.keys(record.values), renderedAt: post.fields.rendered_at }, Date.now())) {
+    return answer(403, { ok: false, message: "The form may not create this record" });
+  }
   const engineUrl = record.app ? config.engineUrls.get(record.app) : config.engineUrl;
   if (!engineUrl) return answer(503, { ok: false, message: "The form is not configured" });
 

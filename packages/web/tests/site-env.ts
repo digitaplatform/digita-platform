@@ -1,3 +1,5 @@
+import { TEST_FORM_KEY } from "./signed-form";
+
 /**
  * The config of a test that reads the site's texts: TRANSLATIONS_DIR stays as the pod reads it,
  * every other required setting is any value. getConfig reads the environment on first use, so a
@@ -13,5 +15,6 @@ export function setSiteEnv(): void {
     REVALIDATE_SECRET: "test-revalidate-secret",
     LOCALES: "en,de",
     DEFAULT_LOCALE: "en",
+    FORM_SIGNING_KEY: TEST_FORM_KEY,
   });
 }

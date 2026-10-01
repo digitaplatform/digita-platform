@@ -9,6 +9,7 @@ import { getBlockComponent } from "../src/blocks/registry";
 import { readRecordFormFields } from "../src/blocks/record-form";
 import { RecordFormFields, recordValues } from "../src/blocks/RecordFormFields";
 import { setSiteEnv } from "./site-env";
+import { TEST_FORM_KEY } from "./signed-form";
 
 vi.mock("server-only", () => ({}));
 setSiteEnv();
@@ -56,6 +57,7 @@ const render = (props: Record<string, unknown>) => {
 let root: Root | null = null;
 // A server clock far from the browser's, so a value the browser made up cannot pass for it.
 const RENDERED_AT = 1_000_000;
+const SIGNATURE = "the-signature-the-server-made";
 
 async function mount() {
   const container = document.createElement("div");
@@ -63,7 +65,7 @@ async function mount() {
   root = createRoot(container);
   const texts = { send: "Request booking", sent: booking.thanks, failed: "Sending failed." };
   await act(async () =>
-    root!.render(<RecordFormFields app="workshop" entity="Booking" fields={readRecordFormFields(booking)} texts={texts} renderedAt={RENDERED_AT} />),
+    root!.render(<RecordFormFields app="workshop" entity="Booking" fields={readRecordFormFields(booking)} texts={texts} renderedAt={RENDERED_AT} signature={SIGNATURE} />),
   );
 }
 
@@ -128,6 +130,32 @@ describe("the record_form block", () => {
     expect(render({ ...booking, app: "" })).not.toBe("");
   });
 
+  it("PLANTED DEFECT: signs the app, the entity and every field it sends, hidden ones too, with the render time", async () => {
+    const { readSignedForm } = await import("../src/lib/form-signature");
+    const { RecordForm } = await import("../src/blocks/RecordForm");
+    const before = Date.now();
+    // The section holds the client form, whose props reach the browser as they are.
+    const section = RecordForm({ props: booking, locale: "en" }) as { props: { children: { props: { signature: string; renderedAt: number } } } };
+    const { signature, renderedAt } = section.props.children.props;
+    const form = readSignedForm(TEST_FORM_KEY, signature);
+    expect(form).toMatchObject({ app: "workshop", entity: "Booking", fields: booking.fields.map((field) => field.name) });
+    expect(form!.renderedAt).toBe(renderedAt);
+    expect(renderedAt).toBeGreaterThanOrEqual(before);
+  });
+
+  it("fails a page that places a form on a renderer without the signing key", async () => {
+    vi.resetModules();
+    const key = process.env.FORM_SIGNING_KEY;
+    delete process.env.FORM_SIGNING_KEY;
+    try {
+      const { RecordForm } = await import("../src/blocks/RecordForm");
+      expect(() => renderToStaticMarkup(<RecordForm props={booking} locale="en" />)).toThrow("missing required env var: FORM_SIGNING_KEY");
+    } finally {
+      process.env.FORM_SIGNING_KEY = key;
+      vi.resetModules();
+    }
+  });
+
   it("posts the record the visitor filled in, the render time and the empty honeypot to /api/record, and thanks them", async () => {
     const fetchMock = vi.fn(async () => Response.json({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);
@@ -151,6 +179,7 @@ describe("the record_form block", () => {
       },
       website: "",
       rendered_at: RENDERED_AT,
+      form: SIGNATURE,
     });
     expect(document.querySelector('[role="status"]')?.textContent).toBe(booking.thanks);
     expect(document.querySelector("form")).toBeNull();

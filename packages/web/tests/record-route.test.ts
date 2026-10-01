@@ -3,6 +3,7 @@
 // plain 403 what the entity's Guest row does not grant.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { TEST_FORM_KEY, signed } from "./signed-form";
 
 vi.mock("server-only", () => ({}));
 
@@ -17,6 +18,7 @@ const ENV = {
   TRANSLATIONS_DIR: "/translations",
   LOCALES: "en,de",
   DEFAULT_LOCALE: "en",
+  FORM_SIGNING_KEY: TEST_FORM_KEY,
 };
 
 type Answer = { status: number; body: unknown };
@@ -35,7 +37,8 @@ async function loadRoute(env: Record<string, string | undefined> = ENV) {
 }
 
 /** A booking of the workshop app, as the Veloluck site's record form sends it. */
-const booking = () => ({
+const booking = () => signed(unsignedBooking());
+const unsignedBooking = () => ({
   app: "workshop",
   entity: "Booking",
   values: {
@@ -104,8 +107,8 @@ describe("POST /api/record", () => {
 
   it("posts a form that names no app to the site's own engine, which stamps the site itself", async () => {
     const route = await loadRoute();
-    const { app: _app, ...form } = { ...booking(), entity: "Lead", values: { email: "ada@example.org" } };
-    expect(await send(route, form)).toEqual({ status: 200, body: { ok: true } });
+    const { app: _app, ...unsigned } = { ...unsignedBooking(), entity: "Lead", values: { email: "ada@example.org" } };
+    expect(await send(route, signed(unsigned))).toEqual({ status: 200, body: { ok: true } });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("http://engine.internal:3000/api/v1/public/resource/Lead");
     expect(JSON.parse(String(init.body))).toEqual({ email: "ada@example.org" });
@@ -151,18 +154,22 @@ describe("POST /api/record", () => {
     const route = await loadRoute();
     engineStatus = 400;
     engineError = { code: "BAD_REQUEST", detail: '"internal_note" is not a field a guest may set on Booking' };
-    const refused = { ...booking(), values: { ...booking().values, internal_note: "VIP" } };
+    // The site's own form shows the field, so the post reaches the engine, whose Guest row refuses it.
+    const refused = signed({ ...unsignedBooking(), values: { ...unsignedBooking().values, internal_note: "VIP" } });
     expect(await send(route, refused)).toEqual({ status: 403, body: { ok: false, message: "The form may not create this record" } });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("PLANTED DEFECT: answers 403 plainly when the entity grants Guest no create, or its engine holds no such entity", async () => {
     const route = await loadRoute();
     engineStatus = 403;
     engineError = { code: "PERMISSION_DENIED", detail: "Permission denied: Guest cannot create Invoice" };
-    expect((await send(route, { ...booking(), entity: "Invoice" })).status).toBe(403);
+    expect((await send(route, signed({ ...unsignedBooking(), entity: "Invoice" }))).status).toBe(403);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     engineStatus = 404;
     engineError = { code: "UNKNOWN_DOCTYPE", detail: "Unknown entity Bookings" };
-    expect((await send(route, { ...booking(), entity: "Bookings" })).status).toBe(403);
+    expect((await send(route, signed({ ...unsignedBooking(), entity: "Bookings" }))).status).toBe(403);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("PLANTED INNOCENT: a value the visitor left out or got wrong is their 400, not the form's 403", async () => {
@@ -176,7 +183,7 @@ describe("POST /api/record", () => {
 
   it("answers 503 and reaches no engine for an app whose engine the site does not know", async () => {
     let route = await loadRoute();
-    expect(await send(route, { ...booking(), app: "erp" })).toEqual({ status: 503, body: { ok: false, message: "The form is not configured" } });
+    expect(await send(route, signed({ ...unsignedBooking(), app: "erp" }))).toEqual({ status: 503, body: { ok: false, message: "The form is not configured" } });
     route = await loadRoute({ ...ENV, ENGINE_URLS: undefined });
     expect((await send(route, booking())).status).toBe(503);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -225,6 +232,65 @@ describe("POST /api/record", () => {
     const answer = await send(route, booking());
     expect(answer.status).toBe(500);
     expect(JSON.stringify(answer.body)).not.toMatch(/internal/);
+  });
+});
+
+describe("POST /api/record, bound to a form the site placed", () => {
+  const refusal = { status: 403, body: { ok: false, message: "The form may not create this record" } };
+
+  it("PLANTED DEFECT: refuses a post without a signature, or with one another key made, and reaches no engine", async () => {
+    const route = await loadRoute();
+    const { form: _form, ...unsigned } = booking();
+    expect(await send(route, unsigned)).toEqual(refusal);
+    expect(await send(route, { ...booking(), form: "garbage" })).toEqual(refusal);
+    const [payload] = booking().form.split(".");
+    expect(await send(route, { ...booking(), form: `${payload}.${Buffer.alloc(32).toString("base64url")}` })).toEqual(refusal);
+    const route2 = await loadRoute({ ...ENV, FORM_SIGNING_KEY: "another-renderer-key-0123456789abcdef" });
+    expect(await send(route2, booking())).toEqual(refusal);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("PLANTED DEFECT: refuses a signed form's post that names another entity or app", async () => {
+    const route = await loadRoute();
+    expect(await send(route, { ...booking(), entity: "Invoice" })).toEqual(refusal);
+    expect(await send(route, { ...booking(), app: "" })).toEqual(refusal);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("PLANTED DEFECT: refuses a key the form does not have", async () => {
+    const route = await loadRoute();
+    const post = booking();
+    expect(await send(route, { ...post, values: { ...post.values, internal_note: "VIP" } })).toEqual(refusal);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("PLANTED INNOCENT: takes a post that leaves out a field the visitor left empty", async () => {
+    const route = await loadRoute();
+    const { phone: _phone, ...values } = { ...unsignedBooking().values, phone: "" };
+    const post = signed(unsignedBooking(), [...Object.keys(values), "phone"]);
+    expect(await send(route, post)).toEqual({ status: 200, body: { ok: true } });
+  });
+
+  it("PLANTED DEFECT: refuses a forged render time, so the fill-time check holds", async () => {
+    const route = await loadRoute();
+    // A program renders the form, then posts at once with an older time than the server signed.
+    const post = signed({ ...unsignedBooking(), rendered_at: Date.now() });
+    expect(await send(route, { ...post, rendered_at: Date.now() - 10_000 })).toEqual(refusal);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("PLANTED DEFECT: refuses a form rendered longer ago than a day, and takes one just inside", async () => {
+    const route = await loadRoute();
+    const { MAX_FORM_AGE_MS } = await import("../src/lib/form-signature");
+    expect(await send(route, signed({ ...unsignedBooking(), rendered_at: Date.now() - MAX_FORM_AGE_MS - 60_000 }))).toEqual(refusal);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect((await send(route, signed({ ...unsignedBooking(), rendered_at: Date.now() - MAX_FORM_AGE_MS + 60_000 }))).status).toBe(200);
+  });
+
+  it("answers 503 and reaches no engine when the renderer has no signing key", async () => {
+    const route = await loadRoute({ ...ENV, FORM_SIGNING_KEY: undefined });
+    expect(await send(route, booking())).toEqual({ status: 503, body: { ok: false, message: "The form is not configured" } });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

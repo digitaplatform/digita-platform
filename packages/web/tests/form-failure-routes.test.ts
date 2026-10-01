@@ -2,6 +2,7 @@
 // 429 says in the standard header how many seconds to wait.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { TEST_FORM_KEY, signed } from "./signed-form";
 
 vi.mock("server-only", () => ({}));
 
@@ -16,6 +17,7 @@ const ENV = {
   TRANSLATIONS_DIR: "/translations",
   LOCALES: "en,de",
   DEFAULT_LOCALE: "en",
+  FORM_SIGNING_KEY: TEST_FORM_KEY,
 };
 
 type Route = { POST: (req: NextRequest) => Promise<Response> };
@@ -29,13 +31,14 @@ async function loadRoutes(): Promise<{ record: Route; contact: Route }> {
   return { record: await import("../src/app/api/record/route"), contact: await import("../src/app/api/contact/route") };
 }
 
-const booking = () => ({
-  app: "workshop",
-  entity: "Booking",
-  values: { contact_name: "Ada Example", email: "ada@example.org" },
-  website: "",
-  rendered_at: Date.now() - 10_000,
-});
+const booking = () =>
+  signed({
+    app: "workshop",
+    entity: "Booking",
+    values: { contact_name: "Ada Example", email: "ada@example.org" },
+    website: "",
+    rendered_at: Date.now() - 10_000,
+  });
 const contactRequest = () => ({
   name: "Ada Example",
   email: "ada@example.org",

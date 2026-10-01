@@ -83,6 +83,11 @@ export interface ServerConfig extends Omit<PublicSiteConfig, "contactEnabled" | 
   /** The tenant's session cookie suffix (AUTH_COOKIE_SUFFIX, sessionCookieNames). Explicitly
    *  OPTIONAL: null → the unsuffixed names. */
   authCookieSuffix: string | null;
+  /** The key the record forms of the site are signed with (FORM_SIGNING_KEY, src/lib/form-signature.ts),
+   *  so a post is bound to a form the site placed. Known to this server alone and never printed.
+   *  Explicitly OPTIONAL here: a page that places a record form fails without it, and the record
+   *  route refuses every post. */
+  formSigningKey: string | null;
   /** The site's chrome texts, one <language>.json each (TRANSLATIONS_DIR): the folder digita-web
    *  of digitaplatform/digita-translations, put there by the pod's init container. */
   translationsDir: string;
@@ -104,11 +109,20 @@ export function getConfig(): ServerConfig {
     authUrl: process.env.AUTH_URL ? noTrailing(process.env.AUTH_URL) : null,
     demoTenant: process.env.DEMO_TENANT === "true" || process.env.DEMO_TENANT === "1",
     authCookieSuffix: process.env.AUTH_COOKIE_SUFFIX || null,
+    formSigningKey: process.env.FORM_SIGNING_KEY || null,
     translationsDir: req("TRANSLATIONS_DIR"),
     locales: getLocales(),
     defaultLocale: getDefaultLocale(),
   };
   return cached;
+}
+
+/** The record forms' signing key, for a page that places one: without it the page fails, as it does
+ *  without any other setting it needs. */
+export function requiredFormSigningKey(): string {
+  const key = getConfig().formSigningKey;
+  if (!key) throw new Error("[digita-web] missing required env var: FORM_SIGNING_KEY (a page places a record form)");
+  return key;
 }
 
 /** The browser-safe subset, injected into the client via <ConfigProvider>. The contact sheet is

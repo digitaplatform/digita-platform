@@ -67,6 +67,7 @@ const recordForm: FormUnderTest = {
         })}
         texts={{ send: "Send", sent: "Thanks", ...texts } as RecordFormTexts}
         renderedAt={1_000_000}
+        signature="a-signature"
         locale="en"
       />,
     ),

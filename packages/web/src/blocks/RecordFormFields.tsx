@@ -46,14 +46,16 @@ interface RecordFormFieldsProps {
   texts: RecordFormTexts;
   /** When the server rendered the page, in its clock. The form sends it back unchanged, so the
    *  route's fill-time check measures a person's time from the server's render, not from the
-   *  browser's clock. A program that sends a number of its own passes the check. */
+   *  browser's clock. The signature binds it, so a number of a program's own is refused. */
   renderedAt: number;
+  /** What the server signed the form as (src/lib/form-signature.ts), sent back unchanged. */
+  signature: string;
   /** The page's language, which words the wait of a visitor who sent too many forms. */
   locale?: string;
 }
 
 /** The record form's inputs, drawn with the kit's controls, and its post to /api/record. */
-export function RecordFormFields({ app, entity, fields, texts, renderedAt, locale }: RecordFormFieldsProps) {
+export function RecordFormFields({ app, entity, fields, texts, renderedAt, signature, locale }: RecordFormFieldsProps) {
   const formId = useId();
   const honeypot = useRef<HTMLInputElement>(null);
   const [values, setValues] = useState(() => initialState(fields));
@@ -68,7 +70,7 @@ export function RecordFormFields({ app, entity, fields, texts, renderedAt, local
       const res = await fetch("/api/record", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ app, entity, values: recordValues(fields, values), website: honeypot.current?.value ?? "", rendered_at: renderedAt }),
+        body: JSON.stringify({ app, entity, values: recordValues(fields, values), website: honeypot.current?.value ?? "", rendered_at: renderedAt, form: signature }),
       });
       if (res.ok) {
         setState("sent");
