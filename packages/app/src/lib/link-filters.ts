@@ -5,7 +5,8 @@
  * A filter value of the form `"$doc.<field>"` is replaced by the document's
  * `<field>` value; static values pass through unchanged. A `$doc.*` token that
  * resolves to null/empty DROPS that filter entry — an unfilled sibling field must
- * not narrow the picker to nothing.
+ * not narrow the picker to nothing. Only a scalar resolves: a token whose field holds an object
+ * or a list drops too.
  *
  * Generic and app-agnostic by design: the engine knows nothing about "company" or
  * any domain concept. An app that wants e.g. tax-rate-by-company-country simply
@@ -22,6 +23,9 @@ export function resolveLinkFilters(
     if (typeof val === "string" && val.startsWith("$doc.")) {
       const resolved = doc?.[val.slice(5)];
       if (resolved == null || resolved === "") continue; // unresolved → drop, don't over-filter
+      // An object or a list names no single value to compare: the engine would read an object as
+      // operators, and refuses both.
+      if (typeof resolved === "object") continue;
       out[key] = resolved;
     } else {
       out[key] = val;
