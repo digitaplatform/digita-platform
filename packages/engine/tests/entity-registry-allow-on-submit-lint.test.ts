@@ -49,9 +49,9 @@ beforeEach(() => warn.mockClear());
 describe("entity-registry allow_on_submit lint", () => {
   it("strips the flag on a system field", async () => {
     const r = await loadFixture(
-      base([{ fieldname: "owner", fieldtype: "Data", label: "Owner", allow_on_submit: true }]),
+      base([{ fieldname: "amended_from", fieldtype: "Data", label: "Amended from", allow_on_submit: true }]),
     );
-    expect(flagOf(r, "Doc", "owner")).toBeUndefined();
+    expect(flagOf(r, "Doc", "amended_from")).toBeUndefined();
     expect(warn).toHaveBeenCalled();
   });
 
