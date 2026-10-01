@@ -23,14 +23,18 @@ Object.assign(process.env, {
   DEFAULT_LOCALE: "en",
 });
 
-const { findWebsiteSignature } = await import("../src/lib/engine-client");
+const { findWebsiteSignature, getBranding } = await import("../src/lib/engine-client");
 const { siteSignature } = await import("../src/lib/identity");
 
 /** The website look each engine's settings name, by the first label of its host; an Error: no
  *  answer; a Response: that answer. */
 let looks: Record<string, string | Error | Response> = {};
+/** The app whose boot answers after the others. */
+let late = "";
 const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
-  const look = looks[new URL(url).hostname.split(".")[0]!];
+  const app = new URL(url).hostname.split(".")[0]!;
+  if (app === late) await new Promise((resolve) => setTimeout(resolve, 10));
+  const look = looks[app];
   if (look instanceof Error) throw look;
   if (look instanceof Response) return look;
   return Response.json({ success: true, data: { branding: look ? { web_default_signature: look } : {} } });
@@ -79,10 +83,16 @@ describe("the website look", () => {
     expect(siteSignature(undefined, undefined).id).toBe("digita");
   });
 
-  it("asks every app with a time limit, so an app that hangs cannot hold the page", async () => {
+  it("asks every app and the site's engine with a five-second limit, so an engine that hangs cannot hold the page", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
     looks = { workshop: "veloluck-workbench" };
     await findWebsiteSignature();
-    for (const [, init] of fetchMock.mock.calls) expect(init?.signal).toBeInstanceOf(AbortSignal);
+    await getBranding();
+    // Three apps and the site's engine, each read with a signal that fires after five seconds.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(timeout.mock.calls).toEqual([[5000], [5000], [5000], [5000]]);
+    const signals = timeout.mock.results.map((result) => result.value);
+    for (const [, init] of fetchMock.mock.calls) expect(signals).toContain(init?.signal);
   });
 
   it("an app that answers with an error is logged, and the others still name the look", async () => {
@@ -91,10 +101,16 @@ describe("the website look", () => {
     expect(vi.mocked(console.error).mock.calls.flat().join(" ")).toMatch(/"crm".*503/);
   });
 
-  it("logs a disagreement once, not on every page", async () => {
+  it("logs a disagreement once, not on every page, whichever app answers first", async () => {
     looks = { workshop: "veloluck-workbench", crm: "simetrix" };
-    await findWebsiteSignature();
-    await findWebsiteSignature();
+    try {
+      for (const app of ["crm", "workshop", "crm"]) {
+        late = app;
+        await findWebsiteSignature();
+      }
+    } finally {
+      late = "";
+    }
     const logged = vi.mocked(console.error).mock.calls.filter((call) => String(call[0]).includes("different website looks"));
     expect(logged).toHaveLength(1);
   });

@@ -198,8 +198,12 @@ export async function findWebsiteSignature(): Promise<string | undefined> {
   );
   const looks = new Set(named.values());
   if (looks.size > 1) {
-    const which = [...named].map(([app, look]) => `${app}: ${look}`).join(", ");
-    // Every request renders the layout, so one disagreement is logged once, not on every page.
+    // The apps answer in any order, so they are named in sorted order: one disagreement then reads
+    // the same on every request, and since every request renders the layout, it is logged once.
+    const which = [...named]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([app, look]) => `${app}: ${look}`)
+      .join(", ");
     if (which !== loggedDisagreement) {
       console.error(`[digita-web] the tenant's apps name different website looks (${which}); none is used`);
       loggedDisagreement = which;
