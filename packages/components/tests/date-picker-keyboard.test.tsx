@@ -60,6 +60,44 @@ describe('DatePicker paging labels', () => {
     expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
   });
 
+  it('names the paging buttons of the month and year view by the year labels, which page twelve years', async () => {
+    const user = userEvent.setup();
+    render(
+      <DatePicker
+        value="2026-09-28"
+        onChange={vi.fn()}
+        locale="de-DE"
+        previousLabel="Vorheriger Monat"
+        nextLabel="Nächster Monat"
+        previousYearsLabel="Vorherige Jahre"
+        nextYearsLabel="Nächste Jahre"
+      />,
+    );
+    await user.click(trigger('28.09.2026'));
+    await user.click(screen.getByRole('button', { name: 'September 2026' }));
+    expect(screen.queryByRole('button', { name: 'Vorheriger Monat' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Nächster Monat' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Nächste Jahre' }));
+    expect(screen.getByRole('button', { name: '2031' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Vorherige Jahre' }));
+    await user.click(screen.getByRole('button', { name: 'Vorherige Jahre' }));
+    expect(screen.getByRole('button', { name: '2007' })).toBeInTheDocument();
+
+    // Back in the day view, the buttons page a month again and say so.
+    await user.click(screen.getByRole('button', { name: 'Sep' }));
+    expect(screen.getByRole('button', { name: 'Vorheriger Monat' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Vorherige Jahre' })).toBeNull();
+  });
+
+  it('keeps the day view labels in the year view when the caller passes no year labels (innocent case)', async () => {
+    const user = userEvent.setup();
+    render(<DatePicker value="2026-09-28" onChange={vi.fn()} locale="en-GB" />);
+    await user.click(trigger('28/09/2026'));
+    await user.click(screen.getByRole('button', { name: 'September 2026' }));
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
+  });
+
   it('keeps Previous and Next when the caller passes no labels, and they still page (innocent case)', async () => {
     const user = userEvent.setup();
     render(<DatePicker value="2026-09-28" onChange={vi.fn()} locale="en-GB" />);

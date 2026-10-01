@@ -23,8 +23,7 @@ const STATE: FieldControlState = {
 const FIELD = { fieldname: 'due', fieldtype: 'Date', label: 'Due' } as FieldDefinition;
 
 describe('DateControl names the calendar paging buttons', () => {
-  it('by the app texts, and not by the English fallback of the kit', async () => {
-    const user = userEvent.setup();
+  function renderControl() {
     render(
       <>
         <span id="due-label">Due</span>
@@ -40,10 +39,25 @@ describe('DateControl names the calendar paging buttons', () => {
         />
       </>,
     );
+  }
+
+  it('by the app texts for a month in the day view, and not by the English fallback of the kit', async () => {
+    const user = userEvent.setup();
+    renderControl();
     await user.click(screen.getByRole('button', { name: 'Due' }));
-    expect(screen.getByRole('button', { name: 'ui.datepicker.previous' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'ui.datepicker.next' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ui.datepicker.previousMonth' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ui.datepicker.nextMonth' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Previous' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Next' })).toBeNull();
+  });
+
+  it('by the app texts for years in the month and year view', async () => {
+    const user = userEvent.setup();
+    renderControl();
+    await user.click(screen.getByRole('button', { name: 'Due' }));
+    await user.click(screen.getByRole('button', { expanded: false, name: /2026/ }));
+    expect(screen.getByRole('button', { name: 'ui.datepicker.previousYears' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ui.datepicker.nextYears' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ui.datepicker.previousMonth' })).toBeNull();
   });
 });
