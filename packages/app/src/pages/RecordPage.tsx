@@ -5,7 +5,7 @@ import { useForm, type Resolver } from 'react-hook-form';
 import { Lock } from 'lucide-react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { EntityDefinition } from '@digitaplatform/shared';
-import { LAYOUT_FIELD_TYPES } from '@digitaplatform/shared';
+import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from '@digitaplatform/shared';
 import { Badge, Button, PageHeader, findScrollContainer } from '@digitaplatform/components';
 import { useMeta } from '@/hooks/useMeta';
 import { useDocument, useSingle, useCreate, useUpdate, useDeleteDoc } from '@/hooks/useDocument';
@@ -230,6 +230,7 @@ function RecordForm({
   const t = useI18nStore((s) => s.t);
   const tEntity = useI18nStore((s) => s.tEntity);
   const tOption = useI18nStore((s) => s.tOption);
+  const tField = useI18nStore((s) => s.tField);
   const tc = useChrome();
 
   const computedSet = useMemo(() => deriveComputedSet(meta), [meta]);
@@ -329,13 +330,19 @@ function RecordForm({
     return map;
   }, [watched, meta, computedSet, frozenSet, allowOnSubmitSet, docstatus, isNew, canWriteLevel, canReadField, writeRefused, user]);
 
-  // Overlay the "updating…" flag on computed fields while a preview is in flight.
+  // A Link whose fetch_from read failed → the reason, shown at that Link.
+  const [fetchFromFailures, setFetchFromFailures] = useState<Record<string, string>>({});
+
+  // Overlay the "updating…" flag on computed fields while a preview is in flight, and each
+  // failed fetch_from read as a warning at its Link.
   const renderState = useMemo(() => {
-    if (preview.status !== 'loading') return fieldState;
+    const loading = preview.status === 'loading';
+    if (!loading && Object.keys(fetchFromFailures).length === 0) return fieldState;
     const copy: FieldStateMap = { ...fieldState };
-    for (const fn of computedSet) if (copy[fn]) copy[fn] = { ...copy[fn], updating: true };
+    if (loading) for (const fn of computedSet) if (copy[fn]) copy[fn] = { ...copy[fn], updating: true };
+    for (const [fn, warning] of Object.entries(fetchFromFailures)) if (copy[fn]) copy[fn] = { ...copy[fn], warning };
     return copy;
-  }, [fieldState, preview.status, computedSet]);
+  }, [fieldState, preview.status, computedSet, fetchFromFailures]);
 
   // Merge preview results back into the form, matched by _row_id: top-level computed
   // fields and each child table's server-owned (read-only) cells, a refresh of
@@ -469,11 +476,22 @@ function RecordForm({
     // EMPTY top-level targets from the picked record (server resolves on save
     // too — this just unblocks required fields in the form).
     const targets = resolveFetchFromTargets(meta, fieldname);
+    if (fieldname in fetchFromFailures) {
+      setFetchFromFailures((failures) => Object.fromEntries(Object.entries(failures).filter(([fn]) => fn !== fieldname)));
+    }
     if (targets.length && typeof value === 'string' && value) {
       const src = meta.fields.find((f) => f.fieldname === fieldname);
-      if (src?.target) {
-        void getDoc(src.target, value).then((res) => {
-          const rec = unwrap(res) as Record<string, unknown>;
+      // A sub-row Link holds `<parent id>::<row id>`, and its fields read from that row of the parent.
+      const rowAt = src?.target_path ? value.indexOf('::') : -1;
+      if (src?.target && (!src.target_path || rowAt > 0)) {
+        void getDoc(src.target, src.target_path ? value.slice(0, rowAt) : value).then((res) => {
+          const doc = unwrap(res) as Doc;
+          const rows = src.target_path ? doc[src.target_path] : undefined;
+          const rec = !src.target_path
+            ? doc
+            : Array.isArray(rows)
+              ? (rows as Doc[]).find((row) => row[ROW_ID_FIELD] === value.slice(rowAt + 2))
+              : undefined;
           for (const { target, sourcePath } of targets) {
             const cur = form.getValues(target);
             if (cur == null || cur === '') {
@@ -485,7 +503,15 @@ function RecordForm({
               }
             }
           }
-        }).catch(() => {});
+        }).catch((e: unknown) => {
+          // A later pick of the same Link owns the message.
+          if (form.getValues(fieldname) !== value) return;
+          const fields = targets
+            .map(({ target }) => tField(entity, target, meta.fields.find((f) => f.fieldname === target)?.label))
+            .join(', ');
+          const error = toUiMessages(e, t).map((m) => m.text).join(' ');
+          setFetchFromFailures((failures) => ({ ...failures, [fieldname]: tc('ui.record.fetchFromFailed', { fields, error }) }));
+        });
       }
     }
   };
