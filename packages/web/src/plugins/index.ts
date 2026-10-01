@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { BlockComponent, PluginManifest } from "@/catalog/types";
+import type { PluginComponent, PluginManifest } from "@/catalog/types";
 
 /**
  * Frontend plugin manifests — the escape hatch for bespoke sections when a generic block isn't
@@ -64,9 +64,9 @@ export const PLUGIN_MANIFESTS: PluginManifest[] = [
   },
 ];
 
-const BY_ID = new Map<string, BlockComponent>(PLUGIN_MANIFESTS.map((m) => [m.id, m.component]));
+const BY_ID = new Map<string, PluginComponent>(PLUGIN_MANIFESTS.map((m) => [m.id, m.component]));
 
-export function resolvePlugin(id: string | undefined): BlockComponent | null {
+export function resolvePlugin(id: string | undefined): PluginComponent | null {
   if (!id) return null;
   return BY_ID.get(id) ?? null;
 }

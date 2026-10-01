@@ -9,9 +9,10 @@ import { PluginBlock } from "./PluginBlock";
  * from the registry (or the plugin seam for `type: "plugin"`). Unknown types are
  * skipped so a new engine-side type never crashes a deployed renderer. `anchor`
  * becomes a scroll target; `theme_variant: "dark"` becomes `data-variant="dark"`, which the theme
- * draws as a dark band (DARK_BAND_SELECTOR in @digitaplatform/theme).
+ * draws as a dark band (DARK_BAND_SELECTOR in @digitaplatform/theme). `site` reaches every block, for
+ * what a site sets once for all its pages; it is null where no site row was read.
  */
-export function BlockRenderer({ blocks, locale, site }: { blocks?: Block[]; locale: Locale; site?: WebSite | null }) {
+export function BlockRenderer({ blocks, locale, site }: { blocks?: Block[]; locale: Locale; site: WebSite | null }) {
   if (!blocks?.length) return null;
   return (
     <>

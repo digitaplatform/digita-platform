@@ -21,11 +21,12 @@ export function HeroBrand({ props, locale, site }: { props?: P; locale: Locale; 
   if (!heading) return null;
   const Figure = resolvePlugin(s(props, "visual") || undefined);
   const lede = s(props, "lede");
-  // The site's rain is read through the same accessors as the block's, so a malformed row draws nothing.
-  const backdrop = s(props, "atmosphere") ? props : { atmosphere: site?.hero_atmosphere, rain: site?.hero_rain };
+  // The site's atmosphere is read through the same accessors as the block's, so an unusable value
+  // draws nothing and never throws.
+  const atmosphereSource = s(props, "atmosphere") ? props : { atmosphere: site?.hero_atmosphere, rain: site?.hero_rain };
   return (
     <div className="relative isolate overflow-hidden">
-      {s(backdrop, "atmosphere") === "data-rain" && <DataRain columns={list(backdrop, "rain").map((column) => texts(column, "tokens"))} />}
+      {s(atmosphereSource, "atmosphere") === "data-rain" && <DataRain columns={list(atmosphereSource, "rain").map((column) => texts(column, "tokens"))} />}
       <Section>
         <div className={LAYOUT}>
           <div className="flex flex-col gap-7">

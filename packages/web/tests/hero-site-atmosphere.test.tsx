@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
-// Every page of a site opens with a hero, but only rows that set their own atmosphere drew the rain.
-// The site names its atmosphere and rain once; a hero without an atmosphere of its own takes the
+// A site names its hero atmosphere and rain once; a hero without an atmosphere of its own takes the
 // site's, and one that names its own keeps it. The page is rendered as the routes render it.
 import { describe, it, expect, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -37,20 +36,50 @@ function rainColumns(site: WebSite | null, hero: Record<string, unknown>): strin
 }
 
 describe("a hero on a site that names its atmosphere", () => {
-  it("draws the site's rain when the block names no atmosphere", () => {
+  it("PLANTED DEFECT: a hero without an atmosphere of its own draws the site's rain", () => {
     expect(rainColumns(rainySite, {})).toEqual([["site-alpha", "site-beta"], ["site-gamma"]]);
   });
 
-  it("draws no rain when the block opts out with none", () => {
+  it("PLANTED DEFECT: a hero whose atmosphere is empty takes the site's, as one without the key does", () => {
+    expect(rainColumns(rainySite, { atmosphere: "" })).toEqual([["site-alpha", "site-beta"], ["site-gamma"]]);
+  });
+
+  it("PLANTED DEFECT: a site that names none draws no rain, though it carries columns", () => {
+    expect(rainColumns({ ...rainySite, hero_atmosphere: "none" }, {})).toEqual([]);
+  });
+
+  it.each([
+    ["no columns", undefined],
+    ["null", null],
+    ["a string", "site-alpha"],
+    ["an object", { tokens: ["site-alpha"] }],
+    ["columns without usable tokens", [{}, { tokens: 5 }, "site-alpha"]],
+  ])("PLANTED DEFECT: a site with data-rain and %s as its columns draws no rain and does not throw", (_shape, unusable) => {
+    expect(rainColumns({ ...rainySite, hero_rain: unusable }, {})).toEqual([]);
+  });
+
+  it("PLANTED DEFECT: a site that carries columns but names no atmosphere draws no rain", () => {
+    expect(rainColumns({ ...plainSite, hero_rain: rainySite.hero_rain }, {})).toEqual([]);
+  });
+
+  it("PLANTED INNOCENT: a hero that opts out with none draws no rain", () => {
     expect(rainColumns(rainySite, { atmosphere: "none" })).toEqual([]);
   });
 
-  it("draws the block's own rain, not the site's, when the block brings its own", () => {
+  it("PLANTED INNOCENT: a hero with its own rain draws its own columns, not the site's", () => {
     const own = { atmosphere: "data-rain", rain: [{ tokens: ["page-one"] }] };
     expect(rainColumns(rainySite, own)).toEqual([["page-one"]]);
   });
 
-  it("draws no rain on a site without the fields when the block names no atmosphere", () => {
+  it("PLANTED INNOCENT: a hero that brings rain but no atmosphere takes the site's rain whole", () => {
+    expect(rainColumns(rainySite, { rain: [{ tokens: ["page-one"] }] })).toEqual([["site-alpha", "site-beta"], ["site-gamma"]]);
+  });
+
+  it("PLANTED INNOCENT: a hero that names data-rain without columns draws none, and borrows none of the site's", () => {
+    expect(rainColumns(rainySite, { atmosphere: "data-rain" })).toEqual([]);
+  });
+
+  it("PLANTED INNOCENT: a site without the fields, or no site row, draws no rain", () => {
     expect(rainColumns(plainSite, {})).toEqual([]);
     expect(rainColumns(null, {})).toEqual([]);
   });

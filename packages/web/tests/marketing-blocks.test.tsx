@@ -34,7 +34,7 @@ const render = (type: BlockType, props?: Record<string, unknown>, contactEnabled
   if (!Block) throw new Error(`${type} is not registered`);
   return renderToStaticMarkup(
     <ConfigProvider value={siteConfig(contactEnabled)}>
-      <Block props={props} locale="en" />
+      <Block props={props} locale="en" site={null} />
     </ConfigProvider>,
   );
 };
@@ -240,7 +240,7 @@ describe("the contact sheet", () => {
     await act(async () =>
       root.render(
         <ConfigProvider value={siteConfig(true)}>
-          <Block props={{ heading: "Talk.", primary: sheet }} locale="en" />
+          <Block props={{ heading: "Talk.", primary: sheet }} locale="en" site={null} />
           <Probe />
         </ConfigProvider>,
       ),
