@@ -5,8 +5,8 @@ import { localizeAction, localizeMeta } from '@/lib/localize-meta';
 /**
  * The dialog an action opens speaks the session language: each of its fields takes its label from
  * `action_field.<Entity>.<action>.<field>`, and a field without a key keeps the label the entity
- * file writes. The key names the action, so a dialog field does not take the text of an entity
- * field that happens to share its name.
+ * file writes. The key names the action, so localizeMeta does not give a dialog field the text of
+ * an entity field that shares its name.
  */
 
 const accept = {
@@ -73,7 +73,7 @@ describe('localizeMeta dialog fields', () => {
 
   it('still translates the action itself and leaves an action without a dialog alone', () => {
     expect(out.actions![0]!.label).toBe('Angebot annehmen');
-    expect(out.actions![1]).toEqual({ action: 'archive', label: 'Archive' });
+    expect(out.actions![1]).toStrictEqual({ action: 'archive', label: 'Archive' });
   });
 
   it('does not mutate the input meta', () => {

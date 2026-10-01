@@ -16,7 +16,7 @@ import type { EntitySummary } from '@/types';
  * Any future label field localizes by adding ONE line here — renderers read
  * already-localized meta and never build translation keys themselves.
  *
- * Wired into `useMeta` / `useMetaCatalog` / `useActions` so it runs reactively on
+ * Wired into `useMeta` / `useMetaCatalog` so it runs reactively on
  * the active locale. Select OPTION values are the one exception: an `options`
  * string[] carries no label slot, so they stay resolved at the control via the
  * store's `tOption` (already localized).
@@ -48,7 +48,8 @@ function localizeDialogField(prefix: string, f: FieldDefinition, t: Dict): Field
 }
 
 /** Localize one action: its label, the inputs of a long-running one and the fields of its dialog.
- *  Exported for the actions the engine reports for a record, which never pass through localizeMeta. */
+ *  Exported so the actions the engine reports for a record, which do not pass through localizeMeta,
+ *  can be localized the same way. */
 export function localizeAction(entity: string, a: ActionDefinition, t: Dict): ActionDefinition {
   const localized = { ...a, label: t[`action.${entity}.${a.action}`] ?? a.label };
   if (a.params) {
