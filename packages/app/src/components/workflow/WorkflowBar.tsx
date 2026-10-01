@@ -1,6 +1,6 @@
 import { Send, Ban, FileEdit } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type { EntityDefinition } from '@digitaplatform/shared';
+import type { EntityDefinition, TransitionDefinition } from '@digitaplatform/shared';
 import { Button } from '@digitaplatform/components';
 import { evaluateExpr } from '@/lib/expression';
 import { resolveWorkflowField } from '@/lib/workflow-field';
@@ -42,6 +42,7 @@ export function WorkflowBar({
   const navigate = useNavigate();
   const user = useSessionStore((s) => s.user);
   const t = useI18nStore((s) => s.t);
+  const tOption = useI18nStore((s) => s.tOption);
   const tc = useChrome();
   const dialog = useDialogHost();
   const submitM = useSubmit<Doc>(entity);
@@ -67,6 +68,10 @@ export function WorkflowBar({
     }
     return true;
   });
+
+  // A transition without an action shows its target state in the text the state badge uses, so a
+  // button and the badge name a state alike. An action arrives translated, from localizeMeta.
+  const transitionLabel = (tr: TransitionDefinition) => tr.action || (wf ? tOption(meta.name, wf, tr.to) : tr.to);
 
   // The engine refuses Submit and Cancel without the `submit` / `cancel` bit on this document.
   const canSubmit = !!meta.is_submittable && docstatus === 0 && hasRecordPermission(meta, user, 'submit', doc);
@@ -127,7 +132,7 @@ export function WorkflowBar({
           {...tid.transition(tr.to)}
           onClick={() => void run(() => transM.mutateAsync({ name, to: tr.to }))}
         >
-          {tr.action || tr.to}
+          {transitionLabel(tr)}
         </Button>
       ))}
       {canCancel && (

@@ -6,7 +6,8 @@ import type { EntitySummary } from '@/types';
  * engine is joined with the per-locale translation map (the i18n store). A single
  * pass replaces every label-bearing string by its canonical key, falling back to
  * the raw value: entity name + plural, field labels, section/tab headings, field
- * help-text (`description`) and action labels. Any future label field localizes
+ * help-text (`description`), action labels and workflow transition labels
+ * (`transition.<Entity>.<action>`). Any future label field localizes
  * by adding ONE line here — renderers read already-localized meta and never build
  * translation keys themselves.
  *
@@ -25,7 +26,7 @@ function localizeField(entity: string, f: FieldDefinition, t: Dict): FieldDefini
   return out;
 }
 
-/** Localize a full EntityDefinition (label/plural/fields/sections/descriptions/actions). */
+/** Localize a full EntityDefinition (label/plural/fields/sections/descriptions/actions/transitions). */
 export function localizeMeta(meta: EntityDefinition, t: Dict): EntityDefinition {
   const e = meta.name;
   const out: EntityDefinition = {
@@ -48,6 +49,13 @@ export function localizeMeta(meta: EntityDefinition, t: Dict): EntityDefinition 
       }
       return localized;
     });
+  }
+  if (meta.transitions) {
+    // The action is a transition's button text and the only name it has, so it keys its own text.
+    // A transition without one is shown by its target state, which the state's own text translates.
+    out.transitions = meta.transitions.map((tr) =>
+      tr.action ? { ...tr, action: t[`transition.${e}.${tr.action}`] ?? tr.action } : tr,
+    );
   }
   return out;
 }
