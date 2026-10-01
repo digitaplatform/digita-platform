@@ -146,6 +146,7 @@ beforeAll(async () => {
   const snapshotResolver = new SnapshotResolver(registry, db);
 
   docService = new DocumentService({
+    tenantTimeZone: () => "UTC",
     registry, db, permissionChecker, hookRunner,
     linkValidator, linkTitleResolver, fetchFromResolver,
     deleteProtection, cancelProtection, versionService, viewLogService,

@@ -115,6 +115,7 @@ beforeAll(async () => {
   const storage = { backend: "local", delete: async (key: string) => { deletedBlobs.push(key); } } as unknown as StoragePort;
 
   docService = new DocumentService({
+    tenantTimeZone: () => "UTC",
     registry,
     db,
     permissionChecker,

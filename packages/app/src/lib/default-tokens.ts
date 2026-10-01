@@ -1,4 +1,4 @@
-import type { FieldDefinition } from '@digitaplatform/shared';
+import { calendarDay, type FieldDefinition } from '@digitaplatform/shared';
 
 type DefaultUser = { email?: string; full_name?: string } | null;
 
@@ -10,12 +10,12 @@ type DefaultUser = { email?: string; full_name?: string } | null;
  * engine fills a default only where the value arrives empty, so a token seeded here
  * as text would be saved as text. An `eval:` default returns `undefined`.
  */
-export function resolveDefaultToken(raw: unknown, user?: DefaultUser): unknown {
+export function resolveDefaultToken(raw: unknown, user: DefaultUser, timeZone: string): unknown {
   if (typeof raw !== 'string') return raw;
   if (isEvalDefault(raw)) return undefined;
   switch (raw) {
     case '__today__':
-      return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      return calendarDay(new Date(), timeZone); // YYYY-MM-DD of the tenant's day
     case '__now__':
       return new Date().toISOString();
     case '__user__':
@@ -27,6 +27,12 @@ export function resolveDefaultToken(raw: unknown, user?: DefaultUser): unknown {
   }
 }
 
+/** The tenant's time zone from /boot's settings. Before /boot answers no form is drawn; "UTC" is
+ *  Setting.timezone's declared default. */
+export function tenantTimeZoneOf(settings: { timezone?: string } | null | undefined): string {
+  return settings?.timezone ?? 'UTC';
+}
+
 /** An `eval:` default reads the document being saved, so only the engine can evaluate it, on insert. */
 export function isEvalDefault(raw: unknown): boolean {
   return typeof raw === 'string' && raw.startsWith('eval:');
@@ -35,11 +41,12 @@ export function isEvalDefault(raw: unknown): boolean {
 /** The seed of a new record, table row or action dialog: each field's expanded `default`. */
 export function buildDefaults(
   fields: readonly Pick<FieldDefinition, 'fieldname' | 'default'>[],
-  user?: DefaultUser,
+  user: DefaultUser,
+  timeZone: string,
 ): Record<string, unknown> {
   const seed: Record<string, unknown> = {};
   for (const f of fields) {
-    const value = resolveDefaultToken(f.default, user);
+    const value = resolveDefaultToken(f.default, user, timeZone);
     if (value !== undefined) seed[f.fieldname] = value;
   }
   return seed;

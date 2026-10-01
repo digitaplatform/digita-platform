@@ -1,5 +1,12 @@
 import type { EntityDefinition } from "@digitaplatform/shared";
-import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from "@digitaplatform/shared";
+import { calendarDay, LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from "@digitaplatform/shared";
+
+/** Who a default is resolved for, and the tenant's time zone, whose day `__today__` names. */
+export interface DefaultContext {
+  user: string;
+  userName?: string;
+  timeZone: string;
+}
 import { evaluateExpressionValue } from "../expression/expression-evaluator.js";
 
 /**
@@ -10,11 +17,10 @@ import { evaluateExpressionValue } from "../expression/expression-evaluator.js";
 export function resolveDefaults(
   entity: EntityDefinition,
   data: Record<string, unknown>,
-  user: string,
-  userName?: string,
+  who: DefaultContext,
 ): Record<string, unknown> {
   const result = { ...data };
-  applyFieldDefaults(entity.fields, result, user, userName);
+  applyFieldDefaults(entity.fields, result, who);
 
   // H-P5: child-table rows have their own field defaults (e.g. a line date that
   // defaults to __today__, or an eval:). These were never applied — the loop only
@@ -27,7 +33,7 @@ export function resolveDefaults(
     if (!Array.isArray(rows)) continue;
     for (const row of rows) {
       if (row && typeof row === "object") {
-        applyFieldDefaults(field.child_fields, row as Record<string, unknown>, user, userName);
+        applyFieldDefaults(field.child_fields, row as Record<string, unknown>, who);
       }
     }
   }
@@ -47,8 +53,7 @@ export function applyNewChildRowDefaults(
   entity: EntityDefinition,
   data: Record<string, unknown>,
   original: Record<string, unknown>,
-  user: string,
-  userName?: string,
+  who: DefaultContext,
 ): void {
   for (const field of entity.fields) {
     if (field.fieldtype !== "Table" || !field.child_fields) continue;
@@ -70,7 +75,7 @@ export function applyNewChildRowDefaults(
       const rid = (row as Record<string, unknown>)[ROW_ID_FIELD];
       // Existing row (known _row_id) → leave as-is. New row (no/unknown id) → default.
       if (typeof rid === "string" && existingRowIds.has(rid)) continue;
-      applyFieldDefaults(field.child_fields, row as Record<string, unknown>, user, userName);
+      applyFieldDefaults(field.child_fields, row as Record<string, unknown>, who);
     }
   }
 }
@@ -79,8 +84,7 @@ export function applyNewChildRowDefaults(
 function applyFieldDefaults(
   fields: EntityDefinition["fields"],
   target: Record<string, unknown>,
-  user: string,
-  userName?: string,
+  who: DefaultContext,
 ): void {
   for (const field of fields) {
     if (LAYOUT_FIELD_TYPES.includes(field.fieldtype)) continue;
@@ -100,26 +104,26 @@ function applyFieldDefaults(
     if (typeof field.default === "string" && field.default.startsWith("eval:")) {
       target[field.fieldname] = evaluateExpressionValue(field.default, {
         doc: target,
-        user: { email: user, full_name: userName ?? user },
+        user: { email: who.user, full_name: who.userName ?? who.user },
       });
     } else {
-      target[field.fieldname] = resolveMagicDefault(field.default, user, userName);
+      target[field.fieldname] = resolveMagicDefault(field.default, who);
     }
   }
 }
 
-function resolveMagicDefault(value: unknown, user: string, userName?: string): unknown {
+function resolveMagicDefault(value: unknown, who: DefaultContext): unknown {
   if (typeof value !== "string") return value;
 
   switch (value) {
     case "__today__":
-      return new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+      return calendarDay(new Date(), who.timeZone); // YYYY-MM-DD
     case "__now__":
       return new Date();
     case "__user__":
-      return user;
+      return who.user;
     case "__username__":
-      return userName ?? user;
+      return who.userName ?? who.user;
     default:
       return value;
   }

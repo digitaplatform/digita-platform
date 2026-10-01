@@ -162,6 +162,8 @@ export function registerBootRoutes(
           default_currency: settingsData["default_currency"] ?? null,
           allow_user_language: settingsData["allow_user_language"] ?? true,
           is_first_run: settingsData["is_first_run"] ?? false,
+          // The tenant's day, which the form's __today__ names, as the engine's default does.
+          timezone: (settingsData["timezone"] as string) || "UTC",
         },
         // Resolved branding (BrandingSetting singleton); undefined fields are
         // omitted → the frontend applies its defaults. app_name falls back to the

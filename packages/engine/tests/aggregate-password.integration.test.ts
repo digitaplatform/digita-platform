@@ -58,6 +58,7 @@ const run = (pipeline: unknown[]) =>
   runAggregateSection({ key: "k", kind: "aggregate", entity: "Note", pipeline } as AggregateSection, rctx, user, {
     db,
     registry,
+    tenantTimeZone: () => "UTC",
     permissionChecker: {
       check: vi.fn().mockResolvedValue(undefined),
       getReadableFieldsOnEveryRow: vi.fn(() => null),

@@ -13,7 +13,7 @@ import { usePreview } from '@/hooks/usePreview';
 import { getDoc, getSingle } from '@/services/resource';
 import { qk } from '@/lib/query-keys';
 import { buildZodSchema, fieldErrorMessage } from '@/lib/schema-from-meta';
-import { buildDefaults } from '@/lib/default-tokens';
+import { buildDefaults, tenantTimeZoneOf } from '@/lib/default-tokens';
 import { mergePreviewRows, RECOMPUTE_OVERRIDES_KEY } from '@/lib/merge-preview-rows';
 import { resolveFetchFromTargets } from '@/lib/resolve-fetch-from';
 import {
@@ -109,6 +109,7 @@ export default function RecordPage() {
   const tc = useChrome();
   const tEntity = useI18nStore((s) => s.tEntity);
   const user = useSessionStore((s) => s.user);
+  const timeZone = useSessionStore((s) => tenantTimeZoneOf(s.settings));
 
   if (metaQ.isLoading) return <FormSkeleton fields={8} />;
   if (metaQ.isError || !metaQ.data) {
@@ -146,7 +147,7 @@ export default function RecordPage() {
   }
 
   const initial: Doc = isNew
-    ? { docstatus: 0, ...buildDefaults(metaQ.data.fields, user) }
+    ? { docstatus: 0, ...buildDefaults(metaQ.data.fields, user, timeZone) }
     : (loaded.data as Doc);
   if (!initial) return <LoadingBlock />;
 

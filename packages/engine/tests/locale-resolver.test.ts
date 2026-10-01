@@ -107,3 +107,28 @@ describe("LocaleResolver — cache invalidation (B2)", () => {
     expect((await r.getEnabledLanguages()).has("tr")).toBe(true);
   });
 });
+
+describe("LocaleResolver — the tenant's time zone", () => {
+  const withSetting = (setting: Record<string, unknown> | null) =>
+    ({
+      findOne: async (coll: string) => (coll === "Setting" ? setting : null),
+      find: async () => [],
+      findOneByFilter: async () => null,
+    }) as unknown as MongoDBService;
+
+  it("is Setting.timezone, and follows a changed setting on refresh", async () => {
+    const setting: Record<string, unknown> = { timezone: "Europe/Zurich" };
+    const r = new LocaleResolver(withSetting(setting));
+    await r.initialize();
+    expect(r.getTimeZone()).toBe("Europe/Zurich");
+    setting["timezone"] = "America/New_York";
+    await r.refresh();
+    expect(r.getTimeZone()).toBe("America/New_York");
+  });
+
+  it("is UTC, the setting's declared default, while no Setting is stored", async () => {
+    const r = new LocaleResolver(withSetting(null));
+    await r.initialize();
+    expect(r.getTimeZone()).toBe("UTC");
+  });
+});

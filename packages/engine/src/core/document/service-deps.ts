@@ -61,4 +61,7 @@ export interface DocumentServiceDeps {
    *  on document delete and on attach-field clear/replace (reference-counted).
    *  Omitted in test fixtures that don't exercise attachments. */
   storage?: StoragePort;
+  /** The tenant's time zone (IANA), read at each call because a write to Setting changes it: the
+   *  day of `__today__` and of a `$now` filter on a Date field. */
+  tenantTimeZone: () => string;
 }

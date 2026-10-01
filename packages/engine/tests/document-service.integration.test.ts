@@ -98,6 +98,7 @@ beforeAll(async () => {
   const workflowEngine = new WorkflowEngine();
 
   docService = new DocumentService({
+    tenantTimeZone: () => "UTC",
     registry,
     db,
     permissionChecker,

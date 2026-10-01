@@ -39,6 +39,8 @@ export interface ViewEngineDeps {
   db: MongoDBService;
   registry: EntityRegistry;
   permissionChecker: PermissionChecker;
+  /** The tenant's time zone (IANA), whose day a `$now` operand on a Date field names. */
+  tenantTimeZone: () => string;
 }
 
 export interface ViewExecutionInput {

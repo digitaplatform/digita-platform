@@ -32,6 +32,7 @@ export interface AggregateRunnerDeps {
   db: MongoDBService;
   registry: EntityRegistry;
   permissionChecker: PermissionChecker;
+  tenantTimeZone: () => string;
 }
 
 /**
@@ -165,7 +166,7 @@ export async function runAggregateSection(
   const coercedUserPipeline = userPipeline.map((stage) => {
     const coerced =
       !reshaped && stage["$match"] && typeof stage["$match"] === "object" && !Array.isArray(stage["$match"])
-        ? { ...stage, $match: coerceMatchDates(entity, stage["$match"] as Document) }
+        ? { ...stage, $match: coerceMatchDates(entity, deps.tenantTimeZone(), stage["$match"] as Document) }
         : stage;
     if (Object.keys(stage).some((k) => RESHAPE_STAGE_KEYS.has(k))) reshaped = true;
     return coerced;

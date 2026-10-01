@@ -16,7 +16,7 @@ import { getFieldTypeHandler, isStoredFieldType, FieldValueError, readStoredRow 
 import { foreignPasswordValue } from "../entity/password-cipher.js";
 import { copyDocumentData } from "./copy-service.js";
 import { projectFields } from "./project-fields.js";
-import { resolveDefaults, applyNewChildRowDefaults } from "../defaults/default-resolver.js";
+import { resolveDefaults, applyNewChildRowDefaults, type DefaultContext } from "../defaults/default-resolver.js";
 import { applyScopeFilters, applyRoleVisibilityFilter, isRoleVisible, readsThroughRoleList } from "../permissions/scope-filter.js";
 import { env } from "../config/env.js";
 import { PermissionDeniedError } from "../permissions/permission-checker.js";
@@ -252,6 +252,7 @@ export class DocumentService {
   private ruleEngine;
   private actionRunner;
   private storage?: StoragePort;
+  private tenantTimeZone: () => string;
 
   /**
    * Fire-and-forget wrapper that logs errors instead of silently swallowing them.
@@ -286,10 +287,15 @@ export class DocumentService {
     this.activityLogService = deps.activityLogService;
     this.ruleEngine = deps.ruleEngine;
     this.storage = deps.storage;
+    this.tenantTimeZone = deps.tenantTimeZone;
 
     this.namingService = new NamingService(deps.db);
     this.docStatusEngine = new DocStatusEngine();
     this.actionRunner = new ActionRunner(deps.permissionChecker);
+  }
+
+  private defaultContext(user: UserContext): DefaultContext {
+    return { user: user.email, userName: user.full_name, timeZone: this.tenantTimeZone() };
   }
 
   /**
@@ -560,8 +566,8 @@ export class DocumentService {
     // matching 0 rows (see filter-value-coercer). Field-type-metadata driven.
     const coercedQuery = {
       ...query,
-      filters: coerceDateFilterValues(entity, query.filters),
-      or_filters: coerceDateFilterValues(entity, query.or_filters),
+      filters: coerceDateFilterValues(entity, query.filters, this.tenantTimeZone()),
+      or_filters: coerceDateFilterValues(entity, query.or_filters, this.tenantTimeZone()),
     };
     const baseFilter = buildMongoFilter(coercedQuery, searchFields, allowed);
 
@@ -921,7 +927,7 @@ export class DocumentService {
       await this.assertReadAccess(user, doctype, storedName);
       doc = await this.loadDocInternal(doctype, storedName);
       await this.assertRowReadable(entity, doctype, storedName, user, doc._data);
-      applyNewChildRowDefaults(entity, writeData, doc._original, user.email, user.full_name);
+      applyNewChildRowDefaults(entity, writeData, doc._original, this.defaultContext(user));
       doc.merge(this.serializeFields(entity, writeData));
       const changedFields = doc.getChangedFields();
       if (entity.fields.some((f) => f.fieldtype === "Link" && changedFields.includes(f.fieldname))) {
@@ -929,7 +935,7 @@ export class DocumentService {
       }
       await this.fetchFromResolver.resolveChangedRows(entity, doc._data, doc._original);
     } else {
-      let processed = resolveDefaults(entity, writeData, user.email, user.full_name);
+      let processed = resolveDefaults(entity, writeData, this.defaultContext(user));
       processed = await this.fetchFromResolver.resolve(entity, processed);
       doc = new BaseDocument(doctype);
       doc._data = { ...this.serializeFields(entity, processed) };
@@ -994,7 +1000,7 @@ export class DocumentService {
     this.refuseForeignPasswordValues(entity, writeData);
 
     // Resolve defaults
-    let processed = resolveDefaults(entity, writeData, user.email, user.full_name);
+    let processed = resolveDefaults(entity, writeData, this.defaultContext(user));
 
     // Stamp the initial workflow state when caller didn't supply one. The
     // workflow field defaults to `status`. Coexists with docstatus.
@@ -1266,7 +1272,7 @@ export class DocumentService {
     // of their _row_id in the loaded original) — parity with insert; existing
     // rows and header fields are left untouched. Runs before serialize so
     // Date/Datetime child defaults serialize correctly.
-    applyNewChildRowDefaults(entity, writeData, doc._original, user.email, user.full_name);
+    applyNewChildRowDefaults(entity, writeData, doc._original, this.defaultContext(user));
     this.refuseForeignPasswordValues(entity, writeData, doc._original);
 
     // Serialize and merge changes (writeData = permission-filtered input)

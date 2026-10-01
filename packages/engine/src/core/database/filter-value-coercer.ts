@@ -1,4 +1,4 @@
-import type { EntityDefinition } from "@digitaplatform/shared";
+import { calendarDay, type EntityDefinition } from "@digitaplatform/shared";
 import type { Document } from "mongodb";
 import type { FilterTuple } from "./filter-builder.js";
 import { FieldValueError } from "../entity/field-types.js";
@@ -44,12 +44,12 @@ function resolveFieldType(entity: EntityDefinition, path: string): string | unde
  *  "YYYY-MM-DD" string; Datetime/creation/modified → BSON Date. Fail LOUD on an
  *  uncoercible non-empty value. `null`/`undefined`/`""` pass through untouched
  *  (presence semantics, not a date comparison). */
-function coerceScalar(fieldtype: string, field: string, value: unknown): unknown {
+function coerceScalar(fieldtype: string, field: string, value: unknown, timeZone: string): unknown {
   if (value === null || value === undefined || value === "") return value;
   if (fieldtype === "Date") {
     // Stored form is a "YYYY-MM-DD" string. A Date object (from $now ± duration)
-    // becomes its UTC calendar day — the platform's existing convention (__today__).
-    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    // becomes its calendar day in the tenant's time zone, as __today__ does.
+    if (value instanceof Date) return calendarDay(value, timeZone);
     return value; // already a string → compares string-vs-string (ISO sorts correctly)
   }
   // Datetime-like: stored as BSON Date. A string must become a Date, else
@@ -72,15 +72,16 @@ function coerceScalar(fieldtype: string, field: string, value: unknown): unknown
  */
 export function coerceDateFilterValues(
   entity: EntityDefinition,
-  filters?: FilterTuple[],
+  filters: FilterTuple[] | undefined,
+  timeZone: string,
 ): FilterTuple[] | undefined {
   if (!filters || filters.length === 0) return filters;
   return filters.map(([field, op, value]): FilterTuple => {
     const ft = resolveFieldType(entity, field);
     if (ft !== "Date" && ft !== "Datetime") return [field, op, value];
-    if (SCALAR_OPS.has(op)) return [field, op, coerceScalar(ft, field, value)];
+    if (SCALAR_OPS.has(op)) return [field, op, coerceScalar(ft, field, value, timeZone)];
     if (ARRAY_OPS.has(op) && Array.isArray(value)) {
-      return [field, op, value.map((v) => coerceScalar(ft, field, v))];
+      return [field, op, value.map((v) => coerceScalar(ft, field, v, timeZone))];
     }
     return [field, op, value];
   });
@@ -93,15 +94,15 @@ const MATCH_ARRAY_OPS = new Set(["$in", "$nin"]);
 
 /** Coerce the operand(s) of ONE `$match` field predicate (scalar, or an operator
  *  object like `{ $gte: <Date>, $lte: <Date> }`, or `{ $in: [...] }`). */
-function coerceMatchOperand(ft: string, field: string, pred: unknown): unknown {
+function coerceMatchOperand(ft: string, field: string, pred: unknown, timeZone: string): unknown {
   if (pred === null || pred instanceof Date || typeof pred !== "object") {
-    return coerceScalar(ft, field, pred);
+    return coerceScalar(ft, field, pred, timeZone);
   }
-  if (Array.isArray(pred)) return pred.map((v) => coerceScalar(ft, field, v));
+  if (Array.isArray(pred)) return pred.map((v) => coerceScalar(ft, field, v, timeZone));
   const out: Record<string, unknown> = { ...(pred as Record<string, unknown>) };
   for (const [op, val] of Object.entries(pred as Record<string, unknown>)) {
-    if (MATCH_SCALAR_OPS.has(op)) out[op] = coerceScalar(ft, field, val);
-    else if (MATCH_ARRAY_OPS.has(op) && Array.isArray(val)) out[op] = val.map((v) => coerceScalar(ft, field, v));
+    if (MATCH_SCALAR_OPS.has(op)) out[op] = coerceScalar(ft, field, val, timeZone);
+    else if (MATCH_ARRAY_OPS.has(op) && Array.isArray(val)) out[op] = val.map((v) => coerceScalar(ft, field, v, timeZone));
     // $regex/$exists/$size/… left untouched
   }
   return out;
@@ -115,16 +116,16 @@ function coerceMatchOperand(ft: string, field: string, pred: unknown): unknown {
  * stages before the first reshape/join — after a `$lookup`/`$group`/etc. the field
  * names/entity context change and this must not run.
  */
-export function coerceMatchDates(entity: EntityDefinition, match: Document): Document {
+export function coerceMatchDates(entity: EntityDefinition, timeZone: string, match: Document): Document {
   const out: Document = {};
   for (const [key, val] of Object.entries(match)) {
     if (key === "$and" || key === "$or" || key === "$nor") {
-      out[key] = Array.isArray(val) ? (val as Document[]).map((m) => coerceMatchDates(entity, m)) : val;
+      out[key] = Array.isArray(val) ? (val as Document[]).map((m) => coerceMatchDates(entity, timeZone, m)) : val;
     } else if (key.startsWith("$")) {
       out[key] = val; // $expr / $text / … — not a field predicate
     } else {
       const ft = resolveFieldType(entity, key);
-      out[key] = ft === "Date" || ft === "Datetime" ? coerceMatchOperand(ft, key, val) : val;
+      out[key] = ft === "Date" || ft === "Datetime" ? coerceMatchOperand(ft, key, val, timeZone) : val;
     }
   }
   return out;

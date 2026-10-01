@@ -173,6 +173,7 @@ export async function createApp(
     activityLogService,
     ruleEngine,
     storage,
+    tenantTimeZone: () => localeResolver.getTimeZone(),
   });
   // Allow hooks to spawn related documents transactionally (e.g. side-effect docs on submit).
   hookRunner.setDocumentService(documentService);
@@ -210,6 +211,7 @@ export async function createApp(
     db,
     registry,
     permissionChecker,
+    tenantTimeZone: () => localeResolver.getTimeZone(),
   });
 
   // ─── API-level Services ────────────────────────────────
