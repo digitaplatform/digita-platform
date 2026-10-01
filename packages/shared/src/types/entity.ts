@@ -404,10 +404,6 @@ export interface FieldDefinition {
   in_standard_filter?: boolean;
   in_global_search?: boolean;
 
-  // Print
-  print_hide?: boolean;
-  print_width?: string;
-
   // Permission level
   perm_level?: number;
 
