@@ -30,8 +30,9 @@ const OPEN = 1;
  * it. Those clients invalidate their cached queries → re-fetch → their list/record
  * updates to the latest. The re-fetch stays permission-gated by the resource API,
  * so no protected document data leaks through this channel (the event carries only
- * entity + id + op). The originator is NOT special-cased: their own open views
- * (incl. the acting tab) refresh too — idempotent.
+ * entity + id + op, and only the entity for a client that may not see every row).
+ * The originator is NOT special-cased: their own open views (incl. the acting tab)
+ * refresh too — idempotent.
  *
  * Single-replica scope: events fan out to clients on THIS engine instance. A
  * multi-replica deployment would need a shared bus (Redis pub/sub) — out of scope
@@ -69,13 +70,17 @@ export class RealtimeService {
 
   private async fanout(event: { entity: string; name: string; op: ChangeOp }): Promise<void> {
     const msg = JSON.stringify({ type: "change", entity: event.entity, name: event.name, op: event.op });
+    // A client that may not see every row learns only that the entity changed: the id and
+    // the operation of a row it may not read would tell it that the row exists.
+    const entityMsg = JSON.stringify({ type: "change", entity: event.entity });
     for (const client of this.clients) {
       // Targeted: only clients viewing this entity, that are open and may read it.
       if (client.socket.readyState !== OPEN) continue;
       if (!client.subscriptions.has(event.entity)) continue;
       try {
         const { allowed } = await this.permissionChecker.hasPermission(client.user, event.entity, "select");
-        if (allowed) client.socket.send(msg);
+        if (!allowed) continue;
+        client.socket.send(this.permissionChecker.mayHideRows(client.user, event.entity) ? entityMsg : msg);
       } catch (err) {
         log.debug({ err: (err as Error).message, entity: event.entity }, "realtime send skipped");
       }
