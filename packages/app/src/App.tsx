@@ -60,8 +60,10 @@ function RequireAuth() {
 
 // createBrowserRouter (data router) — enables useBlocker (dirty-guard) + per-route
 // errorElement. Built once; RouterProvider is only rendered after boot completes.
+// The app's own lowercase paths match case-sensitively: React Router ignores case otherwise, and
+// /Account, /App and /Login would never reach the list of an entity named Account, App or Login.
 const router = createBrowserRouter([
-  { path: '/login', element: <LoginPage /> },
+  { path: '/login', caseSensitive: true, element: <LoginPage /> },
   {
     element: <RequireAuth />,
     children: [
@@ -72,9 +74,9 @@ const router = createBrowserRouter([
         children: [
           { index: true, element: <DashboardPage /> },
           // `url`-kind menu targets (e.g. /app/view/...) until a plugin owns them.
-          { path: 'app/*', element: <PluginPagePlaceholder /> },
+          { path: 'app/*', caseSensitive: true, element: <PluginPagePlaceholder /> },
           // Self-service account (static → ranked ahead of :entity).
-          { path: 'account', element: <AccountPage /> },
+          { path: 'account', caseSensitive: true, element: <AccountPage /> },
       // Jobs satellite panel (menu entry gates on /health + role; deep links
       // simply show the no-access block when the tenant has no opt-in).
       { path: '_jobs', element: <JobsPage /> },
