@@ -46,6 +46,11 @@ export interface BaseDialogProps {
   ariaLabel?: string;
   /** Max-width preset for the panel. */
   size?: keyof typeof SIZES;
+  /** 'content' = the panel is as tall as its content, up to 90% of the screen. 'fill' = it stands
+   *  at the full screen on a phone and at 90% of the screen from `sm` up, whatever its content, so
+   *  rows that arrive or go never resize it or move it; its body is a column, and a child with
+   *  `min-h-0 flex-1` takes the height left and scrolls inside it. */
+  height?: 'content' | 'fill';
   /** Presentation: 'auto' = responsive (bottom sheet on phones, centered modal on
    *  desktop — today's behavior); 'sheet' = always a bottom sheet (grabber +
    *  slide-up); 'center' = always centered. */
@@ -103,6 +108,7 @@ export function BaseDialog({
   title,
   ariaLabel,
   size = 'md',
+  height = 'content',
   presentation = 'auto',
   detents,
   defaultDetent,
@@ -348,7 +354,8 @@ export function BaseDialog({
         style={dragHeight != null ? { height: `${dragHeight}px`, transitionDuration: '0ms' } : undefined}
         className={cn(
           closing ? 'anim-pop-out' : 'anim-pop-in',
-          'flex max-h-[90vh] w-full flex-col rounded-t-dialog bg-surface shadow-lg outline-none sm:rounded-dialog',
+          'flex w-full flex-col bg-surface shadow-lg outline-none sm:rounded-dialog',
+          height === 'fill' ? 'h-dvh sm:h-[90vh]' : 'max-h-[90vh] rounded-t-dialog',
           SIZES[size],
           className,
         )}
@@ -403,7 +410,11 @@ export function BaseDialog({
             )}
           </div>
         )}
-        <div ref={bodyRef} data-ui="dialog-body" className="min-h-0 flex-1 overflow-auto px-5 py-4 text-sm text-textMain">
+        <div
+          ref={bodyRef}
+          data-ui="dialog-body"
+          className={cn('min-h-0 flex-1 overflow-auto px-5 py-4 text-sm text-textMain', height === 'fill' && 'flex flex-col')}
+        >
           {children}
         </div>
         {footer && <div data-ui="dialog-footer" className="border-t border-border px-5 py-3">{footer}</div>}
