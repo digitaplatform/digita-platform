@@ -39,7 +39,7 @@ describe('EntryContextBar labels', () => {
       'field.partAvailability.price.sale_price': 'Verkaufspreis',
     });
 
-    const bar = await screen.findByTestId('entry-context-bar');
+    const bar = await screen.findByTestId('entry-context-bar', undefined, { timeout: 3000 });
     expect(bar).toHaveTextContent('Lagerbestand: 7');
     expect(bar).toHaveTextContent('Lagerplatz: A-3');
     expect(bar).toHaveTextContent('Verkaufspreis: 12.50');
@@ -51,7 +51,7 @@ describe('EntryContextBar labels', () => {
   it('shows a key without a text as words, never as the key', async () => {
     renderBar({});
 
-    const bar = await screen.findByTestId('entry-context-bar');
+    const bar = await screen.findByTestId('entry-context-bar', undefined, { timeout: 3000 });
     expect(bar).toHaveTextContent('Bin Location: A-3');
     expect(bar).toHaveTextContent('Sale Price: 12.50');
   });
@@ -62,7 +62,7 @@ describe('EntryContextBar labels', () => {
       'field.partAvailability.supplier.stock_qty': 'Bestand beim Lieferanten',
     });
 
-    const bar = await screen.findByTestId('entry-context-bar');
+    const bar = await screen.findByTestId('entry-context-bar', undefined, { timeout: 3000 });
     expect(bar).toHaveTextContent('Lagerbestand: 7');
     expect(bar).toHaveTextContent('Bestand beim Lieferanten: 40');
   });

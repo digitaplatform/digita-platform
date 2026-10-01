@@ -17,8 +17,8 @@ vi.mock('@/services/resource', () => ({
       sections: {
         customer: { display_name: 'Sample Co', customer_group: 'Retail', credit_limit: 5000 },
         open_orders: [
-          { _id: 'WO-1', order_no: 'WO-1', stage: 'In repair', total: 120 },
-          { _id: 'WO-2', order_no: 'WO-2', stage: 'Ready', total: 80 },
+          { _id: 'WO-1', order_no: 'A-100', stage: 'In repair', total: 120 },
+          { _id: 'WO-2', order_no: 'A-101', stage: 'Ready', total: 80 },
         ],
       },
     },
@@ -83,7 +83,7 @@ describe('ContextPanel labels', () => {
       'Auftrag',
       'Stufe',
     ]);
-    expect(within(orders).getAllByText('WO-1')).toHaveLength(2);
+    expect(within(orders).getByText('A-100')).toBeInTheDocument();
     expect(screen.queryByText('order_no')).not.toBeInTheDocument();
     expect(screen.queryByText('_id')).not.toBeInTheDocument();
   });
