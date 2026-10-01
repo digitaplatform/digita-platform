@@ -39,16 +39,26 @@ export function reportLinkLabel(
   return translations[`report.${entity}.${link.report}`] ?? link.label;
 }
 
-/** Resolve `param_map` (report param -> doc field path) against the doc. */
+function readPath(doc: Doc, path: string): unknown {
+  let value: unknown = doc;
+  for (const seg of path.split('.')) {
+    value = (value as Doc | undefined)?.[seg];
+  }
+  return value;
+}
+
+/**
+ * Resolve `param_map` (report param -> doc field path) against the doc, and the link's `locale`
+ * path into the render's `locale`. An empty language sends none, so the definition's locale prints.
+ */
 export function resolveReportParams(link: EntityReportLink, doc: Doc): Record<string, string> {
   const params: Record<string, string> = {};
   for (const [param, path] of Object.entries(link.param_map ?? {})) {
-    let value: unknown = doc;
-    for (const seg of path.split('.')) {
-      value = (value as Doc | undefined)?.[seg];
-    }
+    const value = readPath(doc, path);
     if (value !== undefined && value !== null) params[param] = String(value);
   }
+  const locale = link.locale ? readPath(doc, link.locale) : undefined;
+  if (locale !== undefined && locale !== null && locale !== '') params['locale'] = String(locale);
   return params;
 }
 
@@ -59,6 +69,8 @@ export function reportRenderUrl(
   opts: { print?: boolean } = {},
 ): string {
   const query = new URLSearchParams({ format, ...params });
+  // The report service answers a csv export that names a locale with 400.
+  if (format === 'csv') query.delete('locale');
   if (opts.print) query.set('print', '1');
   return `${REPORT_URL}/api/v1/report/definitions/${encodeURIComponent(report)}/render?${query.toString()}`;
 }

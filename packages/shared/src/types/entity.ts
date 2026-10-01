@@ -746,6 +746,13 @@ export interface EntityReportLink {
   label?: string;
   /** report param name -> doc field path (e.g. { param: "field_path" }). */
   param_map?: Record<string, string>;
+  /**
+   * Doc field path of the language to print in (e.g. "customer_language", fetched from the
+   * customer), sent as the render's `locale` with html, pdf and png, never with csv, on which the
+   * report service refuses one. A value with a region ("de-CH") prints with that region's formats;
+   * an empty value prints in the locale of the report definition.
+   */
+  locale?: string;
   /** Offered export formats (default ["pdf"]); "html" powers the preview. */
   formats?: ("pdf" | "html" | "png" | "csv")[];
   /** Permission gate on THIS entity (default "print"). */
