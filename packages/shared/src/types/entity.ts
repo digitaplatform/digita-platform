@@ -710,7 +710,7 @@ export interface ActionDefinition {
    *  dialog is itself the confirmation). */
   confirm?: boolean;
   /** What running the action does, said in its confirm dialog under the title; read only with
-   *  `confirm`. Translated under `action_confirm_message.<Entity>.<action>`. */
+   *  `confirm`. Translated under `action.<Entity>.<action>.confirm_message`. */
   confirm_message?: string;
   show_if?: string;
   requires_permission?: string;

@@ -92,7 +92,7 @@ export function ActionBar({
         title: tc('ui.action.confirmActionTitle', { action: action.label }),
         message:
           action.confirm_message &&
-          (translations[`action_confirm_message.${entity}.${action.action}`] ?? action.confirm_message),
+          (translations[`action.${entity}.${action.action}.confirm_message`] ?? action.confirm_message),
         confirmLabel: action.label,
         danger: action.type === 'danger',
       });
