@@ -9,10 +9,6 @@ export interface ResolvedLocale {
   code: string;
   fallback: string;
   direction: "ltr" | "rtl";
-  date_format: string;
-  time_format: string;
-  number_format: string;
-  first_day_of_week: string;
   /** BCP-47 formatting locale (e.g. "de-CH") — drives Intl number/date/currency
    *  formatting on the frontend. Region-aware, independent of the UI language. */
   format_locale: string;
@@ -162,7 +158,7 @@ export class LocaleResolver {
   /**
    * Drop all cached locale state and re-read SystemSettings + the Language
    * collection. Wired to fire when the settings singleton or a Language row changes
-   * (see affects()), so a newly enabled language / changed default / changed format
+   * (see affects()), so a newly enabled language / changed default / changed direction
    * takes effect immediately — previously the cache held until an engine restart.
    */
   async refresh(): Promise<void> {
@@ -208,10 +204,6 @@ export class LocaleResolver {
       code,
       fallback: this.fallbackLanguage,
       direction: "ltr",
-      date_format: "YYYY-MM-DD",
-      time_format: "HH:mm",
-      number_format: "#,###.##",
-      first_day_of_week: "Monday",
       format_locale: code,
       timezone: null,
     };
@@ -222,10 +214,6 @@ export class LocaleResolver {
       code,
       fallback: this.fallbackLanguage,
       direction: (data["direction"] as "ltr" | "rtl") ?? "ltr",
-      date_format: (data["date_format"] as string) ?? "YYYY-MM-DD",
-      time_format: (data["time_format"] as string) ?? "HH:mm",
-      number_format: (data["number_format"] as string) ?? "#,###.##",
-      first_day_of_week: (data["first_day_of_week"] as string) ?? "Monday",
       format_locale: code,
       timezone: null,
     };
