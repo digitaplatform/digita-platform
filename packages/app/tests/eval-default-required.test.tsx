@@ -66,7 +66,12 @@ vi.mock('@/stores/session', () => ({
 }));
 vi.mock('@/stores/i18n', () => ({
   useI18nStore: (sel: (s: Record<string, unknown>) => unknown) =>
-    sel({ t: (k: string) => k, tEntity: (e: string, fb?: string) => fb ?? e, tOption: (_e: string, _f: string, v: string) => v }),
+    sel({
+      t: (k: string) => k,
+      tEntity: (e: string, fb?: string) => fb ?? e,
+      tField: (_e: string, f: string, fb?: string) => fb ?? f,
+      tOption: (_e: string, _f: string, v: string) => v,
+    }),
 }));
 vi.mock('@/stores/record-title', () => ({
   useRecordTitle: (sel: (s: { publish: () => void; clear: () => void }) => unknown) =>

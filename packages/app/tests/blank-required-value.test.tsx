@@ -53,7 +53,11 @@ vi.mock('@/stores/session', () => ({
 }));
 vi.mock('@/stores/i18n', () => ({
   useI18nStore: (sel: (s: Record<string, unknown>) => unknown) =>
-    sel({ t: (k: string) => k, tEntity: (e: string, fb?: string) => fb ?? e }),
+    sel({
+      t: (k: string, p?: Record<string, string>) => (p?.field ? `${k}: ${p.field}` : k),
+      tEntity: (e: string, fb?: string) => fb ?? e,
+      tField: (_e: string, f: string, fb?: string) => fb ?? f,
+    }),
 }));
 vi.mock('@/stores/record-title', () => ({
   useRecordTitle: (sel: (s: { publish: () => void; clear: () => void }) => unknown) =>
@@ -105,18 +109,18 @@ describe('RecordPage refuses a blank required value before it sends the record',
   it('refuses a whitespace-only value in a required field at that field', async () => {
     await saveWith({ customer: '   ', lines: [{ _row_id: 'r1', sku: 'A-1' }] });
 
-    await waitFor(() => expect(state.errors['customer']).toBe('field_required'));
+    await waitFor(() => expect(state.errors['customer']).toBe('field_required: Customer'));
     expect(state.create).not.toHaveBeenCalled();
   });
 
   it('refuses a blank and a whitespace-only required Table cell at the Table', async () => {
     await saveWith({ customer: 'Ann', lines: [{ _row_id: 'r1', sku: 'A-1' }, { _row_id: 'r2', sku: '' }] });
-    await waitFor(() => expect(state.errors['lines']).toBe('field_required'));
+    await waitFor(() => expect(state.errors['lines']).toBe('field_required: Lines'));
     expect(state.create).not.toHaveBeenCalled();
     cleanup();
 
     await saveWith({ customer: 'Ann', lines: [{ _row_id: 'r1', sku: '  ' }] });
-    await waitFor(() => expect(state.errors['lines']).toBe('field_required'));
+    await waitFor(() => expect(state.errors['lines']).toBe('field_required: Lines'));
     expect(state.create).not.toHaveBeenCalled();
   });
 
@@ -137,7 +141,7 @@ describe('RecordDialog refuses a blank required Table cell before it sends the r
     });
     fireEvent.click(screen.getByRole('button', { name: 'ui.action.create' }));
 
-    await waitFor(() => expect(state.errors['lines']).toBe('field_required'));
+    await waitFor(() => expect(state.errors['lines']).toBe('field_required: Lines'));
     expect(state.create).not.toHaveBeenCalled();
   });
 });

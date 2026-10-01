@@ -375,10 +375,11 @@ function RecordForm({
     const rhf = form.formState.errors as Record<string, unknown>;
     for (const k of Object.keys(rhf)) {
       const m = fieldErrorMessage(rhf[k]);
-      if (m) out[k] = t(m);
+      // An engine message such as field_required names its field through {field}.
+      if (m) out[k] = t(m, { field: tField(entity, k, meta.fields.find((f) => f.fieldname === k)?.label) });
     }
     return out;
-  }, [form.formState.errors, t]);
+  }, [form.formState.errors, t, tField, entity, meta]);
 
   // Dirty-guard: block in-app navigation away from unsaved edits (data router).
   // `bypassGuardRef` lets a programmatic post-save/-delete navigation skip the guard.
