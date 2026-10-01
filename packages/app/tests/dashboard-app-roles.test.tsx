@@ -38,16 +38,21 @@ const resource = vi.hoisted(() => ({
       ? { success: true, data: structuredClone(fixtures.workspaces.find((w) => w._id === name)) }
       : { success: false, status_code: 403, error: { detail: `Permission denied: demo@show.test cannot read ${entity}` } },
   ),
-  getView: vi.fn(async () => ({
+  getView: vi.fn(async () => viewResult({ today_appointments: 'Appointment' })),
+}));
+
+// The view result, with the entities of its sections, or without them as an older engine answers.
+function viewResult(entities?: Record<string, string>) {
+  return {
     success: true,
     data: {
       source: null,
       sections: { today_appointments: [{ _id: 'A-1', subject: 'Brake check', customer: 'Acme' }] },
-      entities: { today_appointments: 'Appointment' },
+      ...(entities ? { entities } : {}),
     },
     messages: [],
-  })),
-}));
+  };
+}
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
@@ -82,20 +87,35 @@ vi.mock('@/services/meta', () => ({
 
 import DashboardPage from '@/pages/DashboardPage';
 
+function drawHome() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <DashboardPage />
+    </QueryClientProvider>,
+  );
+}
+
+async function findTodayTable(): Promise<HTMLElement> {
+  expect(await screen.findByRole('heading', { level: 1, name: 'Reception' })).toBeInTheDocument();
+  const card = within(screen.getByRole('heading', { name: 'Today' }).closest<HTMLElement>('[data-ui="card"]')!);
+  return card.findByRole('table');
+}
+
+const headers = (table: HTMLElement) => within(table).getAllByRole('columnheader').map((header) => header.textContent);
+
 describe('Home of a user who holds only roles of the app', () => {
   it('draws the workspace of its role with the field labels of the section it read, and opens no View', async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <DashboardPage />
-      </QueryClientProvider>,
-    );
-
-    expect(await screen.findByRole('heading', { level: 1, name: 'Reception' })).toBeInTheDocument();
-    const card = within(screen.getByRole('heading', { name: 'Today' }).closest<HTMLElement>('[data-ui="card"]')!);
-    const table = await card.findByRole('table');
-    expect(within(table).getAllByRole('columnheader').map((header) => header.textContent)).toEqual(['Subject', 'Customer']);
+    drawHome();
+    const table = await findTodayTable();
+    expect(headers(table)).toEqual(['Subject', 'Customer']);
     expect(within(table).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['Brake check', 'Acme']);
     expect(resource.getDoc.mock.calls.filter(([entity]) => entity === 'View')).toEqual([]);
+  });
+
+  it('draws the workspace with the keys as headers when the view result names no entities', async () => {
+    resource.getView.mockImplementationOnce(async () => viewResult());
+    drawHome();
+    expect(headers(await findTodayTable())).toEqual(['subject', 'customer']);
   });
 });

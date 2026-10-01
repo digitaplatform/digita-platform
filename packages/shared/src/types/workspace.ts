@@ -107,6 +107,7 @@ export interface ViewResult {
   source: Record<string, unknown> | null;
   sections: Record<string, ViewSectionData>;
   /** The entity each section that ran read, by section key, whose field labels name its row
-   *  keys. A section that failed has none. */
-  entities: Record<string, string>;
+   *  keys. A section that failed has none, and an engine of an older release sends no map, so a
+   *  reader names the row keys as they are. */
+  entities?: Record<string, string>;
 }

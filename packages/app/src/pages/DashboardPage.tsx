@@ -129,7 +129,7 @@ export default function DashboardPage() {
       data: section in sections ? sections[section]! : null,
       message,
       // The entity the section read; its field labels head a card's columns.
-      entity: q.data?.result?.entities[section],
+      entity: q.data?.result?.entities?.[section],
     };
     return result;
   };
