@@ -3,7 +3,10 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "lib": ["ES2023", "DOM"]
+    "lib": ["ES2023", "DOM"],
+    // The minimal package types its design with this theme's Design; read it from the source
+    // here, since the theme's own dist is the output of this build.
+    "paths": { "@digitaplatform/theme": ["./src/index.ts"] }
   },
   "include": ["src/**/*.ts"]
 }
