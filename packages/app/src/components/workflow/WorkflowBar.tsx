@@ -70,7 +70,7 @@ export function WorkflowBar({
   });
 
   // A transition without an action shows its target state in the text the state badge uses, so a
-  // button and the badge name a state alike. An action arrives translated, from localizeMeta.
+  // button and the badge name a state in the same words. An action arrives translated, from localizeMeta.
   const transitionLabel = (tr: TransitionDefinition) => tr.action || (wf ? tOption(meta.name, wf, tr.to) : tr.to);
 
   // The engine refuses Submit and Cancel without the `submit` / `cancel` bit on this document.

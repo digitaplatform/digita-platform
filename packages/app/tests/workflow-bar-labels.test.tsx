@@ -2,6 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { EntityDefinition } from '@digitaplatform/shared';
+import { useI18nStore } from '@/stores/i18n';
 import { localizeMeta } from '@/lib/localize-meta';
 
 /**
@@ -10,17 +11,8 @@ import { localizeMeta } from '@/lib/localize-meta';
  * its target state by the text the state badge uses (`option.<Entity>.<workflow field>.<state>`).
  */
 
-const texts = vi.hoisted(() => ({ map: {} as Record<string, string> }));
-
 vi.mock('@/stores/session', () => ({
   useSessionStore: (sel: (s: { user: { roles: string[] } }) => unknown) => sel({ user: { roles: ['Mechanic'] } }),
-}));
-vi.mock('@/stores/i18n', () => ({
-  useI18nStore: (sel: (s: Record<string, unknown>) => unknown) =>
-    sel({
-      t: (k: string) => k,
-      tOption: (entity: string, field: string, value: string) => texts.map[`option.${entity}.${field}.${value}`] ?? value,
-    }),
 }));
 vi.mock('@/lib/chrome-i18n', () => ({ useChrome: () => (k: string) => k }));
 vi.mock('@/components/overlay/DialogHost', () => ({
@@ -47,7 +39,8 @@ const meta = {
   ],
 } as unknown as EntityDefinition;
 
-function renderBar(localized: EntityDefinition) {
+function renderBar(localized: EntityDefinition, translations: Record<string, string> = {}) {
+  useI18nStore.setState({ translations, loaded: true });
   render(
     <WorkflowBar
       entity="WorkOrder"
@@ -62,25 +55,23 @@ function renderBar(localized: EntityDefinition) {
 
 describe('WorkflowBar button labels', () => {
   it('shows the translated label of a transition with an action', () => {
-    texts.map = {};
-    renderBar(localizeMeta(meta, { 'transition.WorkOrder.Ready for pickup': 'Prêt pour le retrait' }));
+    const french = { 'transition.WorkOrder.Ready for pickup': 'Prêt pour le retrait' };
+    renderBar(localizeMeta(meta, french), french);
     expect(screen.getByRole('button', { name: 'Prêt pour le retrait' })).toBeInTheDocument();
   });
 
   it('shows the written label where the action has no key', () => {
-    texts.map = {};
     renderBar(localizeMeta(meta, {}));
     expect(screen.getByRole('button', { name: 'Ready for pickup' })).toBeInTheDocument();
   });
 
   it('labels a transition without an action by the translated text of its target state', () => {
-    texts.map = { 'option.WorkOrder.stage.waiting': 'En attente de pièces' };
-    renderBar(localizeMeta(meta, {}));
+    const french = { 'option.WorkOrder.stage.waiting': 'En attente de pièces' };
+    renderBar(localizeMeta(meta, french), french);
     expect(screen.getByRole('button', { name: 'En attente de pièces' })).toBeInTheDocument();
   });
 
   it('labels a transition without an action by its state as written where the state has no text', () => {
-    texts.map = {};
     renderBar(localizeMeta(meta, {}));
     expect(screen.getByRole('button', { name: 'waiting' })).toBeInTheDocument();
   });
