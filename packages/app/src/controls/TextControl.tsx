@@ -178,7 +178,10 @@ function escapeHtml(text: string): string {
 function renderInline(text: string): string {
   const setAside: string[] = [];
   const keep = (html: string) => `\uE000${setAside.push(html) - 1}\uE000`;
+  // A placeholder character in the source is written as its reference, so only keep() makes
+  // placeholders and each one names an earlier, existing entry.
   const html = escapeHtml(text)
+    .replace(/\uE000/g, '&#xE000;')
     .replace(/`([^`]+)`/g, (_, code: string) => keep(`<code>${code}</code>`))
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, label: string, href: string) =>
       keep(`<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`),
