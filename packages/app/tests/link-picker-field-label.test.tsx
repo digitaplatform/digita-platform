@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { SUPPORTED_LANGUAGES, type FieldDefinition } from '@digitaplatform/shared';
+import { SUPPORTED_LANGUAGES, type EntityDefinition, type FieldDefinition } from '@digitaplatform/shared';
 import type { FieldControlState } from '@/controls/types';
 
 vi.mock('@/hooks/useSearchLink', () => ({
@@ -32,6 +32,8 @@ vi.mock('@/hooks/useMeta', () => ({
 import LinkControl from '@/controls/LinkControl';
 import { AddViaLinkSearch } from '@/controls/AddViaLinkSearch';
 import { LinkEntryInput } from '@/controls/LinkEntryInput';
+import { FilterEditor } from '@/components/list/FilterEditor';
+import { ListToolbar } from '@/components/list/ListToolbar';
 import { useI18nStore } from '@/stores/i18n';
 
 const CODE_NAME = 'CustomerGroup';
@@ -56,6 +58,42 @@ const STATE: FieldControlState = {
 
 function buildGroupField(language: string, extra: Partial<FieldDefinition> = {}): FieldDefinition {
   return { fieldname: 'group', fieldtype: 'Link', label: LABEL[language]!, target: CODE_NAME, ...extra } as FieldDefinition;
+}
+
+/** The Customer list with its group field as a quick filter, labelled as the meta localizer hands it over. */
+function buildCustomerMeta(language: string): EntityDefinition {
+  return { name: 'Customer', fields: [buildGroupField(language, { in_standard_filter: true })] } as EntityDefinition;
+}
+
+function renderListToolbar(meta: EntityDefinition) {
+  const ignore = () => {};
+  return render(
+    <ListToolbar
+      entity="Customer"
+      meta={meta}
+      search=""
+      filters={[]}
+      orFilters={[]}
+      columns={[]}
+      savedViews={[]}
+      canCreate={false}
+      canEditView={() => false}
+      onSearch={ignore}
+      onFiltersChange={ignore}
+      onColumnsChange={ignore}
+      onApplyView={ignore}
+      onResetView={ignore}
+      onAllRecords={ignore}
+      onSaveView={ignore}
+      onUpdateView={ignore}
+      onDeleteView={ignore}
+      onSetDefaultView={ignore}
+      onClearDefaultView={ignore}
+      onSetOrgDefaultView={ignore}
+      onClearOrgDefaultView={ignore}
+      onCreate={ignore}
+    />,
+  );
 }
 
 function renderField(field: FieldDefinition) {
@@ -131,6 +169,20 @@ describe.each(SUPPORTED_LANGUAGES)('a Link picker in %s', (language) => {
       expect(text).toContain(LABEL[language]);
       expect(text).not.toContain(CODE_NAME);
     }
+  });
+
+  it('names its field by the label in the placeholder of the Link value of a filter row', () => {
+    render(
+      <FilterEditor meta={buildCustomerMeta(language)} filter={['group', '=', '']} onChange={() => {}} onRemove={() => {}} />,
+    );
+    expect(screen.getByPlaceholderText(LABEL[language]!, { exact: false })).toHaveAttribute('role', 'combobox');
+    expect(screen.queryByPlaceholderText(CODE_NAME, { exact: false })).toBeNull();
+  });
+
+  it('names its field by the label in the placeholder of its quick filter', () => {
+    renderListToolbar(buildCustomerMeta(language));
+    expect(screen.getByPlaceholderText(LABEL[language]!, { exact: false })).toHaveAccessibleName(LABEL[language]);
+    expect(screen.queryByPlaceholderText(CODE_NAME, { exact: false })).toBeNull();
   });
 });
 
