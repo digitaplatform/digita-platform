@@ -8,9 +8,10 @@ import type { EntitySummary } from '@/types';
  * the raw value: entity name + plural, field labels, section/tab headings, field
  * help-text (`description`), action labels, the fields of an action's dialog
  * (`action_field.<Entity>.<action>.<field>`) and workflow transition labels
- * (`transition.<Entity>.<action>`). A child field of a table also keys by its table
- * (`field.<Entity>.<table>.<field>`, `description.<Entity>.<table>.<field>`). Any
- * future label field localizes by adding ONE line here — renderers read
+ * (`transition.<Entity>.<action>`) and the labels of a record's links
+ * (`link.<Entity>.<linked entity>.<link_field>`). A child field of a table also keys
+ * by its table (`field.<Entity>.<table>.<field>`, `description.<Entity>.<table>.<field>`).
+ * Any future label field localizes by adding ONE line here — renderers read
  * already-localized meta and never build translation keys themselves.
  *
  * Wired into `useMeta` / `useMetaCatalog` / `useActions` so it runs reactively on
@@ -63,7 +64,7 @@ export function localizeAction(entity: string, a: ActionDefinition, t: Dict): Ac
   return localized;
 }
 
-/** Localize a full EntityDefinition (label/plural/fields/sections/descriptions/actions/transitions). */
+/** Localize a full EntityDefinition (label/plural/fields/sections/descriptions/actions/transitions/links). */
 export function localizeMeta(meta: EntityDefinition, t: Dict): EntityDefinition {
   const e = meta.name;
   const out: EntityDefinition = {
@@ -79,6 +80,14 @@ export function localizeMeta(meta: EntityDefinition, t: Dict): EntityDefinition 
     out.transitions = meta.transitions.map((tr) =>
       tr.action ? { ...tr, action: t[`transition.${e}.${tr.action}`] ?? tr.action } : tr,
     );
+  }
+  if (meta.links) {
+    // A link has no id and its position moves when the links are reordered; the linked entity and the
+    // field that points back stay put, so they name its text.
+    out.links = meta.links.map((link) => ({
+      ...link,
+      label: t[`link.${e}.${link.entity}.${link.link_field}`] ?? link.label,
+    }));
   }
   return out;
 }

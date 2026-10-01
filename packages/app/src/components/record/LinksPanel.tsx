@@ -8,13 +8,15 @@ import { qk } from '@/lib/query-keys';
 import { toUiMessages, unwrap } from '@/lib/api-result';
 import { objectFilterToTuples } from '@/lib/filter-from-url';
 import { useI18nStore } from '@/stores/i18n';
+import { resolveIcon } from '@/lib/icon-registry';
 import { tid } from '@/lib/testid';
 
 /**
  * The record's `links`: one entry per link whose entity the caller may select, with the count
  * the related route answers where the link sets `show_count`. An entry opens the list of the
  * linked entity with the filter the route counts by, `link_field` = the record plus the link's
- * `filters`, so the list shows the rows the count counted.
+ * `filters`, so the list shows the rows the count counted. An entry draws the link's `icon` where the
+ * icon registry knows the name, and is label-only otherwise, as an action button is.
  */
 export function LinksPanel({ entity, name, links }: { entity: string; name: string; links: LinkDefinition[] }) {
   const catalog = useMetaCatalog();
@@ -39,12 +41,14 @@ export function LinksPanel({ entity, name, links }: { entity: string; name: stri
         const answer = related.data?.[links.indexOf(link)];
         const count = answer?.entity === link.entity ? answer.count : undefined;
         const filter = JSON.stringify(objectFilterToTuples({ [link.link_field]: name, ...link.filters }));
+        const Icon = resolveIcon(link.icon);
         return (
           <Link
             key={i}
             to={{ pathname: `/${link.entity}`, search: `?${new URLSearchParams({ f: filter })}` }}
             className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-sm text-textMain hover:bg-bgHover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
           >
+            {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}
             {link.label}{' '}
             {link.show_count && typeof count === 'number' && <Badge size="sm">{count}</Badge>}
             {link.show_count && typeof count !== 'number' && !related.isPending && (
