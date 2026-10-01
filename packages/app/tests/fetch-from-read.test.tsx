@@ -62,7 +62,6 @@ vi.mock('@/stores/i18n', () => ({
       t: (k: string) => k,
       tEntity: (e: string, fb?: string) => fb ?? e,
       tField: (_e: string, f: string, fb?: string) => fb ?? f,
-      tSection: (_e: string, s: string, fb?: string) => fb ?? s,
       tOption: (_e: string, _f: string, v: string) => v,
     }),
 }));
