@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import {
   Bell,
   Check,
@@ -190,26 +190,37 @@ function ComboboxGroup() {
 
 function DatePickerGroup() {
   const [date, setDate] = useState<string | undefined>('2026-09-28');
+  // Each picker is named by a visible label, as a record form names it, so the states read apart.
+  const labelId = useId();
+  const label = (n: number, text: string) => (
+    <span id={`${labelId}-${n}`} className="text-xs font-medium text-textMuted">
+      {text}
+    </span>
+  );
   return (
     <ShowcaseGroup title="DatePicker" exports={['DatePicker']}>
       <ShowcaseState state="selected · click opens">
-        <div className="w-56">
-          <DatePicker value={date} onChange={setDate} locale="en-GB" />
+        <div className="flex w-56 flex-col gap-1.5">
+          {label(1, 'Order date')}
+          <DatePicker value={date} onChange={setDate} locale="en-GB" aria-labelledby={`${labelId}-1`} />
         </div>
       </ShowcaseState>
       <ShowcaseState state="rest · placeholder">
-        <div className="w-56">
-          <DatePicker onChange={noop} placeholder="Delivery date" />
+        <div className="flex w-56 flex-col gap-1.5">
+          {label(2, 'Delivery date')}
+          <DatePicker onChange={noop} placeholder="Delivery date" aria-labelledby={`${labelId}-2`} />
         </div>
       </ShowcaseState>
       <ShowcaseState state="invalid">
-        <div className="w-56">
-          <DatePicker onChange={noop} invalid placeholder="Required" />
+        <div className="flex w-56 flex-col gap-1.5">
+          {label(3, 'Due date')}
+          <DatePicker onChange={noop} invalid placeholder="Required" aria-labelledby={`${labelId}-3`} />
         </div>
       </ShowcaseState>
       <ShowcaseState state="disabled">
-        <div className="w-56">
-          <DatePicker value="2026-09-28" onChange={noop} disabled locale="en-GB" />
+        <div className="flex w-56 flex-col gap-1.5">
+          {label(4, 'Posting date')}
+          <DatePicker value="2026-09-28" onChange={noop} disabled locale="en-GB" aria-labelledby={`${labelId}-4`} />
         </div>
       </ShowcaseState>
     </ShowcaseGroup>
