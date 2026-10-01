@@ -2076,8 +2076,11 @@ export class DocumentService {
       // an arbitrary, permission-free status write via the transition route.
     }
 
+    // Only a workflow's allowed_roles may stand in for the write check. Without a workflow
+    // nothing declares who may move the status, so the move is a plain write of that field
+    // and takes the write check and the field filter like any other save.
     return this.update(doctype, name, { [workflowField]: toState }, user, ctx, {
-      skipWritePermCheck: true,
+      skipWritePermCheck: !!this.workflowEngine?.hasWorkflow(entity),
       sessionOverride,
     });
   }
