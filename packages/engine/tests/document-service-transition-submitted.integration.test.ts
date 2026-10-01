@@ -11,7 +11,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
-import { PermissionChecker } from "../src/core/permissions/permission-checker.js";
+import { PermissionChecker, PermissionDeniedError } from "../src/core/permissions/permission-checker.js";
 import { HookRunner } from "../src/core/hooks/hook-runner.js";
 import { decryptPassword } from "../src/core/entity/password-cipher.js";
 import { LinkValidator } from "../src/core/link/link-validator.js";
@@ -176,6 +176,21 @@ describe("transition() on a submitted doc (E5)", () => {
 });
 
 describe("transition() side_effects on a submitted doc (E5 / §4 step 15)", () => {
+  it("refuses a side effect that changes a field read_only_depends_on locks", async () => {
+    const entity = orderEntity("OrderLocked", { delivered_at: "2026-06-20T10:00:00.000Z" });
+    const deliveredAt = entity.fields.find((f) => f.fieldname === "delivered_at")!;
+    deliveredAt.read_only_depends_on = "eval:doc.grand_total > 100";
+    registry.register(entity);
+    await db.ensureCollection("OrderLocked", "app");
+    const doc = await docService.insert("OrderLocked", { title: "L", grand_total: 500 }, admin);
+    await docService.submit("OrderLocked", doc._id, admin);
+    await expect(docService.transition("OrderLocked", doc._id, "delivered", salesManager)).rejects.toBeInstanceOf(
+      PermissionDeniedError,
+    );
+    const raw = await db.findOne("OrderLocked", doc._id, "app");
+    expect([raw?.["status"], raw?.["delivered_at"] ?? null]).toEqual(["confirmed", null]);
+  });
+
   it("T15a: band-conformant side_effects.set persists", async () => {
     registry.register(orderEntity("OrderGood", { delivered_at: "2026-06-20T10:00:00.000Z" }));
     await db.ensureCollection("OrderGood", "app");

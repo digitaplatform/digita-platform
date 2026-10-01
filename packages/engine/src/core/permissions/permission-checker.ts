@@ -11,6 +11,16 @@ const log = createLogger("permission-checker");
 /** Every action a permission row can grant, each a flag of EntityPermission named alike. */
 const PERMISSION_ACTIONS: ReadonlySet<string> = new Set(Object.values(PermissionAction));
 
+/** A field or a Table cell a submitted document's patch changes, with what it held and holds now. */
+export interface PatchChange {
+  field: string;
+  old: unknown;
+  new: unknown;
+  /** The Table of a cell, and the row as the patch leaves it. */
+  table?: string;
+  row?: Record<string, unknown>;
+}
+
 export class PermissionDeniedError extends Error {
   constructor(
     public user: string,
@@ -646,6 +656,44 @@ export class PermissionChecker {
     }
 
     return filtered;
+  }
+
+  /**
+   * The read_only_depends_on lock on the path that patches a submitted document (updateSubmitted).
+   * The patch names the fields and cells it changes, so the lock judges each of them as it is, with
+   * no write filter between: a hook whose actor may not write the target is held all the same. Each
+   * is judged on what the patch produces, a field on the document and a cell on its row, so a patch
+   * that releases its own lock passes, as on update; the Administrator is exempt there too. A static
+   * `read_only` binds a person only, since hooks settle such fields.
+   */
+  assertPatchKeepsLocks(
+    user: UserContext,
+    entityName: string,
+    doc: Record<string, unknown>,
+    changes: readonly PatchChange[],
+  ): void {
+    if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return;
+    const entity = this.registry.get(entityName);
+    for (const change of changes) {
+      const fields = change.table
+        ? entity.fields.find((f) => f.fieldname === change.table)?.child_fields
+        : entity.fields;
+      const lock = fields?.find((f) => f.fieldname === change.field)?.read_only_depends_on;
+      if (!lock) continue;
+      if (JSON.stringify(change.old ?? null) === JSON.stringify(change.new ?? null)) continue;
+      const locked = evaluateExpression(lock, {
+        doc: change.row ?? doc,
+        user: user as unknown as Record<string, unknown>,
+      });
+      if (!locked) continue;
+      throw new PermissionDeniedError(
+        user.email,
+        entityName,
+        change.table
+          ? `change the locked cell "${change.table}.${change.field}" of`
+          : `change the locked field "${change.field}" of`,
+      );
+    }
   }
 
   /**
