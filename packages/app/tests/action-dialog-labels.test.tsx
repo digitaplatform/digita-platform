@@ -18,6 +18,7 @@ const accept = {
   dialog_fields: [
     { fieldname: 'accepted_by', fieldtype: 'Data', label: 'Accepted by' },
     { fieldname: 'note', fieldtype: 'Data', label: 'Note' },
+    { fieldname: 'terms', fieldtype: 'Heading', label: 'Terms' },
   ],
 } as unknown as ActionDefinition;
 
@@ -55,6 +56,17 @@ describe('the field labels of the dialog an action opens on the record page', ()
   it('come from action_field.<Entity>.<action>.<field>', async () => {
     const labels = await openDialog({ 'action_field.Quote.accept.accepted_by': 'Angenommen von' });
     expect(labels).toEqual(['Angenommen von', 'Note']);
+  });
+
+  it('take the action_field text over the text of an entity field of the same name', async () => {
+    const labels = await openDialog({
+      'action_field.Quote.accept.accepted_by': 'Angenommen von',
+      'field.Quote.accepted_by': 'Akzeptiert durch',
+      'action_field.Quote.accept.terms': 'Bedingungen',
+      'field.Quote.terms': 'AGB',
+    });
+    expect(labels).toEqual(['Angenommen von', 'Note']);
+    expect(screen.getByRole('heading', { level: 4 })).toHaveTextContent('Bedingungen');
   });
 
   it('keep the text of the entity field of the same name where the dialog field has no key', async () => {

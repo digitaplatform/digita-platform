@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 // Heading and HTML are layout fields: the form draws them itself instead of a control. A Heading
-// reads in the session language. The markup of an HTML field comes from entity metadata that any app
+// reads in the session language, which the localized meta every form is given carries. The markup of an HTML field comes from entity metadata that any app
 // author writes, so it must reach the page only after DOMPurify has dropped what runs code.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import type { FieldDefinition } from '@digitaplatform/shared';
+import type { EntityDefinition } from '@digitaplatform/shared';
 import type { FieldControlState } from '@/controls/types';
 import { FormRenderer } from '@/components/render/FormRenderer';
 import { useI18nStore } from '@/stores/i18n';
+import { localizeMeta } from '@/lib/localize-meta';
 
 vi.mock('@/lib/chrome-i18n', () => ({ useChrome: () => (key: string) => key }));
 
@@ -23,7 +24,8 @@ const OPEN: FieldControlState = {
 };
 
 function drawFields(fields: Array<Record<string, unknown>>) {
-  const defined = fields as unknown as FieldDefinition[];
+  const meta = { name: 'Gadget', label: 'Gadget', fields } as unknown as EntityDefinition;
+  const defined = localizeMeta(meta, useI18nStore.getState().translations).fields;
   return render(
     <MemoryRouter>
       <FormRenderer

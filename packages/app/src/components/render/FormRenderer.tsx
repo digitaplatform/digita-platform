@@ -4,6 +4,7 @@ import { Info, Snowflake, TriangleAlert } from 'lucide-react';
 import { Badge, FormRow, FormSection, TabPanel, Tabs, Tooltip, cn } from '@digitaplatform/components';
 import type { FieldDefinition, FormLayoutConfig } from '@digitaplatform/shared';
 import { useI18nStore } from '@/stores/i18n';
+import { fieldLabel } from '@/lib/localize-meta';
 import { useChrome } from '@/lib/chrome-i18n';
 import type { FieldControlState } from '@/controls/types';
 import type { FieldStateMap } from '@/lib/evaluate-field';
@@ -64,7 +65,6 @@ export function FormRenderer({
   tabsRef,
 }: FormRendererProps) {
   const formId = useId();
-  const tField = useI18nStore((s) => s.tField);
   const tSection = useI18nStore((s) => s.tSection);
   const tc = useChrome();
 
@@ -134,7 +134,6 @@ export function FormRenderer({
           state={fieldState[field.fieldname]}
           error={errors[field.fieldname]}
           formId={formId}
-          tField={tField}
           cellClassName={cellClassName}
           onChange={(v) => onFieldChange(field.fieldname, v)}
         />
@@ -224,7 +223,6 @@ function FieldSlot({
   state,
   error,
   formId,
-  tField,
   cellClassName,
   onChange,
 }: {
@@ -235,7 +233,6 @@ function FieldSlot({
   state: FieldControlState | undefined;
   error?: string;
   formId: string;
-  tField: (entity: string, field: string, fallback?: string) => string;
   cellClassName?: string;
   onChange: (v: unknown) => void;
 }) {
@@ -253,7 +250,7 @@ function FieldSlot({
 
   // Non-control layout fields placed inside a column.
   if (field.fieldtype === 'Heading') {
-    return <h4 className={cell('text-sm font-semibold text-textMain')}>{tField(entity, field.fieldname, field.label)}</h4>;
+    return <h4 className={cell('text-sm font-semibold text-textMain')}>{fieldLabel(field)}</h4>;
   }
   if (field.fieldtype === 'HTML') {
     const html = typeof field.options === 'string' ? field.options : field.description ?? '';
@@ -269,7 +266,7 @@ function FieldSlot({
   const describedById = field.description ? `${controlId}-desc` : undefined;
   const errorId = error ? `${controlId}-error` : undefined;
   const invalid = s.invalid || !!error;
-  const labelText = tField(entity, field.fieldname, field.label);
+  const labelText = fieldLabel(field);
 
   return (
     <FormRow
