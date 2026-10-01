@@ -30,11 +30,13 @@ function isApiResponse(body: unknown): body is ApiResponse {
 /** Build an ApiClientError from a non-OK response body (ApiResponse or plain). */
 export function toApiError(status: number, body: unknown): ApiClientError {
   if (isApiResponse(body)) {
-    const detail =
-      body.error?.detail ??
-      body.messages.find((m) => m.type === 'error')?.text ??
+    // The first error message is the person's text, which the engine translated; the detail of an
+    // engine error is its code.
+    const text =
+      body.messages.find((m) => m.type === 'error')?.text ||
+      body.error?.detail ||
       `Request failed with status ${status}`;
-    return new ApiClientError(detail, status, body);
+    return new ApiClientError(text, status, body);
   }
   const generic =
     typeof body === 'object' && body !== null && 'message' in body

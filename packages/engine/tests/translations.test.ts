@@ -54,9 +54,10 @@ describe("the engine's texts in TRANSLATIONS_DIR", () => {
     }
   });
 
-  it("holds the code of every refused action of a permission row (#24)", () => {
+  it("holds a code of its own for every refused action of a permission row (#24)", () => {
     const codes = Object.values(PermissionAction).map((action) => PermissionDeniedError.forAction("Item", action).code);
-    expect(codes.filter((code) => !Object.hasOwn(texts.en!, code))).toEqual([]);
+    // The fallback is for an action no permission row names, so a row's action may never fall to it.
+    expect(codes.filter((code) => code === "permission_denied_doc" || !Object.hasOwn(texts.en!, code))).toEqual([]);
     expect(new Set(codes).size).toBe(Object.values(PermissionAction).length);
   });
 
