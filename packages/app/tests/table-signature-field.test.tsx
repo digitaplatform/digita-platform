@@ -222,4 +222,26 @@ describe('a Signature child field of a Table', () => {
 
     expect(within(screen.getByRole('grid')).getByRole('img', { name: 'ui.signature.alt' })).toHaveAttribute('src', DRAWN);
   });
+
+  it('is signed in the row dialog where the detail fields leave it out', async () => {
+    const user = userEvent.setup();
+    render(<Host field={deliveriesField({ detail_fields: ['item'] })} initialRows={[{ _row_id: 'r1', item: 'Pen' }]} />);
+
+    await signInRowDialog(user);
+
+    expect(within(screen.getByRole('grid')).getByRole('img', { name: 'ui.signature.alt' })).toHaveAttribute('src', DRAWN);
+  });
+
+  it('offers no row dialog for a read-only Signature the detail fields leave out', () => {
+    const field = deliveriesField({
+      detail_fields: ['item'],
+      child_fields: [
+        { fieldname: 'item', fieldtype: 'Data', label: 'Item' },
+        { fieldname: 'signature', fieldtype: 'Signature', label: 'Signature', read_only: true },
+      ],
+    });
+    render(<Host field={field} initialRows={[{ _row_id: 'r1', item: 'Pen', signature: SIGNED }]} />);
+
+    expect(within(screen.getByRole('grid')).queryByRole('button', { name: 'ui.table.editRow' })).not.toBeInTheDocument();
+  });
 });
