@@ -1210,18 +1210,7 @@ export class DocumentService {
     if (this.workflowEngine && this.workflowEngine.hasWorkflow(entity)) {
       const wf = this.workflowEngine.getWorkflowField(entity);
       if (Object.prototype.hasOwnProperty.call(data, wf)) {
-        const from = doc._data[wf] as string | undefined;
-        const to = data[wf];
-        if (typeof to === "string" && from !== to) {
-          const authorizedTransition = this.workflowEngine.validateTransition(
-            entity,
-            doc._data,
-            from,
-            to,
-            user,
-          );
-          pendingTransition = { from, to, transition: authorizedTransition };
-        }
+        pendingTransition = this.workflowEngine.judgeFieldWrite(entity, doc._data, data[wf], user);
       }
     }
 
@@ -1594,18 +1583,7 @@ export class DocumentService {
         patch.set &&
         Object.prototype.hasOwnProperty.call(patch.set, workflowField)
       ) {
-        const from = doc._data[workflowField] as string | undefined;
-        const to = patch.set[workflowField];
-        if (typeof to === "string" && from !== to) {
-          const authorized = this.workflowEngine.validateTransition(
-            entity,
-            doc._data,
-            from,
-            to,
-            user,
-          );
-          pendingTransition = { from, to, transition: authorized };
-        }
+        pendingTransition = this.workflowEngine.judgeFieldWrite(entity, doc._data, patch.set[workflowField], user);
       }
 
       const childChanges: FieldChange[] = [];
