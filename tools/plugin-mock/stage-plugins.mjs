@@ -178,7 +178,7 @@ function stageOne(section, id, version) {
   if (manifest.type === 'signature') {
     const identity = {};
     if (typeof manifest.name === 'string' && manifest.name.length > 0) identity.title = manifest.name;
-    for (const key of ['accent', 'fonts', 'family', 'logoUrl', 'monogram', 'wordmark', 'colors', 'graphics']) {
+    for (const key of ['accent', 'fonts', 'family', 'monogram', 'wordmark', 'colors', 'graphics']) {
       if (manifest[key] !== undefined) identity[key] = manifest[key];
     }
     if (typeof identity.accent !== 'string' || identity.accent.length === 0) {

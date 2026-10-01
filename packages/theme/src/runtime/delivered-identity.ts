@@ -55,7 +55,6 @@ export interface DeliveredSignature {
   accent?: string;
   fonts?: { display?: string; sans?: string; mono?: string };
   family?: string;
-  logoUrl?: string;
   monogram?: string;
   wordmark?: string;
   colors?: Record<string, SignatureValue>;
@@ -75,7 +74,6 @@ export function registerDeliveredSignature(signature: DeliveredSignature): void 
     accent: signature.accent ?? '',
     fonts: signature.fonts,
     family: signature.family,
-    logoUrl: signature.logoUrl,
     monogram: signature.monogram,
     wordmark: signature.wordmark,
     colors: signature.colors,

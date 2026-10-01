@@ -69,4 +69,12 @@ describe('the staging tool', () => {
   it('stages no family for a signature manifest without one', () => {
     expect(stageSignature(aurora)).not.toHaveProperty('family');
   });
+
+  it('stages no logoUrl of a signature manifest, which the host draws nowhere', () => {
+    expect(stageSignature({ ...aurora, logoUrl: '/aurora.png', monogram: '<svg/>' })).toMatchObject({
+      id: 'aurora',
+      monogram: '<svg/>',
+    });
+    expect(stageSignature({ ...aurora, logoUrl: '/aurora.png' })).not.toHaveProperty('logoUrl');
+  });
 });

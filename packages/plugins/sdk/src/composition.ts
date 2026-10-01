@@ -47,7 +47,6 @@ export interface PluginInventoryEntry {
   accent?: string;
   fonts?: { display?: string; sans?: string; mono?: string };
   family?: string;
-  logoUrl?: string;
   monogram?: string;
   wordmark?: string;
   colors?: Record<string, SignatureValue>;
@@ -90,7 +89,6 @@ export interface PluginSource {
   accent?: string;
   fonts?: { display?: string; sans?: string; mono?: string };
   family?: string;
-  logoUrl?: string;
   monogram?: string;
   wordmark?: string;
   colors?: Record<string, SignatureValue>;
@@ -131,7 +129,6 @@ export function joinCompositionWithInventory(
         accent: staged.accent,
         fonts: staged.fonts,
         family: staged.family,
-        logoUrl: staged.logoUrl,
         monogram: staged.monogram,
         wordmark: staged.wordmark,
         colors: staged.colors,

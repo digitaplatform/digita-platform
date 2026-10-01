@@ -43,7 +43,6 @@ export interface Signature {
    *  family instead of one wordmark SVG per product. Absent: the signature has no lockup
    *  family and its `wordmark` SVG is the brand. */
   family?: string;
-  logoUrl?: string;
   /** Self-contained inline SVG string for the brand mark: `fill="currentColor"`
    *  (inherits the accent via CSS `color`), viewBox preserved, NO width/height —
    *  the consumer sizes it via CSS. Used by the shell as the default-brand
