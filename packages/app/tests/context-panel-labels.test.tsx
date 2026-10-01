@@ -108,6 +108,14 @@ describe('ContextPanel labels', () => {
     expect(screen.queryByText('credit_limit')).not.toBeInTheDocument();
   });
 
+  it('heads a section without a text by words, never by the key', async () => {
+    renderPanel({ 'view.customer360.customer': 'Kunde' });
+
+    await screen.findByText('Kunde');
+    expect(screen.getByText('Open Orders')).toBeInTheDocument();
+    expect(screen.queryByText('open_orders')).not.toBeInTheDocument();
+  });
+
   it('follows the language the texts are in', async () => {
     const { rerender } = renderPanel(GERMAN);
     await screen.findByText('Kunde');
