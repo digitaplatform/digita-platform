@@ -2,7 +2,8 @@
 // A language switch without a reload formats and lays out the page as the engine resolves
 // the new language: its direction from the Language row, and the format_locale of the
 // user's own preference, else the language itself (the engine's LocaleResolver rule).
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import type { BootLocale } from '@/types';
 
 const getTranslations = vi.fn();
 const getDoc = vi.fn();
@@ -50,8 +51,16 @@ describe('setLocale', () => {
     expect(locale.code).toBe('de');
     expect(locale.format_locale).toBe('de');
     expect(locale.direction).toBe('ltr');
-    expect(locale.date_format).toBe('DD.MM.YYYY');
     expect(locale.timezone).toBe('Europe/Zurich');
+  });
+
+  it('carries no format field of the Language row, as a boot carries none', async () => {
+    expectTypeOf<BootLocale>().not.toHaveProperty('date_format');
+    expectTypeOf<BootLocale>().not.toHaveProperty('number_format');
+    await useSessionStore.getState().setLocale('de');
+    const locale = useSessionStore.getState().locale!;
+    expect(locale).not.toHaveProperty('date_format');
+    expect(locale).not.toHaveProperty('number_format');
   });
 
   it('keeps the format_locale the user set themselves', async () => {

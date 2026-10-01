@@ -78,13 +78,13 @@ export async function pickBootLocale(
   return { resolved: resolveBootLocale(data?.locale?.code, initial), data };
 }
 
-/** The fields of a Language row the engine copies into the locale it resolves. */
-type LanguageRow = Pick<BootLocale, 'direction' | 'date_format' | 'number_format'>;
+/** The field of a Language row the engine copies into the locale it resolves. */
+type LanguageRow = Pick<BootLocale, 'direction'>;
 
 /**
  * The locale the engine resolves for `code`, so a language switch formats and lays out the
  * page as the next boot would. A signed-in user gets the engine's LocaleResolver rule: the
- * direction and formats of the Language row, the format_locale of the user's own "locale"
+ * direction of the Language row, the format_locale of the user's own "locale"
  * preference, else the language itself, and the timezone they already have. A visitor has
  * no profile language and no preference, so the engine resolves the Accept-Language a new
  * boot sends, which names `code` once its texts have loaded.
@@ -105,8 +105,6 @@ async function resolveLocale(code: string, signedIn: boolean, current: BootLocal
     code,
     // The engine's LocaleResolver reads a Language row without a direction as left to right.
     direction: language.direction ?? 'ltr',
-    date_format: language.date_format,
-    number_format: language.number_format,
     format_locale: own || code,
   };
 }

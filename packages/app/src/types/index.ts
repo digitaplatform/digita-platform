@@ -37,8 +37,6 @@ export interface BootLanguage {
 /** Locale resolved by the engine (mirrors the engine LocaleResolver output). */
 export interface BootLocale {
   code: string;
-  date_format?: string;
-  number_format?: string;
   direction?: 'ltr' | 'rtl';
   /** BCP-47 formatting locale (e.g. "de-CH") — drives Intl number/date/currency.
    *  Region-aware, independent of `code` (the UI language). */
