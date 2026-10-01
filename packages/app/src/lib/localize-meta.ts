@@ -10,7 +10,8 @@ import type { EntitySummary } from '@/types';
  * (`action_field.<Entity>.<action>.<field>`), workflow transition labels
  * (`transition.<Entity>.<action>`) and the labels of a record's links
  * (`link.<Entity>.<linked entity>.<link_field>`, or that key followed by `.<written label>`
- * to tell apart two links with the same entity and field). A child field of a table also keys
+ * to tell apart two links with the same entity and field) and the labels of its report links
+ * (`report.<Entity>.<report>`). A child field of a table also keys
  * by its table (`field.<Entity>.<table>.<field>`, `description.<Entity>.<table>.<field>`).
  * What a view returns is no entity meta, so its texts key by the view: see `viewSectionLabel`.
  * Any future label field localizes by adding ONE line here — renderers read
@@ -67,7 +68,7 @@ export function localizeAction(entity: string, a: ActionDefinition, t: Dict): Ac
   return localized;
 }
 
-/** Localize a full EntityDefinition (label/plural/fields/sections/descriptions/actions/transitions/links). */
+/** Localize a full EntityDefinition (label/plural/fields/sections/descriptions/actions/transitions/links/reports). */
 export function localizeMeta(meta: EntityDefinition, t: Dict): EntityDefinition {
   const e = meta.name;
   const out: EntityDefinition = {
@@ -93,6 +94,7 @@ export function localizeMeta(meta: EntityDefinition, t: Dict): EntityDefinition 
       return { ...link, label: t[`${key}.${link.label}`] ?? t[key] ?? link.label };
     });
   }
+  if (meta.reports) out.reports = meta.reports.map((r) => ({ ...r, label: t[`report.${e}.${r.report}`] ?? r.label }));
   return out;
 }
 

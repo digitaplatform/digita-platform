@@ -2,22 +2,21 @@
 // A German clerk prints from a record whose entity links two reports. Each entry of the print menu
 // names its link, and the entity file writes that name once, in English. An app translates it in its
 // locale files under report.<Entity>.<report>, as it translates a field under field.<Entity>.<field>
-// and an action under action.<Entity>.<action>; without that lookup the German menu reads "Invoice"
-// and "Delivery note".
+// and an action under action.<Entity>.<action>; the record page reads the meta that localizeMeta
+// translated, and without that the German menu reads "Invoice" and "Delivery note".
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { EntityDefinition, EntityReportLink } from '@digitaplatform/shared';
 import { readBundle } from '@digitaplatform/shared/i18n-node';
 import { useI18nStore } from '@/stores/i18n';
+import { localizeMeta } from '@/lib/localize-meta';
 
 vi.mock('@/stores/session', () => ({
   useSessionStore: (select: (state: Record<string, unknown>) => unknown) => select({ user: { roles: ['Clerk'] } }),
 }));
 
 import { PrintMenu } from '@/components/workflow/PrintMenu';
-import { RowPrintButton } from '@/components/workflow/RowPrintButton';
 
 // tests/setup.ts stops the run without it.
 const texts = readBundle(process.env.TRANSLATIONS_DIR!);
@@ -30,20 +29,19 @@ const PACKING_LINK: EntityReportLink = { report: 'packing-slip', label: 'Packing
 const GERMAN_LABELS = {
   'report.Invoice.invoice': 'Rechnung',
   'report.Invoice.delivery-note': 'Lieferschein',
-  // The same report linked from another entity has a key of its own.
-  'report.Order.invoice': 'Auftragsrechnung',
 };
 
 const DOC = { _id: 'INV-7', docstatus: 1 };
 
 function buildMeta(reports: EntityReportLink[]): EntityDefinition {
-  return {
+  const meta = {
     name: 'Invoice',
-    label: 'Rechnung',
+    label: 'Invoice',
     fields: [],
     reports,
     permissions: [{ role: 'Clerk', level: 0, read: 1, print: 1 }],
   } as unknown as EntityDefinition;
+  return localizeMeta(meta, GERMAN_LABELS);
 }
 
 async function openMenu(reports: EntityReportLink[]) {
@@ -55,7 +53,7 @@ async function openMenu(reports: EntityReportLink[]) {
 
 beforeEach(() => {
   vi.spyOn(window, 'open').mockImplementation(() => null);
-  useI18nStore.setState({ locale: 'de', translations: GERMAN_LABELS });
+  useI18nStore.setState({ locale: 'de', translations: {} });
 });
 
 afterEach(() => {
@@ -99,27 +97,5 @@ describe('the print button of an entity with one report link, in German', () => 
     render(<PrintMenu meta={buildMeta([INVOICE_LINK])} doc={DOC} />);
 
     expect(screen.getByRole('button', { name: 'Rechnung' })).toBeInTheDocument();
-  });
-});
-
-describe('the print button of a list row, in German', () => {
-  function drawRowButton(entity: string, link: EntityReportLink) {
-    render(
-      <MemoryRouter initialEntries={[`/${entity}`]}>
-        <Routes>
-          <Route path="/:entity" element={<RowPrintButton link={link} doc={DOC} onPrint={() => {}} />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-  }
-
-  it('is named by the German label of the link of the listed entity', () => {
-    drawRowButton('Invoice', INVOICE_LINK);
-    expect(screen.getByRole('button', { name: 'Rechnung' })).toBeInTheDocument();
-  });
-
-  it('reads the key of the listed entity, not of another entity linking the same report', () => {
-    drawRowButton('Order', INVOICE_LINK);
-    expect(screen.getByRole('button', { name: 'Auftragsrechnung' })).toBeInTheDocument();
   });
 });

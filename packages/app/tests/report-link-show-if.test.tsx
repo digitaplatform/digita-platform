@@ -6,7 +6,6 @@
 // rule it skipped would offer the button always.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { EntityDefinition, EntityReportLink } from '@digitaplatform/shared';
 import type { SessionUser } from '@/types';
 
@@ -109,13 +108,7 @@ describe('the print buttons of a document under a show_if with &&', () => {
   });
 
   function drawRowButton(rowLink: EntityReportLink, doc: Record<string, unknown>) {
-    return render(
-      <MemoryRouter initialEntries={['/Membership']}>
-        <Routes>
-          <Route path="/:entity" element={<RowPrintButton link={rowLink} doc={doc} onPrint={() => {}} />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    return render(<RowPrintButton link={rowLink} doc={doc} onPrint={() => {}} />);
   }
 
   const managersOnly = linkWith("doc.status == Open && 'Manager' in user.roles");
