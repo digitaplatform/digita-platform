@@ -54,7 +54,22 @@ const TICKET: EntityDefinition = {
   permissions: [{ role: "Reader", level: 0, select: 1, read: 1 }],
 } as unknown as EntityDefinition;
 
-const entities = new Map([NOTE, BOARD, TICKET].map((e) => [e.name, e]));
+// Workspace as the engine declares it: a user who holds only roles of an app reads through the
+// role lists of its rows, since no declared row names one of its roles.
+const WORKSPACE: EntityDefinition = {
+  name: "Workspace",
+  module: "test",
+  database: "app",
+  naming: { strategy: "user_set" },
+  role_visibility_field: "roles",
+  fields: [{ fieldname: "roles", fieldtype: "JSON", label: "Visible to roles" }],
+  permissions: [
+    { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
+    { role: "System User", level: 0, select: 1, read: 1 },
+  ],
+} as unknown as EntityDefinition;
+
+const entities = new Map([NOTE, BOARD, TICKET, WORKSPACE].map((e) => [e.name, e]));
 const registry = { get: (name: string) => entities.get(name)! } as unknown as EntityRegistry;
 
 function user(...roles: string[]): UserContext {
@@ -96,7 +111,12 @@ describe("realtime change events", () => {
     expect(await received(user(role), entity)).toEqual([{ type: "change", entity }]);
   });
 
+  it("carry only the entity of a Workspace for a user who reads it through the role lists of its rows", async () => {
+    expect(await received(user("Reception"), "Workspace")).toEqual([{ type: "change", entity: "Workspace" }]);
+  });
+
   it("reach no subscriber who may not list the entity", async () => {
     expect(await received(user("Stranger"), "Note")).toEqual([]);
+    expect(await received(user(), "Workspace")).toEqual([]);
   });
 });
