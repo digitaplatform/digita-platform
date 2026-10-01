@@ -25,7 +25,8 @@ export default function PercentControl({
         step="any"
         min={0}
         max={100}
-        className="text-right tabular-nums"
+        // The right padding clears the % sign below, so the last digit never sits under it.
+        className="pr-8 text-right tabular-nums"
         aria-labelledby={labelId}
         aria-describedby={describedBy(describedById, errorId)}
         aria-required={state.required || undefined}
