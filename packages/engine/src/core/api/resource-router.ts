@@ -13,6 +13,15 @@ import { listQueryFrom } from "./list-query.js";
 import type { HookServices } from "../hooks/hook-runner.js";
 import type { DelegationScope } from "@digitaplatform/shared";
 import { createLogger } from "../logging/logger.js";
+import { EngineError } from "../errors/engine-error.js";
+
+/** A row a bulk operation could not process: an engine error's code with its params, or the
+ *  message of any other error. */
+interface BulkFailure {
+  name: string;
+  error: string;
+  params?: Record<string, string>;
+}
 
 const log = createLogger("resource-router");
 
@@ -309,9 +318,9 @@ export function registerResourceRoutes(
   async function runBulk(
     names: string[],
     perItem: (name: string) => Promise<void>,
-  ): Promise<{ ok: string[]; failed: Array<{ name: string; error: string }> }> {
+  ): Promise<{ ok: string[]; failed: BulkFailure[] }> {
     const ok: string[] = [];
-    const failed: Array<{ name: string; error: string }> = [];
+    const failed: BulkFailure[] = [];
     for (let i = 0; i < names.length; i += BULK_CONCURRENCY) {
       const slice = names.slice(i, i + BULK_CONCURRENCY);
       const results = await Promise.allSettled(
@@ -326,8 +335,11 @@ export function registerResourceRoutes(
         if (r.status === "fulfilled") {
           ok.push(name);
         } else {
-          const message = r.reason instanceof Error ? r.reason.message : String(r.reason);
-          failed.push({ name, error: message });
+          if (r.reason instanceof EngineError) {
+            failed.push({ name, error: r.reason.code, params: r.reason.params });
+          } else {
+            failed.push({ name, error: r.reason instanceof Error ? r.reason.message : String(r.reason) });
+          }
         }
       }
     }

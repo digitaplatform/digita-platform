@@ -385,8 +385,8 @@ describe("runAggregateSection — rows a read condition hides", () => {
   it("refuses to count the rows of an entity the reader reads only under a condition", async () => {
     await expect(runAggregateSection(countPosts, rctx, guest, conditionDeps(published))).rejects.toMatchObject({
       name: "PermissionDeniedError",
-      entity: "Post",
-      action: "aggregate_bypasses_read_condition",
+      code: "aggregate_bypasses_read_condition",
+      params: { doctype: "Post" },
     });
   });
 
@@ -399,8 +399,8 @@ describe("runAggregateSection — rows a read condition hides", () => {
     };
     await expect(runAggregateSection(section, rctx, guest, conditionDeps(published))).rejects.toMatchObject({
       name: "PermissionDeniedError",
-      entity: "Post",
-      action: "lookup_bypasses_read_condition",
+      code: "lookup_bypasses_read_condition",
+      params: { doctype: "Post" },
     });
   });
 

@@ -23,6 +23,12 @@ export function loadEngineI18n(): Translator {
   return translator;
 }
 
+/** The English text of a code for a log entry, or nothing before the catalog is loaded, when a
+ *  log entry carries the code and its params alone. */
+export function englishText(code: string, params?: Record<string, string>): string | undefined {
+  return translator?.t(code, params, "en");
+}
+
 /** The boot-loaded translator; throws until loadEngineI18n() has run. */
 export function engineI18n(): Translator {
   if (!translator) throw new Error("engine i18n: loadEngineI18n() has not run");

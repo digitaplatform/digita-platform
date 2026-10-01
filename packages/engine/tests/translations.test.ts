@@ -1,8 +1,18 @@
 import { fileURLToPath } from "node:url";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SUPPORTED_LANGUAGES } from "@digitaplatform/shared";
+import { PermissionAction, SUPPORTED_LANGUAGES } from "@digitaplatform/shared";
 import { findMissingKeys, readBundle } from "@digitaplatform/shared/i18n-node";
 import { DEFAULT_LANGUAGES } from "../src/core/setup/seed-languages.js";
+import { PermissionDeniedError } from "../src/core/permissions/permission-checker.js";
+
+/**
+ * The calls whose first literal argument is a key: a text the code translates, and the code an
+ * engine error carries, which an EngineError subclass passes to `super` or a throw site to the class.
+ */
+const KEY_CALLS = ["t", "super", "PermissionDeniedError"];
 
 // The logger reads the real env; a test below imports that env itself, on purpose.
 vi.mock("../src/core/logging/logger.js", () => ({
@@ -22,9 +32,32 @@ describe("the engine's texts in TRANSLATIONS_DIR", () => {
   // Code and texts are versioned apart: every literal key of a t() or tPlural() call in the code
   // must be in this build's folder. The engine names most message keys otherwise, as
   // ctx.success("doc_saved") or { text: "…" } in an error response, and those are not seen.
-  it("finds every literal key of the code in en.json", () => {
+  it("finds every literal key of the code in en.json, error codes included", () => {
     const src = fileURLToPath(new URL("../src", import.meta.url));
-    expect(findMissingKeys(src, texts.en!)).toEqual([]);
+    expect(findMissingKeys(src, texts.en!, KEY_CALLS)).toEqual([]);
+  });
+
+  it("goes red on an error code en.json lacks (#24)", () => {
+    const planted = mkdtempSync(join(tmpdir(), "engine-error-codes-"));
+    try {
+      writeFileSync(
+        join(planted, "planted.ts"),
+        'class A extends EngineError { constructor() { super("planted_missing_code", {}, 404, "NOT_FOUND"); } }\n' +
+          'throw new PermissionDeniedError("planted_missing_refusal", {});\n',
+      );
+      expect(findMissingKeys(planted, texts.en!, KEY_CALLS)).toEqual([
+        "planted.ts:1 planted_missing_code",
+        "planted.ts:2 planted_missing_refusal",
+      ]);
+    } finally {
+      rmSync(planted, { recursive: true, force: true });
+    }
+  });
+
+  it("holds the code of every refused action of a permission row (#24)", () => {
+    const codes = Object.values(PermissionAction).map((action) => PermissionDeniedError.forAction("Item", action).code);
+    expect(codes.filter((code) => !Object.hasOwn(texts.en!, code))).toEqual([]);
+    expect(new Set(codes).size).toBe(Object.values(PermissionAction).length);
   });
 
   it("are what the engine's translator reads, in every supported language", async () => {

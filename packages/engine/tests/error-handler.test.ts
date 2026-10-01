@@ -89,16 +89,16 @@ describe("globalErrorHandler – NotFoundError", () => {
     expect(reply.sentData.error.trace_id).toBe("trace-abc");
   });
 
-  it("puts the error message in messages[]", () => {
+  it("sends the code with its params as the message, and no English sentence (#24)", () => {
     const error = new NotFoundError("Product", "PROD-99");
     const reply = mockReply();
 
     globalErrorHandler(error, mockRequest(), reply);
 
-    expect(reply.sentData.messages).toHaveLength(1);
-    expect(reply.sentData.messages[0].text).toBe(error.message);
-    expect(reply.sentData.messages[0].type).toBe("error");
-    expect(reply.sentData.messages[0].show).toBe(true);
+    expect(reply.sentData.messages).toEqual([
+      { text: "not_found", params: { doctype: "Product", name: "PROD-99" }, type: "error", show: true },
+    ]);
+    expect(reply.sentData.error.detail).toBe("not_found");
   });
 });
 
@@ -232,7 +232,7 @@ describe("globalErrorHandler – ConcurrentModificationError", () => {
 
 describe("globalErrorHandler – PermissionDeniedError", () => {
   it("returns 403 with PERMISSION_DENIED code", () => {
-    const error = new PermissionDeniedError("user@test.com", "Invoice", "delete");
+    const error = PermissionDeniedError.forAction("Invoice", "delete");
     const reply = mockReply();
 
     globalErrorHandler(error, mockRequest(), reply);
@@ -242,18 +242,20 @@ describe("globalErrorHandler – PermissionDeniedError", () => {
     expect(reply.sentData.success).toBe(false);
   });
 
-  it("puts the error message in messages[]", () => {
-    const error = new PermissionDeniedError("user@test.com", "Invoice", "delete");
+  it("sends the action's code with the entity as the message, and no English sentence (#24)", () => {
+    const error = PermissionDeniedError.forAction("Invoice", "delete");
     const reply = mockReply();
 
     globalErrorHandler(error, mockRequest(), reply);
 
-    expect(reply.sentData.messages).toHaveLength(1);
-    expect(reply.sentData.messages[0].text).toBe(error.message);
+    expect(reply.sentData.messages).toEqual([
+      { text: "permission_denied_delete", params: { doctype: "Invoice" }, type: "error", show: true },
+    ]);
+    expect(reply.sentData.error.detail).toBe("permission_denied_delete");
   });
 
   it("passes the trace_id through", () => {
-    const error = new PermissionDeniedError("user@test.com", "Invoice", "delete");
+    const error = PermissionDeniedError.forAction("Invoice", "delete");
     const req = mockRequest({ traceId: "trace-perm" });
     const reply = mockReply();
 

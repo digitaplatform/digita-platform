@@ -1,4 +1,5 @@
 import type { EntityDefinition, EntityPermission, FieldDefinition, StatePermissionOverride } from "@digitaplatform/shared";
+import { EngineError } from "../errors/engine-error.js";
 import { ROW_ID_FIELD, SYSTEM_ROLES, canGrantActionTo } from "@digitaplatform/shared";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import { docFieldsOf, evaluateExpression } from "../expression/expression-evaluator.js";
@@ -8,14 +9,33 @@ import { createLogger } from "../logging/logger.js";
 
 const log = createLogger("permission-checker");
 
-export class PermissionDeniedError extends Error {
-  constructor(
-    public user: string,
-    public entity: string,
-    public action: string,
-  ) {
-    super(`Permission denied: ${user} cannot ${action} ${entity}`);
-    this.name = "PermissionDeniedError";
+/** The code of each action of a permission row: the person reads what they may not do. */
+const ACTION_CODES: Record<string, string> = {
+  select: "permission_denied_select",
+  read: "permission_denied_read",
+  write: "permission_denied_write",
+  create: "permission_denied_create",
+  delete: "permission_denied_delete",
+  submit: "permission_denied_submit",
+  cancel: "permission_denied_cancel",
+  amend: "permission_denied_amend",
+  print: "permission_denied_print",
+  email: "permission_denied_email",
+  export: "permission_denied_export",
+  import: "permission_denied_import",
+  share: "permission_denied_share",
+  report: "permission_denied_report",
+};
+
+export class PermissionDeniedError extends EngineError {
+  constructor(code: string, params: Record<string, string>) {
+    super(code, params, 403, "PERMISSION_DENIED");
+  }
+
+  /** A refused action on `doctype`; an action no permission row names (an action's own
+   *  `requires_permission`) reads as a refused action on `doctype`. */
+  static forAction(doctype: string, action: string): PermissionDeniedError {
+    return new PermissionDeniedError(ACTION_CODES[action] ?? "permission_denied_doc", { doctype });
   }
 }
 
@@ -68,7 +88,7 @@ export class PermissionChecker {
         },
         "Permission denied",
       );
-      throw new PermissionDeniedError(user.email, entityName, action);
+      throw PermissionDeniedError.forAction(entityName, action);
     }
   }
 
@@ -629,11 +649,10 @@ export class PermissionChecker {
         }); // safeDefault=true → fail-closed lock, matching the UI
         if (!locked) continue;
         if (JSON.stringify(filtered[field.fieldname]) !== JSON.stringify(contextDoc[field.fieldname])) {
-          throw new PermissionDeniedError(
-            user.email,
-            entityName,
-            `change the locked field "${field.fieldname}" of`,
-          );
+          throw new PermissionDeniedError("permission_denied_locked_field", {
+            doctype: entityName,
+            field: field.fieldname,
+          });
         }
       }
       for (const [tableName, tableField] of tableFields) {
@@ -683,11 +702,10 @@ export class PermissionChecker {
           user: user as unknown as Record<string, unknown>,
         });
         if (locked) {
-          throw new PermissionDeniedError(
-            user.email,
-            entityName,
-            `change the locked cell "${tableField.fieldname}.${child.fieldname}" of`,
-          );
+          throw new PermissionDeniedError("permission_denied_locked_cell", {
+            doctype: entityName,
+            cell: `${tableField.fieldname}.${child.fieldname}`,
+          });
         }
       }
     }
@@ -700,11 +718,10 @@ export class PermissionChecker {
         }),
       );
       if (locked) {
-        throw new PermissionDeniedError(
-          user.email,
-          entityName,
-          `delete the row holding the locked cell "${tableField.fieldname}.${locked.fieldname}" of`,
-        );
+        throw new PermissionDeniedError("permission_denied_locked_row", {
+          doctype: entityName,
+          cell: `${tableField.fieldname}.${locked.fieldname}`,
+        });
       }
     }
   }

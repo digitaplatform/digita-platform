@@ -64,10 +64,10 @@ export async function assertAttachFilesReadable(
     session,
   );
   // An id no File has yet is refused too: the next upload could take it.
-  if (files.length < added.size) throw new PermissionDeniedError(user.email, DIGITA.COLLECTIONS.FILE, "read");
+  if (files.length < added.size) throw PermissionDeniedError.forAction(DIGITA.COLLECTIONS.FILE, "read");
   for (const file of files) {
     if (!(await mayReadFile(deps, user, file as Record<string, unknown>))) {
-      throw new PermissionDeniedError(user.email, DIGITA.COLLECTIONS.FILE, "read");
+      throw PermissionDeniedError.forAction(DIGITA.COLLECTIONS.FILE, "read");
     }
   }
 }
