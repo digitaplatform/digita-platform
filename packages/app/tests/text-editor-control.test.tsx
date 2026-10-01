@@ -121,9 +121,28 @@ describe('the TextEditor control', () => {
       '<p><a href="https://example.com/terms">read</a><br><span>s</span></p>';
     const { onFieldChange } = drawField(html);
     const box = await screen.findByLabelText('Terms');
-    expect(box.innerHTML).toBe(html);
+    expect(box.innerHTML).toBe(
+      html.replace('<a href="https://example.com/terms">', '<a href="https://example.com/terms" target="_blank" rel="noopener noreferrer">'),
+    );
     typeHtml(box, html);
     expect(onFieldChange).toHaveBeenLastCalledWith('terms', html);
+  });
+
+  it('opens a link of the value in a new tab, so the record page stays', async () => {
+    const { onFieldChange } = drawField('<p><a href="https://example.com/terms" target="_self">read</a></p>', { readOnly: true });
+    const box = await screen.findByLabelText('Terms');
+    const link = box.querySelector('a')!;
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    // Only the drawn link opens a new tab: the stored value keeps what the person wrote.
+    typeHtml(box, '<p><a href="https://example.com/terms">read</a></p>');
+    expect(onFieldChange).toHaveBeenLastCalledWith('terms', '<p><a href="https://example.com/terms">read</a></p>');
+  });
+
+  it('adds no target or rel to an element that is not a link', async () => {
+    drawField('<p>plain <b>text</b></p>', { readOnly: true });
+    const box = await screen.findByLabelText('Terms');
+    expect(box.querySelector('[target], [rel]')).toBeNull();
   });
 
   it('keeps only formatting: no form control, frame or style of a stored or pasted value', async () => {
