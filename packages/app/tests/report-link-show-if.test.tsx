@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 // An app author writes "doc.status == Open && doc.member" as the show_if of a print link, as they
-// would for an action. The print button reads the rule with the expression grammar of an action's
-// show_if, with the document as `doc` and the signed-in user as `user`; a rule cut at its first
-// comparison would compare the status with "Open && doc.member" and never offer the button, and a
-// rule it skipped would offer the button always.
+// would for an action. The print button reads the rule with the app's evaluator of a field's
+// depends_on, not the engine's evaluator of an action's show_if, with the document as `doc` and the
+// signed-in user as `user`; a rule cut at its first comparison would compare the status with
+// "Open && doc.member" and never offer the button, and a rule it skipped would offer the button always.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { EntityDefinition, EntityReportLink } from '@digitaplatform/shared';
