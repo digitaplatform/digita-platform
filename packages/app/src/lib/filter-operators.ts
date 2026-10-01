@@ -99,6 +99,15 @@ export function standardFilterFields(meta: Pick<EntityDefinition, 'fields'>): Fi
   return meta.fields.filter((f) => f.in_standard_filter === true && operatorsForFieldtype(f.fieldtype).length > 0);
 }
 
+/** The input type a typed filter value of this field type is entered in. */
+export function chooseFilterInputType(ft: FieldType): 'number' | 'date' | 'datetime-local' | 'time' | 'text' {
+  if (NUMERIC.includes(ft)) return 'number';
+  if (ft === 'Date') return 'date';
+  if (ft === 'Datetime') return 'datetime-local';
+  if (ft === 'Time') return 'time';
+  return 'text';
+}
+
 /** FAIL LOUD: the bar must never emit an operator outside the whitelist (the engine
  *  would silently coerce it to `=`). */
 export function assertValidTuple(t: [string, string, unknown]): void {

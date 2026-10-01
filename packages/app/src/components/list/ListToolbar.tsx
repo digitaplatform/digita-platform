@@ -1,30 +1,57 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Search, Columns3, Download, Upload, Repeat, X, Plus, MoreHorizontal } from 'lucide-react';
-import type { EntityDefinition } from '@digitaplatform/shared';
-import { Button, Chip, Input, Fab, Menu, MenuItem, PageHeader, Tooltip, useFocusTrap } from '@digitaplatform/components';
+import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
+import {
+  Button,
+  Chip,
+  Combobox,
+  Input,
+  Fab,
+  Menu,
+  MenuItem,
+  PageHeader,
+  Select,
+  Tooltip,
+  useFocusTrap,
+  type SelectOption,
+} from '@digitaplatform/components';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useSessionStore } from '@/stores/session';
+import { useI18nStore } from '@/stores/i18n';
+import { useSearchLink } from '@/hooks/useSearchLink';
 import { formatNumber } from '@/lib/format';
 import { isCompleteFilter, type FilterTuple } from '@/lib/filter-from-url';
+import {
+  chooseFilterInputType,
+  operatorArity,
+  operatorsForFieldtype,
+  standardFilterFields,
+  type FilterOp,
+} from '@/lib/filter-operators';
+import { resolveLinkFilters } from '@/lib/link-filters';
+import { resolveOptionSource } from '@/lib/option-sources';
+import { optionList } from '@/controls/SelectControl';
 import type { ListPreferenceDoc, ViewVisibility } from '@/services/listPreference';
 import { FilterChip } from './FilterChip';
-import { FilterEditor } from './FilterEditor';
+import { FilterEditor, MultiValueInput } from './FilterEditor';
 import { ColumnChooser } from './ColumnChooser';
 import { ViewPicker } from './ViewPicker';
 
 /**
  * The single entry the ListPage renders above ListRenderer. Composes the kit
  * PageHeader (title with the total · search · Columns, data menu, ViewPicker and
- * the New action) and, under it, the applied FilterChips with the Filter chip
- * that opens a popover (desktop) / bottom-sheet (mobile) of FilterEditor rows
- * with an AND/OR group toggle.
+ * the New action) and, under it, the quick filters of the fields the entity flags
+ * in_standard_filter, then the applied FilterChips with the Filter chip that opens
+ * a popover (desktop) / bottom-sheet (mobile) of FilterEditor rows with an AND/OR
+ * group toggle.
  *
  * PURE: the ListPage owns ALL applied state (URL params + useListPreferences) and
  * passes it down; this component only emits via callbacks. The AND list lives in
  * `filters`, the OR list in `orFilters`; the group toggle routes new rows to the
  * active bucket. onFiltersChange emits BOTH buckets so the page writes ?f + ?of
  * atomically. Only the filter panel keeps rows of its own: those still missing a
- * field or an operator, which are no filters yet.
+ * field or an operator, which are no filters yet. The search box and a quick
+ * filter's input keep the text being typed until the person pauses.
  */
 
 export interface ListToolbarProps {
@@ -295,6 +322,8 @@ export function ListToolbar(props: ListToolbarProps) {
         }
       />
 
+      <QuickFilters meta={meta} filters={filters} onChange={(and) => onFiltersChange(and, orFilters)} />
+
       {/* The applied filters, each a removable chip, and the Filter chip that opens
           the editor; `filter-action` is the hook a design draws that chip by. */}
       <div className="flex flex-wrap items-center gap-2">
@@ -353,6 +382,298 @@ export function ListToolbar(props: ListToolbarProps) {
       )}
     </>
   );
+}
+
+/* ── Quick filters: one control for each field flagged in_standard_filter ──── */
+
+interface QuickFiltersProps {
+  meta: EntityDefinition;
+  filters: FilterTuple[];
+  onChange: (and: FilterTuple[]) => void;
+}
+
+/** The fields a person filters by most, as the author flagged them, each with a control
+ *  above the list. A control holds the AND filter of its field with the operator the panel
+ *  picks first for the field; a filter on the field with another operator, or an OR filter,
+ *  stays as the panel built it. */
+function QuickFilters({ meta, filters, onChange }: QuickFiltersProps) {
+  const tc = useChrome();
+  const tField = useI18nStore((s) => s.tField);
+  const fields = standardFilterFields(meta);
+  if (fields.length === 0) return null;
+
+  return (
+    <div
+      role="group"
+      aria-label={tc('ui.filter.title')}
+      data-ui="quick-filters"
+      className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end"
+    >
+      {fields.map((field) => {
+        // standardFilterFields keeps only the fields a filter has an operator for.
+        const op = operatorsForFieldtype(field.fieldtype)[0]!;
+        const appliedFilter = filters.find(([name, o]) => name === field.fieldname && o === op);
+        return (
+          <QuickFilter
+            key={field.fieldname}
+            meta={meta}
+            field={field}
+            op={op}
+            label={tField(meta.name, field.fieldname, field.label)}
+            value={appliedFilter?.[2]}
+            onValue={(value) => {
+              const nextFilters = applyQuickFilter(filters, [field.fieldname, op, value]);
+              if (nextFilters !== filters) onChange(nextFilters);
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+interface QuickFilterProps {
+  meta: EntityDefinition;
+  field: FieldDefinition;
+  op: FilterOp;
+  label: string;
+  /** The value of the applied filter; undefined while the field is not filtered. */
+  value: unknown;
+  /** An empty value takes the filter away. */
+  onValue: (value: unknown) => void;
+}
+
+/** One quick filter: the label of its field over the control its field type takes. */
+function QuickFilter(props: QuickFilterProps) {
+  const id = useId();
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5 sm:w-44">
+      <label htmlFor={id} data-ui="field-label" className="text-xs font-medium text-textMuted">
+        {props.label}
+      </label>
+      <QuickFilterControl id={id} {...props} />
+    </div>
+  );
+}
+
+function QuickFilterControl({ id, meta, field, op, label, value, onValue }: QuickFilterProps & { id: string }) {
+  const tc = useChrome();
+  const tOption = useI18nStore((s) => s.tOption);
+  const arity = operatorArity(op);
+
+  if (arity === 'presence') {
+    return (
+      <QuickChoice
+        id={id}
+        label={label}
+        value={value === 'set' || value === 'not set' ? value : ''}
+        options={[
+          { value: 'set', label: tc('ui.filter.set') },
+          { value: 'not set', label: tc('ui.filter.notSet') },
+        ]}
+        onChoose={onValue}
+      />
+    );
+  }
+
+  if (field.fieldtype === 'Check') {
+    const isYes = value === 1 || value === true || value === '1';
+    const isNo = value === 0 || value === false || value === '0';
+    return (
+      <QuickChoice
+        id={id}
+        label={label}
+        value={isYes ? '1' : isNo ? '0' : ''}
+        options={[
+          { value: '1', label: tc('ui.filter.yes') },
+          { value: '0', label: tc('ui.filter.no') },
+        ]}
+        onChoose={(next) => onValue(next === '' ? '' : Number(next))}
+      />
+    );
+  }
+
+  if (field.fieldtype === 'Select') {
+    const currentValue = value == null ? '' : String(value);
+    // The choices of the Select field itself, a declared option source before its options, and
+    // the applied value where they lack it, so the control never hides an applied filter. An
+    // empty or repeated choice would collide with '—' or with its twin.
+    const declaredChoices = field.options_source
+      ? resolveOptionSource(field.options_source)
+      : optionList(field.options).map((o) => ({ value: o, label: tOption(meta.name, field.fieldname, o) }));
+    const choices: SelectOption[] = [];
+    for (const choice of declaredChoices) {
+      if (choice.value !== '' && !choices.some((c) => c.value === choice.value)) choices.push(choice);
+    }
+    if (currentValue && !choices.some((c) => c.value === currentValue)) {
+      choices.push({ value: currentValue, label: currentValue });
+    }
+    return <QuickChoice id={id} label={label} value={currentValue} options={choices} onChoose={onValue} />;
+  }
+
+  if (arity === 'multi') {
+    return (
+      <MultiValueInput
+        arr={Array.isArray(value) ? value : []}
+        numeric={false}
+        ariaLabel={label}
+        placeholder={tc('ui.filter.commaSeparated')}
+        onValue={onValue}
+      />
+    );
+  }
+
+  if (field.fieldtype === 'Link' && field.target) {
+    return <QuickLinkFilter id={id} field={field} target={field.target} label={label} value={value} onValue={onValue} />;
+  }
+
+  return <QuickTypedFilter id={id} field={field} label={label} value={value} onValue={onValue} />;
+}
+
+/** A choice among a field's values, led by '—', which filters by none of them. */
+function QuickChoice({
+  id,
+  label,
+  value,
+  options,
+  onChoose,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  options: SelectOption[];
+  onChoose: (value: string) => void;
+}) {
+  const tc = useChrome();
+  return (
+    <Select
+      id={id}
+      aria-label={label}
+      value={value}
+      onChange={onChoose}
+      options={[{ value: '', label: '—' }, ...options]}
+      searchable={options.length > 10}
+      searchPlaceholder={tc('ui.list.search')}
+      noResultsLabel={tc('ui.select.noResults')}
+    />
+  );
+}
+
+/** A typed value, applied once the person pauses typing, as the search box applies its text:
+ *  a request for every letter would be a list nobody waits for. */
+function QuickTypedFilter({
+  id,
+  field,
+  label,
+  value,
+  onValue,
+}: {
+  id: string;
+  field: FieldDefinition;
+  label: string;
+  value: unknown;
+  onValue: (value: unknown) => void;
+}) {
+  const inputType = chooseFilterInputType(field.fieldtype);
+  const appliedText = value == null ? '' : String(value);
+  const [draft, setDraft] = useState(appliedText);
+  useEffect(() => setDraft(appliedText), [appliedText]);
+  useEffect(() => {
+    if (draft === appliedText) return;
+    const timer = setTimeout(() => onValue(inputType === 'number' && draft !== '' ? Number(draft) : draft), 300);
+    return () => clearTimeout(timer);
+    // Only the text being typed restarts the pause: the callback is new on every render of
+    // the list, and the applied text catches up with the draft once it is applied.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft]);
+
+  return <Input id={id} type={inputType} aria-label={label} value={draft} onChange={(e) => setDraft(e.target.value)} />;
+}
+
+/** A record of the Link's target, searched by what the person types, as the panel's Link
+ *  value is. The filter carries the record's id: after a reload the control shows the id,
+ *  because a filter carries no title. */
+function QuickLinkFilter({
+  id,
+  field,
+  target,
+  label,
+  value,
+  onValue,
+}: {
+  id: string;
+  field: FieldDefinition;
+  target: string;
+  label: string;
+  value: unknown;
+  onValue: (value: unknown) => void;
+}) {
+  const tc = useChrome();
+  const [query, setQuery] = useState('');
+  const [searchedText, setSearchedText] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const [pickedRecord, setPickedRecord] = useState<{ id: string; label: string } | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchedText(query), 200);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const results = useSearchLink({
+    entity: target,
+    q: searchedText,
+    targetPath: field.target_path,
+    // A filter has no document, so a `$doc.` token names nothing here and is dropped.
+    filters: resolveLinkFilters(field.target_filters, undefined),
+    enabled: isOpen,
+  });
+
+  const hasValue = value != null && value !== '';
+  const shownText = hasValue ? (pickedRecord && pickedRecord.id === value ? pickedRecord.label : String(value)) : '';
+
+  return (
+    <Combobox
+      id={id}
+      value={shownText}
+      query={query}
+      onQueryChange={setQuery}
+      options={(results.data ?? []).map((r) => ({ id: r._id, label: r.display, subtitle: r.subtitle }))}
+      loading={results.isLoading}
+      open={isOpen}
+      onOpenChange={setIsOpen}
+      onPick={(option) => {
+        setPickedRecord({ id: option.id, label: option.label });
+        onValue(option.id);
+      }}
+      placeholder={tc('ui.link.searchEntity', { entity: target })}
+      loadingLabel={tc('ui.link.searching')}
+      emptyLabel={tc('ui.select.noResults')}
+      ariaLabel={label}
+      onClear={
+        hasValue
+          ? () => {
+              setPickedRecord(null);
+              setQuery('');
+              onValue('');
+            }
+          : undefined
+      }
+      clearLabel={tc('ui.action.clear')}
+    />
+  );
+}
+
+/** The AND filters with the quick filter of a field set to a value: the field's filter with
+ *  that operator changes in place, or a new one goes last, and an empty value takes it away.
+ *  The same list comes back when nothing changes. */
+function applyQuickFilter(filters: FilterTuple[], quickFilter: FilterTuple): FilterTuple[] {
+  const [field, op, value] = quickFilter;
+  const index = filters.findIndex(([name, o]) => name === field && o === op);
+  const isEmpty = value == null || value === '' || (Array.isArray(value) && value.length === 0);
+  if (index === -1) return isEmpty ? filters : [...filters, quickFilter];
+  if (isEmpty) return filters.filter((_, i) => i !== index);
+  if (sameFilters([filters[index]!], [quickFilter])) return filters;
+  return filters.map((filter, i) => (i === index ? quickFilter : filter));
 }
 
 /* ── Filter panel: editor rows + AND/OR group toggle + Add condition ────────── */
