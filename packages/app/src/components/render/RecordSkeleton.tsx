@@ -1,6 +1,6 @@
 import { Card, Skeleton, cn } from '@digitaplatform/components';
 import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
-import { computeLayout, spanClass, type LayoutSection } from './layout';
+import { SECTION_GRID_CLASS, computeLayout, spanClass, type LayoutSection } from './layout';
 
 /**
  * Meta-aware record load skeleton (BUG-2 reflow fix). The plain <FormSkeleton> is a
@@ -82,7 +82,7 @@ function SectionSkeleton({ section, columns }: { section: LayoutSection; columns
           </header>
         )}
         {section.columns.length <= 1 ? (
-          <div className="grid grid-cols-12 gap-x-8 gap-y-6">
+          <div className={SECTION_GRID_CLASS}>
             {visible(section.columns[0]?.fields ?? []).map((f, i) => (
               <FieldCell key={f.fieldname} field={f} index={i} cellClassName={spanClass(f, columns)} />
             ))}
