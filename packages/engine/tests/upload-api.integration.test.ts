@@ -1512,6 +1512,74 @@ describe("Upload API Integration", () => {
       });
     });
 
+    describe("a record that names a colleague's file uploaded before files were bound", () => {
+      /** The state the migration of legacy loose uploads leaves: the colleague's letter stays
+       *  loose, because the record's owner did not upload it. */
+      function legacyLetterOfSales(entity: string, body: string) {
+        return uploadAsApp(salesToken, "letter", body, entity);
+      }
+
+      async function expectStillLoose(fileId: string) {
+        await attachLegacyLooseFiles(db, registry.getAll());
+        const row = (await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, "core")) as Record<string, unknown>;
+        expect(row["owner"]).toBe("sales@digita.local");
+        expect(row["attached_to_name"]).toBeUndefined();
+      }
+
+      async function cancelledOrderOfOwner(letterUrl: string) {
+        const created = await app.inject({
+          method: "POST",
+          url: "/api/v1/resource/TestSubBook",
+          headers: authHeaders(authToken),
+          payload: { title: "Legacy order", letter: letterUrl },
+        });
+        expect(created.statusCode).toBe(201);
+        const id = created.json().data._id as string;
+        for (const verb of ["submit", "cancel"]) {
+          const res = await app.inject({ method: "POST", url: `/api/v1/resource/TestSubBook/${id}/${verb}`, headers: authHeaders(authToken) });
+          expect(res.statusCode, verb).toBe(200);
+        }
+        await db.updateOne("TestSubBook", id, { owner: "owner@digita.local" }, "core");
+        return id;
+      }
+
+      it("refuses the amendment to its owner, who is not an Administrator, with 403", async () => {
+        const letter = await legacyLetterOfSales("TestSubBook", "%PDF legacy letter of sales, amended by the owner");
+        const id = await cancelledOrderOfOwner(letter.file_url);
+        await expectStillLoose(letter._id);
+        const amended = await app.inject({ method: "POST", url: `/api/v1/resource/TestSubBook/${id}/amend`, headers: authHeaders(ownerToken) });
+        expect(amended.statusCode).toBe(403);
+      });
+
+      it("lets an Administrator amend it, with the amendment's own clone of the letter", async () => {
+        const letter = await legacyLetterOfSales("TestSubBook", "%PDF legacy letter of sales, amended by an Administrator");
+        const id = await cancelledOrderOfOwner(letter.file_url);
+        await expectStillLoose(letter._id);
+        const amended = await app.inject({ method: "POST", url: `/api/v1/resource/TestSubBook/${id}/amend`, headers: authHeaders(authToken) });
+        expect(amended.statusCode).toBe(201);
+        const cloneId = /\/file\/([^/]+)\/download/.exec(amended.json().data.letter as string)![1]!;
+        expect(cloneId).not.toBe(letter._id);
+      });
+
+      it("refuses the copy to its owner, who is not an Administrator, with 403", async () => {
+        const letter = await legacyLetterOfSales("TestBook", "%PDF legacy letter of sales, copied by the owner");
+        const planted = await plantBook(ownerToken, { title: "Legacy book", letter: letter.file_url });
+        await expectStillLoose(letter._id);
+        const copied = await app.inject({ method: "POST", url: `/api/v1/resource/TestBook/${planted.json().data._id}/copy`, headers: authHeaders(ownerToken) });
+        expect(copied.statusCode).toBe(403);
+      });
+
+      it("lets an Administrator copy it, with the copy's own clone of the letter", async () => {
+        const letter = await legacyLetterOfSales("TestBook", "%PDF legacy letter of sales, copied by an Administrator");
+        const planted = await plantBook(ownerToken, { title: "Legacy book", letter: letter.file_url });
+        await expectStillLoose(letter._id);
+        const copied = await app.inject({ method: "POST", url: `/api/v1/resource/TestBook/${planted.json().data._id}/copy`, headers: authHeaders(authToken) });
+        expect(copied.statusCode).toBe(201);
+        const cloneId = /\/file\/([^/]+)\/download/.exec(copied.json().data.letter as string)![1]!;
+        expect(cloneId).not.toBe(letter._id);
+      });
+    });
+
     describe("a document with a system id, reached through its id in upper case", () => {
       beforeAll(() => {
         registry.register({
