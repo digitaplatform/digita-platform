@@ -17,6 +17,7 @@ import { ProfileCard } from '@/components/account/ProfileCard';
 import { RegionCard } from '@/components/account/RegionCard';
 import { PasswordCard } from '@/components/account/PasswordCard';
 import { SessionsCard } from '@/components/account/SessionsCard';
+import { useSwitchLanguage } from '@/components/layout/LanguageSwitcher';
 
 /** Up to two initials from the display name, else the email's first letter. */
 function initials(user: SessionUser): string {
@@ -34,7 +35,7 @@ export default function AccountPage() {
   const dialog = useDialogHost();
   const user = useSessionStore((s) => s.user);
   const languages = useSessionStore((s) => s.languages);
-  const setLocale = useSessionStore((s) => s.setLocale);
+  const switchLanguage = useSwitchLanguage();
   const locale = useSessionStore((s) => s.locale);
   const defaultCurrency = useSessionStore((s) => s.settings?.default_currency);
   const setLocaleFormat = useSessionStore((s) => s.setLocaleFormat);
@@ -62,7 +63,7 @@ export default function AccountPage() {
     // Language is driven by the LOCAL stored locale (boot resolves it via
     // Accept-Language) — applying it here is what makes the change take effect +
     // survive a reload. The /auth/profile write persists it server-side too.
-    if (body.language && body.language !== (user.language ?? undefined)) void setLocale(body.language);
+    if (body.language && body.language !== (user.language ?? undefined)) switchLanguage(body.language);
     profileM.mutate(body, {
       onSuccess: () => dialog.toast(tc('ui.account.profile.saved'), 'success'),
     });

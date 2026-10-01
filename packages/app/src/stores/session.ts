@@ -16,7 +16,9 @@ import { redirectToIdpLogin } from '@/lib/authConfig';
 import { appUrl } from '@/lib/appBase';
 import { useThemeStore } from '@/stores/theme';
 import { useI18nStore } from '@/stores/i18n';
-import { setUserPreference } from '@/services/userPreference';
+import { getUserPreference, setUserPreference } from '@/services/userPreference';
+import { getDoc } from '@/services/resource';
+import { unwrap } from '@/lib/api-result';
 
 type SessionStatus = 'loading' | 'authenticated' | 'anonymous';
 
@@ -76,6 +78,39 @@ export async function pickBootLocale(
   return { resolved: resolveBootLocale(data?.locale?.code, initial), data };
 }
 
+/** The fields of a Language row the engine copies into the locale it resolves. */
+type LanguageRow = Pick<BootLocale, 'direction' | 'date_format' | 'number_format'>;
+
+/**
+ * The locale the engine resolves for `code`, so a language switch formats and lays out the
+ * page as the next boot would. A signed-in user gets the engine's LocaleResolver rule: the
+ * direction and formats of the Language row, the format_locale of the user's own "locale"
+ * preference, else the language itself, and the timezone they already have. A visitor has
+ * no profile language and no preference, so the engine resolves the Accept-Language a new
+ * boot sends, which names `code` once its texts have loaded.
+ */
+async function resolveLocale(code: string, signedIn: boolean, current: BootLocale | null): Promise<BootLocale> {
+  if (!signedIn) return { ...unwrap(await getBoot()).locale, code };
+  const [language, preference] = await Promise.all([
+    getDoc<LanguageRow>('Language', code).then(unwrap),
+    getUserPreference('locale'),
+  ]);
+  // Stored as a JSON string, as setLocaleFormat writes it and the engine reads it.
+  const own =
+    typeof preference === 'string' && preference.trim()
+      ? (JSON.parse(preference) as { format_locale?: string | null }).format_locale?.trim()
+      : undefined;
+  return {
+    ...current,
+    code,
+    // The engine's LocaleResolver reads a Language row without a direction as left to right.
+    direction: language.direction ?? 'ltr',
+    date_format: language.date_format,
+    number_format: language.number_format,
+    format_locale: own || code,
+  };
+}
+
 /**
  * The session: who the user is + the boot payload. Identity is resolved from
  * the engine's `/boot` via the httpOnly access cookie (never a JS-readable
@@ -107,7 +142,8 @@ interface SessionState {
   hasRole: (role: string) => boolean;
   bootstrap: () => Promise<BootData | null>;
   /** Switch to one of the backend languages: reload its translations, persist the
-   *  choice, and mark the document lang so the engine resolves it via Accept-Language. */
+   *  choice, mark the document lang so the engine resolves it via Accept-Language, and
+   *  take the formats and the text direction the engine resolves for it. */
   setLocale: (code: string) => Promise<void>;
   /** Persist + apply the region formatting locale (BCP-47, e.g. "de-CH") and the
    *  display timezone — independent of the UI language, so "German UI, Swiss
@@ -189,12 +225,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // Loads the backend translations for this locale + sets document.lang (which
     // the api client sends as Accept-Language → the engine resolves it on boot).
     await useI18nStore.getState().load(code);
-    const cur = get().locale;
-    set({ locale: cur ? { ...cur, code } : { code } });
-    document.documentElement.dir = get().locale?.direction ?? 'ltr';
-    // NOTE: date/number formats for the new locale refresh on next full boot
-    // (the engine resolves them via Accept-Language). A future auth profile
-    // update would persist the choice server-side across devices.
+    const locale = await resolveLocale(code, get().status === 'authenticated', get().locale);
+    set({ locale });
+    document.documentElement.dir = locale.direction ?? 'ltr';
   },
 
   setLocaleFormat: async (formatLocale, timezone) => {
