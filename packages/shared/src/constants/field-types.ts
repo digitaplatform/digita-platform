@@ -42,20 +42,6 @@ export const NUMERIC_FIELD_TYPES: readonly FieldType[] = [
   "Duration",
 ];
 
-export const TEXT_FIELD_TYPES: readonly FieldType[] = [
-  "Data",
-  "Text",
-  "SmallText",
-  "TextEditor",
-  "Code",
-  "Markdown",
-  "Phone",
-];
-
-export const DATE_FIELD_TYPES: readonly FieldType[] = ["Date", "Datetime", "Time"];
-
-export const LINK_FIELD_TYPES: readonly FieldType[] = ["Link"];
-
 /** The field types a person uploads a file into. Each upload lands under the entity's storage_path. */
 export const UPLOAD_FIELD_TYPES = ["Attach", "AttachImage"] as const satisfies readonly FieldType[];
 
@@ -65,7 +51,3 @@ export const UPLOAD_FIELD_TYPES = ["Attach", "AttachImage"] as const satisfies r
  * file URL that a seed, an API client or a copy of an upload field set.
  */
 export const FILE_FIELD_TYPES = [...UPLOAD_FIELD_TYPES, "Image"] as const satisfies readonly FieldType[];
-
-export const DATA_FORMAT_OPTIONS = ["Email", "Phone", "URL", "IP", "Name"] as const;
-
-export type DataFormatOption = (typeof DATA_FORMAT_OPTIONS)[number];
