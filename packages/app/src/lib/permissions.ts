@@ -39,7 +39,10 @@ function isMatrixWithheld(entity: Pick<EntityDefinition, 'permissions'>): boolea
   return (entity.permissions ?? []).length === 0;
 }
 
-/** Does the user hold `action` on the entity through a level-0 row, as the engine requires? */
+/**
+ * Does the user hold `action` on the entity through a level-0 row, as the engine requires? Where
+ * the engine withheld the matrix, the answer is yes, so the engine judges the action.
+ */
 export function hasEntityPermission(
   entity: Pick<EntityDefinition, 'permissions'>,
   user: SessionUser | null | undefined,
@@ -55,7 +58,8 @@ type RecordRules = Pick<EntityDefinition, 'permissions' | 'states' | 'transition
 /**
  * Does the user hold `action` on this record, as the engine checks it against the stored
  * record: through a level-0 row whose role the record's workflow state does not strip of it,
- * and whose `if_owner`, `condition` and `scope` admit the record?
+ * and whose `if_owner`, `condition` and `scope` admit the record? Where the engine withheld the
+ * matrix, the answer is yes, so the engine judges the action.
  */
 export function hasRecordPermission(
   entity: RecordRules,
@@ -127,14 +131,15 @@ function stateStrips(entity: RecordRules, record: Record<string, unknown>, role:
 
 /**
  * A predicate over field `perm_level`: true when the user may WRITE fields at that
- * level. Administrator → always true. A field whose perm_level fails this becomes
- * read-only in the form (so the user never types into a field the engine drops).
+ * level. Administrator → always true, and so where the engine withheld the matrix, which leaves
+ * the fields to the engine. A field whose perm_level fails this becomes read-only in the form
+ * (so the user never types into a field the engine drops).
  */
 export function writableLevelPredicate(
   entity: Pick<EntityDefinition, 'permissions'>,
   user: SessionUser | null | undefined,
 ): (level: number) => boolean {
-  if (isAdministrator(user)) return () => true;
+  if (isAdministrator(user) || (user && isMatrixWithheld(entity))) return () => true;
   const roles = new Set(user?.roles ?? []);
   const levels = new Set<number>();
   for (const p of entity.permissions ?? []) {

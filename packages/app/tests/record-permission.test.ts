@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { EntityDefinition } from '@digitaplatform/shared';
-import { hasEntityPermission, hasRecordPermission } from '@/lib/permissions';
+import { hasEntityPermission, hasRecordPermission, writableLevelPredicate } from '@/lib/permissions';
 import type { SessionUser } from '@/types';
 
 /**
@@ -104,14 +104,23 @@ describe('an entity whose permission rows the engine withheld', () => {
     expect(hasEntityPermission(withheld, reception, 'create')).toBe(true);
   });
 
+  // Otherwise the form offers Save over fields that are all read-only.
+  it('leaves the fields of every level writable for the engine to judge', () => {
+    const canWriteLevel = writableLevelPredicate(withheld, reception);
+    expect(canWriteLevel(0)).toBe(true);
+    expect(canWriteLevel(1)).toBe(true);
+  });
+
   it('still refuses through rows that grant the user nothing', () => {
     const otherRole = workOrder({ permissions: [{ role: 'Workshop Lead', level: 0, write: 1, create: 1 }] });
     expect(hasRecordPermission(otherRole, reception, 'write', { status: 'open' })).toBe(false);
     expect(hasEntityPermission(otherRole, reception, 'create')).toBe(false);
+    expect(writableLevelPredicate(otherRole, reception)(0)).toBe(false);
   });
 
   it('refuses a signed-out caller', () => {
     expect(hasRecordPermission(withheld, null, 'write', { status: 'open' })).toBe(false);
     expect(hasEntityPermission(withheld, null, 'create')).toBe(false);
+    expect(writableLevelPredicate(withheld, null)(0)).toBe(false);
   });
 });
