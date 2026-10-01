@@ -187,3 +187,15 @@ export type { DIGITACollection, DIGITADatabase } from "./digita-constants.js";
 // the subpath export "@digitaplatform/shared/i18n-node".
 export { createTranslator, fetchBundle, SUPPORTED_LANGUAGES, FALLBACK_LANGUAGE } from "./i18n.js";
 export type { Translator, LocaleBundle, LocaleMessages, Language } from "./i18n.js";
+
+// The one expression grammar the form and the engine both parse field expressions with.
+export {
+  parseExpression,
+  evaluateNode,
+  stripEvalPrefix,
+  isTruthy,
+  identifiersOf,
+  rootFieldsOf,
+  ExpressionError,
+} from "./expression.js";
+export type { ExprNode, ExprBinaryOperator, ExprUnaryOperator, ExprIdentifierResolver } from "./expression.js";

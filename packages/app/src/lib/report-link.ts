@@ -68,14 +68,14 @@ export function reportRenderUrl(
 
 /**
  * Affordance-only show_if for report links, read by the app's evaluator of a field's depends_on: the
- * doc as `doc`, the signed-in user as `user`. The engine reads an action's show_if with a grammar of
- * its own, so one rule can decide differently on an action and on a print link. A rule that does not
- * parse fails OPEN — the report service stays the security boundary; this only hides
- * obviously-inapplicable buttons.
+ * doc as `doc`, the signed-in user as `user`, and any other unquoted word as text. The engine refuses
+ * such a word in an action's show_if, so one rule can decide differently on an action and on a print
+ * link. A rule that does not parse fails OPEN — the report service stays the security boundary; this
+ * only hides obviously-inapplicable buttons.
  */
 export function reportLinkVisible(link: EntityReportLink, doc: Doc, user?: SessionUser | null): boolean {
   const expr = link.show_if?.replace(/^eval:/, '').trim();
   if (!expr) return true;
-  const result = evaluateExpr(expr, { doc, user: user ? (user as unknown as Doc) : undefined });
+  const result = evaluateExpr(expr, { doc, user: user ? (user as unknown as Doc) : undefined, hasBareWords: true });
   return result.error ? true : result.value;
 }
