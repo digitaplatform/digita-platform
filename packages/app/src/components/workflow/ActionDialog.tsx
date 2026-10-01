@@ -6,6 +6,7 @@ import { buildDefaults } from '@/lib/default-tokens';
 import { useSessionStore } from '@/stores/session';
 import { useChrome } from '@/lib/chrome-i18n';
 import { FormRenderer } from '@/components/render/FormRenderer';
+import { ActionOptionTexts } from '@/lib/option-text';
 
 type Doc = Record<string, unknown>;
 
@@ -64,14 +65,16 @@ export function ActionDialog({
         </div>
       }
     >
-      <FormRenderer
-        entity={entity}
-        fields={fields}
-        doc={values}
-        fieldState={fieldState}
-        errors={{}}
-        onFieldChange={(fn, v) => setValues((p) => ({ ...p, [fn]: v }))}
-      />
+      <ActionOptionTexts entity={entity} action={action.action}>
+        <FormRenderer
+          entity={entity}
+          fields={fields}
+          doc={values}
+          fieldState={fieldState}
+          errors={{}}
+          onFieldChange={(fn, v) => setValues((p) => ({ ...p, [fn]: v }))}
+        />
+      </ActionOptionTexts>
     </BaseDialog>
   );
 }

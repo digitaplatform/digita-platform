@@ -69,13 +69,16 @@ export const boxShadow = {
   hover: 'var(--shadow-md)',
 } as const;
 
-/** Layering tokens for floating surfaces. The three layers the interaction
- *  foundation needs for now (popover < dialog < toast — toasts must render over
- *  open dialogs); rolling the remaining ad-hoc z-indexes (drawer, palette,
+/** Layering tokens for floating surfaces: popover < dialog < dropdown < toast.
+ *  Toasts must render over open dialogs. A dropdown list opens from a control,
+ *  and that control may sit in a dialog: below the dialog's scrim no click could
+ *  reach it. A floating page button keeps the popover layer under the dialog.
+ *  Rolling the remaining ad-hoc z-indexes (drawer, palette,
  *  tooltip) onto tokens is design-system work (TP3). */
 export const zIndex = {
   popover: '40',
   dialog: '50',
+  dropdown: '55',
   toast: '60',
 } as const;
 
