@@ -688,7 +688,6 @@ export class EntityRegistry {
     entity.allow_import = entity.allow_import ?? false;
     entity.allow_export = entity.allow_export ?? true;
     entity.in_global_search = entity.in_global_search ?? false;
-    entity.allow_quick_entry = entity.allow_quick_entry ?? false;
   }
 
   /**

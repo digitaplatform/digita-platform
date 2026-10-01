@@ -1048,10 +1048,6 @@ export interface EntityDefinition {
   // List view
   in_global_search?: boolean;
 
-  // Quick entry
-  allow_quick_entry?: boolean;
-  quick_entry_fields?: string[];
-
   // Import/export
   allow_import?: boolean;
   allow_export?: boolean;
