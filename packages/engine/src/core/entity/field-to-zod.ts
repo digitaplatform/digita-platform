@@ -157,7 +157,7 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
       // Time is a wall-clock value (HH:mm[:ss]), NOT a Date — `new Date("14:30")`
       // is Invalid Date, so it must have its own branch or every canonical time
       // is rejected on the happy path.
-      return z.string().refine((v) => v === "" || /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(v), {
+      return z.string().refine((v) => /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(v), {
         message: "field_invalid_time",
       });
     case "Duration":
@@ -199,7 +199,6 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
  */
 function isSafeAttachValue(v: string): boolean {
   const t = v.trim();
-  if (t === "") return true;
   if (!/^[a-z][a-z0-9+.-]+:/i.test(t)) return true; // no URL scheme → relative
   const lower = t.toLowerCase();
   return (
@@ -275,18 +274,18 @@ const NUMERIC_COERCE_TYPES: ReadonlySet<FieldType> = new Set<FieldType>([
 ]);
 
 /**
- * Guard coercing-numeric fields against empty-ish inputs. Plain `z.coerce.number()`
- * turns '', whitespace, [], null and false into 0 — silently bypassing `required`
- * and `non_negative`. Wrap the (already range-constrained) number schema in a
- * preprocess that maps those to NaN so the inner number schema rejects them;
- * genuine numbers and numeric strings ("42") pass through unchanged. Runs BEFORE
- * the outer `.nullable().optional()` so an OPTIONAL field's null/undefined still
- * short-circuits.
+ * Guard coercing-numeric fields against the inputs `z.coerce.number()` would turn into a
+ * number: a boolean, an array and a blank string (false and [] become 0, true becomes 1,
+ * [5] becomes 5). Wrap the (already range-constrained) number schema in a preprocess that
+ * maps those to NaN so the inner number schema rejects them; genuine numbers and numeric
+ * strings ("42") pass through unchanged. The blank string it refuses is an optional field's:
+ * a required field's blank value is refused by the blank check before this runs, and the
+ * outer `.nullable().optional()` answers an optional field's null and undefined first.
  */
 function applyNumericEmptyGuard(schema: ZodTypeAny, field: FieldDefinition): ZodTypeAny {
   if (!NUMERIC_COERCE_TYPES.has(field.fieldtype)) return schema;
   return z.preprocess((v) => {
-    if (v === null || typeof v === "boolean" || Array.isArray(v)) return NaN;
+    if (typeof v === "boolean" || Array.isArray(v)) return NaN;
     if (typeof v === "string" && v.trim() === "") return NaN;
     return v;
   }, schema);
