@@ -107,6 +107,14 @@ describe('the Markdown control', () => {
     expect(preview().querySelector('h2')!.textContent).toBe('closed');
   });
 
+  it('shows the private-use character the preview sets text aside with as text', async () => {
+    const source = 'x 7 y and `0` and [`c`](https://example.com)';
+    drawField('Markdown', source);
+    await screen.findByLabelText('Body');
+    expect(preview().textContent).toBe('x 7 y and 0 and c');
+    expect(preview().querySelector('a code')).toHaveTextContent('c');
+  });
+
   it('keeps snake_case words as they are', async () => {
     drawField('Markdown', 'the field qr_payload_text stays');
     await screen.findByLabelText('Body');
