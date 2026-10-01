@@ -3,7 +3,12 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { setSiteEnv } from "./site-env";
+
+// The registry reaches the server config through the media block.
+vi.mock("server-only", () => ({}));
+setSiteEnv();
 
 const src = fileURLToPath(new URL("../src", import.meta.url));
 
@@ -77,5 +82,19 @@ describe("the exports of lib/format.ts", () => {
   it("PLANTED INNOCENT: the check passes an export a file calls, and ignores a longer name that contains it", () => {
     expect(exportsWithoutCaller(["format"], ["format(1);"])).toEqual([]);
     expect(exportsWithoutCaller(["format"], ["formatCurrency(1);"])).toEqual(["format"]);
+  });
+});
+
+describe("the block and plugin manifests", () => {
+  // The renderer reads a manifest's type or id and its component; its name, description and
+  // category tell a reader of the source what it is. A prop schema no code checks drifts from
+  // what the block reads and reads like a contract that holds.
+  it("declare no prop schema", async () => {
+    const { BLOCK_MANIFESTS } = await import("../src/blocks/registry");
+    const { PLUGIN_MANIFESTS } = await import("../src/plugins");
+    const withSchema = [...BLOCK_MANIFESTS.map((m) => ({ key: m.type, m })), ...PLUGIN_MANIFESTS.map((m) => ({ key: m.id, m }))]
+      .filter(({ m }) => "props" in m)
+      .map(({ key }) => key);
+    expect(withSchema).toEqual([]);
   });
 });
