@@ -1,6 +1,7 @@
-import { getConfig } from "@/config/env";
+import { getConfig, requiredFormSigningKey } from "@/config/env";
 import type { Locale } from "@/i18n/config";
 import { t } from "@/i18n/messages";
+import { signForm } from "@/lib/form-signature";
 import { type P, Section, s } from "./marketing/shared";
 import { readRecordFormFields } from "./record-form";
 import { RecordFormFields } from "./RecordFormFields";
@@ -10,7 +11,9 @@ import { RecordFormFields } from "./RecordFormFields";
  * engine that holds it (src/app/api/record/route.ts). It draws nothing without an entity or a
  * visible field, and nothing when it names a tenant app whose engine the site does not know
  * (ENGINE_URLS), whose posts would find no engine. A form whose entity or fields the Guest row does
- * not open still draws, and the route refuses its posts with 403.
+ * not open still draws, and the route refuses its posts with 403. The form carries a signature of
+ * what it was rendered for, so the route takes only posts of a form the site placed; a page that
+ * places one on a renderer without the signing key fails, as a missing setting does.
  */
 export function RecordForm({ props, locale }: { props?: P; locale: Locale }) {
   const entity = s(props, "entity");
@@ -18,6 +21,8 @@ export function RecordForm({ props, locale }: { props?: P; locale: Locale }) {
   const fields = readRecordFormFields(props);
   if (!entity || !fields.some((field) => field.type !== "hidden")) return null;
   if (app && !getConfig().engineUrls.has(app)) return null;
+  const renderedAt = Date.now();
+  const signature = signForm(requiredFormSigningKey(), { app, entity, fields: fields.map((field) => field.name), renderedAt });
   return (
     <Section eyebrow={s(props, "eyebrow")} heading={s(props, "heading")} lede={s(props, "lede")}>
       <RecordFormFields
@@ -32,7 +37,8 @@ export function RecordForm({ props, locale }: { props?: P; locale: Locale }) {
           unavailable: t("recordFormUnavailable", locale),
           tooMany: t("recordFormTooMany", locale),
         }}
-        renderedAt={Date.now()}
+        renderedAt={renderedAt}
+        signature={signature}
         locale={locale}
       />
     </Section>

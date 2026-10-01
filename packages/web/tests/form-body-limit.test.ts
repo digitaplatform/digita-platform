@@ -3,6 +3,7 @@
 // body that reaches a route is 10 MB.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { TEST_FORM_KEY, signed } from "./signed-form";
 
 vi.mock("server-only", () => ({}));
 
@@ -17,6 +18,7 @@ Object.assign(process.env, {
   TRANSLATIONS_DIR: "/translations",
   LOCALES: "en,de",
   DEFAULT_LOCALE: "en",
+  FORM_SIGNING_KEY: TEST_FORM_KEY,
 });
 
 const record = await import("../src/app/api/record/route");
@@ -42,13 +44,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const bookings = () => ({
-  app: "workshop",
-  entity: "Booking",
-  values: { contact_name: "Ada Example", email: "ada@example.org" },
-  website: "",
-  rendered_at: Date.now() - 10_000,
-});
+const bookings = () =>
+  signed({
+    app: "workshop",
+    entity: "Booking",
+    values: { contact_name: "Ada Example", email: "ada@example.org" },
+    website: "",
+    rendered_at: Date.now() - 10_000,
+  });
 const requests = () => ({
   name: "Ada Example",
   email: "ada@example.org",
