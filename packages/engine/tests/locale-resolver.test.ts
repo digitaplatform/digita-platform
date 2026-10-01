@@ -37,7 +37,7 @@ describe("LocaleResolver — region/timezone via UserPreference", () => {
   it("applies format_locale + timezone from the user's locale preference", async () => {
     const pref = { value: JSON.stringify({ format_locale: "de-CH", timezone: "Europe/Zurich" }) };
     const r = await build(pref);
-    const loc = await r.resolve("user@example.com", "de", undefined);
+    const loc = await r.resolve({ email: "user@example.com", language: "de" });
     expect(loc.code).toBe("de"); // UI language
     expect(loc.format_locale).toBe("de-CH"); // Swiss formatting
     expect(loc.timezone).toBe("Europe/Zurich");
@@ -46,21 +46,21 @@ describe("LocaleResolver — region/timezone via UserPreference", () => {
   it("lets the preference override the UI language (it UI, CH formatting)", async () => {
     const pref = { value: JSON.stringify({ language: "it", format_locale: "de-CH" }) };
     const r = await build(pref);
-    const loc = await r.resolve("user@example.com", "de", undefined);
+    const loc = await r.resolve({ email: "user@example.com", language: "de" });
     expect(loc.code).toBe("it");
     expect(loc.format_locale).toBe("de-CH");
   });
 
   it("defaults format_locale to the language code and timezone to null without a preference", async () => {
     const r = await build(null);
-    const loc = await r.resolve("user@example.com", "de", undefined);
+    const loc = await r.resolve({ email: "user@example.com", language: "de" });
     expect(loc.format_locale).toBe("de");
     expect(loc.timezone).toBeNull();
   });
 
   it("survives a malformed preference value (no throw, falls back)", async () => {
     const r = await build({ value: "{not json" });
-    const loc = await r.resolve("user@example.com", "de", undefined);
+    const loc = await r.resolve({ email: "user@example.com", language: "de" });
     expect(loc.code).toBe("de");
     expect(loc.format_locale).toBe("de");
   });
@@ -68,7 +68,7 @@ describe("LocaleResolver — region/timezone via UserPreference", () => {
   it("ignores an unknown preference language (falls back to token)", async () => {
     const pref = { value: JSON.stringify({ language: "zz" }) };
     const r = await build(pref);
-    const loc = await r.resolve("user@example.com", "de", undefined);
+    const loc = await r.resolve({ email: "user@example.com", language: "de" });
     expect(loc.code).toBe("de");
   });
 });

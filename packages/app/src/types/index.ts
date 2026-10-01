@@ -18,6 +18,9 @@ export interface SessionUser {
   /** Audience-set (ADR-A1): the authenticated tiers this user may enter, from the
    *  verified token's `tiers` claim (mirrored by /boot). Never a data boundary. */
   tiers?: AudienceGrant[];
+  /** A demo session: every visitor signs in as this one user, so a visitor's own choices stay
+   *  on their IdP session (from /boot, mirroring the token's `demo` claim). */
+  demo?: boolean;
 }
 
 /** Audience block from /boot (ADR-A1…A3): the caller's grant-set, the app's per-tier
