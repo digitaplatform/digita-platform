@@ -230,6 +230,25 @@ describe('DatePicker hands the focus back', () => {
     expect(trigger('28/09/2026')).toHaveFocus();
   });
 
+  it('to its own trigger when Escape closes two open calendars', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <DatePicker value="2026-09-28" onChange={vi.fn()} locale="en-GB" />
+        <DatePicker value="2026-10-05" onChange={vi.fn()} locale="en-GB" />
+      </>,
+    );
+    await openByKeyboard(user);
+    // A keyboard opens the second calendar without the pointer that would close the first.
+    act(() => trigger('05/10/2026').focus());
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('gridcell', { name: 'Monday, 5 October 2026' })).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(trigger('05/10/2026')).toHaveFocus();
+  });
+
   it('and leaves it to a host that moves the focus on after the pick, as a grid editor does (innocent case)', async () => {
     const user = userEvent.setup();
     function Host() {

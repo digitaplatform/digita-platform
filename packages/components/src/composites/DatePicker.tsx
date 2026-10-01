@@ -113,6 +113,7 @@ export function DatePicker({
   const anchorRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<'days' | 'my'>('days');
   const selected = useMemo(() => parseIso(value), [value]);
@@ -145,9 +146,10 @@ export function DatePicker({
 
   // Closing removes the day button that holds the focus, and the focus would fall to the page. A
   // panel that held it hands it to the trigger; one that did not (a click outside) leaves it where
-  // the person put it.
+  // the person put it. Only this picker's own panel counts: Escape closes every open calendar, and
+  // each one would otherwise send the focus to its own trigger.
   const close = () => {
-    const holdsFocus = document.activeElement?.closest('.dg-datepicker') != null;
+    const holdsFocus = panelRef.current?.contains(document.activeElement) ?? false;
     setOpen(false);
     if (holdsFocus) triggerRef.current?.focus();
   };
@@ -243,7 +245,7 @@ export function DatePicker({
       </button>
 
       <Popover open={open} anchorRef={anchorRef} onRequestClose={close} className="dg-datepicker w-76 p-3">
-        <div role="dialog" aria-modal="true" aria-labelledby={ariaLabelledby} onKeyDown={keepTab}>
+        <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={ariaLabelledby} onKeyDown={keepTab}>
           <div className="mb-2 flex items-center justify-between">
             <button
               type="button"
