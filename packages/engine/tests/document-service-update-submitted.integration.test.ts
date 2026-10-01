@@ -129,6 +129,7 @@ beforeAll(async () => {
   const periodCloseValidator = new PeriodCloseValidator(registry, db);
 
   docService = new DocumentService({
+    tenantTimeZone: () => "UTC",
     registry,
     db,
     permissionChecker,

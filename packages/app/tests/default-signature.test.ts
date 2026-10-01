@@ -48,7 +48,7 @@ function bootData(branding: BootBranding): BootData {
     user: { _id: 'staff@harbor.test', email: 'staff@harbor.test', roles: ['System User'] },
     locale: { code: 'en' },
     available_languages: [],
-    system_settings: { platform_name: 'Digita Platform', default_currency: null, allow_user_language: true, is_first_run: false },
+    system_settings: { platform_name: 'Digita Platform', default_currency: null, allow_user_language: true, is_first_run: false, timezone: 'UTC' },
     branding,
   };
 }

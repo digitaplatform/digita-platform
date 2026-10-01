@@ -85,6 +85,7 @@ beforeAll(async () => {
   const permissionChecker = new PermissionChecker(registry);
   const translationService = new TranslationService(db);
   docService = new DocumentService({
+    tenantTimeZone: () => "UTC",
     registry,
     db,
     permissionChecker,

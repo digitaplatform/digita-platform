@@ -116,6 +116,7 @@ beforeAll(async () => {
   const ruleEngine = new RuleEngine(db, registry);
 
   docService = new DocumentService({
+    tenantTimeZone: () => "UTC",
     registry, db, permissionChecker, hookRunner,
     linkValidator, linkTitleResolver, fetchFromResolver,
     deleteProtection, cancelProtection, versionService, viewLogService,

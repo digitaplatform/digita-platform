@@ -56,6 +56,7 @@ describe("DocumentService.update — time-series immutability", () => {
     } as never;
 
     const docService = new DocumentService({
+      tenantTimeZone: () => "UTC",
       registry,
       db,
       permissionChecker: new PermissionChecker(registry),

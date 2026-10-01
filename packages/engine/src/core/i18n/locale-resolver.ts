@@ -48,6 +48,8 @@ export class LocaleResolver {
   private languageCache: Map<string, Record<string, unknown>> = new Map();
   private defaultLanguage: string = env.BOOTSTRAP_LOCALE;
   private fallbackLanguage: string = env.TRANSLATION_FALLBACK_LOCALE;
+  // Setting.timezone declares "UTC" as its default; a singleton not seeded yet reads as that default.
+  private timeZone = "UTC";
 
   constructor(private db: MongoDBService) {}
 
@@ -61,6 +63,7 @@ export class LocaleResolver {
       const s = settings as Record<string, unknown>;
       this.defaultLanguage = (s["default_language"] as string) ?? env.BOOTSTRAP_LOCALE;
       this.fallbackLanguage = (s["fallback_language"] as string) ?? env.TRANSLATION_FALLBACK_LOCALE;
+      this.timeZone = (s["timezone"] as string) || "UTC";
     }
 
     // Load enabled languages
@@ -160,6 +163,11 @@ export class LocaleResolver {
 
   getFallbackLanguage(): string {
     return this.fallbackLanguage;
+  }
+
+  /** The tenant's time zone (Setting.timezone, IANA), whose calendar day is the tenant's "today". */
+  getTimeZone(): string {
+    return this.timeZone;
   }
 
   /**

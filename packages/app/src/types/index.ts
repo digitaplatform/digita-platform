@@ -55,6 +55,8 @@ export interface BootSystemSettings {
   default_currency: string | null;
   allow_user_language: boolean;
   is_first_run: boolean;
+  /** The tenant's time zone (Setting.timezone, IANA), whose day `__today__` names. */
+  timezone: string;
 }
 
 /** Branding payload (from BrandingSetting via the /boot extension). */

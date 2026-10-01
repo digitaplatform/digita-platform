@@ -20,7 +20,25 @@ const entity = {
   ],
 } as unknown as EntityDefinition;
 
-const coerce = (f: [string, string, unknown][]) => coerceDateFilterValues(entity, f);
+const coerce = (f: [string, string, unknown][]) => coerceDateFilterValues(entity, f, "UTC");
+
+describe("the calendar day of a Date filter value", () => {
+  // A booking desk in Zurich at 00:30 local time on 2026-09-30: UTC is still on the 29th.
+  const halfPastMidnightInZurich = new Date("2026-09-29T22:30:00Z");
+
+  it("is the day of the tenant's time zone", () => {
+    expect(coerceDateFilterValues(entity, [["posting_date", "=", halfPastMidnightInZurich]], "Europe/Zurich")).toEqual([
+      ["posting_date", "=", "2026-09-30"],
+    ]);
+    expect(coerceMatchDates(entity, "Europe/Zurich", { posting_date: halfPastMidnightInZurich })).toEqual({ posting_date: "2026-09-30" });
+  });
+
+  it("is the UTC day for a tenant on UTC", () => {
+    expect(coerceDateFilterValues(entity, [["posting_date", "=", halfPastMidnightInZurich]], "UTC")).toEqual([
+      ["posting_date", "=", "2026-09-29"],
+    ]);
+  });
+});
 
 describe("coerceDateFilterValues — date/datetime filter coercion", () => {
   it("Date field + JS Date value → canonical YYYY-MM-DD string (the $now bug)", () => {
@@ -84,32 +102,32 @@ describe("coerceDateFilterValues — date/datetime filter coercion", () => {
   });
 
   it("undefined / empty filter list passes through", () => {
-    expect(coerceDateFilterValues(entity, undefined)).toBeUndefined();
-    expect(coerceDateFilterValues(entity, [])).toEqual([]);
+    expect(coerceDateFilterValues(entity, undefined, "UTC")).toBeUndefined();
+    expect(coerceDateFilterValues(entity, [], "UTC")).toEqual([]);
   });
 });
 
 describe("coerceMatchDates — aggregate $match coercion", () => {
   it("coerces a range operator object on a Date field ($now bug in a pipeline)", () => {
-    const out = coerceMatchDates(entity, {
+    const out = coerceMatchDates(entity, "UTC", {
       posting_date: { $gte: new Date("2026-07-02T10:00:00Z"), $lte: new Date("2026-07-09T10:00:00Z") },
     });
     expect(out).toEqual({ posting_date: { $gte: "2026-07-02", $lte: "2026-07-09" } });
   });
 
   it("coerces a bare scalar equality on a Date field", () => {
-    expect(coerceMatchDates(entity, { posting_date: new Date("2026-07-02T23:00:00Z") })).toEqual({
+    expect(coerceMatchDates(entity, "UTC", { posting_date: new Date("2026-07-02T23:00:00Z") })).toEqual({
       posting_date: "2026-07-02",
     });
   });
 
   it("coerces a string operand on a Datetime field to a Date", () => {
-    const out = coerceMatchDates(entity, { created_at: { $gte: "2026-07-01" } });
+    const out = coerceMatchDates(entity, "UTC", { created_at: { $gte: "2026-07-01" } });
     expect((out.created_at as { $gte: Date }).$gte).toBeInstanceOf(Date);
   });
 
   it("descends $and/$or", () => {
-    const out = coerceMatchDates(entity, {
+    const out = coerceMatchDates(entity, "UTC", {
       $and: [{ posting_date: { $gte: new Date("2026-07-02T00:00:00Z") } }, { title: "x" }],
     });
     expect(out).toEqual({ $and: [{ posting_date: { $gte: "2026-07-02" } }, { title: "x" }] });
@@ -117,11 +135,11 @@ describe("coerceMatchDates — aggregate $match coercion", () => {
 
   it("leaves $expr and non-date fields untouched", () => {
     const m = { $expr: { $gt: ["$a", "$b"] }, title: { $regex: "x" } };
-    expect(coerceMatchDates(entity, m)).toEqual(m);
+    expect(coerceMatchDates(entity, "UTC", m)).toEqual(m);
   });
 
   it("coerces $in array element-wise on a Date field", () => {
-    const out = coerceMatchDates(entity, {
+    const out = coerceMatchDates(entity, "UTC", {
       posting_date: { $in: [new Date("2026-01-01T00:00:00Z"), new Date("2026-02-01T00:00:00Z")] },
     });
     expect(out).toEqual({ posting_date: { $in: ["2026-01-01", "2026-02-01"] } });

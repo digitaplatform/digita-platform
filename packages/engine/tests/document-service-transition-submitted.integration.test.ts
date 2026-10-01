@@ -88,6 +88,7 @@ beforeAll(async () => {
   hookRunner.setServices({ db, registry, decryptPassword });
   const workflowEngine = new WorkflowEngine();
   docService = new DocumentService({
+    tenantTimeZone: () => "UTC",
     registry,
     db,
     permissionChecker,

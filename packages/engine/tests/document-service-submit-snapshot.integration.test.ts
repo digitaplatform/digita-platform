@@ -158,6 +158,7 @@ beforeAll(async () => {
   const translationService = new TranslationService(db);
 
   docService = new DocumentService({
+    tenantTimeZone: () => "UTC",
     registry, db, permissionChecker, hookRunner,
     linkValidator, linkTitleResolver, fetchFromResolver, snapshotResolver,
     deleteProtection, cancelProtection, versionService, viewLogService, activityLogService, translationService,
