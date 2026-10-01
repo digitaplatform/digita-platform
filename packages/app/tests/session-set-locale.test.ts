@@ -46,6 +46,23 @@ afterEach(() => {
 });
 
 describe('setLocale', () => {
+  // The toast of a failed load says to choose the language again; by then a boot may already
+  // name it (the topbar saves the pick to the profile), while the old texts are still in use.
+  it('loads the texts again when the language is chosen again after a failed load', async () => {
+    useI18nStore.setState({ locale: 'en' });
+    useSessionStore.setState({ locale: { code: 'de', direction: 'ltr', format_locale: 'de' } });
+    getTranslations.mockResolvedValue({ success: true, data: { 'entity.Customer': 'Kunde' } });
+    await useSessionStore.getState().setLocale('de');
+    expect(getTranslations).toHaveBeenCalledWith('de');
+    expect(useI18nStore.getState().locale).toBe('de');
+  });
+
+  it('sends nothing when the language and its texts are already in use', async () => {
+    useI18nStore.setState({ locale: 'en' });
+    await useSessionStore.getState().setLocale('en');
+    expect(getTranslations).not.toHaveBeenCalled();
+  });
+
   it('switches for a person whose roles grant no read of Language rows or preferences', async () => {
     await useSessionStore.getState().setLocale('de');
     expect(useSessionStore.getState().locale!.code).toBe('de');
