@@ -1,5 +1,5 @@
 import type { EntityDefinition, FieldDefinition } from "@digitaplatform/shared";
-import { LAYOUT_FIELD_TYPES } from "@digitaplatform/shared";
+import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from "@digitaplatform/shared";
 import type { DocumentService } from "../document/document-service.js";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { ListQuery } from "../database/filter-builder.js";
@@ -163,8 +163,9 @@ export class ExportService {
   /**
    * Strip system/snapshot columns so a row is directly re-insertable. `_id` is
    * kept ONLY under `user_set` naming (where it is caller-supplied and part of
-   * the business content); every `_`-prefixed key inside Table child rows
-   * (e.g. `_row_id`) is dropped — regenerated on insert.
+   * the business content); every `_`-prefixed key inside Table child rows but
+   * `_row_id` is dropped. An import names the stored row by its `_row_id`, so
+   * an update keeps the cells the importer may not write.
    */
   private stripForRoundTrip(
     entity: EntityDefinition,
@@ -176,13 +177,12 @@ export class ExportService {
       if (key === "_id" && entity.naming?.strategy !== "user_set") continue;
       out[key] = value;
     }
-    // Strip _-prefixed keys inside Table child rows.
     for (const field of entity.fields) {
       if (field.fieldtype === "Table" && Array.isArray(out[field.fieldname])) {
         out[field.fieldname] = (out[field.fieldname] as Record<string, unknown>[]).map((child) => {
           const c: Record<string, unknown> = {};
           for (const [k, v] of Object.entries(child)) {
-            if (k.startsWith("_")) continue;
+            if (k.startsWith("_") && k !== ROW_ID_FIELD) continue;
             c[k] = v;
           }
           return c;

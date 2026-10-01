@@ -60,6 +60,7 @@ let db: MongoDBService;
 let registry: { register: (e: EntityDefinition) => void };
 let adminTok: string;
 let editorTok: string;
+let clerkTok: string;
 
 const ADMIN_PERM = { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, export: 1, import: 1 };
 const EDITOR_PERM = { role: "Editor", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 0, export: 0, import: 0 };
@@ -107,6 +108,23 @@ const Item: EntityDefinition = {
   permissions: [ADMIN_PERM, EDITOR_PERM],
 } as unknown as EntityDefinition;
 
+const CLERK_PERM = { role: "Clerk", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 0, export: 1, import: 1 };
+
+// `step` is read_only, so every role but Administrator keeps its stored value.
+const Checklist: EntityDefinition = {
+  name: "Checklist", module: "test", database: "app", naming: { strategy: "system" },
+  business_key: "code",
+  is_submittable: false, is_log: false, track_changes: false, track_views: false,
+  fields: [
+    { fieldname: "code", fieldtype: "Data", label: "Code" },
+    { fieldname: "steps", fieldtype: "Table", label: "Steps", child_fields: [
+      { fieldname: "step", fieldtype: "Data", label: "Step", read_only: true, default: "Extra step" },
+      { fieldname: "done", fieldtype: "Check", label: "Done" },
+    ] },
+  ],
+  permissions: [ADMIN_PERM, CLERK_PERM],
+} as unknown as EntityDefinition;
+
 const bearer = (tok: string) => ({ authorization: `Bearer ${tok}` });
 const imp = (doctype: string, tok: string, payload: object) =>
   app.inject({ method: "POST", url: `/api/v1/import/${doctype}`, headers: bearer(tok), payload });
@@ -122,13 +140,14 @@ beforeAll(async () => {
   registry = result.registry as unknown as { register: (e: EntityDefinition) => void };
   await result.startup();
   await app.ready();
-  for (const e of [Account, Group, Item]) {
+  for (const e of [Account, Group, Item, Checklist]) {
     registry.register(e);
     await db.ensureCollection(e.name, "app");
   }
 
   adminTok = await ta.sign({ sub: "admin@d", email: "admin@d", roles: ["Administrator", "System User"], tiers: ["internal"] });
   editorTok = await ta.sign({ sub: "ed@d", email: "ed@d", roles: ["Editor", "System User"], tiers: ["internal"] });
+  clerkTok = await ta.sign({ sub: "clerk@d", email: "clerk@d", roles: ["Clerk", "System User"], tiers: ["internal"] });
 
   // Baseline master data referenced by Item link tests.
   await imp("Account", adminTok, { rows: [{ acc_no: "A1", name: "Cash" }], mode: "insert" });
@@ -278,16 +297,39 @@ describe("Import modes — insert / upsert / validate", () => {
     expect(line.amount).toBe(50);
   });
 
-  it("a child row's _row_id in the file is dropped, so a file cannot repeat one", async () => {
+  it("a file that repeats a child row's _row_id fails that row and stores nothing", async () => {
     const res = await imp("Item", adminTok, { rows: [{
       item_no: "RID1", name: "Repeat", group: "G1",
       lines: [{ _row_id: "R1", account: "A1", amount: 1 }, { _row_id: "R1", account: "A1", amount: 2 }],
     }], mode: "insert" });
-    expect(res.json().data.inserted).toBe(1);
-    const lines = (await findOne("Item", { item_no: "RID1" }))!.lines as Record<string, unknown>[];
-    expect(lines.map((l) => l.amount)).toEqual([1, 2]);
-    expect(lines.map((l) => l._row_id)).not.toContain("R1");
-    expect(new Set(lines.map((l) => l._row_id)).size).toBe(2);
+    expect(res.json().data.inserted).toBe(0);
+    expect(res.json().data.failed).toBe(1);
+    expect(await findOne("Item", { item_no: "RID1" })).toBeUndefined();
+  });
+
+  it("upsert keeps a stored row's read_only child value for a role that may not write it (#256)", async () => {
+    await imp("Checklist", adminTok, { rows: [{
+      code: "CL1", steps: [{ step: "Legacy", done: false }, { step: "Brakes", done: false }],
+    }], mode: "insert" });
+    const stored = (await findOne("Checklist", { code: "CL1" }))!.steps as Array<Record<string, unknown>>;
+
+    // The file names each stored row by its _row_id, as an export writes it.
+    const res = await imp("Checklist", clerkTok, { rows: [{
+      code: "CL1",
+      steps: [
+        { _row_id: stored[0]!._row_id, step: "Changed", done: true },
+        { _row_id: stored[1]!._row_id, done: true },
+        { step: "Changed", done: false },
+      ],
+    }], mode: "upsert" });
+    expect(res.json().data).toMatchObject({ updated: 1, failed: 0 });
+
+    const steps = (await findOne("Checklist", { code: "CL1" }))!.steps as Array<Record<string, unknown>>;
+    expect(steps.map((s) => [s._row_id, s.step, s.done])).toEqual([
+      [stored[0]!._row_id, "Legacy", true],
+      [stored[1]!._row_id, "Brakes", true],
+      [expect.any(String), "Extra step", false],
+    ]);
   });
 });
 
