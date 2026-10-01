@@ -12,7 +12,7 @@
     "build:components": "pnpm --filter @digitaplatform/components build",
     "build:plugins": "pnpm --filter @digitaplatform/plugins build",
     "build:engine": "pnpm --filter @digitaplatform/engine build",
-    "build:app": "pnpm --filter @digitaplatform/app build:vendor && pnpm --filter @digitaplatform/app build",
+    "build:app": "node tools/plugin-mock/stage-plugins.mjs --registry && pnpm --filter @digitaplatform/app build:vendor && pnpm --filter @digitaplatform/app build",
     "build:web": "pnpm --filter @digitaplatform/web build",
     "test": "pnpm -r test",
     "clean": "pnpm -r clean"
