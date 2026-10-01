@@ -80,6 +80,7 @@ vi.mock('@/stores/session', () => ({
 vi.mock('@/stores/i18n', () => ({
   useI18nStore: (select: (state: Record<string, unknown>) => unknown) =>
     select({
+      translations: {},
       t: (key: string) => key,
       tField: (_entity: string, _field: string, fallback?: string) => fallback ?? '',
       tOption: (_entity: string, _field: string, value: string) => value,

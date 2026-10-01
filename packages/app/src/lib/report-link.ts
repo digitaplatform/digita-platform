@@ -26,6 +26,19 @@ export const REPORT_URL: string = (
   'http://localhost:3400'
 ).replace(/\/+$/, '');
 
+/**
+ * The entity file writes a link's label in one language, so an app translates it in its locale
+ * files under `report.<Entity>.<report>`, keyed like an action label (`action.<Entity>.<action>`).
+ * Without a key the written label stands; without either the caller names the link itself.
+ */
+export function reportLinkLabel(
+  entity: string,
+  link: EntityReportLink,
+  translations: Record<string, string>,
+): string | undefined {
+  return translations[`report.${entity}.${link.report}`] ?? link.label;
+}
+
 /** Resolve `param_map` (report param -> doc field path) against the doc. */
 export function resolveReportParams(link: EntityReportLink, doc: Doc): Record<string, string> {
   const params: Record<string, string> = {};
