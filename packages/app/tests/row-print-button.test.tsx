@@ -213,6 +213,21 @@ describe('the print button of a row in a list', () => {
     expect(windowOpen).toHaveBeenLastCalledWith(`${RENDER_BASE}/invoice/render?format=pdf&invoice=INV-2`, '_blank', 'noopener');
   });
 
+  it('downloads the csv of that row from the collection its link names', async () => {
+    const user = userEvent.setup();
+    const windowOpen = vi.spyOn(window, 'open').mockImplementation(() => null);
+    drawList([{ ...INVOICE_LINK, formats: ['pdf', 'csv'], source: 'rows' }]);
+    const [second] = await screen.findAllByRole('button', { name: 'Print invoice' });
+
+    await user.click(second!);
+    const dialog = await screen.findByRole('dialog', { name: 'Print invoice' });
+
+    await user.click(within(dialog).getByTestId('report-preview:download:csv'));
+    expect(windowOpen).toHaveBeenLastCalledWith(`${RENDER_BASE}/invoice/render?format=csv&invoice=INV-2&source=rows`, '_blank', 'noopener');
+    await user.click(within(dialog).getByTestId('report-preview:download:pdf'));
+    expect(windowOpen).toHaveBeenLastCalledWith(`${RENDER_BASE}/invoice/render?format=pdf&invoice=INV-2`, '_blank', 'noopener');
+  });
+
   it('prints with the primary link of the entity', async () => {
     drawList([DELIVERY_LINK, { ...INVOICE_LINK, primary: true, show_if: undefined }]);
 
