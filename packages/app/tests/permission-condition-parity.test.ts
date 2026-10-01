@@ -27,9 +27,9 @@ interface ConditionCase {
 }
 
 const cases: [string, ConditionCase][] = [
-  ['a strict equality', { condition: "doc.status === 'draft'", stored: { status: 'draft' }, isJudged: false }],
-  ['a strict inequality', { condition: "doc.status !== 'closed'", stored: { status: 'closed' }, isJudged: false }],
-  ['arithmetic', { condition: 'doc.qty * doc.price > 100', stored: { qty: 2, price: 10 }, isJudged: false }],
+  ['a strict equality', { condition: "doc.status === 'draft'", stored: { status: 'draft' }, isJudged: true }],
+  ['a strict inequality', { condition: "doc.status !== 'closed'", stored: { status: 'closed' }, isJudged: true }],
+  ['arithmetic', { condition: 'doc.qty * doc.price > 100', stored: { qty: 2, price: 10 }, isJudged: true }],
   [
     'a token claim',
     { condition: 'doc.branch == user.branch', stored: { branch: 'North' }, claims: { branch: 'North' }, isJudged: false },

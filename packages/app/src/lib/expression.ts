@@ -1,14 +1,7 @@
 /**
- * Safe expression evaluator for depends_on / mandatory_depends_on /
- * read_only_depends_on. Recursive descent, NO `eval`; multi-root scope
- * `{ doc, user }`.
- *
- *   expr     := or
- *   or       := and ( "||" and )*
- *   and      := not ( "&&" not )*
- *   not      := "!" not | cmp
- *   cmp      := primary ( ("=="|"!="|"<"|"<="|">"|">="|"in"|"not in") primary )?
- *   primary  := "(" expr ")" | array | literal | doc.path | user.path | ident
+ * The form's reading of depends_on / mandatory_depends_on / read_only_depends_on and of the
+ * other conditions the engine also judges. It parses with the grammar of
+ * `@digitaplatform/shared`, the one the engine uses on save, over the roots `{ doc, user }`.
  *
  * `evaluateExpr` returns `{ value, error }` so the CALLER owns the safe-degrade
  * direction: visibility fails OPEN, mandatory/read_only fail CLOSED. A parse
@@ -16,12 +9,26 @@
  * prefix is stripped.
  */
 
+import {
+  ExpressionError,
+  evaluateNode,
+  isTruthy,
+  parseExpression,
+  rootFieldsOf,
+  stripEvalPrefix,
+  type ExprNode,
+} from '@digitaplatform/shared';
+
 export interface EvalScope {
   doc: Record<string, unknown>;
   user?: Record<string, unknown>;
   /** The roots hold only part of what the expression may read, so a path whose first field
    *  they lack is an error, never `undefined`. */
   isPartial?: boolean;
+  /** A name other than `doc` and `user` is text, as an app author writes `doc.status == Open`
+   *  in a report link's show_if, which only the app reads. A field expression has no such
+   *  names, since the engine refuses them on save. */
+  hasBareWords?: boolean;
 }
 
 export interface EvalResult {
@@ -29,220 +36,63 @@ export interface EvalResult {
   error?: string;
 }
 
-type Value = unknown;
-const WS = /\s/;
+const ROOTS = ['doc', 'user'] as const;
 
-class Lexer {
-  private i = 0;
-  constructor(private src: string) {}
-
-  done(): boolean {
-    return this.i >= this.src.length;
-  }
-  skipWs(): void {
-    while (!this.done() && WS.test(this.src[this.i]!)) this.i++;
-  }
-  match(s: string): boolean {
-    this.skipWs();
-    if (this.src.startsWith(s, this.i)) {
-      this.i += s.length;
-      return true;
-    }
-    return false;
-  }
-  expect(s: string): void {
-    if (!this.match(s)) throw new Error(`expected "${s}" at ${this.i}`);
-  }
-  ident(): string | null {
-    this.skipWs();
-    const start = this.i;
-    while (!this.done() && /[A-Za-z0-9_]/.test(this.src[this.i]!)) this.i++;
-    return start === this.i ? null : this.src.slice(start, this.i);
-  }
-  number(): number | null {
-    this.skipWs();
-    const start = this.i;
-    if (this.src[this.i] === '-') this.i++;
-    while (!this.done() && /[0-9.]/.test(this.src[this.i]!)) this.i++;
-    if (start === this.i || (start + 1 === this.i && this.src[start] === '-')) {
-      this.i = start;
-      return null;
-    }
-    const n = Number(this.src.slice(start, this.i));
-    if (isNaN(n)) {
-      this.i = start;
-      return null;
-    }
-    return n;
-  }
-  string(): string | null {
-    this.skipWs();
-    const q = this.src[this.i];
-    if (q !== "'" && q !== '"') return null;
-    this.i++;
-    const start = this.i;
-    while (!this.done() && this.src[this.i] !== q) {
-      if (this.src[this.i] === '\\') this.i++;
-      this.i++;
-    }
-    const value = this.src.slice(start, this.i);
-    if (this.src[this.i] === q) this.i++;
-    return value;
-  }
-  pos(): number {
-    return this.i;
-  }
-  rewind(i: number): void {
-    this.i = i;
-  }
+function resolveRoot(scope: EvalScope, name: string): unknown {
+  if (name === 'doc') return scope.doc;
+  if (name === 'user') return scope.user;
+  if (scope.hasBareWords) return name;
+  throw new ExpressionError(`unknown name "${name}"`);
 }
 
-function resolveScopePath(scope: EvalScope, root: 'doc' | 'user', path: string[]): Value {
-  let cur: unknown = root === 'user' ? scope.user : scope.doc;
-  if (scope.isPartial && (cur as Record<string, unknown> | undefined)?.[path[0]!] === undefined) {
-    throw new Error(`${root}.${path[0]} is not held`);
-  }
-  for (const seg of path) {
-    if (cur == null || typeof cur !== 'object') return undefined;
-    cur = (cur as Record<string, unknown>)[seg];
-  }
-  return cur;
-}
-
-function isTruthy(v: Value): boolean {
-  if (v === null || v === undefined || v === '' || v === 0 || v === false) return false;
-  if (Array.isArray(v) && v.length === 0) return false;
-  return true;
-}
-
-function equal(a: Value, b: Value): boolean {
-  if (a == null && b == null) return true;
-  if (typeof a === 'number' && typeof b === 'string') return a === Number(b);
-  if (typeof a === 'string' && typeof b === 'number') return Number(a) === b;
-  return a === b;
-}
-
-function compare(op: string, a: Value, b: Value): boolean {
-  switch (op) {
-    case '==':
-      return equal(a, b);
-    case '!=':
-      return !equal(a, b);
-    case '<':
-      return Number(a) < Number(b);
-    case '<=':
-      return Number(a) <= Number(b);
-    case '>':
-      return Number(a) > Number(b);
-    case '>=':
-      return Number(a) >= Number(b);
-    case 'in':
-      if (Array.isArray(b)) return b.some((x) => equal(x, a));
-      if (typeof b === 'string') return String(a) ? b.includes(String(a)) : false;
-      return false;
-    case 'not in':
-      if (Array.isArray(b)) return !b.some((x) => equal(x, a));
-      if (typeof b === 'string') return !b.includes(String(a));
-      return true;
-  }
-  return false;
-}
-
-function parsePrimary(lex: Lexer, scope: EvalScope): Value {
-  lex.skipWs();
-  if (lex.match('(')) {
-    const v = parseOr(lex, scope);
-    lex.expect(')');
-    return v;
-  }
-  if (lex.match('[')) {
-    const arr: unknown[] = [];
-    if (!lex.match(']')) {
-      arr.push(parsePrimary(lex, scope));
-      while (lex.match(',')) arr.push(parsePrimary(lex, scope));
-      lex.expect(']');
-    }
-    return arr;
-  }
-  if (lex.match('true')) return true;
-  if (lex.match('false')) return false;
-  if (lex.match('null')) return null;
-
-  const saved = lex.pos();
-  const s = lex.string();
-  if (s !== null) return s;
-  lex.rewind(saved);
-
-  const n = lex.number();
-  if (n !== null) return n;
-
-  const id = lex.ident();
-  if (id === 'doc' || id === 'user') {
-    const path: string[] = [];
-    while (lex.match('.')) {
-      const seg = lex.ident();
-      if (!seg) break;
-      path.push(seg);
-    }
-    if (!path.length) return undefined;
-    return resolveScopePath(scope, id, path);
-  }
-  if (id) return id; // bare identifier → string fallback (e.g. `Lead`)
-  return undefined;
-}
-
-function parseCmp(lex: Lexer, scope: EvalScope): Value {
-  const left = parsePrimary(lex, scope);
-  lex.skipWs();
-  for (const op of ['==', '!=', '<=', '>=', '<', '>', 'in', 'not in']) {
-    if (lex.match(op)) {
-      const right = parsePrimary(lex, scope);
-      return compare(op, left, right);
+/** A partial scope cannot judge a field it does not hold, nor a root read as a whole. */
+function assertHeld(scope: EvalScope, node: ExprNode): void {
+  for (const root of ROOTS) {
+    const fields = rootFieldsOf(node, root);
+    if (!fields) throw new Error(`${root} is not held whole`);
+    const held = root === 'user' ? scope.user : scope.doc;
+    for (const field of fields) {
+      if (held?.[field] === undefined) throw new Error(`${root}.${field} is not held`);
     }
   }
-  return left;
 }
 
-function parseNot(lex: Lexer, scope: EvalScope): Value {
-  if (lex.match('!')) return !isTruthy(parseNot(lex, scope));
-  return parseCmp(lex, scope);
-}
+const COMPARISONS = new Set(['==', '!=', '===', '!==', '<', '<=', '>', '>=', 'in', 'not in']);
 
-function parseAnd(lex: Lexer, scope: EvalScope): Value {
-  let v = isTruthy(parseNot(lex, scope));
-  // Parse the rhs BEFORE the boolean combine — a `&&`/`||` short-circuit must not
-  // skip token consumption (else `(a || b) && c` leaves the lexer mid-stream and
-  // the enclosing `)` fails to match). This fixes a latent bug in the admin port.
-  while (lex.match('&&')) {
-    const rhs = isTruthy(parseNot(lex, scope));
-    v = v && rhs;
+/** A bare word is text only where it is compared, so `Pre-paid` is not read as `Pre - paid`. */
+function assertBareWordsCompared(node: ExprNode, isCompared = false): void {
+  switch (node.type) {
+    case 'Identifier':
+      if (!isCompared && node.name !== 'doc' && node.name !== 'user') {
+        throw new ExpressionError(`"${node.name}" is not compared`);
+      }
+      return;
+    case 'Member':
+      return assertBareWordsCompared(node.object);
+    case 'Array':
+      return node.elements.forEach((element) => assertBareWordsCompared(element, true));
+    case 'Unary':
+      return assertBareWordsCompared(node.argument);
+    case 'Binary': {
+      const compared = COMPARISONS.has(node.operator);
+      assertBareWordsCompared(node.left, compared);
+      return assertBareWordsCompared(node.right, compared);
+    }
+    case 'Conditional':
+      assertBareWordsCompared(node.test);
+      assertBareWordsCompared(node.consequent);
+      return assertBareWordsCompared(node.alternate);
   }
-  return v;
-}
-
-function parseOr(lex: Lexer, scope: EvalScope): Value {
-  let v = isTruthy(parseAnd(lex, scope));
-  while (lex.match('||')) {
-    const rhs = isTruthy(parseAnd(lex, scope));
-    v = v || rhs;
-  }
-  return v;
 }
 
 /** Evaluate an expression, exposing parse errors so the caller owns the degrade direction. */
 export function evaluateExpr(expr: string, scope: EvalScope): EvalResult {
   if (!expr) return { value: true };
-  let src = expr.trim();
-  if (src.startsWith('eval:')) src = src.slice(5).trim();
-
   try {
-    const lex = new Lexer(src);
-    const value = isTruthy(parseOr(lex, scope));
-    // The grammar stops at the first token or word it does not know, as in `doc.a === 1` or
-    // `doc.status == On hold`; the value of the part before it is not the expression's.
-    lex.skipWs();
-    if (!lex.done()) throw new Error(`unexpected "${src.slice(lex.pos())}" at ${lex.pos()}`);
-    return { value };
+    const node = parseExpression(stripEvalPrefix(expr));
+    if (scope.isPartial) assertHeld(scope, node);
+    if (scope.hasBareWords) assertBareWordsCompared(node);
+    return { value: isTruthy(evaluateNode(node, (name) => resolveRoot(scope, name))) };
   } catch (e) {
     return { value: false, error: e instanceof Error ? e.message : String(e) };
   }

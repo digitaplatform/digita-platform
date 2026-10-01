@@ -59,9 +59,22 @@ describe('evaluateExpr', () => {
   });
 
   it('an expression the grammar does not read to its end → error', () => {
-    expect(evaluateExpr("doc.status === 'draft'", scope({ status: 'draft' })).error).toBeDefined();
-    expect(evaluateExpr('doc.qty * doc.price > 100', scope({ qty: 2, price: 10 })).error).toBeDefined();
+    expect(evaluateExpr("doc.status = 'Closed'", scope({ status: 'Closed' })).error).toBeDefined();
+    expect(evaluateExpr("doc.status == 'Closed' doc.qty", scope({ status: 'Closed' })).error).toBeDefined();
     expect(evaluateExpr("doc.status == 'draft'  ", scope({ status: 'draft' }))).toEqual({ value: true });
+  });
+
+  it('reads the operators the engine reads on save', () => {
+    expect(evaluateExpr("doc.status === 'draft'", scope({ status: 'draft' }))).toEqual({ value: true });
+    expect(evaluateExpr('doc.qty !== 5', scope({ qty: '5' }))).toEqual({ value: true });
+    expect(evaluateExpr('doc.qty * doc.price > 100', scope({ qty: 2, price: 10 }))).toEqual({ value: false });
+    expect(evaluateExpr('doc.flag == true', scope({ flag: 1 }))).toEqual({ value: true });
+  });
+
+  it('refuses a word that is neither doc nor user, unless the caller reads bare words as text', () => {
+    expect(evaluateExpr('doc.status == Open', scope({ status: 'Open' })).error).toBeDefined();
+    expect(evaluateExpr('doc.status == Open', { doc: { status: 'Open' }, hasBareWords: true })).toEqual({ value: true });
+    expect(evaluateExpr('doc.status == Pre-paid', { doc: { status: 'Pre-paid' }, hasBareWords: true }).error).toBeDefined();
   });
 
   it('a partial scope: a path whose first field it lacks → error', () => {
@@ -76,7 +89,7 @@ describe('evaluateExpr', () => {
 
   it('reports the text it could not read after a whole expression, instead of dropping it', () => {
     // Only "On" would be compared, so "doc.status == On hold" would be false for every status.
-    for (const expr of ['doc.status == On hold', 'doc.status == Zurückgestellt', 'doc.status == Pre-paid', "doc.status == 'Open' and doc.member", "doc.status === 'Open'"]) {
+    for (const expr of ['doc.status == On hold', 'doc.status == Zurückgestellt', 'doc.status == Pre-paid', "doc.status == 'Open' and doc.member"]) {
       expect(evaluateExpr(expr, scope({ status: 'On hold' })).error, expr).toBeDefined();
     }
     expect(evaluateExpr("doc.status == 'Open'  ", scope({ status: 'Open' }))).toEqual({ value: true });

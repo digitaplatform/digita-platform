@@ -2,18 +2,19 @@
  * Safe expression evaluator for depends_on, mandatory_depends_on,
  * read_only_depends_on, permission conditions, and show_if expressions.
  *
- * Implementation: parses with `jsep` to a JS expression AST, then walks
- * the AST with an ALLOWLIST evaluator. Any node type, operator, or
- * identifier not on the allowlist throws and the caller safe-defaults
- * (visible / null). No `new Function`, no globals, no prototypes.
+ * Implementation: parses and evaluates with the expression grammar of
+ * `@digitaplatform/shared`, the one the form uses too, so a field locks in the
+ * form as it does on save. Identifiers are resolved here; any identifier not
+ * on the allowlist throws and the caller safe-defaults (visible / null).
+ * No `new Function`, no globals, no prototypes.
  *
  * Supported syntax:
  *   Literals: numbers, strings, booleans, null, undefined, arrays
- *   Identifiers: only `doc`, `user`, `undefined` (true/false/null are literals)
+ *   Identifiers: only `doc` and `user`
  *   Member access: static `.field` on doc/user/their child objects
  *     (no computed `[…]`, no method calls, blocked names: constructor,
  *     prototype, __proto__)
- *   Binary: ==, !=, ===, !==, >, >=, <, <=, +, -, *, /, %, in
+ *   Binary: ==, !=, ===, !==, >, >=, <, <=, +, -, *, /, %, in, not in
  *   Logical: &&, ||
  *   Unary: !, -, +
  *   Ternary: a ? b : c
@@ -24,58 +25,25 @@
  *   "eval:doc.status=='Active'"
  *   "eval:doc.grand_total > 0 && doc.status != 'Cancelled'"
  *   "eval:doc.docstatus == 1"
- *   "doc.customer"  (truthy check — fast path)
+ *   "doc.customer"  (truthy check)
  */
 
-import jsep from "jsep";
+import {
+  ExpressionError,
+  evaluateNode,
+  identifiersOf,
+  isTruthy,
+  parseExpression,
+  rootFieldsOf,
+  stripEvalPrefix,
+} from "@digitaplatform/shared";
 
 export interface ExpressionContext {
   doc: Record<string, unknown>;
   user?: Record<string, unknown>;
 }
 
-interface AstNode {
-  type: string;
-  [key: string]: unknown;
-}
-
-const ALLOWED_IDENTIFIERS = new Set(["doc", "user", "undefined"]);
-
-// jsep emits BinaryExpression for `&&` and `||` (not LogicalExpression), so
-// they live in this set and are short-circuited inside the BinaryExpression
-// handler below.
-const ALLOWED_BINARY = new Set([
-  "==",
-  "!=",
-  "===",
-  "!==",
-  ">",
-  ">=",
-  "<",
-  "<=",
-  "+",
-  "-",
-  "*",
-  "/",
-  "%",
-  "in",
-  "&&",
-  "||",
-]);
-
-const ALLOWED_LOGICAL = new Set(["&&", "||"]);
-
-const ALLOWED_UNARY = new Set(["!", "-", "+"]);
-
-const FORBIDDEN_PROPERTY_NAMES = new Set([
-  "constructor",
-  "prototype",
-  "__proto__",
-  "__defineGetter__",
-  "__defineSetter__",
-  "__lookupGetter__",
-  "__lookupSetter__",
-]);
+const ALLOWED_IDENTIFIERS = new Set(["doc", "user"]);
 
 export class UnsafeExpressionError extends Error {
   constructor(public detail: string) {
@@ -86,8 +54,7 @@ export class UnsafeExpressionError extends Error {
 
 /**
  * Resolves a bare identifier (`doc`, `user`, `now`, …) to its runtime value.
- * `evalNode` reads identifiers ONLY through this closure — every other node
- * type (member access, operators, literals) is root-agnostic — so a caller
+ * The shared evaluator reads identifiers ONLY through this closure, so a caller
  * that wants a different identifier namespace (the rule engine's
  * {doc,row,item,item_index,user,now}) just passes a different resolver while
  * the operator/member/prototype-guard semantics stay bit-identical.
@@ -96,167 +63,21 @@ export type IdentifierResolver = (name: string) => unknown;
 
 /**
  * Default resolver for depends_on / show_if / permission conditions: only
- * `doc`, `user`, `undefined` are visible, matching ALLOWED_IDENTIFIERS.
+ * `doc` and `user` are visible, matching ALLOWED_IDENTIFIERS.
  */
 function contextResolver(ctx: ExpressionContext): IdentifierResolver {
   return (name: string) => {
     if (!ALLOWED_IDENTIFIERS.has(name)) {
       throw new UnsafeExpressionError(`Identifier:${name}`);
     }
-    switch (name) {
-      case "doc":
-        return ctx.doc;
-      case "user":
-        return ctx.user ?? {};
-      case "undefined":
-        return undefined;
-    }
-    throw new UnsafeExpressionError(`Identifier:${name}`);
+    return name === "doc" ? ctx.doc : (ctx.user ?? {});
   };
-}
-
-function evalNode(node: AstNode, resolveId: IdentifierResolver): unknown {
-  switch (node.type) {
-    case "Literal":
-      return node.value;
-
-    case "Identifier": {
-      const name = node.name as string;
-      return resolveId(name);
-    }
-
-    case "MemberExpression": {
-      // Static `.field` only — no computed `[…]` access.
-      if (node.computed) {
-        throw new UnsafeExpressionError("MemberExpression:computed");
-      }
-      const object = evalNode(node.object as AstNode, resolveId);
-      const property = node.property as AstNode;
-      if (property.type !== "Identifier") {
-        throw new UnsafeExpressionError("MemberExpression:property-type");
-      }
-      const propName = property.name as string;
-      if (FORBIDDEN_PROPERTY_NAMES.has(propName)) {
-        throw new UnsafeExpressionError(`MemberExpression:${propName}`);
-      }
-      if (object === null || object === undefined) return null;
-      const v = (object as Record<string, unknown>)[propName];
-      // Treat missing properties as `null` (not `undefined`) so arithmetic
-      // matches the previous `JSON.stringify(value ?? null)` substitution
-      // semantics — e.g. `doc.qty * 5` with `qty` unset → 0, not NaN.
-      return v === undefined ? null : v;
-    }
-
-    case "BinaryExpression": {
-      const op = node.operator as string;
-      if (!ALLOWED_BINARY.has(op)) {
-        throw new UnsafeExpressionError(`BinaryExpression:${op}`);
-      }
-      // jsep emits `&&`/`||` as BinaryExpression. Short-circuit so the
-      // right side isn't unnecessarily evaluated (and side-effect-free
-      // semantics — though our evaluator has no side effects).
-      if (op === "&&") {
-        const left = evalNode(node.left as AstNode, resolveId);
-        return left ? evalNode(node.right as AstNode, resolveId) : left;
-      }
-      if (op === "||") {
-        const left = evalNode(node.left as AstNode, resolveId);
-        return left ? left : evalNode(node.right as AstNode, resolveId);
-      }
-      const left = evalNode(node.left as AstNode, resolveId);
-      const right = evalNode(node.right as AstNode, resolveId);
-      switch (op) {
-        case "==":
-          return left == right;
-        case "!=":
-          return left != right;
-        case "===":
-          return left === right;
-        case "!==":
-          return left !== right;
-        case ">":
-          return (left as number) > (right as number);
-        case ">=":
-          return (left as number) >= (right as number);
-        case "<":
-          return (left as number) < (right as number);
-        case "<=":
-          return (left as number) <= (right as number);
-        case "+":
-          return (left as number) + (right as number);
-        case "-":
-          return (left as number) - (right as number);
-        case "*":
-          return (left as number) * (right as number);
-        case "/":
-          return (left as number) / (right as number);
-        case "%":
-          return (left as number) % (right as number);
-        case "in": {
-          if (Array.isArray(right)) return right.includes(left);
-          // Reject `in` on objects to avoid prototype-chain probing.
-          return false;
-        }
-      }
-      throw new UnsafeExpressionError(`BinaryExpression:${op}`);
-    }
-
-    case "LogicalExpression": {
-      // Some jsep configurations emit LogicalExpression instead of
-      // BinaryExpression for `&&`/`||`. Handle both for portability.
-      const op = node.operator as string;
-      if (!ALLOWED_LOGICAL.has(op)) {
-        throw new UnsafeExpressionError(`LogicalExpression:${op}`);
-      }
-      const left = evalNode(node.left as AstNode, resolveId);
-      if (op === "&&") {
-        return left ? evalNode(node.right as AstNode, resolveId) : left;
-      }
-      // ||
-      return left ? left : evalNode(node.right as AstNode, resolveId);
-    }
-
-    case "UnaryExpression": {
-      const op = node.operator as string;
-      if (!ALLOWED_UNARY.has(op)) {
-        throw new UnsafeExpressionError(`UnaryExpression:${op}`);
-      }
-      const arg = evalNode(node.argument as AstNode, resolveId);
-      switch (op) {
-        case "!":
-          return !arg;
-        case "-":
-          return -(arg as number);
-        case "+":
-          return +(arg as number);
-      }
-      throw new UnsafeExpressionError(`UnaryExpression:${op}`);
-    }
-
-    case "ConditionalExpression": {
-      const test = evalNode(node.test as AstNode, resolveId);
-      return test
-        ? evalNode(node.consequent as AstNode, resolveId)
-        : evalNode(node.alternate as AstNode, resolveId);
-    }
-
-    case "ArrayExpression": {
-      const elements = node.elements as AstNode[];
-      return elements.map((el) => evalNode(el, resolveId));
-    }
-
-    // Anything else (CallExpression, ThisExpression, NewExpression, Compound,
-    // SequenceExpression, AssignmentExpression, UpdateExpression,
-    // TaggedTemplateExpression, …) is rejected.
-    default:
-      throw new UnsafeExpressionError(`NodeType:${node.type}`);
-  }
 }
 
 /**
  * Evaluate an expression string against a document and optional user context.
  * Returns true/false for conditional expressions. On parse error or a
- * disallowed AST node it returns `safeDefault` — `true` for visibility
+ * disallowed identifier it returns `safeDefault` — `true` for visibility
  * expressions (depends_on/show_if: a broken expr shows the field) but callers
  * gating ACCESS (permission conditions) MUST pass `false` so a typo'd condition
  * fails CLOSED (denies) instead of silently granting.
@@ -267,33 +88,12 @@ function evalNode(node: AstNode, resolveId: IdentifierResolver): unknown {
  * a whole), so the caller loads the whole row.
  */
 export function docFieldsOf(expression: string): string[] | undefined {
-  let expr = expression.trim();
-  if (expr.startsWith("eval:")) expr = expr.slice(5).trim();
-  let ast: AstNode;
   try {
-    ast = jsep(expr) as unknown as AstNode;
-  } catch {
-    return undefined;
+    return rootFieldsOf(parseExpression(stripEvalPrefix(expression)), "doc");
+  } catch (e) {
+    if (e instanceof ExpressionError) return undefined;
+    throw e;
   }
-  const fields = new Set<string>();
-  let whole = false;
-  const walk = (node: unknown): void => {
-    if (!node || typeof node !== "object") return;
-    const n = node as AstNode;
-    const object = n["object"] as AstNode | undefined;
-    if (n.type === "MemberExpression" && object?.type === "Identifier" && object["name"] === "doc") {
-      if (n["computed"]) whole = true;
-      else fields.add(String((n["property"] as AstNode)["name"]));
-      return;
-    }
-    if (n.type === "Identifier" && n["name"] === "doc") whole = true;
-    for (const value of Object.values(n)) {
-      if (Array.isArray(value)) value.forEach(walk);
-      else walk(value);
-    }
-  };
-  walk(ast);
-  return whole ? undefined : [...fields];
 }
 
 export function evaluateExpression(
@@ -303,23 +103,11 @@ export function evaluateExpression(
 ): boolean {
   if (!expression) return true;
 
-  let expr = expression.trim();
-  if (expr.startsWith("eval:")) {
-    expr = expr.slice(5).trim();
-  }
-
-  // Fast path: bare `doc.field` truthy check
-  if (/^doc\.\w+$/.test(expr)) {
-    const field = expr.split(".")[1]!;
-    return isTruthy(context.doc[field]);
-  }
-
   try {
-    const ast = jsep(expr) as unknown as AstNode;
-    const result = evalNode(ast, contextResolver(context));
-    return Boolean(result);
+    const ast = parseExpression(stripEvalPrefix(expression));
+    return isTruthy(evaluateNode(ast, contextResolver(context)));
   } catch {
-    // Parse failure or disallowed node → caller-chosen safe default.
+    // Parse failure or disallowed identifier → caller-chosen safe default.
     return safeDefault;
   }
 }
@@ -334,19 +122,9 @@ export function evaluateExpression(
 export function evaluateExpressionValue(expression: string, context: ExpressionContext): unknown {
   if (!expression) return null;
 
-  let expr = expression.trim();
-  if (expr.startsWith("eval:")) {
-    expr = expr.slice(5).trim();
-  }
-
-  if (/^doc\.\w+$/.test(expr)) {
-    const field = expr.split(".")[1]!;
-    return context.doc[field] ?? null;
-  }
-
   try {
-    const ast = jsep(expr) as unknown as AstNode;
-    return evalNode(ast, contextResolver(context));
+    const ast = parseExpression(stripEvalPrefix(expression));
+    return evaluateNode(ast, contextResolver(context));
   } catch {
     return null;
   }
@@ -368,13 +146,12 @@ export function evaluateExpressionValueIn(
   expression: string,
   roots: Record<string, unknown>,
 ): unknown {
-  const ast = jsep(expression) as unknown as AstNode;
+  const ast = parseExpression(expression);
   const resolveId: IdentifierResolver = (name) => {
-    if (name === "undefined") return undefined;
     if (!(name in roots)) throw new UnsafeExpressionError(`Identifier:${name}`);
     return roots[name];
   };
-  return evalNode(ast, resolveId);
+  return evaluateNode(ast, resolveId);
 }
 
 /**
@@ -388,75 +165,8 @@ export function assertExpressionParsableIn(
   expression: string,
   allowedRoots: Set<string>,
 ): void {
-  const ast = jsep(expression) as unknown as AstNode;
-  assertNode(ast, allowedRoots);
-}
-
-function assertNode(node: AstNode, allowedRoots: Set<string>): void {
-  switch (node.type) {
-    case "Literal":
-      return;
-    case "Identifier": {
-      const name = node.name as string;
-      if (name === "undefined") return;
-      if (!allowedRoots.has(name)) {
-        throw new UnsafeExpressionError(`Identifier:${name}`);
-      }
-      return;
-    }
-    case "MemberExpression": {
-      if (node.computed) throw new UnsafeExpressionError("MemberExpression:computed");
-      const property = node.property as AstNode;
-      if (property.type !== "Identifier") {
-        throw new UnsafeExpressionError("MemberExpression:property-type");
-      }
-      const propName = property.name as string;
-      if (FORBIDDEN_PROPERTY_NAMES.has(propName)) {
-        throw new UnsafeExpressionError(`MemberExpression:${propName}`);
-      }
-      assertNode(node.object as AstNode, allowedRoots);
-      return;
-    }
-    case "BinaryExpression": {
-      const op = node.operator as string;
-      if (!ALLOWED_BINARY.has(op)) throw new UnsafeExpressionError(`BinaryExpression:${op}`);
-      assertNode(node.left as AstNode, allowedRoots);
-      assertNode(node.right as AstNode, allowedRoots);
-      return;
-    }
-    case "LogicalExpression": {
-      const op = node.operator as string;
-      if (!ALLOWED_LOGICAL.has(op)) throw new UnsafeExpressionError(`LogicalExpression:${op}`);
-      assertNode(node.left as AstNode, allowedRoots);
-      assertNode(node.right as AstNode, allowedRoots);
-      return;
-    }
-    case "UnaryExpression": {
-      const op = node.operator as string;
-      if (!ALLOWED_UNARY.has(op)) throw new UnsafeExpressionError(`UnaryExpression:${op}`);
-      assertNode(node.argument as AstNode, allowedRoots);
-      return;
-    }
-    case "ConditionalExpression": {
-      assertNode(node.test as AstNode, allowedRoots);
-      assertNode(node.consequent as AstNode, allowedRoots);
-      assertNode(node.alternate as AstNode, allowedRoots);
-      return;
-    }
-    case "ArrayExpression": {
-      for (const el of node.elements as AstNode[]) assertNode(el, allowedRoots);
-      return;
-    }
-    default:
-      throw new UnsafeExpressionError(`NodeType:${node.type}`);
+  const ast = parseExpression(expression);
+  for (const name of identifiersOf(ast)) {
+    if (!allowedRoots.has(name)) throw new UnsafeExpressionError(`Identifier:${name}`);
   }
-}
-
-function isTruthy(value: unknown): boolean {
-  if (value === null || value === undefined) return false;
-  if (value === "") return false;
-  if (value === 0) return false;
-  if (value === false) return false;
-  if (Array.isArray(value) && value.length === 0) return false;
-  return true;
 }
