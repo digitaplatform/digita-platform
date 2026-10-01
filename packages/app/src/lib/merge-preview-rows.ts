@@ -18,6 +18,15 @@ function isOverridden(row: Doc, field: string): boolean {
   return !!o && typeof o === 'object' && (o as Record<string, unknown>)[field] === true;
 }
 
+function rowsById(rows: Doc[]): Map<string, Doc> {
+  const byId = new Map<string, Doc>();
+  for (const r of rows) {
+    const id = r[ROW_ID_FIELD];
+    if (typeof id === 'string') byId.set(id, r);
+  }
+  return byId;
+}
+
 export interface TableMergeSpec {
   /** Server-owned (read-only) cells — always taken from the preview. */
   owned: string[];
@@ -27,7 +36,10 @@ export interface TableMergeSpec {
    * (marked in `RECOMPUTE_OVERRIDES_KEY`), in which case the user's entry wins.
    */
   derived: string[];
-  /** Server-resolved editable cells — taken only when the current cell is empty. */
+  /**
+   * Server-resolved editable cells — taken when the current cell is empty, or when it still
+   * holds the stored row's value, as the save re-derives such a cell after its Link moved.
+   */
   fillable: string[];
 }
 
@@ -40,8 +52,9 @@ export interface TableMergeSpec {
  *   - `derived`  cells (editable + server-derived) are refreshed from the server
  *                whenever they differ, so a derived display value follows its inputs
  *                — unless the user overrode the cell (then their entry is kept).
- *   - `fillable` cells are taken only when the current cell is empty, so a non-empty
- *                user entry is never overwritten.
+ *   - `fillable` cells are taken when the current cell is empty, or when it still holds
+ *                the value of `storedRows` (the saved record's rows), so an entry the
+ *                person made is never overwritten.
  *
  * Returns the merged array, or `null` when nothing changed so the caller can skip a
  * redundant write.
@@ -50,12 +63,10 @@ export function mergePreviewRows(
   currentRows: Doc[],
   serverRows: Doc[],
   spec: TableMergeSpec,
+  storedRows: Doc[] = [],
 ): Doc[] | null {
-  const byId = new Map<string, Doc>();
-  for (const r of serverRows) {
-    const id = r[ROW_ID_FIELD];
-    if (typeof id === 'string') byId.set(id, r);
-  }
+  const byId = rowsById(serverRows);
+  const storedById = rowsById(storedRows);
   let changed = false;
   const merged = currentRows.map((row) => {
     const sv = byId.get(row[ROW_ID_FIELD] as string);
@@ -73,8 +84,11 @@ export function mergePreviewRows(
         next[k] = sv[k];
       }
     }
+    const stored = storedById.get(row[ROW_ID_FIELD] as string);
     for (const k of spec.fillable) {
-      if (isEmpty(row[k]) && !isEmpty(sv[k]) && row[k] !== sv[k]) {
+      // Compared as JSON, as the engine compares a cell with its stored value.
+      const isStoredValue = stored !== undefined && JSON.stringify(row[k]) === JSON.stringify(stored[k]);
+      if (((isEmpty(row[k]) && !isEmpty(sv[k])) || isStoredValue) && row[k] !== sv[k]) {
         next ??= { ...row };
         next[k] = sv[k];
       }
