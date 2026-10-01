@@ -11,6 +11,8 @@ import { qkPrefix } from '@/lib/query-keys';
 import { useUiStore } from '@/stores/ui';
 import { LoadingBlock, ErrorBlock } from '@/components/status';
 import { optionList } from '@/controls/SelectControl';
+import { hasEntityPermission } from '@/lib/permissions';
+import { useSessionStore } from '@/stores/session';
 
 type Row = Record<string, unknown>;
 
@@ -35,6 +37,11 @@ export function TreeEditor({
   const qc = useQueryClient();
   const dialog = useDialogHost();
   const tc = useChrome();
+  // The tree offers what the role may do, as the list offers its New button; the engine refuses the rest.
+  const user = useSessionStore((s) => s.user);
+  const canCreate = hasEntityPermission(meta, user, 'create');
+  const canWrite = hasEntityPermission(meta, user, 'write');
+  const canDelete = hasEntityPermission(meta, user, 'delete');
 
   const labelField = tree.label_field ?? meta.title_field ?? '_id';
   const parentField = tree.parent_field;
@@ -211,9 +218,11 @@ export function TreeEditor({
             />
           </div>
         )}
-        <Button variant="secondary" disabled={busy || !!movingId} onClick={() => openCreate(null)}>
-          + {tc('ui.tree.addRoot')}
-        </Button>
+        {canCreate && (
+          <Button variant="secondary" disabled={busy || !!movingId} onClick={() => openCreate(null)}>
+            + {tc('ui.tree.addRoot')}
+          </Button>
+        )}
         {movingId && (
           <div className="flex items-center gap-2 rounded-card bg-subtle px-3 py-1.5 text-sm">
             <span className="text-textMuted">{tc('ui.tree.movingHint')}</span>
@@ -259,28 +268,34 @@ export function TreeEditor({
         }}
         renderActions={(node) => (
           <>
-            <IconButton
-              label={tc('ui.tree.addChild')}
-              size="sm"
-              disabled={busy || !!movingId}
-              onClick={() => openCreate(node.id)}
-              icon={<span aria-hidden>＋</span>}
-            />
-            <IconButton
-              label={tc('ui.tree.move')}
-              size="sm"
-              disabled={busy || !!movingId}
-              onClick={() => setMovingId(node.id)}
-              icon={<span aria-hidden>↕</span>}
-            />
-            <IconButton
-              label={tc('ui.action.delete')}
-              size="sm"
-              variant="danger"
-              disabled={busy || !!movingId}
-              onClick={() => void removeNode(node)}
-              icon={<span aria-hidden>🗑</span>}
-            />
+            {canCreate && (
+              <IconButton
+                label={tc('ui.tree.addChild')}
+                size="sm"
+                disabled={busy || !!movingId}
+                onClick={() => openCreate(node.id)}
+                icon={<span aria-hidden>＋</span>}
+              />
+            )}
+            {canWrite && (
+              <IconButton
+                label={tc('ui.tree.move')}
+                size="sm"
+                disabled={busy || !!movingId}
+                onClick={() => setMovingId(node.id)}
+                icon={<span aria-hidden>↕</span>}
+              />
+            )}
+            {canDelete && (
+              <IconButton
+                label={tc('ui.action.delete')}
+                size="sm"
+                variant="danger"
+                disabled={busy || !!movingId}
+                onClick={() => void removeNode(node)}
+                icon={<span aria-hidden>🗑</span>}
+              />
+            )}
           </>
         )}
       />
