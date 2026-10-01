@@ -657,7 +657,7 @@ export class PermissionChecker {
       }
       for (const [tableName, tableField] of tableFields) {
         if (!(tableName in filtered)) continue;
-        this.assertChildLocksKept(user, entityName, tableField, filtered[tableName], contextDoc[tableName], contextDoc);
+        this.assertChildLocksKept(user, entityName, tableField, filtered[tableName], contextDoc[tableName]);
       }
     }
 
@@ -672,7 +672,7 @@ export class PermissionChecker {
    * no sent row names by `_row_id` is deleted: it may not hold a cell whose
    * condition holds on the stored row. A value that is not a list deletes every
    * row. A new row has no stored value to keep, and a cell the write filter
-   * strips is not the client's change.
+   * strips carries its stored value again, so it is no change.
    */
   private assertChildLocksKept(
     user: UserContext,
@@ -680,11 +680,9 @@ export class PermissionChecker {
     tableField: FieldDefinition,
     rows: unknown,
     storedRows: unknown,
-    contextDoc: Record<string, unknown>,
   ): void {
     const lockable = tableField.child_fields?.filter((c) => c.read_only_depends_on) ?? [];
     if (lockable.length === 0 || !Array.isArray(storedRows)) return;
-    const writable = this.getWritableChildFields(user, entityName, tableField.fieldname, contextDoc);
     const storedById = new Map(
       (storedRows as Array<Record<string, unknown>>).map((r) => [r["_row_id"], r] as const),
     );
@@ -695,7 +693,6 @@ export class PermissionChecker {
       keptRowIds.add(row["_row_id"]);
       const resultingRow = { ...stored, ...row };
       for (const child of lockable) {
-        if (writable && !writable.has(child.fieldname)) continue;
         if (JSON.stringify(row[child.fieldname] ?? null) === JSON.stringify(stored[child.fieldname] ?? null)) continue;
         const locked = evaluateExpression(child.read_only_depends_on!, {
           doc: resultingRow,
