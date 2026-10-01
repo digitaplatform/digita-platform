@@ -7,6 +7,7 @@ import { useChrome } from '@/lib/chrome-i18n';
 import { useSearchLink } from '@/hooks/useSearchLink';
 import { FIELD_CLASS } from '@/controls/control-styles';
 import type { FilterTuple } from '@/lib/filter-from-url';
+import { resolveLinkFilters } from '@/lib/link-filters';
 import {
   filterableFields,
   operatorsForFieldtype,
@@ -388,7 +389,9 @@ function LinkFilterValue({
     entity: field.target,
     q: debounced,
     targetPath: field.target_path,
-    filters: field.target_filters as Record<string, unknown> | undefined,
+    // A filter has no document, so a `$doc.` token names nothing here and is dropped, as an
+    // unfilled field's token is; sent as written, it would match no row.
+    filters: resolveLinkFilters(field.target_filters, undefined),
     enabled: open,
   });
   const options = (results.data ?? []).map((r) => ({

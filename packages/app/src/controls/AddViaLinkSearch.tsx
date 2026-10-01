@@ -4,12 +4,16 @@ import type { FieldDefinition } from '@digitaplatform/shared';
 import { useMeta } from '@/hooks/useMeta';
 import { useSearchLink } from '@/hooks/useSearchLink';
 import { useChrome } from '@/lib/chrome-i18n';
+import { resolveLinkFilters } from '@/lib/link-filters';
 
 interface AddViaLinkSearchProps {
   open: boolean;
   onClose: () => void;
   /** The child Link field whose target + search_columns drive the picker. */
   linkField: FieldDefinition;
+  /** The owning record: a `$doc.<field>` token in the link's target_filters reads its field.
+   *  The row the pick adds does not exist yet, so the owning record is the only document there is. */
+  doc?: Record<string, unknown>;
   /** Called with the picked row id and its display text so the caller can
    *  append a new line that already shows a title instead of the raw id. */
   onPick: (id: string, display?: string) => void;
@@ -27,6 +31,7 @@ export function AddViaLinkSearch({
   open,
   onClose,
   linkField,
+  doc,
   onPick,
   initialQuery,
 }: AddViaLinkSearchProps) {
@@ -52,7 +57,7 @@ export function AddViaLinkSearch({
   const results = useSearchLink({
     entity: linkField.target,
     q: debounced,
-    filters: linkField.target_filters as Record<string, unknown> | undefined,
+    filters: resolveLinkFilters(linkField.target_filters, doc),
     fields: columns,
     enabled: open,
   });
