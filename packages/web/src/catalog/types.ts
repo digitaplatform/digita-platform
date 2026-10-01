@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import type { BlockType } from "@/lib/types";
+import type { BlockType, WebSite } from "@/lib/types";
 import type { Locale } from "@/i18n/config";
 
 /**
@@ -35,8 +35,9 @@ export interface PropField {
 }
 
 /** A component that renders from a JSON `props` bag and the page's locale, for the chrome texts it
- *  carries, such as a status pill. Blocks and plugins share it. */
-export type BlockComponent = ComponentType<{ props?: Record<string, unknown>; locale: Locale }>;
+ *  carries, such as a status pill. Blocks and plugins share it. `site` carries what a site sets once
+ *  for all its pages, such as the hero's atmosphere; a block rendered outside a page has none. */
+export type BlockComponent = ComponentType<{ props?: Record<string, unknown>; locale: Locale; site?: WebSite | null }>;
 
 export interface BlockManifest {
   type: BlockType;

@@ -70,6 +70,10 @@ export interface WebSite {
   link_apps?: boolean;
   /** Whether the band that switches the site's design shows above the footer. */
   design_switcher?: boolean;
+  /** The atmosphere behind every hero_brand block that names none of its own: "data-rain" or "none". */
+  hero_atmosphere?: string;
+  /** The columns of that rain, shaped like the block prop `rain`: [{ "tokens": ["…"] }, …]. */
+  hero_rain?: unknown;
 }
 
 export interface NavItem {
