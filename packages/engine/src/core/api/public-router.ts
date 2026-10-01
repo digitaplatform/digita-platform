@@ -19,6 +19,10 @@ import { parseBodyLimit } from "./http-options.js";
 
 const log = createLogger("public-router");
 
+/** The widths a public image is served at (`?w=`), for the breakpoints a page's srcset names. A
+ *  fixed set bounds the work and storage each image can cost. */
+export const IMAGE_VARIANT_WIDTHS = [320, 640, 960, 1280, 1920] as const;
+
 /** Identity for an anonymous request: the built-in "Guest" role. An entity is
  *  reachable here ONLY if it grants Guest read/select in its own permissions. */
 export const GUEST_USER: UserContext = { _id: "Guest", email: "Guest", roles: ["Guest"] };
@@ -244,6 +248,22 @@ export function registerPublicRoutes(
           ),
         );
 
+    // A width outside the set is refused before anything is read. Until variants are made, a width
+    // of the set is answered with the original.
+    const width = (request.query as Record<string, unknown> | undefined)?.["w"];
+    if (width !== undefined && !(IMAGE_VARIANT_WIDTHS as readonly number[]).some((w) => String(w) === width)) {
+      return reply
+        .code(400)
+        .send(
+          errorResponse(
+            400,
+            "BAD_REQUEST",
+            `w must be one of ${IMAGE_VARIANT_WIDTHS.join(", ")}`,
+            [{ text: "file_width_not_offered", type: "error", show: true }],
+            request.traceId ?? "",
+          ),
+        );
+    }
     if (!doc) return notFound();
     // Sole gate: serve ONLY explicitly-public files. is_private defaults to true,
     // so private (non-public) attachments can never leak through this route —
