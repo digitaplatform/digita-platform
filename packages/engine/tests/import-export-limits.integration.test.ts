@@ -69,7 +69,12 @@ const EXP: EntityDefinition = {
   is_log: false,
   track_changes: false,
   track_views: false,
-  fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
+  fields: [
+    { fieldname: "title", fieldtype: "Data", label: "Title" },
+    { fieldname: "shelf", fieldtype: "Data", label: "Shelf" },
+    { fieldname: "genre", fieldtype: "Data", label: "Genre" },
+  ],
+  search_fields: ["title"],
   permissions: [
     { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, export: 1, import: 1 },
   ],
@@ -138,20 +143,36 @@ describe("Import/Export — malformed input is 400, over-cap limit is 400", () =
   });
 });
 
-// The export applies `filters` only. Asked to apply a list's OR filters or its search as well,
-// it refuses instead of answering the rows they leave out, which a re-import would then touch.
-describe("Export — OR filters and a search it cannot apply are refused", () => {
-  it("400s an export asked to apply or_filters", async () => {
-    const orFilters = encodeURIComponent(JSON.stringify([["title", "=", "A"], ["title", "=", "B"]]));
-    const res = await app.inject({ method: "GET", url: `/api/v1/export/ExpDoc?or_filters=${orFilters}`, headers: bearer(adminTok) });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.detail).toContain("or_filters");
+// A list narrows its rows with AND filters, OR filters and a search. An export for re-import
+// must hold exactly those rows, or a re-import of the file touches rows the user filtered out.
+describe("Export — holds the rows the list shows under its whole query", () => {
+  it("answers the rows the list answers for the same filters, or_filters and search", async () => {
+    const rows = [
+      { title: "Rose poem", shelf: "A", genre: "Poetry" },
+      { title: "Rose ode", shelf: "C", genre: "Poetry" },
+      { title: "Tulip", shelf: "B", genre: "Poetry" },
+      { title: "Rose song", shelf: "B", genre: "Prose" },
+      { title: "Rose verse", shelf: "B", genre: "Poetry" },
+    ];
+    await app.inject({ method: "POST", url: "/api/v1/import/ExpDoc", headers: bearer(adminTok), payload: { rows, mode: "insert" } });
+    const query =
+      `filters=${encodeURIComponent(JSON.stringify([["genre", "=", "Poetry"]]))}` +
+      `&or_filters=${encodeURIComponent(JSON.stringify([["shelf", "=", "A"], ["shelf", "=", "B"]]))}` +
+      "&search=rose";
+    const titles = (data: { title: string }[]) => data.map((row) => row.title).sort();
+
+    const listed = await app.inject({ method: "GET", url: `/api/v1/resource/ExpDoc?${query}`, headers: bearer(adminTok) });
+    const exported = await app.inject({ method: "GET", url: `/api/v1/export/ExpDoc?round_trip=true&${query}`, headers: bearer(adminTok) });
+
+    expect(listed.statusCode).toBe(200);
+    expect(titles(listed.json().data)).toEqual(["Rose poem", "Rose verse"]);
+    expect(exported.statusCode).toBe(200);
+    expect(titles(exported.json().data)).toEqual(titles(listed.json().data));
   });
 
-  it("400s an export asked to apply a search", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/v1/export/ExpDoc?search=Imported", headers: bearer(adminTok) });
+  it("400s an export with malformed or_filters JSON", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/v1/export/ExpDoc?or_filters=not-json", headers: bearer(adminTok) });
     expect(res.statusCode).toBe(400);
-    expect(res.json().error.detail).toContain("search");
   });
 
   it("answers an export asked to apply filters only", async () => {

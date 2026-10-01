@@ -14,6 +14,7 @@ import { BadRequestError } from "../view/view-engine.js";
 import { env } from "../config/env.js";
 import { ResponseContext } from "./response-context.js";
 import { successResponse } from "./response-model.js";
+import { listQueryFrom } from "./list-query.js";
 
 const GUEST_USER: UserContext = { _id: "Guest", email: "Guest", roles: ["Guest"] };
 
@@ -97,24 +98,9 @@ export function registerImportExportRoutes(
     const { doctype } = request.params as { doctype: string };
     const query = request.query as Record<string, string>;
 
-    // A list narrows its rows with OR filters and a search too, but the export applies
-    // `filters` only. Answering without them would hand back rows the caller filtered out,
-    // which a re-import of the file would then touch, so the export refuses them.
-    if (query["or_filters"] || query["search"]) {
-      throw new BadRequestError(
-        "query params 'or_filters' and 'search' are not applied by an export, which applies 'filters' only",
-      );
-    }
-
-    // Malformed filters must be a clean 400, not a 500 from an unhandled parse.
-    let filters: [string, string, unknown][] | undefined;
-    if (query["filters"]) {
-      try {
-        filters = JSON.parse(query["filters"]);
-      } catch {
-        throw new BadRequestError("query param 'filters' is not valid JSON");
-      }
-    }
+    // The export reads a list's whole query, so its file holds the rows the list shows and a
+    // re-import of it touches no row the caller filtered out.
+    const { filters, or_filters, search } = listQueryFrom(query);
 
     // Enforce the anti-DoS cap: an uncapped limit could dump the whole
     // collection. Reject loudly (rather than silently truncate) when the caller
@@ -149,7 +135,7 @@ export function registerImportExportRoutes(
     const user = request.user ?? GUEST_USER;
     await permissionChecker.check(user, doctype, "export");
 
-    const data = await exportService.exportData(doctype, filters, limit, user, {
+    const data = await exportService.exportData(doctype, { filters, or_filters, search }, limit, user, {
       linkFormat,
       roundTrip,
     });

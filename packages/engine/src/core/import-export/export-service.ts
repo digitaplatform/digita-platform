@@ -2,6 +2,7 @@ import type { EntityDefinition, FieldDefinition } from "@digitaplatform/shared";
 import { LAYOUT_FIELD_TYPES } from "@digitaplatform/shared";
 import type { DocumentService } from "../document/document-service.js";
 import type { MongoDBService } from "../database/mongodb-service.js";
+import type { ListQuery } from "../database/filter-builder.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { UserContext } from "../permissions/types.js";
 import { businessKeyFields, type BkResolver } from "./bk-resolver.js";
@@ -41,7 +42,7 @@ export class ExportService {
    */
   async exportData(
     doctype: string,
-    filters?: [string, string, unknown][],
+    query: Pick<ListQuery, "filters" | "or_filters" | "search"> = {},
     limit: number = 50000,
     user?: UserContext,
     opts: ExportOptions = {},
@@ -72,7 +73,7 @@ export class ExportService {
     // neither break for entities without a Guest grant nor dump out-of-scope rows.
     const result = await this.documentService.getList(
       doctype,
-      { fields, filters, limit, offset: 0 },
+      { ...query, fields, limit, offset: 0 },
       user,
     );
 
