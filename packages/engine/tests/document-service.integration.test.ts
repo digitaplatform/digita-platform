@@ -1908,3 +1908,41 @@ describe("A document shared for reading shows what a level-0 read shows", () => 
     );
   });
 });
+
+describe("An amendment points back to the cancelled original, whoever amends it", () => {
+  const clerk: UserContext = { _id: "cl-1", email: "clerk@test.local", roles: ["Clerk"], full_name: "Clerk" };
+
+  beforeAll(async () => {
+    registry.register(
+      makeEntity({
+        name: "AmendDoc",
+        is_submittable: true,
+        permissions: [
+          { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+          { role: "Clerk", level: 0, select: 1, read: 1, write: 1, create: 1, submit: 1, cancel: 1, amend: 1 },
+        ],
+      }),
+    );
+    await db.ensureCollection("AmendDoc", "app");
+  });
+
+  it("stores amended_from on the draft a role without an amended_from field amends", async () => {
+    const original = await docService.insert("AmendDoc", { title: "Invoice" }, clerk);
+    await docService.submit("AmendDoc", original._id, clerk);
+    await docService.cancel("AmendDoc", original._id, clerk);
+
+    const amended = await docService.amend("AmendDoc", original._id, clerk);
+
+    const raw = (await db.findOne("AmendDoc", amended._id, "app")) as Record<string, unknown>;
+    expect(raw["amended_from"]).toBe(original._id);
+    expect(raw["docstatus"]).toBe(0);
+  });
+
+  it("refuses amended_from on a plain create, an Administrator's included", async () => {
+    for (const who of [clerk, adminUser]) {
+      const created = await docService.insert("AmendDoc", { title: "Plain", amended_from: "TD-9999" }, who);
+      const raw = (await db.findOne("AmendDoc", created._id, "app")) as Record<string, unknown>;
+      expect(raw["amended_from"] ?? null).toBeNull();
+    }
+  });
+});

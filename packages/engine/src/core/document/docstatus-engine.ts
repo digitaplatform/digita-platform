@@ -298,7 +298,7 @@ export class DocStatusEngine {
   /**
    * Prepare data for an amended document.
    */
-  prepareAmend(entity: EntityDefinition, doc: BaseDocument): Record<string, unknown> {
+  prepareAmend(entity: EntityDefinition, doc: BaseDocument): { amended_from: string } {
     if (doc.docstatus !== DocStatus.Cancelled) {
       throw new DocStatusError("cannot_amend_not_cancelled", {
         doctype: entity.name,
