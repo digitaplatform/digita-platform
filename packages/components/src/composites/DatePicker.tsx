@@ -123,7 +123,8 @@ export function DatePicker({
   // The day of the shown month that holds the focus, the one day in the tab order.
   const [focusDay, setFocusDay] = useState(() => selected?.d ?? new Date().getDate());
   // The day button that takes the focus is drawn by the render that follows, so the request waits
-  // for it: on opening and after a key moved the day, on the first render and not on any later one.
+  // for it: on opening, after a key moved the day and after a month pick, on the first render and
+  // not on any later one.
   const focusDayNext = useRef(false);
   useEffect(() => {
     if (!focusDayNext.current) return;
@@ -268,7 +269,7 @@ export function DatePicker({
             <div className="mb-2 grid grid-cols-4 gap-0.5">
               {Array.from({ length: 12 }, (_, mi) => (
                 <button key={mi} type="button" aria-pressed={mi === my.m}
-                  onClick={() => { setMy((s) => ({ ...s, m: mi })); setView('days'); }}
+                  onClick={() => { setMy((s) => ({ ...s, m: mi })); setView('days'); focusDayNext.current = true; }}
                   className={cn(DAY_BTN, 'min-h-9', mi === my.m && SEL)}>
                   {new Date(2000, mi, 1).toLocaleDateString(locale, { month: 'short' })}
                 </button>

@@ -24,6 +24,20 @@ async function openByKeyboard(user: User) {
   await user.keyboard('{Enter}');
 }
 
+/** From the open day grid back to the title, into the month and year view, and onto January. */
+async function pickJanuaryByKeyboard(user: User) {
+  await openByKeyboard(user);
+  await user.tab({ shift: true });
+  await user.tab({ shift: true });
+  await user.tab({ shift: true });
+  await user.keyboard('{Enter}');
+  await user.tab();
+  await user.tab();
+  await user.tab();
+  expect(screen.getByRole('button', { name: 'Jan' })).toHaveFocus();
+  await user.keyboard('{Enter}');
+}
+
 describe('DatePicker paging labels', () => {
   it('names the paging buttons by the labels the caller passes', async () => {
     const user = userEvent.setup();
@@ -193,6 +207,23 @@ describe('DatePicker hands the focus back', () => {
     await user.tab();
     await user.keyboard('{Enter}');
     expect(onChange).toHaveBeenCalledWith(undefined);
+    expect(trigger('28/09/2026')).toHaveFocus();
+  });
+
+  it('to the day grid after a month pick in the month and year view', async () => {
+    const user = userEvent.setup();
+    render(<DatePicker value="2026-09-28" onChange={vi.fn()} locale="en-GB" />);
+    await pickJanuaryByKeyboard(user);
+    expect(screen.getByRole('button', { name: 'January 2026' })).toBeInTheDocument();
+    expect(day(28)).toHaveFocus();
+  });
+
+  it('to the trigger when Escape closes the calendar after a month pick', async () => {
+    const user = userEvent.setup();
+    render(<DatePicker value="2026-09-28" onChange={vi.fn()} locale="en-GB" />);
+    await pickJanuaryByKeyboard(user);
+    await user.keyboard('{Escape}');
+    expect(queryDay(28)).toBeNull();
     expect(trigger('28/09/2026')).toHaveFocus();
   });
 
