@@ -33,7 +33,7 @@ vi.mock('@/services/resource', () => ({
 vi.mock('@/lib/chrome-i18n', () => ({ useChrome: () => (key: string) => key }));
 vi.mock('@/stores/i18n', () => ({
   useI18nStore: (sel: (s: Record<string, unknown>) => unknown) =>
-    sel({ tField: (_e: string, _f: string, label: string) => label }),
+    sel({ tField: (_e: string, _f: string, label: string) => label, translations: {} }),
 }));
 
 import { ContextPanel } from '@/components/record/ContextPanel';
