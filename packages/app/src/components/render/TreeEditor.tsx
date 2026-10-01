@@ -11,7 +11,7 @@ import { qkPrefix } from '@/lib/query-keys';
 import { useUiStore } from '@/stores/ui';
 import { LoadingBlock, ErrorBlock } from '@/components/status';
 import { optionList } from '@/controls/SelectControl';
-import { hasEntityPermission } from '@/lib/permissions';
+import { hasEntityPermission, hasRecordPermission } from '@/lib/permissions';
 import { useSessionStore } from '@/stores/session';
 
 type Row = Record<string, unknown>;
@@ -38,10 +38,10 @@ export function TreeEditor({
   const dialog = useDialogHost();
   const tc = useChrome();
   // The tree offers what the role may do, as the list offers its New button; the engine refuses the rest.
+  // A move and a delete act on one node, so they are offered per node: a role whose row is if_owner,
+  // or holds a condition, may write or delete some nodes and not others.
   const user = useSessionStore((s) => s.user);
   const canCreate = hasEntityPermission(meta, user, 'create');
-  const canWrite = hasEntityPermission(meta, user, 'write');
-  const canDelete = hasEntityPermission(meta, user, 'delete');
 
   const labelField = tree.label_field ?? meta.title_field ?? '_id';
   const parentField = tree.parent_field;
@@ -96,6 +96,7 @@ export function TreeEditor({
   );
 
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
+  const rowById = useMemo(() => new Map(rows.map((r) => [String(r._id), r])), [rows]);
   // Every node is open until a person closes it, so a node that arrives with an add, a move or
   // another partition opens like the others.
   const expandedIds = useMemo(
@@ -277,7 +278,7 @@ export function TreeEditor({
                 icon={<span aria-hidden>＋</span>}
               />
             )}
-            {canWrite && (
+            {hasRecordPermission(meta, user, 'write', rowById.get(node.id) ?? {}) && (
               <IconButton
                 label={tc('ui.tree.move')}
                 size="sm"
@@ -286,7 +287,7 @@ export function TreeEditor({
                 icon={<span aria-hidden>↕</span>}
               />
             )}
-            {canDelete && (
+            {hasRecordPermission(meta, user, 'delete', rowById.get(node.id) ?? {}) && (
               <IconButton
                 label={tc('ui.action.delete')}
                 size="sm"
