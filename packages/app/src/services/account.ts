@@ -1,4 +1,5 @@
 import { api } from '@/services/api';
+import { authUrl } from '@/lib/authConfig';
 import type { SessionUser } from '@/types';
 
 /**
@@ -30,7 +31,7 @@ export interface SessionSummary {
   expires_at?: string;
 }
 
-const AUTH = '/api/v1/auth';
+const AUTH = authUrl('/api/v1/auth');
 
 export const updateProfile = (body: UpdateProfileRequest) =>
   api.post<SessionUser>(`${AUTH}/profile`, body);
