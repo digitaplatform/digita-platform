@@ -84,6 +84,18 @@ const PROBE: EntityDefinition = {
   ],
 } as unknown as EntityDefinition;
 
+// The same field under a workflow: only Editor may move draft → published.
+const WORKFLOW_PROBE: EntityDefinition = {
+  ...PROBE,
+  name: "WorkflowProbe",
+  naming: { strategy: "auto_increment", prefix: "WF-", pad_length: 4 },
+  states: [
+    { value: "draft", label: "Draft", is_initial: true, doc_status: 0 },
+    { value: "published", label: "Published", doc_status: 0 },
+  ],
+  transitions: [{ from: "draft", to: "published", label: "Publish", allowed_roles: ["Editor"] }],
+} as unknown as EntityDefinition;
+
 beforeAll(async () => {
   replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   (env as any).MONGODB_URI = replSet.getUri();
@@ -96,6 +108,8 @@ beforeAll(async () => {
   await app.ready();
   result.registry.register(PROBE);
   await db.ensureCollection("StatusProbe", "app");
+  result.registry.register(WORKFLOW_PROBE);
+  await db.ensureCollection("WorkflowProbe", "app");
 
   for (const [who, roles] of Object.entries({
     admin: ["Administrator", "System User"],
@@ -148,5 +162,51 @@ describe("a transition of an entity without a workflow", () => {
     const name = await createDraft();
     expect((await transition("editor", name)).statusCode).toBe(200);
     expect(await storedStatus(name)).toBe("published");
+  });
+});
+
+describe("a transition of an entity with a workflow", () => {
+  async function createWorkflowDraft(): Promise<string> {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/resource/WorkflowProbe",
+      headers: { authorization: `Bearer ${tokens["admin"]}` },
+      payload: { title: "Page" },
+    });
+    expect(res.statusCode).toBe(201);
+    return res.json().data._id as string;
+  }
+
+  // The workflow judges only a target that names another state, so no other body may write.
+  it.each([
+    ["no state", null],
+    ["the state it is in", "draft"],
+    ["nothing", undefined],
+  ])("refuses a move to %s, and the record stays as it was", async (_case, to) => {
+    const name = await createWorkflowDraft();
+    const before = await db.findOne("WorkflowProbe", name, "app");
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/resource/WorkflowProbe/${name}/transition`,
+      headers: { authorization: `Bearer ${tokens["stranger"]}` },
+      payload: to === undefined ? {} : { to },
+    });
+    expect(res.statusCode).toBeGreaterThanOrEqual(400);
+    expect(res.statusCode).toBeLessThan(500);
+    const after = await db.findOne("WorkflowProbe", name, "app");
+    expect(after?.["status"]).toBe("draft");
+    expect(after?.["modified_by"]).toBe(before?.["modified_by"]);
+  });
+
+  it("moves a declared transition for a role it allows", async () => {
+    const name = await createWorkflowDraft();
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/resource/WorkflowProbe/${name}/transition`,
+      headers: { authorization: `Bearer ${tokens["editor"]}` },
+      payload: { to: "published" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((await db.findOne("WorkflowProbe", name, "app"))?.["status"]).toBe("published");
   });
 });

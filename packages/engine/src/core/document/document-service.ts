@@ -2050,10 +2050,18 @@ export class DocumentService {
     const entity = this.registry.get(doctype);
     const workflowField = entity.workflow_field ?? "status";
     const doc = await this.loadDocInternal(doctype, name, sessionOverride);
+    const hasWorkflow = !!this.workflowEngine?.hasWorkflow(entity);
+
+    // The workflow judges only a target that names a state other than the current one, and
+    // its judgement is what stands in for the write check; a move to no state or to the
+    // current one would write without it.
+    const from = doc._data[workflowField] as string | undefined;
+    if (typeof toState !== "string" || toState === "" || (hasWorkflow && toState === from)) {
+      throw new IllegalTransitionError(entity.name, from, String(toState), "not_declared");
+    }
 
     if (entity.is_submittable && doc.docstatus === DocStatus.Submitted) {
       const toStateDef = (entity.states ?? []).find((s) => s.value === toState);
-      const hasWorkflow = !!this.workflowEngine?.hasWorkflow(entity);
       if (hasWorkflow && toStateDef && toStateDef.doc_status === 1) {
         // A declared doc_status-1 → doc_status-1 move: the ONLY legal post-submit
         // transition. validateTransition (allowed_roles) runs inside.
@@ -2080,7 +2088,7 @@ export class DocumentService {
     // nothing declares who may move the status, so the move is a plain write of that field
     // and takes the write check and the field filter like any other save.
     return this.update(doctype, name, { [workflowField]: toState }, user, ctx, {
-      skipWritePermCheck: !!this.workflowEngine?.hasWorkflow(entity),
+      skipWritePermCheck: hasWorkflow,
       sessionOverride,
     });
   }
