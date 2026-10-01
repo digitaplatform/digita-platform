@@ -162,6 +162,10 @@ export default function LinkControl({
     );
   }
 
+  // Every picker names the field a person fills by its label, which the meta localizer has already
+  // put in their language; the target's entity name is a code name in no language at all.
+  const searchPrompt = tc('ui.link.searchField', { field: field.label });
+
   // EVERY pick path commits: the onCommit contract exists precisely so a grid
   // cell editor can close and the entry-flow can advance after a Link pick.
   const select = (opt: { _id: string; display: string }) => {
@@ -226,7 +230,7 @@ export default function LinkControl({
             aria-required={state.required || undefined}
             aria-invalid={state.invalid || undefined}
             readOnly
-            placeholder={field.placeholder ?? tc('ui.link.searchEntity', { entity: field.target ?? '' })}
+            placeholder={field.placeholder ?? searchPrompt}
             value={fieldDisplay}
             title={pathFailure}
             // Open on CLICK or explicit keys only — never onFocus: the dialog's
@@ -265,7 +269,7 @@ export default function LinkControl({
         <BaseDialog
           open={treeOpen}
           onClose={() => setTreeOpen(false)}
-          title={tc('ui.link.searchEntity', { entity: field.target ?? '' })}
+          title={searchPrompt}
           size="lg"
           height="fill"
         >
@@ -332,9 +336,7 @@ export default function LinkControl({
             aria-describedby={describedBy(describedById, errorId)}
             aria-required={state.required || undefined}
             aria-invalid={state.invalid || undefined}
-            placeholder={
-              field.placeholder ?? tc('ui.link.searchEntity', { entity: field.target ?? '' })
-            }
+            placeholder={field.placeholder ?? searchPrompt}
             value={displayValue}
             onFocus={() => {
               setInputFocused(true);
@@ -386,7 +388,7 @@ export default function LinkControl({
         <SearchDialog
           open={dialogOpen}
           onClose={() => setDialogOpen(false)}
-          title={tc('ui.link.searchEntity', { entity: field.target ?? '' })}
+          title={searchPrompt}
           query={dialogQuery}
           onQueryChange={setDialogQuery}
           columns={colDefs}
@@ -419,7 +421,7 @@ export default function LinkControl({
       open={open}
       onOpenChange={setOpen}
       onPick={(opt) => select({ _id: opt.id, display: opt.label })}
-      placeholder={field.placeholder ?? (field.target ? tc('ui.link.searchEntity', { entity: field.target }) : tc('ui.list.search'))}
+      placeholder={field.placeholder ?? searchPrompt}
       loadingLabel={tc('ui.link.searching')}
       emptyLabel={tc('ui.select.noResults')}
       invalid={state.invalid}
