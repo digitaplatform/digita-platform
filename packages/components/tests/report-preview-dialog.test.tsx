@@ -2,12 +2,11 @@
 // ReportPreviewDialog is the frame that every print button of the app opens: the report inside an
 // iframe, a link that opens the self-printing variant, and a link per export format. The caller hands
 // it ready-made addresses, so the dialog has to draw exactly those, or the receptionist gets a blank
-// preview or a link to the wrong document. It lives in the components package and is drawn here the
-// way the app draws it.
+// preview or a link to the wrong document.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ReportPreviewDialog } from '@digitaplatform/components';
+import { ReportPreviewDialog } from '../src/composites/ReportPreviewDialog.js';
 
 const SRC = 'https://reports.example/api/v1/report/definitions/invoice/render?format=html&invoice=INV-7';
 const PRINT_HREF = `${SRC}&print=1`;
