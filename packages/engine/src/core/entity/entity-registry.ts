@@ -2,7 +2,7 @@ import { readdir, readFile } from "fs/promises";
 import { join, extname } from "path";
 import type { EntityDefinition, FieldDefinition, FieldType, FreezeSpec } from "@digitaplatform/shared";
 import { DIGITA } from "@digitaplatform/shared";
-import { LAYOUT_FIELD_TYPES, UPLOAD_FIELD_TYPES } from "@digitaplatform/shared";
+import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD, UPLOAD_FIELD_TYPES } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { createLogger } from "../logging/logger.js";
 import { isValidStoragePath, STORAGE_PATH_RULE } from "../storage/storage-path.js";
@@ -32,6 +32,14 @@ const RESERVED_ENTITY_NAMES = ["account", "app", "login"];
 
 /** Hook keys no engine code runs: an entity that declares one restricts and changes nothing. */
 const NEVER_RUN_HOOKS = ["has_permission", "on_list_load"];
+
+/**
+ * What the engine writes itself, on every document (`BaseDocument.toMongo`) and on every Table
+ * row (`BaseDocument.addChild`). A field of the same name shares the stored key, so its value and
+ * the engine's overwrite each other, seeds included.
+ */
+const SYSTEM_FIELDS = ["_id", "doctype", "docstatus", "owner", "modified_by", "creation", "modified"];
+const SYSTEM_ROW_FIELDS = ["idx", ROW_ID_FIELD];
 
 /** Levenshtein distance (inputs are short doctype names, so the naive DP is fine). */
 function editDistance(a: string, b: string): number {
@@ -207,6 +215,7 @@ export class EntityRegistry {
       this.applyDefaults(entity);
       this.expandFlattenDirectives(entity);
       entity.fields.sort((a, b) => (a.idx ?? 0) - (b.idx ?? 0));
+      this.validateFieldNames(entity);
       this.validateHooks(entity);
       this.validateSnapshotManifest(entity);
       this.validateTimeSeriesConfig(entity);
@@ -244,6 +253,23 @@ export class EntityRegistry {
       throw err instanceof Error
         ? new Error(`Malformed entity definition ${filePath}: ${err.message}`, { cause: err })
         : err;
+    }
+  }
+
+  private validateFieldNames(entity: EntityDefinition): void {
+    const refuse = (field: FieldDefinition, owner: string, reserved: string[]): void => {
+      if (!reserved.includes(field.fieldname)) return;
+      throw new Error(
+        `Field "${field.fieldname}" of ${owner} is named after a system field the engine writes itself; ` +
+          `rename it (reserved: ${reserved.join(", ")})`,
+      );
+    };
+    for (const field of entity.fields) {
+      refuse(field, `entity "${entity.name}"`, SYSTEM_FIELDS);
+      if (field.fieldtype !== "Table") continue;
+      for (const child of field.child_fields ?? []) {
+        refuse(child, `Table "${entity.name}.${field.fieldname}"`, SYSTEM_ROW_FIELDS);
+      }
     }
   }
 
@@ -487,17 +513,7 @@ export class EntityRegistry {
    * fail at runtime inside `updateSubmitted`.
    */
   private validateAllowOnSubmit(entity: EntityDefinition): void {
-    const SYSTEM = new Set([
-      "docstatus",
-      "owner",
-      "creation",
-      "modified",
-      "modified_by",
-      "_id",
-      "doctype",
-      "amended_from",
-      "idx",
-    ]);
+    const SYSTEM = new Set([...SYSTEM_FIELDS, "amended_from", "idx"]);
     const FILE_TYPES = new Set<FieldType>(["Attach", "AttachImage"]);
 
     const isFreezeActive = (f: FieldDefinition): boolean => {
