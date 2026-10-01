@@ -91,6 +91,29 @@ const SEED_USER: UserContext = { _id: SEED_IDENTITY, email: SEED_IDENTITY, roles
 const seedWrote = (doc: Record<string, unknown>) =>
   doc.owner === SEED_IDENTITY && doc.modified_by === SEED_IDENTITY;
 
+/**
+ * The first workspace row that is the default for a role its role list hides it from. The role
+ * list decides who reads a workspace, `is_default_for_roles` only picks the default among the
+ * readable ones: a person of such a role is sent to a Home they cannot see, which stays empty.
+ * A row with no role list or an empty one is not checked: who reads it is decided by the
+ * entity's permission rows, not by the row.
+ */
+function defaultHiddenByRoles(
+  entity: EntityDefinition,
+  rows: CollectedRow[],
+): { workspace: string; role: string; field: string } | undefined {
+  const field = entity.role_visibility_field;
+  if (!field) return undefined;
+  for (const row of rows) {
+    const readers = row[field];
+    const defaults = row["is_default_for_roles"];
+    if (!Array.isArray(readers) || readers.length === 0 || !Array.isArray(defaults)) continue;
+    const role = defaults.find((r) => !readers.includes(r));
+    if (role !== undefined) return { workspace: String(row["_id"] ?? row["name"]), role: String(role), field };
+  }
+  return undefined;
+}
+
 export async function seedAppData(
   db: MongoDBService,
   registry: EntityRegistry,
@@ -151,6 +174,18 @@ export async function seedAppData(
         log.error(
           { file: join(dir, file), entity: entity.name },
           "seed file skipped: user_set naming requires an explicit _id on every row",
+        );
+        continue;
+      }
+
+      const hidden = entity.name === "Workspace" ? defaultHiddenByRoles(entity, rows) : undefined;
+      if (hidden) {
+        log.error(
+          { file: join(dir, file), entity: entity.name, workspace: hidden.workspace, role: hidden.role },
+          `seed file skipped: workspace "${hidden.workspace}" names role "${hidden.role}" in ` +
+            `is_default_for_roles, but its ${hidden.field} leave that role out, so the role would get ` +
+            `as its default a workspace it cannot see — add "${hidden.role}" to ${hidden.field} or drop it ` +
+            `from is_default_for_roles`,
         );
         continue;
       }
