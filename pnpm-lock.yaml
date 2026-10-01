@@ -336,8 +336,8 @@ importers:
   packages/theme:
     dependencies:
       '@digitaplatform/minimal':
-        specifier: ^0.3.5
-        version: 0.3.5
+        specifier: ^0.3.9
+        version: 0.3.9
     devDependencies:
       esbuild:
         specifier: ^0.28.1
@@ -651,8 +651,8 @@ packages:
   '@digitaplatform/digita@0.3.0':
     resolution: {integrity: sha512-OG3YNe9kevwXSIhF6/HVBz3e0RlPvgNoiBhKbUhD1v+YB1P/a6TEn8zboA8ylNumZOxNnnC2Vjjy3Vn5y/sOPw==, tarball: https://npm.pkg.github.com/download/@digitaplatform/digita/0.3.0/d43793af6fd3ee3d461dd2c61da32df34e10f30c}
 
-  '@digitaplatform/minimal@0.3.5':
-    resolution: {integrity: sha512-FjqapQoFwyeePMQkCM7nYBKSPR3b1syw3TytMIfy2DcUUaMYk1AA+8YHTLf+AQFTRawxEn2P1dAdV3ESrrUxNg==, tarball: https://npm.pkg.github.com/download/@digitaplatform/minimal/0.3.5/e468f83caf8ebdd17414f1bf7a171303b1ad9dac}
+  '@digitaplatform/minimal@0.3.9':
+    resolution: {integrity: sha512-S7iCOX9IHxIwHZFuCOPNRz9uh2Z0tFFF/Ya6jRmI2aAS1hEwyUSVz1QB26cyqiMy94SrI2iFW0pNejmqM7Jolw==, tarball: https://npm.pkg.github.com/download/@digitaplatform/minimal/0.3.9/79680bed6c676cf58b1012d2223ed7c7c709564d}
     engines: {node: '>=22.0.0', pnpm: '>=11.0.0'}
 
   '@digitaplatform/simetrix@0.3.2':
@@ -4334,7 +4334,7 @@ snapshots:
 
   '@digitaplatform/digita@0.3.0': {}
 
-  '@digitaplatform/minimal@0.3.5': {}
+  '@digitaplatform/minimal@0.3.9': {}
 
   '@digitaplatform/simetrix@0.3.2': {}
 

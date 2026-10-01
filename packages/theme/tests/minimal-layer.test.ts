@@ -31,6 +31,14 @@ describe('theme.css bundles only the variant layer of the minimal plugin', () =>
     expect(rule.slice(0, rule.indexOf('}'))).toContain('background: var(--color-primary-600)');
   });
 
+  it('leaves the page header bar unpainted while it holds nothing', () => {
+    // The kit marks the bar of a page without a back link and actions; minimal paints every other bar.
+    expect(THEME_CSS).toContain(':root[data-design-variant="minimal"] [data-ui="page-header-bar"] {');
+    expect(THEME_CSS).toMatch(
+      /:root\[data-design-variant="minimal"\] \[data-ui="page-header-bar"\]\[data-empty="true"\] \{ background: transparent; \}/,
+    );
+  });
+
   it('drops only the token blocks; a rule keyed on the same attribute stays (planted case)', () => {
     const tokens = ':root[data-design="minimal"] {\n  --a: 1;\n}\n:root[data-design="minimal"].dark {\n  --a: 2;\n}\n';
     const rules =
