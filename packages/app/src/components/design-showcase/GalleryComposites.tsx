@@ -673,10 +673,11 @@ function LayoutGroup() {
             search={<Input placeholder="Search lines" />}
           />
         </ShowcaseState>
-        <ShowcaseState state="expanded · eyebrow and status">
+        <ShowcaseState state="expanded · media, eyebrow and status">
           <PageHeader
             className="w-96"
             headingLevel={3}
+            media={<span aria-hidden="true" className="block h-16 w-16 rounded border border-border bg-subtle" />}
             eyebrow="Sales Order"
             title="SO-0042"
             status={<Badge variant="pill" size="lg" color="success">confirmed</Badge>}

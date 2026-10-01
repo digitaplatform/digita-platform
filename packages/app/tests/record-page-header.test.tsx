@@ -14,10 +14,14 @@ vi.mock('react-router-dom', () => ({
   useBlocker: () => ({ state: 'unblocked' }),
 }));
 vi.mock('@/hooks/useMeta', () => ({
-  useMeta: () => ({ data: META, isLoading: false, isError: false }),
+  useMeta: () => ({ data: meta, isLoading: false, isError: false }),
 }));
 vi.mock('@/hooks/useDocument', () => ({
-  useDocument: () => ({ data: { _id: 'INV-1', modified: 'T1', docstatus: 0, note: 'a' }, isLoading: false, isError: false }),
+  useDocument: () => ({
+    data: { _id: 'INV-1', modified: 'T1', docstatus: 0, note: 'a', scan: '/api/v1/file/FILE-1/download' },
+    isLoading: false,
+    isError: false,
+  }),
   useSingle: () => ({ data: undefined, isLoading: false, isError: false }),
   useCreate: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdate: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -61,10 +65,14 @@ const META = {
   label: 'Invoice',
   label_plural: 'Invoices',
   title_field: '_id',
-  fields: [{ fieldname: 'note', fieldtype: 'Data', label: 'Note' }],
+  fields: [
+    { fieldname: 'note', fieldtype: 'Data', label: 'Note' },
+    { fieldname: 'scan', fieldtype: 'AttachImage', label: 'Scan' },
+  ],
   permissions: [],
   is_submittable: false,
 } as unknown as EntityDefinition;
+let meta = META;
 
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -119,5 +127,24 @@ describe('RecordPage header', () => {
     const print = screen.getByRole('button', { name: 'Print' });
     expect(document.querySelector('[data-ui="page-header-bar"]')).not.toContainElement(print);
     expect(document.querySelector('form')).toContainElement(print);
+  });
+
+  it('draws the picture image_field names before the title, as its thumbnail', () => {
+    meta = { ...META, image_field: 'scan' } as EntityDefinition;
+    try {
+      renderPage();
+      const media = document.querySelector('[data-ui="page-header-media"]');
+      const img = media?.querySelector('img');
+      expect(img).toHaveAttribute('src', '/api/v1/file/FILE-1/download?thumb=1');
+      expect(document.querySelector('[data-ui="page-header-bar"]')).not.toContainElement(img as HTMLElement);
+    } finally {
+      meta = META;
+    }
+  });
+
+  it('draws no picture for an entity that names no image_field, though a record has an image', () => {
+    renderPage();
+    expect(document.querySelector('[data-ui="page-header-media"]')).toBeNull();
+    expect(document.querySelector('[data-component="record-image"]')).toBeNull();
   });
 });

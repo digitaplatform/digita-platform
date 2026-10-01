@@ -81,6 +81,8 @@ export interface PageHeaderProps extends Omit<HTMLAttributes<HTMLElement>, 'titl
   eyebrow?: ReactNode;
   /** Sits beside the heading, outside it: a record's status pill and lock marker. */
   status?: ReactNode;
+  /** Stands before the heading in the title block, never in the bar: a record's picture. */
+  media?: ReactNode;
   /** Search slot in the title area (policy §2 "Search"). */
   search?: ReactNode;
   /** Scroll source driving the collapse. Default: nearest scrollable ancestor
@@ -151,6 +153,7 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
     actions,
     eyebrow,
     status,
+    media,
     search,
     scrollRef,
     collapseThreshold,
@@ -295,6 +298,11 @@ export const PageHeader = forwardRef<HTMLElement, PageHeaderProps>(function Page
           </p>
         )}
         <div className="flex flex-wrap items-center gap-3">
+          {media != null && (
+            <span data-ui="page-header-media" className="shrink-0">
+              {media}
+            </span>
+          )}
           {/* The heading wraps: a record's title must be read whole, and the truncating
               mirror in the bar has no room for a tooltip. overflow-wrap breaks a title
               without a break opportunity (an email address), which would otherwise
