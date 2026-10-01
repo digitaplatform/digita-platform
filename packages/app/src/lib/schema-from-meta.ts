@@ -260,7 +260,8 @@ export function buildZodSchema(
     if (f.fieldtype === 'Table') {
       shape[f.fieldname] = tableSchema(f, rowDefaultedOnSave(stored, f.fieldname)).nullable().optional();
     } else {
-      shape[f.fieldname] = isFilledOnInsert(f) ? filledOnInsertSchema(f) : buildFieldSchema(f);
+      // Only a required field is refused for a value the engine keeps; any other field keeps its own schema.
+      shape[f.fieldname] = f.required && isFilledOnInsert(f) ? filledOnInsertSchema(f) : buildFieldSchema(f);
     }
   }
   // passthrough keeps engine-internal keys (_id/docstatus/owner/creation/modified/
