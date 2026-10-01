@@ -172,14 +172,9 @@ export type {
 export {
   STORED_FIELD_TYPES,
   NUMERIC_FIELD_TYPES,
-  TEXT_FIELD_TYPES,
-  DATE_FIELD_TYPES,
-  LINK_FIELD_TYPES,
   FILE_FIELD_TYPES,
   UPLOAD_FIELD_TYPES,
-  DATA_FORMAT_OPTIONS,
 } from "./constants/field-types.js";
-export type { DataFormatOption } from "./constants/field-types.js";
 
 // Digita backend — collection + database name constants. Hand-maintained
 // alongside `packages/backend/src/entities/*.entity.json`.
