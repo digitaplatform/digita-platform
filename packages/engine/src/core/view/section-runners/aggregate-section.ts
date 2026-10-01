@@ -10,6 +10,7 @@ import { resolveTokens, type ResolverContext } from "../param-resolver.js";
 import { collectFieldReferences } from "./pipeline-field-walker.js";
 import { coerceMatchDates } from "../../database/filter-value-coercer.js";
 import { readStoredRow } from "../../entity/field-types.js";
+import { joinByStoredIdForms } from "./id-form-lookup.js";
 
 /** Pipeline stages after which field names / entity context change — date-match
  *  coercion (which resolves field types against the section entity) must stop here. */
@@ -172,7 +173,7 @@ export async function runAggregateSection(
   const finalPipeline = [
     ...securityMatch,
     ...unsetPasswords(entity),
-    ...coercedUserPipeline.map((stage) => unsetPasswordsInLookups(stage, deps.registry)),
+    ...coercedUserPipeline.flatMap(joinByStoredIdForms).map((stage) => unsetPasswordsInLookups(stage, deps.registry)),
   ];
 
   // 4. Execute.

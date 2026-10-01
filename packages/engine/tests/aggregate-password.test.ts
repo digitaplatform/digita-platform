@@ -112,8 +112,13 @@ describe("an aggregate section over an entity with a Password field", () => {
       section("Note", [{ $lookup: bare }, { $facet: { a: [{ $lookup: bare }] } }]),
       rctx, user, d.deps,
     );
-    const joined = { $lookup: { ...bare, pipeline: [{ $unset: ["secret"] }] } };
-    expect(d.aggregate.mock.calls[0]![1]).toEqual([joined, { $facet: { a: [joined] } }]);
+    // The join on the key field that holds both stored forms of an id (id-form-lookup.ts).
+    const joined = [
+      expect.objectContaining({ $set: expect.objectContaining({ __join_key: expect.anything() }) }),
+      { $lookup: { ...bare, localField: "__join_key", pipeline: [{ $unset: ["secret"] }] } },
+      { $unset: "__join_key" },
+    ];
+    expect(d.aggregate.mock.calls[0]![1]).toEqual([...joined, { $facet: { a: joined } }]);
   });
 
   it("drops it before a $lookup sub-pipeline from that entity runs", async () => {
