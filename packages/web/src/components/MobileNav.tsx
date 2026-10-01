@@ -80,7 +80,15 @@ export function MobileNav({
                 const active = isActive(item);
                 return (
                   <li key={`${item.label}-${i}`}>
-                    <NavItemLink locale={locale} item={item} comingLabel={comingLabel} current={active} data-ui="nav-leaf" className={navLeafClass(active)} />
+                    <NavItemLink
+                      locale={locale}
+                      item={item}
+                      comingLabel={comingLabel}
+                      current={active}
+                      onSelect={() => setOpen(false)}
+                      data-ui="nav-leaf"
+                      className={navLeafClass(active)}
+                    />
                   </li>
                 );
               })}
@@ -102,7 +110,14 @@ export function MobileNav({
                         {item.label}
                       </span>
                     ) : (
-                      <NavItemLink locale={locale} item={item} comingLabel={comingLabel} data-ui="nav-leaf" className={navLeafClass(false)} />
+                      <NavItemLink
+                        locale={locale}
+                        item={item}
+                        comingLabel={comingLabel}
+                        onSelect={() => setOpen(false)}
+                        data-ui="nav-leaf"
+                        className={navLeafClass(false)}
+                      />
                     )}
                   </li>
                 ))}
