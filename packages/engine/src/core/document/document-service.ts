@@ -913,13 +913,28 @@ export class DocumentService {
     // Same prep as insert (minus workflow stamping): strip non-writable fields,
     // resolve defaults + fetch_from, serialize.
     const writeData = this.permissionChecker.filterFieldsForWrite(user, doctype, data);
-    let processed = resolveDefaults(entity, writeData, user.email, user.full_name);
-    processed = await this.fetchFromResolver.resolve(entity, processed);
-    const serialized = this.serializeFields(entity, processed);
-
-    const doc = new BaseDocument(doctype);
-    doc._data = { ...serialized };
-    doc._isNew = true;
+    const storedName = typeof data["_id"] === "string" && data["_id"] !== "" ? data["_id"] : undefined;
+    let doc: BaseDocument;
+    if (storedName) {
+      // A saved record previews as its update would store it: a row whose Link moved re-derives
+      // its fetched cells against the stored row, which a draft without the record cannot know.
+      await this.assertReadAccess(user, doctype, storedName);
+      doc = await this.loadDocInternal(doctype, storedName);
+      await this.assertRowReadable(entity, doctype, storedName, user, doc._data);
+      applyNewChildRowDefaults(entity, writeData, doc._original, user.email, user.full_name);
+      doc.merge(this.serializeFields(entity, writeData));
+      const changedFields = doc.getChangedFields();
+      if (entity.fields.some((f) => f.fieldtype === "Link" && changedFields.includes(f.fieldname))) {
+        doc.merge(await this.fetchFromResolver.resolve(entity, doc._data));
+      }
+      await this.fetchFromResolver.resolveChangedRows(entity, doc._data, doc._original);
+    } else {
+      let processed = resolveDefaults(entity, writeData, user.email, user.full_name);
+      processed = await this.fetchFromResolver.resolve(entity, processed);
+      doc = new BaseDocument(doctype);
+      doc._data = { ...this.serializeFields(entity, processed) };
+      doc._isNew = true;
+    }
     doc.ensureRowIds();
 
     // Computed hooks only, NO session → in-memory, never persisted.

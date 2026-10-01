@@ -90,4 +90,29 @@ describe('mergePreviewRows', () => {
     const server = [{ [ROW_ID_FIELD]: 'a', in_a: 5, deriv_a: 20, out_a: 50 }];
     expect(mergePreviewRows(current, server, spec)).toBeNull();
   });
+
+  // The save re-derives a fillable cell of a row whose Link moved while the cell still holds its
+  // stored value, so the form takes the preview's value there too, a cleared one included.
+  it('takes the server value of a fillable cell that still holds its stored value', () => {
+    const stored = [{ [ROW_ID_FIELD]: 'a', in_a: 6, in_b: 'HOUR' }];
+    const current = [{ [ROW_ID_FIELD]: 'a', in_a: 6, in_b: 'HOUR' }];
+    const server = [{ [ROW_ID_FIELD]: 'a', in_a: 24, in_b: null }];
+    const merged = mergePreviewRows(current, server, spec, stored);
+    expect(merged![0]!.in_a).toBe(24);
+    expect(merged![0]!.in_b).toBeNull();
+  });
+
+  it('keeps a fillable cell the person changed from its stored value', () => {
+    const stored = [{ [ROW_ID_FIELD]: 'a', in_a: 6 }];
+    const current = [{ [ROW_ID_FIELD]: 'a', in_a: 7 }];
+    const server = [{ [ROW_ID_FIELD]: 'a', in_a: 24 }];
+    expect(mergePreviewRows(current, server, spec, stored)).toBeNull();
+  });
+
+  it('keeps a non-empty fillable cell of a row the record did not store', () => {
+    const stored = [{ [ROW_ID_FIELD]: 'b', in_a: 6 }];
+    const current = [{ [ROW_ID_FIELD]: 'a', in_a: 6 }];
+    const server = [{ [ROW_ID_FIELD]: 'a', in_a: 24 }];
+    expect(mergePreviewRows(current, server, spec, stored)).toBeNull();
+  });
 });
