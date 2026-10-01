@@ -6,16 +6,21 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import type { EntityDefinition } from '@digitaplatform/shared';
 import type { ListParams } from '@/services/resource';
+import type { ListPreferenceDoc } from '@/services/listPreference';
 
 /**
  * A filter row without a field is no filter yet: the engine refuses a filter whose field
  * name is empty with 400, and the list would show its error block instead of the rows.
  * Such a row stays in the filter panel, and neither the URL nor a list request carries it.
+ * Because the panel shows its own rows, a removed filter must leave the request too, also
+ * one an applied view brought: otherwise the panel shows no filter where one applies.
  * The page runs on the real data router, as the app does, so the URL and the requests are
  * the ones a person's clicks produce.
  */
 
 const getList = vi.hoisted(() => vi.fn<(entity: string, params: ListParams) => Promise<unknown>>());
+// One array for the whole file: the page compares the applied view by reference.
+const views = vi.hoisted((): ListPreferenceDoc[] => []);
 
 const META = {
   name: 'Book',
@@ -34,7 +39,7 @@ vi.mock('@/hooks/useMeta', () => ({
 }));
 vi.mock('@/hooks/useListPreferences', () => ({
   useListPreferences: () => ({
-    views: [],
+    views,
     defaultView: undefined,
     isLoading: false,
     isAdmin: false,
@@ -118,6 +123,7 @@ async function pickField(
 }
 
 beforeEach(() => {
+  views.length = 0;
   getList.mockReset();
   getList.mockResolvedValue({ data: [], meta: { total: 0, page: 1, page_size: 20, total_pages: 0 } });
 });
@@ -206,5 +212,41 @@ describe('a filter row without a field', () => {
 
     expect(within(filterPanel()).queryByRole('combobox', { name: 'ui.filter.field' })).not.toBeInTheDocument();
     expect(within(filterPanel()).getByText('ui.filter.noConditions')).toBeInTheDocument();
+  });
+});
+
+describe('removing the last filter while a view is applied', () => {
+  it('empties the panel, the chips and the list request alike when the filter is the view\'s own', async () => {
+    views.push({ _id: 'v1', view_name: 'Dune', entity: 'Book', filters: [['title', 'like', 'dune']] });
+    const user = userEvent.setup();
+    const router = renderList('/Book?view=v1');
+    await waitFor(() => expect(requestedFilters()).toContainEqual(['title', 'like', 'dune']));
+
+    await user.click(screen.getByRole('button', { name: 'ui.filter.button' }));
+    await user.click(within(filterPanel()).getByRole('button', { name: 'ui.filter.removeRow' }));
+    await settle();
+
+    expect(within(filterPanel()).queryByRole('combobox', { name: 'ui.filter.field' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ui.filter.removeChip' })).not.toBeInTheDocument();
+    expect(getList).toHaveBeenLastCalledWith('Book', expect.not.objectContaining({ filters: expect.anything() }));
+    expect(urlFilters(router)).toEqual([]);
+    // The view stays applied, now edited, so Reset brings its filter back.
+    expect(new URLSearchParams(router.state.location.search).get('view')).toBe('v1');
+  });
+
+  it('leaves the clean view in the URL when the view has no filters of its own', async () => {
+    views.push({ _id: 'v1', view_name: 'All', entity: 'Book' });
+    const user = userEvent.setup();
+    const router = renderList('/Book?view=v1');
+    await waitFor(() => expect(getList).toHaveBeenCalled());
+
+    await user.click(screen.getByRole('button', { name: 'ui.filter.button' }));
+    await user.click(within(filterPanel()).getByRole('button', { name: /ui\.filter\.addCondition/ }));
+    await pickField(user, 'Title');
+    await waitFor(() => expect(urlFilters(router)).toEqual([['title', 'like', '']]));
+    await user.click(within(filterPanel()).getByRole('button', { name: 'ui.filter.removeRow' }));
+    await settle();
+
+    expect(router.state.location.search).toBe('?view=v1');
   });
 });

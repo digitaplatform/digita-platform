@@ -270,8 +270,15 @@ export default function ListPage() {
   };
 
   // ── ListToolbar callbacks ──────────────────────────────────────────────────
+  // A missing ?f or ?of means the applied view's own filters, so emptying a side the view
+  // fills writes `[]`: deleting the param would bring the view's filters back.
+  const filterParam = (tuples: FilterTuple[], viewTuples: FilterTuple[] | undefined) =>
+    tuples.length === 0 && viewTuples?.length ? '[]' : serializeFilterTuples(tuples);
   const onFiltersChange = (and: FilterTuple[], or: FilterTuple[]) =>
-    updateParam({ f: serializeFilterTuples(and), of: serializeFilterTuples(or) }, true);
+    updateParam(
+      { f: filterParam(and, activeView?.filters), of: filterParam(or, activeView?.or_filters) },
+      true,
+    );
 
   const onColumnsChange = (cols: string[]) => updateParam({ cols: serializeColumns(cols) });
 
