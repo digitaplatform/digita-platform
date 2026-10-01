@@ -401,7 +401,6 @@ export interface FieldDefinition {
   // List view
   in_list_view?: boolean;
   in_standard_filter?: boolean;
-  in_global_search?: boolean;
 
   // Permission level
   perm_level?: number;

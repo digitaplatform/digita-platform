@@ -81,6 +81,7 @@ import { registerUploadRoutes } from "./core/api/upload-router.js";
 import { createStoragePort } from "./core/storage/storage-factory.js";
 import { attachLegacyLooseFilesOnce } from "./core/storage/legacy-file-attachment.js";
 import { removeSignaturePreferencesOnce } from "./core/database/signature-preferences.js";
+import { dropGlobalSearchTextIndexOnce } from "./core/database/global-search-text-index.js";
 import { clearSeededDensityOnce } from "./core/setup/seed-branding-settings.js";
 import { publishFilesOfPublicFields } from "./core/storage/public-field-files.js";
 import { registerSidebarRoutes } from "./core/api/sidebar-router.js";
@@ -692,12 +693,14 @@ export async function createApp(
     //     The files of a public attach field move forward to public after it: a file moves only
     //     from the document it is attached to, which the attachment names for a legacy upload.
     //     A person's former signature pick, the UserPreference ui.signature, goes once too,
-    //     and so does the branding density the seed wrote without anybody choosing it.
+    //     and so does the branding density the seed wrote without anybody choosing it, and the
+    //     text index a field's in_global_search built.
     if (env.AUTO_MIGRATE) {
       await attachLegacyLooseFilesOnce(db, registry.getAll());
       await publishFilesOfPublicFields(db, registry.getAll());
       await removeSignaturePreferencesOnce(db);
       await clearSeededDensityOnce(db);
+      await dropGlobalSearchTextIndexOnce(db, registry.getAll());
     }
 
     // 5b. Snapshot coverage audit — every Link on a submittable entity
