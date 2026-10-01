@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 // A tree entity's list in tree display searches in the tree's own box only: the header's box would
-// write ?q=, which the tree never reads, so a person typing there would see nothing filter.
+// write ?q=, which the tree never reads, so a person typing there would see nothing filter. Moving to
+// tree display drops a query typed in list display, which the tree box would not show while the
+// count and the exports still carried it.
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, cleanup, screen } from '@testing-library/react';
+import { render, cleanup, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { EntityDefinition } from '@digitaplatform/shared';
 
@@ -75,6 +77,9 @@ function renderList(params: Record<string, string>) {
   );
 }
 
+/** The URL parameters of the last write, as a plain object. */
+const lastWrite = () => Object.fromEntries(state.setParams.mock.lastCall![0] as URLSearchParams);
+
 afterEach(cleanup);
 
 describe('ListPage search of a tree entity', () => {
@@ -87,5 +92,19 @@ describe('ListPage search of a tree entity', () => {
   it('keeps the header search box in list display', () => {
     renderList({});
     expect(screen.getByRole('searchbox', { name: 'ui.list.search' })).toBeInTheDocument();
+  });
+
+  it('drops the list query when the display moves to the tree and keeps the filters', () => {
+    const f = JSON.stringify([['region', '=', 'North']]);
+    renderList({ q: 'rose', f });
+    fireEvent.click(screen.getByRole('radio', { name: 'ui.tree.viewTree' }));
+    expect(lastWrite()).toEqual({ display: 'tree', f });
+  });
+
+  it('keeps the filters when the display moves back to the list', () => {
+    const f = JSON.stringify([['region', '=', 'North']]);
+    renderList({ display: 'tree', f });
+    fireEvent.click(screen.getByRole('radio', { name: 'ui.tree.viewList' }));
+    expect(lastWrite()).toEqual({ f });
   });
 });
