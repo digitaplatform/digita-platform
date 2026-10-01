@@ -782,6 +782,7 @@ describe("An update re-derives the fetch_from fields of a row whose Link changed
     await db.ensureCollection("FetchOrder", "app");
     await docService.insert("FetchProduct", { _id: "SERVICE", product_no: "S-100", sales_uom: "HOUR" }, adminUser);
     await docService.insert("FetchProduct", { _id: "STOCKABLE", product_no: "P-200", sales_uom: "PCS" }, adminUser);
+    await docService.insert("FetchProduct", { _id: "PLAIN" }, adminUser);
   });
 
   async function storedLines(name: string): Promise<Record<string, unknown>[]> {
@@ -817,6 +818,21 @@ describe("An update re-derives the fetch_from fields of a row whose Link changed
     const rows = await storedLines(created._id);
     expect(rows.map((r) => r["product_code"])).toEqual(["P-200", "S-100", "P-200"]);
     expect(rows.map((r) => r["uom"])).toEqual(["PCS", "HOUR", "PCS"]);
+  });
+
+  it("clears a fetched value when the row's new source has none, as an insert with it stores none", async () => {
+    const created = await docService.insert("FetchOrder", { title: "SO", lines: [{ product: "STOCKABLE", quantity: 1 }] }, salesperson);
+    const [row] = await storedLines(created._id);
+    expect(row!["product_code"]).toBe("P-200");
+
+    await docService.update("FetchOrder", created._id, { lines: [{ ...row, product: "PLAIN" }] }, salesperson);
+
+    const [moved] = await storedLines(created._id);
+    expect(moved!["product_code"] ?? null).toBeNull();
+    expect(moved!["uom"] ?? null).toBeNull();
+    const inserted = await docService.insert("FetchOrder", { title: "SO", lines: [{ product: "PLAIN" }] }, salesperson);
+    const [fresh] = await storedLines(inserted._id);
+    expect(fresh!["product_code"] ?? null).toBeNull();
   });
 
   it("keeps a value the same write sets on the row whose Link changed", async () => {

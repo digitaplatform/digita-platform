@@ -195,8 +195,11 @@ export class FetchFromResolver {
         path,
         targetPath,
         rowId,
+        // A row whose Link moved to a source without this path clears the field, as an insert
+        // with that source stores none; otherwise the old source's value would stay.
         assign: (v) => {
           if (v !== undefined) rowData[childField.fieldname] = v;
+          else if (storedRow) rowData[childField.fieldname] = null;
         },
       });
     }
