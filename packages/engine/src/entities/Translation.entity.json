@@ -23,7 +23,7 @@
       "in_standard_filter": true,
       "idx": 2
     },
-    { "fieldname": "key", "fieldtype": "Data", "label": "Key", "required": true, "in_list_view": true, "in_global_search": true, "idx": 3 },
+    { "fieldname": "key", "fieldtype": "Data", "label": "Key", "required": true, "in_list_view": true, "idx": 3 },
     { "fieldname": "value", "fieldtype": "Text", "label": "Value", "required": true, "in_list_view": true, "idx": 4 },
     { "fieldname": "cb_1", "fieldtype": "ColumnBreak", "idx": 5 },
     { "fieldname": "source", "fieldtype": "Select", "label": "Source", "options": ["file", "api", "user"], "default": "api", "read_only": true, "in_standard_filter": true, "idx": 6 },

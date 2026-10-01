@@ -11,7 +11,7 @@
   "search_fields": ["file_name"],
   "default_sort": { "field": "creation", "order": "desc" },
   "fields": [
-    { "fieldname": "file_name", "fieldtype": "Data", "label": "File Name", "required": true, "in_list_view": true, "in_global_search": true, "idx": 1 },
+    { "fieldname": "file_name", "fieldtype": "Data", "label": "File Name", "required": true, "in_list_view": true, "idx": 1 },
     { "fieldname": "file_url", "fieldtype": "Data", "label": "File URL", "required": true, "idx": 2 },
     { "fieldname": "file_size", "fieldtype": "Int", "label": "File Size (bytes)", "read_only": true, "in_list_view": true, "idx": 3 },
     { "fieldname": "file_type", "fieldtype": "Data", "label": "MIME Type", "read_only": true, "in_standard_filter": true, "idx": 4 },

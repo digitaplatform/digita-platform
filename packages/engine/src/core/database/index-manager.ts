@@ -129,22 +129,7 @@ export class IndexManager {
       }
     }
 
-    // 3. Text index for global search fields
-    const textFields = entity.fields.filter(
-      (f) => f.in_global_search && !LAYOUT_FIELD_TYPES.includes(f.fieldtype),
-    );
-    if (textFields.length > 0) {
-      const textSpec: Record<string, string> = {};
-      for (const f of textFields) {
-        textSpec[f.fieldname] = "text";
-      }
-      indexes.push({
-        spec: textSpec as IndexSpecification,
-        options: { name: "idx_global_search" },
-      });
-    }
-
-    // 4. Entity-defined custom indexes
+    // 3. Entity-defined custom indexes
     if (entity.indexes) {
       for (const idx of entity.indexes) {
         const spec: Record<string, unknown> = {};
