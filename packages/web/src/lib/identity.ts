@@ -15,8 +15,9 @@ registerSignature(veloluckWorkbench);
 registerSignature(veloluckLakeside);
 registerSignature(veloluckPrecise);
 
-/** The signature a site is drawn in: the one its `theme` names. getSignature falls back to the
+/** The signature a site is drawn in: the one its `theme` names, else the website look the
+ *  tenant's settings name (findWebsiteSignature), else the default. getSignature falls back to the
  *  default for an id nobody registered. */
-export function siteSignature(theme: string | undefined): Signature {
-  return getSignature(theme);
+export function siteSignature(theme: string | undefined, websiteLook?: string): Signature {
+  return getSignature(theme || websiteLook);
 }

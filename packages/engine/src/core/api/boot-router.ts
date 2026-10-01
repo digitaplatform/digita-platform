@@ -176,6 +176,7 @@ export function registerBootRoutes(
           density: b["density"] ?? undefined,
           default_template: b["default_template"] ?? undefined,
           default_signature: b["default_signature"] ?? undefined,
+          web_default_signature: b["web_default_signature"] ?? undefined,
           allow_user_template_override: b["allow_user_template_override"] ?? undefined,
           allow_user_theme_mode: b["allow_user_theme_mode"] ?? undefined,
           login_background: b["login_background"] ?? undefined,

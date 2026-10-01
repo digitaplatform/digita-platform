@@ -25,10 +25,12 @@ vi.mock("next/headers", () => ({
 
 let site: WebSite;
 let publishedSlugs: Record<string, string[]> = { en: [""], de: [""] };
+let websiteLook: string | undefined;
 vi.mock("../src/lib/engine-client", () => ({
   getSite: async () => site,
   getNav: async () => null,
   getBranding: async () => null,
+  findWebsiteSignature: async () => websiteLook,
   listPublishedSlugs: async () => publishedSlugs,
 }));
 
@@ -105,6 +107,18 @@ describe("the locale layout", () => {
     for (const declaration of inline) {
       const [name, value] = [declaration.slice(0, declaration.indexOf(":")), declaration.slice(declaration.indexOf(":") + 1)];
       expect(band![1]).toContain(`${name}: ${value} !important;`);
+    }
+  });
+
+  it("draws a site without a theme in the website look the tenant's settings name", async () => {
+    site = { ...site, theme: undefined };
+    websiteLook = "veloluck-workbench";
+    try {
+      expect(await render()).toContain('data-signature="veloluck-workbench"');
+      site = { ...site, theme: "simetrix" };
+      expect(await render()).toContain('data-signature="simetrix"');
+    } finally {
+      websiteLook = undefined;
     }
   });
 

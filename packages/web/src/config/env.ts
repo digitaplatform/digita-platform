@@ -63,8 +63,9 @@ export function parseEngineUrls(raw: string | undefined): ReadonlyMap<string, st
 export interface ServerConfig extends Omit<PublicSiteConfig, "contactEnabled" | "notFound"> {
   /** Cluster-internal engine URL for server-side fetches (never sent to the browser). */
   engineUrl: string;
-  /** The engines of the tenant's apps a record form may post to (ENGINE_URLS, parseEngineUrls).
-   *  Explicitly OPTIONAL: a site without one posts only to its own engine. */
+  /** The engines of the tenant's apps (ENGINE_URLS, parseEngineUrls): a record form may post to
+   *  them, and their settings may name the website look (findWebsiteSignature). Explicitly
+   *  OPTIONAL: a site without one posts only to its own engine and draws its own look. */
   engineUrls: ReadonlyMap<string, string>;
   revalidateSeconds: number;
   /** The secret the engine sends with a cache purge (REVALIDATE_SECRET). */
