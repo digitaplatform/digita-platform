@@ -314,8 +314,9 @@ export class DocumentService {
    * specific document (D10b). The share is checked lazily — only when the
    * normal permission check denies — so the common path stays one check.
    * A user who reads the entity only through the role lists of its rows may
-   * read exactly the rows meant for its roles, so a stored row it may not read
-   * answers not found, as a missing one does, and no answer tells that it exists.
+   * read exactly the rows meant for its roles, so reading a stored row it may not
+   * read answers not found, as a missing one does: a read tells nothing of the
+   * row's existence. A write of such a row still answers 403.
    */
   private async assertReadAccess(
     user: UserContext,
