@@ -339,7 +339,7 @@ function RecordForm({
       watched[f.fieldname] !== '',
   );
 
-  const preview = usePreview<Doc>(entity, { enabled: hasTable });
+  const preview = usePreview<Doc>(entity, { enabled: hasTable, name: isNew ? undefined : name });
 
   const fieldState = useMemo(() => {
     const map = sweepFieldStates(meta.fields, {
