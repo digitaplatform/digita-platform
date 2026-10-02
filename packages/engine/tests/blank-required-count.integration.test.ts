@@ -6,6 +6,7 @@ vi.mock("../src/core/config/env.js", () => ({
     MONGODB_MIN_POOL: 1, MONGODB_MAX_POOL: 5, MONGODB_TIMEOUT_MS: 30000, MONGODB_RETRY_WRITES: true,
     MONGODB_IDENTITY_DB: "test_users", MONGODB_LOGS_DB: "test_logs", MONGODB_AUDITS_DB: "test_audits",
     MONGODB_CORE_DB: "test_admin", MONGODB_APP_DB_PREFIX: "test",
+    ENTITIES_DIR: "", APP_DIRS: [],
   },
 }));
 vi.mock("../src/core/logging/logger.js", () => ({
@@ -17,7 +18,10 @@ import { MongoMemoryReplSet } from "mongodb-memory-server";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { env } from "../src/core/config/env.js";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
-import { countBlankRequired } from "../src/core/setup/blank-required-count.js";
+import { mkdtemp, mkdir, writeFile, rm } from "fs/promises";
+import { tmpdir } from "os";
+import { basename, join } from "path";
+import { countBlankRequired, countBlankRequiredInApp } from "../src/core/setup/blank-required-count.js";
 
 // A stored document with a blank value in a required field is refused by any later update, so the
 // count shows where an operator has to fill or report values before such updates meet them.
@@ -70,5 +74,84 @@ describe("the count of stored blank values in required fields", () => {
     const text = JSON.stringify(await countBlankRequired(db, [order]));
     expect(text).not.toContain("secret note");
     expect(text).not.toContain("Full");
+  });
+});
+
+describe("blank means what the save refuses", () => {
+  const cases = {
+    name: "BlankCase",
+    module: "test",
+    database: "app",
+    naming: { strategy: "user_set" },
+    fields: [
+      { fieldname: "text", fieldtype: "Data", label: "Text", required: true },
+      { fieldname: "rating", fieldtype: "Rating", label: "Rating", required: true },
+      { fieldname: "tags", fieldtype: "Tag", label: "Tags", required: true },
+      { fieldname: "check", fieldtype: "Check", label: "Check", required: true },
+      { fieldname: "details", fieldtype: "SectionBreak", label: "Details", required: true },
+      {
+        fieldname: "lines",
+        fieldtype: "Table",
+        label: "Lines",
+        child_fields: [
+          { fieldname: "item", fieldtype: "Data", label: "Item", required: true },
+          { fieldname: "memo", fieldtype: "Data", label: "Memo" },
+        ],
+      },
+    ],
+    permissions: [],
+  } as unknown as EntityDefinition;
+
+  beforeAll(async () => {
+    for (const row of [
+      { _id: "B-1", text: "\u00a0", rating: "0", tags: [""], check: 0, lines: [{ item: "a", memo: "" }] },
+      { _id: "B-2", text: null, rating: 0, tags: ["a"], check: false, lines: [{ item: "\u3000" }] },
+      { _id: "B-3", rating: 0.5, tags: ["b"], check: true, lines: [] },
+      { _id: "B-4", text: "ok", rating: 3, tags: ["c"], check: true, lines: [{ item: "b" }] },
+    ]) {
+      await db.insertOne("BlankCase", row as never, "app");
+    }
+  });
+
+  it("counts a Unicode space, a stored null, a missing key, a Rating of \"0\" and an unticked Check; never a Tag holding one empty string", async () => {
+    expect(await countBlankRequired(db, [cases])).toEqual([
+      { database: "app", entity: "BlankCase", field: "text", documents: 3 },
+      { database: "app", entity: "BlankCase", field: "rating", documents: 2 },
+      { database: "app", entity: "BlankCase", field: "tags", documents: 0 },
+      { database: "app", entity: "BlankCase", field: "check", documents: 2 },
+      { database: "app", entity: "BlankCase", field: "lines.item", documents: 1 },
+    ]);
+  });
+
+  it("skips a virtual entity", async () => {
+    const virtual = { ...cases, name: "BlankCase", is_virtual: true } as EntityDefinition;
+    expect(await countBlankRequired(db, [virtual])).toEqual([]);
+  });
+});
+
+describe("the count of the app the engine runs", () => {
+  let root: string;
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "count-app-"));
+    const app = join(root, "shopapp");
+    const entity = (name: string, database?: string) => JSON.stringify({
+      name, module: "test", database, naming: { strategy: "user_set" },
+      fields: [{ fieldname: "title", fieldtype: "Data", label: "Title", required: true }], permissions: [],
+    });
+    await mkdir(join(root, "core"), { recursive: true });
+    await mkdir(join(app, "entities"), { recursive: true });
+    await mkdir(join(app, "sales", "entities"), { recursive: true });
+    await writeFile(join(app, "entities", "AppThing.entity.json"), entity("AppThing", "app"));
+    await writeFile(join(app, "sales", "entities", "SalesThing.entity.json"), entity("SalesThing"));
+    Object.assign(env, { ENTITIES_DIR: join(root, "core"), APP_DIRS: [app] });
+  });
+  afterAll(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it("counts the entities of the app's files and of its domains, as the boot loads them", async () => {
+    const counts = await countBlankRequiredInApp(db);
+    expect(counts).toContainEqual({ database: "app", entity: "AppThing", field: "title", documents: 0 });
+    expect(counts).toContainEqual({ database: `${basename(join(root, "shopapp"))}_sales`, entity: "SalesThing", field: "title", documents: 0 });
   });
 });

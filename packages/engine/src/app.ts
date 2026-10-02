@@ -11,7 +11,7 @@ import swaggerUi from "@fastify/swagger-ui";
 import { env } from "./core/config/env.js";
 import { createLogger } from "./core/logging/logger.js";
 import { MongoDBService } from "./core/database/mongodb-service.js";
-import { registerAppDatabases } from "./core/database/app-db-discovery.js";
+import { loadAppEntityFiles } from "./core/setup/load-app-entity-files.js";
 import { EntityRegistry } from "./core/entity/entity-registry.js";
 import { assertPasswordFieldKeys, configurePasswordFieldKeys, decryptPassword } from "./core/entity/password-cipher.js";
 import { DocumentService } from "./core/document/document-service.js";
@@ -553,35 +553,20 @@ export async function createApp(
     //    session entities that the rest of the platform depends on. APP_DIRS
     //    are loaded after so they can override core entities by name if needed.
     const useAppDirs = env.APP_DIRS.length > 0;
-    const entityDirs = useAppDirs
-      ? [env.ENTITIES_DIR, ...env.APP_DIRS.map((d) => join(d, "entities"))]
-      : [env.ENTITIES_DIR];
     const moduleDirs = useAppDirs
       ? [env.MODULES_DIR, ...env.APP_DIRS.map((d) => join(d, "modules"))]
       : [env.MODULES_DIR];
     const localeDirs = useAppDirs
       ? [env.TRANSLATIONS_DIR, ...env.APP_DIRS.map((d) => join(d, "locales"))]
       : [env.TRANSLATIONS_DIR];
-    discoveredEntityDirs = entityDirs;
     discoveredLocaleDirs = localeDirs;
 
-    // 2b. Discover domain databases under each app dir. Convention: any
-    //     subfolder containing an `entities/` directory is its own database
-    //     called `<appname>_<sub>` (e.g. `<app>/master/entities/` → `<app>_master`).
-    //     Each is registered with the MongoDB service and gets its own
-    //     entity-load pass with the matching default database name.
-    const domainDirs = useAppDirs ? await registerAppDatabases(db, env.APP_DIRS) : [];
+    // 2b + 3. Each app dir's domains are their own databases: any subfolder with an `entities/`
+    //     directory is the database `<appname>_<sub>`. The entity files load into the registry,
+    //     the domains' under their database.
+    const { entityDirs, domainDirs } = await loadAppEntityFiles(db, registry);
+    discoveredEntityDirs = entityDirs;
     discoveredDomainDirs = domainDirs;
-
-    // 3. Load entity definitions from all app directories.
-    //    First the legacy flat `<appdir>/entities/` (database = "app"),
-    //    then the per-domain `<appdir>/<sub>/entities/` (database = "<app>_<sub>").
-    for (const dir of entityDirs) {
-      await registry.loadAll(dir);
-    }
-    for (const d of domainDirs) {
-      await registry.loadAll(join(d.root, "entities"), { defaultDatabase: d.dbName });
-    }
 
     // 3a. The demo reset exists only where the engine may reseed its app data. It is registered
     //     before first-run stores and migrates the definitions; everywhere else, a definition an
