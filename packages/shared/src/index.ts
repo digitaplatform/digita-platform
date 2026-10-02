@@ -69,7 +69,6 @@ export type {
 export {
   TOKEN_TYPE,
   WELL_KNOWN_JWKS_PATH,
-  TOKEN_TTL_REFERENCE,
   SESSION_COOKIE,
   sessionCookieNames,
   findCookie,

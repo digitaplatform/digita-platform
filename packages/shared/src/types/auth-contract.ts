@@ -299,19 +299,6 @@ export interface LogoutRequest {
   session_id?: string;
 }
 
-// ─── Documented defaults (informational) ─────────────────
-
-/**
- * Reference TTLs. digita-auth is the authority on the real values (driven by
- * its own env); these document the intended contract so consumers size their
- * JWKS cache and clock-skew tolerance sensibly.
- */
-export const TOKEN_TTL_REFERENCE = {
-  access: "15m",
-  refresh: "7d",
-  pending: "5m",
-} as const;
-
 // ─── Cookie session transport ────────────────────────────
 
 /**
