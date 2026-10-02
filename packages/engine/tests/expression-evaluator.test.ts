@@ -4,6 +4,7 @@ import {
   evaluateExpression,
   evaluateExpressionValue,
   evaluateExpressionValueIn,
+  UnsafeExpressionError,
   assertExpressionParsableIn,
 } from "../src/core/expression/expression-evaluator.js";
 import type { ExpressionContext } from "../src/core/expression/expression-evaluator.js";
@@ -1168,5 +1169,15 @@ describe("the in operator, which the engine parses with the form's grammar", () 
     const condition = "'Staff' in user.roles || doc.customer_email == user.email";
     expect(evaluateExpression(condition, ctx({ customer_email: "c@test" }, { roles: ["Staff"], email: "s@test" }), false)).toBe(true);
     expect(evaluateExpression(condition, ctx({ customer_email: "c@test" }, { roles: ["Customer"], email: "o@test" }), true)).toBe(false);
+  });
+});
+
+describe("evaluateExpressionValueIn — only its own roots", () => {
+  it.each(["constructor", "__proto__", "hasOwnProperty", "valueOf"])("refuses %s, which every object inherits", (name) => {
+    expect(() => evaluateExpressionValueIn(name, { doc: { a: 1 } })).toThrow(UnsafeExpressionError);
+  });
+
+  it("PLANTED INNOCENT: resolves a root it is given", () => {
+    expect(evaluateExpressionValueIn("doc.a", { doc: { a: 1 } })).toBe(1);
   });
 });
