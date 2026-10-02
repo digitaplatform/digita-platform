@@ -621,6 +621,51 @@ describe("Resource API Integration", () => {
 
   // The default signature decides the first look of every user of the app, so only an
   // Administrator may write it.
+  describe("DELETE /meta/:doctype", () => {
+    it("stops serving an entity /meta created, and says nothing is deleted from the data", async () => {
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/v1/meta",
+        headers: authHeaders(),
+        payload: {
+          name: "MetaGone",
+          module: "test",
+          database: "app",
+          naming: { strategy: "user_set" },
+          fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
+          permissions: [{ role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 }],
+        },
+      });
+      expect(created.statusCode).toBe(201);
+
+      const deleted = await app.inject({ method: "DELETE", url: "/api/v1/meta/MetaGone", headers: authHeaders() });
+      expect(deleted.statusCode).toBe(200);
+      expect(deleted.json().data).toMatchObject({ deleted: true, restored_from_file: false });
+      expect(deleted.json().messages[0].text).toContain("Nothing is deleted from the data");
+
+      const meta = await app.inject({ method: "GET", url: "/api/v1/meta/MetaGone", headers: authHeaders() });
+      const list = await app.inject({ method: "GET", url: "/api/v1/resource/MetaGone", headers: authHeaders() });
+      expect([meta.statusCode, list.statusCode]).toEqual([404, 404]);
+    });
+
+    it("refuses an entity only the app bundle defines, and keeps serving it", async () => {
+      registry.register({
+        name: "BundleOnly",
+        module: "test",
+        database: "app",
+        naming: { strategy: "user_set" },
+        fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
+        permissions: [{ role: "Administrator", level: 0, select: 1, read: 1 }],
+      } as unknown as Parameters<EntityRegistry["register"]>[0]);
+
+      const refused = await app.inject({ method: "DELETE", url: "/api/v1/meta/BundleOnly", headers: authHeaders() });
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json()).toMatchObject({ success: false, error: { code: "DEFINED_BY_BUNDLE" } });
+      const meta = await app.inject({ method: "GET", url: "/api/v1/meta/BundleOnly", headers: authHeaders() });
+      expect(meta.statusCode).toBe(200);
+    });
+  });
+
   describe("BrandingSetting.default_signature", () => {
     it("a System User's PUT of BrandingSetting.default_signature is refused with 403, an Administrator's is saved", async () => {
       await db.deleteMany("BrandingSetting", {}, "core");
