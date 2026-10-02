@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
-import { buildZodSchema } from '@/lib/schema-from-meta';
+import { buildZodSchema, fieldErrorTexts } from '@/lib/schema-from-meta';
 
 function field(f: Partial<FieldDefinition> & { fieldname: string }): FieldDefinition {
   return { fieldtype: 'Data', label: f.fieldname, ...f } as FieldDefinition;
@@ -102,5 +102,42 @@ describe('buildZodSchema — a required Check must be ticked and a required Rati
   it('accepts an unticked box and a Rating of 0 when the field is not required now', () => {
     const optional = buildZodSchema(entity(fields.map((f) => ({ ...f, required: false }))), () => false);
     expect(issues(optional, { agreed: 0, score: 0 })).toEqual([]);
+  });
+});
+
+describe('fieldErrorTexts — the text each field shows for its error', () => {
+  // Each parameter a message names is shown, so a test reads what was filled in.
+  const t = (key: string, params?: Record<string, string | number>) =>
+    [key, params?.field, params?.min, params?.max].filter((v) => v !== undefined).join(': ');
+  const fieldName = (fieldname: string, fallback?: string) => fallback ?? fieldname;
+  const fields = [
+    field({ fieldname: 'code', label: 'Code', min_length: 2, max_length: 3 }),
+    field({ fieldname: 'qty', fieldtype: 'Int', label: 'Qty', min_value: 1, max_value: 9 }),
+    field({
+      fieldname: 'lines',
+      fieldtype: 'Table',
+      label: 'Lines',
+      min_rows: 1,
+      max_rows: 2,
+      // A limit the Table itself does not use, so a cell's limit read from the Table shows.
+      max_length: 99,
+      child_fields: [field({ fieldname: 'sku', label: 'SKU', max_length: 4 })],
+    }),
+  ];
+  const text = (fieldname: string, message: string) => fieldErrorTexts({ [fieldname]: { message } }, fields, t, fieldName)[fieldname];
+
+  it('PLANTED DEFECT: fills each limit a message names from its field', () => {
+    expect(text('code', 'field_min_length')).toBe('field_min_length: Code: 2');
+    expect(text('code', 'field_max_length')).toBe('field_max_length: Code: 3');
+    expect(text('qty', 'field_min_value')).toBe('field_min_value: Qty: 1');
+    expect(text('qty', 'field_max_value')).toBe('field_max_value: Qty: 9');
+    expect(text('lines', 'table_min_rows')).toBe('table_min_rows: Lines: 1');
+    expect(text('lines', 'table_max_rows')).toBe('table_max_rows: Lines: 2');
+    expect(text('code', 'field_required')).toBe('field_required: Code');
+  });
+
+  it("PLANTED DEFECT: names a Table cell's error by the cell and fills the cell's own limit", () => {
+    const errors = { lines: [undefined, { sku: { message: 'field_max_length' } }] };
+    expect(fieldErrorTexts(errors, fields, t, fieldName)).toEqual({ lines: 'field_max_length: Lines: SKU: 4' });
   });
 });

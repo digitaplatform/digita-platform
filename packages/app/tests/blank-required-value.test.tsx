@@ -163,4 +163,17 @@ describe('RecordDialog refuses a blank required Table cell before it sends the r
     await waitFor(() => expect(state.errors['lines']).toBe('field_required: Lines: SKU'));
     expect(state.create).not.toHaveBeenCalled();
   });
+
+  it('PLANTED DEFECT: fills the limit a message names, as the record page does', async () => {
+    render(<RecordDialog open onClose={vi.fn()} entity="Order" meta={meta} />);
+    act(() => {
+      state.onFieldChange('customer', 'Ann');
+      state.onFieldChange('code', 'Anna');
+      state.onFieldChange('lines', [{ _row_id: 'r1', sku: 'A' }]);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'ui.action.create' }));
+
+    await waitFor(() => expect(state.errors['code']).toBe('field_max_length: Code: 3'));
+    expect(state.create).not.toHaveBeenCalled();
+  });
 });

@@ -12,8 +12,7 @@ import { useDocument, useSingle, useCreate, useUpdate, useDeleteDoc, useCopy } f
 import { usePreview } from '@/hooks/usePreview';
 import { getDoc, getSingle } from '@/services/resource';
 import { qk } from '@/lib/query-keys';
-import { buildZodSchema, fieldErrorMessage, fieldMessageParams } from '@/lib/schema-from-meta';
-import { fieldLabel } from '@/lib/localize-meta';
+import { buildZodSchema, fieldErrorTexts } from '@/lib/schema-from-meta';
 import { buildDefaults, seedsDefault, tenantTimeZoneOf } from '@/lib/default-tokens';
 import { mergePreviewRows, RECOMPUTE_OVERRIDES_KEY } from '@/lib/merge-preview-rows';
 import { resolveFetchFromTargets } from '@/lib/resolve-fetch-from';
@@ -407,24 +406,13 @@ export function RecordForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preview.data]);
 
-  const errors = useMemo(() => {
-    const out: Record<string, string> = {};
-    const rhf = form.formState.errors as Record<string, unknown>;
-    for (const k of Object.keys(rhf)) {
-      const error = fieldErrorMessage(rhf[k]);
-      if (!error) continue;
-      // An engine message names its field through {field}, a Table's cell as "Lines: SKU", and
-      // its limit through {min} or {max}.
-      const field = meta.fields.find((f) => f.fieldname === k);
-      const cell = error.cell ? field?.child_fields?.find((c) => c.fieldname === error.cell) : undefined;
-      const name = tField(entity, k, field?.label);
-      out[k] = t(error.message, {
-        field: cell ? `${name}: ${fieldLabel(cell)}` : name,
-        ...fieldMessageParams(cell ?? field, error.message),
-      });
-    }
-    return out;
-  }, [form.formState.errors, t, tField, entity, meta]);
+  const errors = useMemo(
+    () =>
+      fieldErrorTexts(form.formState.errors as Record<string, unknown>, meta.fields, t, (fieldname, fallback) =>
+        tField(entity, fieldname, fallback),
+      ),
+    [form.formState.errors, t, tField, entity, meta],
+  );
 
   const { dirtyFields } = form.formState;
   const shownFields = useMemo(() => {
