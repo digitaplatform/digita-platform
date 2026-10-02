@@ -9,6 +9,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { cn } from '../lib/cn.js';
 import { Button } from '../primitives/Button.js';
 
@@ -17,6 +18,16 @@ export interface TreeViewNode {
   label: string;
   parentId: string | null;
   subtitle?: string;
+  /** The node's place among its siblings; siblings sort by it, then by label. */
+  position?: number;
+  /** Drawn before the label, such as the node's icon. */
+  icon?: ReactNode;
+  /** A picture drawn before the label, such as a category's photo. */
+  imageUrl?: string;
+  /** Drawn after the label, such as how many records the node holds. */
+  badge?: ReactNode;
+  /** Drawn subdued, such as a node that is switched off. */
+  muted?: boolean;
 }
 
 export interface TreeViewProps {
@@ -52,7 +63,18 @@ export interface TreeViewProps {
    *  Without it every node is open until a person closes it. */
   expandedIds?: Set<string>;
   onExpandedChange?: (id: string, expanded: boolean) => void;
+  /** The node's label as the consumer draws it, in place of its text. */
+  renderLabel?: (node: TreeViewNode) => ReactNode;
 }
+
+/** Above this many visible rows only the rows in view mount; a smaller tree mounts whole, so a
+ *  person's in-page search finds every row of it. */
+const VIRTUAL_ROWS_FROM = 500;
+/** The height of one row, which a long tree reserves for every row out of view. */
+const ROW_HEIGHT_PX = 32;
+
+const bySiblingOrder = (a: TreeViewNode, b: TreeViewNode): number =>
+  (a.position ?? 0) - (b.position ?? 0) || a.label.localeCompare(b.label);
 
 function buildChildren(nodes: TreeViewNode[]): {
   childrenOf: Map<string | null, TreeViewNode[]>;
@@ -67,6 +89,7 @@ function buildChildren(nodes: TreeViewNode[]): {
     list.push(n);
     childrenOf.set(key, list);
   }
+  for (const list of childrenOf.values()) list.sort(bySiblingOrder);
   return { childrenOf, roots: childrenOf.get(null) ?? [] };
 }
 
@@ -104,6 +127,7 @@ export function TreeView({
   selectLabel = 'Select',
   expandedIds,
   onExpandedChange,
+  renderLabel,
 }: TreeViewProps) {
   const { childrenOf, roots } = useMemo(() => buildChildren(nodes), [nodes]);
   // Without `expandedIds` the tree keeps the nodes a person closed, not the open
@@ -169,6 +193,14 @@ export function TreeView({
     return out;
   }, [roots, childrenOf, isExpanded, q, subtreeMatches]);
 
+  const virtual = flat.length > VIRTUAL_ROWS_FROM;
+  const virtualizer = useVirtualizer({
+    count: virtual ? flat.length : 0,
+    getScrollElement: () => containerRef.current,
+    estimateSize: () => ROW_HEIGHT_PX,
+    overscan: 10,
+  });
+
   // A search shows every node open, so an open or close then would change nothing a person sees
   // and would only surface once the search is cleared.
   const toggle = (id: string) => {
@@ -182,10 +214,14 @@ export function TreeView({
   }, [autoFocus]);
 
   useEffect(() => {
-    if (activeId)
+    if (!activeId) return;
+    // A long tree has mounted only the rows in view, so it scrolls to the row's index first.
+    if (virtual) virtualizer.scrollToIndex(flat.findIndex((f) => f.node.id === activeId));
+    else
       containerRef.current
         ?.querySelector(`[data-tree-id="${escapeAttr(activeId)}"]`)
         ?.scrollIntoView?.({ block: 'nearest' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -231,108 +267,122 @@ export function TreeView({
         className,
       )}
     >
-      {flat.map(({ node, depth }, index) => {
-        const nameId = `${baseId}-name-${index}`;
-        const expandable = hasChildren(node.id);
-        const open = isExpanded(node.id);
-        const selected = node.id === selectedId;
-        const active = node.id === activeId;
-        const disabled = disabledIds?.has(node.id) ?? false;
-        // A disabled group still opens on its name: its subtree stays navigable.
-        const opensOnName = expandOnNameClick === true && expandable;
-        const nameDisabled = disabled && !opensOnName;
-        const dragData = getNodeDragData ? getNodeDragData(node) : null;
-        return (
-          <div
-            key={node.id}
-            data-tree-id={node.id}
-            role="treeitem"
-            // Named by its name alone: named by its content, it would add the names of the row's buttons.
-            aria-labelledby={nameId}
-            aria-level={depth + 1}
-            aria-selected={selected}
-            aria-expanded={expandable ? open : undefined}
-            draggable={dragData ? true : undefined}
-            onDragStart={
-              dragData
-                ? (e: DragEvent) => {
-                    e.dataTransfer.setData(dragData.type, dragData.data);
-                    e.dataTransfer.effectAllowed = 'copy';
-                  }
-                : undefined
-            }
-            className={cn(
-              'group flex items-center gap-1 border-b border-border pr-2 text-sm last:border-b-0',
-              active ? 'bg-bgHover' : selected && 'bg-subtle',
-              dragData && 'cursor-grab active:cursor-grabbing',
-            )}
-          >
-            <button
-              type="button"
-              tabIndex={-1}
-              // Where the name opens the group, the name is its accessible toggle.
-              aria-hidden={!expandable || opensOnName}
-              onClick={() => expandable && toggle(node.id)}
-              style={{ marginLeft: depth * 16 }}
+      {/* A long tree reserves the height of every row, and places the rows in view inside it. */}
+      <div style={virtual ? { height: virtualizer.getTotalSize(), position: 'relative' } : undefined}>
+        {(virtual
+          ? virtualizer.getVirtualItems().map((item) => ({ ...flat[item.index]!, index: item.index, start: item.start }))
+          : flat.map((row, index) => ({ ...row, index, start: undefined }))
+        ).map(({ node, depth, index, start }) => {
+          const nameId = `${baseId}-name-${index}`;
+          const expandable = hasChildren(node.id);
+          const open = isExpanded(node.id);
+          const selected = node.id === selectedId;
+          const active = node.id === activeId;
+          const disabled = disabledIds?.has(node.id) ?? false;
+          // A disabled group still opens on its name: its subtree stays navigable.
+          const opensOnName = expandOnNameClick === true && expandable;
+          const nameDisabled = disabled && !opensOnName;
+          const dragData = getNodeDragData ? getNodeDragData(node) : null;
+          return (
+            <div
+              key={node.id}
+              data-tree-id={node.id}
+              role="treeitem"
+              // Named by its name alone: named by its content, it would add the names of the row's buttons.
+              aria-labelledby={nameId}
+              aria-level={depth + 1}
+              aria-selected={selected}
+              aria-expanded={expandable ? open : undefined}
+              draggable={dragData ? true : undefined}
+              onDragStart={
+                dragData
+                  ? (e: DragEvent) => {
+                      e.dataTransfer.setData(dragData.type, dragData.data);
+                      e.dataTransfer.effectAllowed = 'copy';
+                    }
+                  : undefined
+              }
+              style={
+                start === undefined
+                  ? undefined
+                  : { position: 'absolute', top: 0, left: 0, right: 0, height: ROW_HEIGHT_PX, transform: `translateY(${start}px)` }
+              }
               className={cn(
-                'flex h-7 w-5 shrink-0 items-center justify-center text-xs text-textMuted',
-                !expandable && 'invisible',
+                'group flex items-center gap-1 border-b border-border pr-2 text-sm last:border-b-0',
+                active ? 'bg-bgHover' : selected && 'bg-subtle',
+                dragData && 'cursor-grab active:cursor-grabbing',
               )}
             >
-              <span className={cn('transition-transform duration-base', open && 'rotate-90')}>
-                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className="h-3.5 w-3.5">
-                  <path d="M7.5 5.5l5 4.5-5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-            </button>
-            <button
-              id={nameId}
-              type="button"
-              tabIndex={-1}
-              disabled={nameDisabled}
-              aria-disabled={nameDisabled || undefined}
-              onClick={() => {
-                if (nameDisabled) return;
-                setActiveId(node.id);
-                if (opensOnName) toggle(node.id);
-                else onSelect?.(node.id);
-              }}
-              className={cn(
-                'flex-1 truncate py-1.5 text-left',
-                disabled ? 'text-textMuted' : 'text-textMain',
-                nameDisabled && 'cursor-not-allowed',
-                selected && 'font-semibold',
-              )}
-            >
-              {node.label}
-              {node.subtitle && <span className="ml-2 text-xs text-textMuted">{node.subtitle}</span>}
-            </button>
-            {opensOnName && (
-              <Button
+              <button
                 type="button"
-                variant="outline"
-                size="xs"
                 tabIndex={-1}
-                // Named after its node: a screen reader listing the buttons would read "Select" on every row.
-                aria-label={`${selectLabel} ${node.label}`}
-                disabled={disabled}
-                onClick={() => {
-                  setActiveId(node.id);
-                  onSelect?.(node.id);
-                }}
-                className="shrink-0 disabled:opacity-50"
+                // Where the name opens the group, the name is its accessible toggle.
+                aria-hidden={!expandable || opensOnName}
+                onClick={() => expandable && toggle(node.id)}
+                style={{ marginLeft: depth * 16 }}
+                className={cn(
+                  'flex h-7 w-5 shrink-0 items-center justify-center text-xs text-textMuted',
+                  !expandable && 'invisible',
+                )}
               >
-                {selectLabel}
-              </Button>
-            )}
-            {renderActions && (
-              <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                {renderActions(node)}
-              </span>
-            )}
-          </div>
-        );
-      })}
+                <span className={cn('transition-transform duration-base', open && 'rotate-90')}>
+                  <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" className="h-3.5 w-3.5">
+                    <path d="M7.5 5.5l5 4.5-5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+              </button>
+              <button
+                id={nameId}
+                type="button"
+                tabIndex={-1}
+                disabled={nameDisabled}
+                aria-disabled={nameDisabled || undefined}
+                onClick={() => {
+                  if (nameDisabled) return;
+                  setActiveId(node.id);
+                  if (opensOnName) toggle(node.id);
+                  else onSelect?.(node.id);
+                }}
+                className={cn(
+                  'flex min-w-0 flex-1 items-center gap-2 truncate py-1.5 text-left',
+                  disabled || node.muted ? 'text-textMuted' : 'text-textMain',
+                  nameDisabled && 'cursor-not-allowed',
+                  selected && 'font-semibold',
+                )}
+              >
+                {node.imageUrl && <img src={node.imageUrl} alt="" className="h-5 w-5 shrink-0 rounded object-cover" />}
+                {node.icon && <span className="flex shrink-0 items-center" aria-hidden="true">{node.icon}</span>}
+                <span className="truncate">{renderLabel ? renderLabel(node) : node.label}</span>
+                {node.subtitle && <span className="text-xs text-textMuted">{node.subtitle}</span>}
+                {node.badge !== undefined && node.badge !== null && <span className="ml-auto shrink-0 text-xs text-textMuted">{node.badge}</span>}
+              </button>
+              {opensOnName && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  tabIndex={-1}
+                  // Named after its node: a screen reader listing the buttons would read "Select" on every row.
+                  aria-label={`${selectLabel} ${node.label}`}
+                  disabled={disabled}
+                  onClick={() => {
+                    setActiveId(node.id);
+                    onSelect?.(node.id);
+                  }}
+                  className="shrink-0 disabled:opacity-50"
+                >
+                  {selectLabel}
+                </Button>
+              )}
+              {renderActions && (
+                <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                  {renderActions(node)}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
