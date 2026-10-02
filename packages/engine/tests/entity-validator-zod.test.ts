@@ -793,6 +793,11 @@ describe("a value no form offers is refused, by the schema and by the handler", 
     expect(refusedBoth("Datetime", "2026-01-01")).toEqual([true, true, true]);
   });
 
+  it("refuses a Datetime that is an invalid Date object", () => {
+    expect(refusedBoth("Datetime", new Date("not a moment"))).toEqual([false, false, false]);
+    expect(refusedBoth("Datetime", new Date("2026-01-01T10:00:00Z"))).toEqual([true, true, true]);
+  });
+
   it("refuses an Int or Duration text other than decimal digits with a sign", () => {
     for (const fieldtype of ["Int", "Duration"]) {
       expect(refusedBoth(fieldtype, "0x10")).toEqual([false, false, false]);
