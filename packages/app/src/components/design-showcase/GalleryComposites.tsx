@@ -70,7 +70,7 @@ import {
   type DataGridColumn,
 } from '@digitaplatform/components';
 import { getSignature } from '@digitaplatform/theme';
-import { useThemeStore } from '@/stores/theme';
+import { isModeLocked, useThemeStore } from '@/stores/theme';
 import { ShowcaseGroup, ShowcaseOpener, ShowcaseState, ShowcaseViewport } from './ShowcaseGroup';
 
 const noop = () => {};
@@ -341,6 +341,8 @@ function MenuGroup() {
   const [language, setLanguage] = useState('en');
   const mode = useThemeStore((s) => s.mode);
   const cycleMode = useThemeStore((s) => s.cycleMode);
+  // Under the tenant's light/dark lock the mode does not change, so the showcase offers no ModeButton.
+  const modeLocked = useThemeStore((s) => isModeLocked(s.branding));
   return (
     <>
       <ShowcaseGroup title="Menu, MenuItem" exports={['Menu', 'MenuItem']}>
@@ -382,16 +384,18 @@ function MenuGroup() {
           />
         </ShowcaseState>
       </ShowcaseGroup>
-      <ShowcaseGroup title="ModeButton" exports={['ModeButton']}>
-        <ShowcaseState state={`${mode} · cycles the page's mode`}>
-          <ModeButton
-            mode={mode}
-            onCycle={cycleMode}
-            label="Mode"
-            icons={{ light: <Sun className="h-5 w-5" />, dark: <Moon className="h-5 w-5" />, system: <Monitor className="h-5 w-5" /> }}
-          />
-        </ShowcaseState>
-      </ShowcaseGroup>
+      {!modeLocked && (
+        <ShowcaseGroup title="ModeButton" exports={['ModeButton']}>
+          <ShowcaseState state={`${mode} · cycles the page's mode`}>
+            <ModeButton
+              mode={mode}
+              onCycle={cycleMode}
+              label="Mode"
+              icons={{ light: <Sun className="h-5 w-5" />, dark: <Moon className="h-5 w-5" />, system: <Monitor className="h-5 w-5" /> }}
+            />
+          </ShowcaseState>
+        </ShowcaseGroup>
+      )}
     </>
   );
 }
