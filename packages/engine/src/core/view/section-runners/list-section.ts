@@ -47,7 +47,8 @@ export async function runListSection(
     search: resolved.search,
   };
 
-  const result = await deps.documentService.getList(section.entity, query, user, ctx);
+  // Read in the reader's language, as a document read is: translatable fields come translated.
+  const result = await deps.documentService.getList(section.entity, query, user, ctx, ctx.locale);
   let rows = result.data;
 
   // Optional one-hop expand: batch-load foreign docs by `_id in [...]`.
@@ -91,6 +92,7 @@ async function applyExpand(
     },
     user,
     ctx,
+    ctx.locale,
   );
   const byId = new Map(expanded.data.map((d) => [String(d["_id"]), d]));
 
