@@ -9,7 +9,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
 }));
 const { seedAppData } = vi.hoisted(() => ({ seedAppData: vi.fn() }));
 vi.mock("../src/core/setup/seed-app-data.js", () => ({ seedAppData }));
-vi.mock("../src/core/setup/seed-data-translations.js", () => ({ seedDataTranslations: vi.fn().mockResolvedValue({ unresolved_links: [] }) }));
+vi.mock("../src/core/setup/seed-data-translations.js", () => ({ seedDataTranslations: vi.fn().mockResolvedValue(undefined) }));
 
 import Fastify from "fastify";
 import { registerAdminReseedRoutes } from "../src/core/api/admin-reseed-router.js";
