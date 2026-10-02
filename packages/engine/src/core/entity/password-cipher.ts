@@ -86,6 +86,25 @@ export function foreignPasswordValue(
   return undefined;
 }
 
+/**
+ * `data` with each Password field a read left out holding the value `stored` holds, so a required
+ * one counts as set while the record keeps it. A Table row keeps its stored cells on a read, so it
+ * needs none.
+ */
+export function withStoredPasswords(
+  entity: EntityDefinition,
+  data: Record<string, unknown>,
+  stored: Record<string, unknown>,
+): Record<string, unknown> {
+  const filled = { ...data };
+  for (const field of entity.fields) {
+    if (field.fieldtype === "Password" && filled[field.fieldname] === undefined && isEncryptedPassword(stored[field.fieldname])) {
+      filled[field.fieldname] = stored[field.fieldname];
+    }
+  }
+  return filled;
+}
+
 let settings: PasswordFieldKeySettings | null = null;
 
 /** Takes the key set into use; the engine's start-up passes its env module, read lazily so a rotated setting is seen. */

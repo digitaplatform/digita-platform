@@ -94,6 +94,7 @@ let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
 let db: MongoDBService;
 let hookRunner: HookRunner;
+let registry: { register: (entity: EntityDefinition) => void };
 let authToken: string;
 
 beforeAll(async () => {
@@ -107,6 +108,7 @@ beforeAll(async () => {
   hookRunner = result.hookRunner;
   await result.startup();
   await app.ready();
+  registry = result.registry;
   result.registry.register(vault);
   await db.ensureCollection("Vault", "app");
   result.registry.register(sealedVault);
@@ -414,5 +416,62 @@ describe("a clear Password value stored before this change", () => {
     await migrator().migrate(vault);
     expect(await db.findOne("Vault", "V-9001", "app")).toEqual(before);
     expect(await db.findOne("_versions", "old-version", "audits")).toEqual(versionBefore);
+  });
+});
+
+describe("a record with a required Password", () => {
+  const requiredVault = {
+    ...vault,
+    name: "RequiredVault",
+    naming: { strategy: "auto_increment", prefix: "RV-", pad_length: 4 },
+    fields: [
+      { fieldname: "title", fieldtype: "Data", label: "Title", idx: 1 },
+      { fieldname: "secret", fieldtype: "Password", label: "Secret", idx: 2, required: true },
+      {
+        fieldname: "accounts", fieldtype: "Table", label: "Accounts", idx: 3,
+        child_fields: [
+          { fieldname: "host", fieldtype: "Data", label: "Host", idx: 1 },
+          { fieldname: "password", fieldtype: "Password", label: "Password", idx: 2, required: true },
+        ],
+      },
+    ],
+  } as unknown as EntityDefinition;
+  const put = (id: string, payload: Record<string, unknown>) =>
+    app.inject({ method: "PUT", url: `/api/v1/resource/RequiredVault/${id}`, headers: authHeaders(), payload });
+
+  beforeAll(async () => {
+    registry.register(requiredVault);
+    await db.ensureCollection("RequiredVault", "app");
+  });
+
+  it("PLANTED DEFECT: saves again without the password, keeps it stored and shows it to no read", async () => {
+    const created = await app.inject({
+      method: "POST", url: "/api/v1/resource/RequiredVault", headers: authHeaders(),
+      payload: { title: "Gateway", secret: "api-key-1", accounts: [{ host: "smtp", password: "row-secret" }] },
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json().data._id as string;
+    const before = (await db.findOne("RequiredVault", id, "app")) as Record<string, unknown>;
+
+    const again = await put(id, { title: "Gateway 2" });
+    expect(again.statusCode).toBe(200);
+    const after = (await db.findOne("RequiredVault", id, "app")) as Record<string, unknown>;
+    expect([after["title"], after["secret"]]).toEqual(["Gateway 2", before["secret"]]);
+    const read = await app.inject({ method: "GET", url: `/api/v1/resource/RequiredVault/${id}`, headers: authHeaders() });
+    expect(read.json().data.secret).toBeUndefined();
+
+    // A Table row keeps its stored cells on a read, so its rows sent back as read pass too.
+    expect((await put(id, { title: "Gateway 3", accounts: read.json().data.accounts })).statusCode).toBe(200);
+  });
+
+  it("PLANTED INNOCENT: still refuses a save of a record whose required password was never stored", async () => {
+    await db.insertOne(
+      "RequiredVault",
+      { _id: "RV-BARE", doctype: "RequiredVault", docstatus: 0, owner: "admin@digita.local", modified_by: "admin@digita.local", creation: new Date(), modified: new Date(), title: "Bare", accounts: [] },
+      "app",
+    );
+    const res = await put("RV-BARE", { title: "Bare 2" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.field).toBe("secret");
   });
 });
