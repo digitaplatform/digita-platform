@@ -1,3 +1,4 @@
+import type { ClientSession } from "mongodb";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
@@ -37,11 +38,11 @@ const isAppDatabase = (db: MongoDBService, database: string): boolean =>
  * Nothing is stored for this state: it is read from the rows each time. The row is judged as it
  * is stored, not as a reader gets it: a read hides a Password, and a stored one is not missing.
  */
-export async function listPendingSetupRecords(deps: SetupStateDeps): Promise<PendingSetupRecord[]> {
+export async function listPendingSetupRecords(deps: SetupStateDeps, session?: ClientSession): Promise<PendingSetupRecord[]> {
   const pending: PendingSetupRecord[] = [];
   for (const entity of deps.registry.getAll()) {
     if (!entity.is_single || !isAppDatabase(deps.db, entity.database)) continue;
-    const [row] = (await deps.db.find(entity.name, { limit: 1 }, entity.database)) as Record<string, unknown>[];
+    const [row] = (await deps.db.find(entity.name, { limit: 1 }, entity.database, session)) as Record<string, unknown>[];
     const { errors } = validateEntityDataZod(entity, row ?? {}, deps.zodSchemaBuilder, false);
     if (errors.length === 0) continue;
     const fields = [...new Set(errors.map((error) => error.field.split(/[.[]/, 1)[0]!))];
@@ -55,8 +56,8 @@ export async function listPendingSetupRecords(deps: SetupStateDeps): Promise<Pen
  * itself stays open, because saving it is the way out, and so does every entity outside the app
  * databases.
  */
-export async function assertSetupAllowsCreate(entity: EntityDefinition, deps: SetupStateDeps): Promise<void> {
+export async function assertSetupAllowsCreate(entity: EntityDefinition, deps: SetupStateDeps, session?: ClientSession): Promise<void> {
   if (entity.is_single || !isAppDatabase(deps.db, entity.database)) return;
   // ponytail: reads each settings record on every create; cache per pod once an import measurably suffers.
-  if ((await listPendingSetupRecords(deps)).length > 0) throw new SetupIncompleteError();
+  if ((await listPendingSetupRecords(deps, session)).length > 0) throw new SetupIncompleteError();
 }

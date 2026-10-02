@@ -144,6 +144,7 @@ async function startApp(name: string, seededSettings?: object) {
     clerk: await bearer(["Clerk", "System User"]),
     bearer,
     documentService: result.hookRunner.getServices()!.documentService as DocumentService,
+    hookRunner: result.hookRunner,
     boot: async (headers?: Record<string, string>) =>
       (await result.app.inject({ method: "GET", url: "/api/v1/boot", headers })).json().data,
     create: (doctype: string, payload: object, headers: Record<string, string>) =>
@@ -336,5 +337,30 @@ describe("an app whose settings record does not exist", () => {
     expect(res.statusCode).toBe(201);
     expect((await running.boot(running.admin)).setup).toEqual({ complete: true, records: [] });
     expect((await running.create("Order", { title: "New" }, running.admin)).statusCode).toBe(201);
+  });
+});
+
+describe("a save that completes the settings record and creates records through its hook", () => {
+  let running: Awaited<ReturnType<typeof startApp>>;
+  /** The engine's hooks of an entity, by event: a test plants the hook an app would declare. */
+  const hooksOf = () => (running.hookRunner as unknown as { hooks: Map<string, Map<string, unknown>> }).hooks;
+
+  beforeAll(async () => {
+    running = await startApp("digita-setup-by-hook", INCOMPLETE);
+  }, 60000);
+
+  afterAll(async () => {
+    hooksOf().delete("ShopSetting");
+    await running.close();
+  });
+
+  it("PLANTED DEFECT: lets the records its on_update hook inserts through, and completes the setup", async () => {
+    hooksOf().set("ShopSetting", new Map([["on_update", async (_doc: unknown, _ctx: unknown, services: { session?: never }) => {
+      await running.documentService.insert("Order", { title: "Opening order" }, ADMIN_USER, undefined, services.session);
+    }]]));
+    const res = await running.save("ShopSetting", "shop", COMPLETION, running.admin);
+    expect(res.statusCode).toBe(200);
+    expect((await running.db.find("Order", {}, running.database)).map((o) => o["title"])).toEqual(["Opening order"]);
+    expect((await running.boot(running.admin)).setup).toEqual({ complete: true, records: [] });
   });
 });
