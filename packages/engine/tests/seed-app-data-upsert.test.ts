@@ -450,6 +450,18 @@ describe("seedAppData tiers in insert mode", () => {
     await rm(app, { recursive: true, force: true });
   });
 
+  it("keeps the first of two reference directories that carry the same _id", async () => {
+    const second = await mkdtemp(join(tmpdir(), "seed-tiers-second-"));
+    await mkdir(join(second, "seeds"));
+    await writeFile(join(second, "seeds", "ShopSetting.seed.json"), JSON.stringify([{ _id: "shop", company_name: "Second app" }]));
+    const { db, stored } = mockDb([]);
+
+    await seedTiers(db, [join(app, "seeds"), join(second, "seeds")]);
+
+    expect(stored.get("shop")?.company_name).toBe("Workshop");
+    await rm(second, { recursive: true, force: true });
+  });
+
   it("lands the demo tier's values on the row the reference tier writes in the same load", async () => {
     const { db, stored } = mockDb([]);
     await seedTiers(db);
