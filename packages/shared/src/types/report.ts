@@ -323,6 +323,14 @@ export interface ReportBand {
   groups?: ReportGroup[];
   /** Data bands only: nested detail bands (data bands with path/lookup binding). */
   bands?: ReportBand[];
+  /**
+   * report-summary bands only: print the band at the foot of the page, its bottom on the paper's
+   * edge, past the bottom margin, where the page footers do not print. It reads its section's last
+   * row like any summary, so an invoice's payment part with its QR code can stand at the foot of
+   * the invoice's page. It goes on the page of the last band when the room below that band holds
+   * it, else on a page of its own. Default false.
+   */
+  at_page_foot?: boolean;
 }
 
 export interface ReportParam {
