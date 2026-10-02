@@ -2384,9 +2384,36 @@ describe("A save stores only declared fields, an Administrator's included", () =
   beforeAll(async () => {
     registry.register(makeEntity({
       name: "DeclaredDoc",
-      fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
+      fields: [
+        { fieldname: "title", fieldtype: "Data", label: "Title" },
+        { fieldname: "lines", fieldtype: "Table", label: "Lines", child_fields: [{ fieldname: "item", fieldtype: "Data", label: "Item" }] },
+      ],
     } as unknown as Partial<EntityDefinition>));
     await db.ensureCollection("DeclaredDoc", "app");
+    // The workflow names its state field without declaring it; the engine stores it.
+    registry.register(makeEntity({
+      name: "UndeclaredStateDoc",
+      fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
+      states: [{ value: "Draft", is_initial: true }, { value: "Active" }],
+      transitions: [{ from: "Draft", to: "Active", action: "activate" }],
+    } as unknown as Partial<EntityDefinition>));
+    await db.ensureCollection("UndeclaredStateDoc", "app");
+  });
+
+  it("stores the state of a workflow whose state field is not declared, on insert and on a transition", async () => {
+    const created = await docService.insert("UndeclaredStateDoc", { title: "x" }, adminUser);
+    expect((await db.findOne("UndeclaredStateDoc", created._id, "app"))?.["status"]).toBe("Draft");
+    await docService.transition("UndeclaredStateDoc", created._id, "Active", adminUser);
+    expect((await db.findOne("UndeclaredStateDoc", created._id, "app"))?.["status"]).toBe("Active");
+  });
+
+  it("drops an undeclared cell of a Table row from an Administrator's insert and update", async () => {
+    const created = await docService.insert("DeclaredDoc", { title: "x", lines: [{ item: "a", itme: "typo" }] }, adminUser);
+    const row = ((await db.findOne("DeclaredDoc", created._id, "app")) as { lines: Array<Record<string, unknown>> }).lines[0]!;
+    expect("itme" in row).toBe(false);
+    await docService.update("DeclaredDoc", created._id, { lines: [{ ...row, colour: "nobody declared it" }] }, adminUser);
+    const updated = ((await db.findOne("DeclaredDoc", created._id, "app")) as { lines: Array<Record<string, unknown>> }).lines[0]!;
+    expect(["colour" in updated, typeof updated["_row_id"]]).toEqual([false, "string"]);
   });
 
   it("drops an undeclared key from an Administrator's insert and update", async () => {
