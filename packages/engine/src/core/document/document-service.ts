@@ -14,7 +14,7 @@ import { validateEntityDataZod } from "../entity/entity-validator-zod.js";
 import { ZodSchemaBuilder } from "../entity/zod-schema-builder.js";
 import { IllegalTransitionError, stateLabel } from "../workflow/workflow-engine.js";
 import { getFieldTypeHandler, isStoredFieldType, FieldValueError, readStoredRow } from "../entity/field-types.js";
-import { foreignPasswordValue } from "../entity/password-cipher.js";
+import { foreignPasswordValue, withStoredPasswords } from "../entity/password-cipher.js";
 import { copyDocumentData } from "./copy-service.js";
 import { projectFields } from "./project-fields.js";
 import { resolveDefaults, applyNewChildRowDefaults, type DefaultContext } from "../defaults/default-resolver.js";
@@ -1412,7 +1412,7 @@ export class DocumentService {
       }
 
       // Entity schema validation (Zod-driven; same code path as insert).
-      const validation = validateEntityDataZod(entity, doc._data, this.zodSchemaBuilder, false);
+      const validation = validateEntityDataZod(entity, withStoredPasswords(entity, doc._data, doc._original), this.zodSchemaBuilder, false);
       if (!validation.valid) {
         for (const err of validation.errors) {
           ctx?.error(err.message_key, err.params);
@@ -1844,7 +1844,7 @@ export class DocumentService {
       }
 
       // Zod (same code path as insert/update).
-      const validation = validateEntityDataZod(entity, doc._data, this.zodSchemaBuilder, false);
+      const validation = validateEntityDataZod(entity, withStoredPasswords(entity, doc._data, doc._original), this.zodSchemaBuilder, false);
       if (!validation.valid) {
         for (const err of validation.errors) ctx?.error(err.message_key, err.params);
         throw new ValidationFailedError(doctype, validation.errors);
