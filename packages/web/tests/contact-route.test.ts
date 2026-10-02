@@ -201,6 +201,12 @@ describe("POST /api/contact", () => {
     expect(await send(route, valid())).toEqual({ status: 503, body: { ok: false, message: "Contact is not configured" } });
   });
 
+  it("answers an engine 413 as 400, as the record form does: the visitor sent too much, the server did not fail", async () => {
+    const route = await loadRoute();
+    engineStatus = 413;
+    expect(await send(route, valid())).toEqual({ status: 400, body: { ok: false, message: "Invalid request" } });
+  });
+
   it("answers 500 without an internal URL when the engine fails the create", async () => {
     const route = await loadRoute();
     engineStatus = 500;
