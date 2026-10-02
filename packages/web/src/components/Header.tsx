@@ -50,6 +50,7 @@ export function Header({
   publishedSlugs,
   enabledLocales,
   lookCookieDomain,
+  modeLocked,
 }: {
   locale: Locale;
   defaultLocale: Locale;
@@ -64,6 +65,8 @@ export function Header({
   enabledLocales: string[];
   /** The Domain of the person's look cookie, from the tenant's sign-in address. */
   lookCookieDomain: string | undefined;
+  /** The tenant locks light/dark: the bar offers no mode button. */
+  modeLocked: boolean;
 }) {
   const all = sortNav(nav?.items);
   const contact = all.find(isContactItem);
@@ -112,7 +115,7 @@ export function Header({
             </div>
           )}
           <LocaleSwitcher current={locale} publishedSlugs={publishedSlugs} enabledLocales={enabledLocales} label={t("language", locale)} />
-          <ThemeToggle label={t("toggleTheme", locale)} lookCookieDomain={lookCookieDomain} />
+          {!modeLocked && <ThemeToggle label={t("toggleTheme", locale)} lookCookieDomain={lookCookieDomain} />}
           {/* The header menu's item for the contact sheet; SheetButton draws nothing where the site offers no sheet.
               Below the tablet the bar has the room of a seven-letter label, so the button shows a mail
               icon there and its label from md on; its name is the full label at every width. */}

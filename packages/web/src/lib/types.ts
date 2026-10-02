@@ -102,4 +102,6 @@ export interface WebBranding {
   accent_palette?: string | null;
   density?: "comfortable" | "compact" | null;
   logo?: string;
+  /** false: the tenant locks light/dark, so the site offers no mode button and paints the system mode. */
+  allow_user_theme_mode?: boolean;
 }
