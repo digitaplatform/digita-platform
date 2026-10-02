@@ -56,7 +56,14 @@ interface DefinitionFailure {
 function useJobTasks(
   app: string | null,
   enabled: boolean,
-): { tasks: JobTask[]; failures: DefinitionFailure[]; isLoading: boolean; error: Error | null; reload: () => void } {
+): {
+  tasks: JobTask[];
+  failures: DefinitionFailure[];
+  isLoading: boolean;
+  isReloading: boolean;
+  error: Error | null;
+  reload: () => void;
+} {
   const translations = useI18nStore((s) => s.translations);
   const qc = useQueryClient();
   const metasQ = useQuery({
@@ -99,6 +106,8 @@ function useJobTasks(
     tasks,
     failures: metasQ.data?.failures ?? [],
     isLoading: metasQ.isLoading,
+    // isLoading stays false while data exists, so a Reload reads isFetching.
+    isReloading: metasQ.isFetching,
     error: metasQ.error,
     reload: () => void qc.invalidateQueries({ queryKey: ['jobs-task-metas', app] }),
   };
@@ -134,6 +143,7 @@ export default function JobsPage() {
     tasks,
     failures: definitionFailures,
     isLoading: tasksLoading,
+    isReloading: tasksReloading,
     error: tasksError,
     reload: reloadTasks,
   } = useJobTasks(selectedApp, appsQ.isSuccess);
@@ -248,14 +258,23 @@ export default function JobsPage() {
         )}
       </div>
       {jobsQ.error && <ErrorBlock title={tc('ui.jobs.jobsLoadFailed')} detail={jobsQ.error.message} />}
-      {definitionFailures.map((f) => (
-        <div key={f.entity} className="space-y-2">
-          <ErrorBlock title={tc('ui.jobs.tasksLoadFailed', { entity: f.entity })} detail={f.message} />
-          <Button variant="secondary" onClick={reloadTasks} {...tid.action('jobs-tasks-reload')}>
+      {definitionFailures.length > 0 && (
+        <div className="space-y-2">
+          {definitionFailures.map((f) => (
+            <ErrorBlock key={f.entity} title={tc('ui.jobs.tasksLoadFailed', { entity: f.entity })} detail={f.message} />
+          ))}
+          {/* One Reload reads every definition again; it waits while that read runs. */}
+          <Button
+            variant="secondary"
+            onClick={reloadTasks}
+            loading={tasksReloading}
+            disabled={tasksReloading}
+            {...tid.action('jobs-tasks-reload')}
+          >
             {tc('ui.action.reload')}
           </Button>
         </div>
-      ))}
+      )}
       {appsQ.error ? (
         <ErrorBlock detail={appsQ.error.message} />
       ) : appsQ.isPending || tasksLoading ? (

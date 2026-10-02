@@ -398,6 +398,30 @@ describe('a definition read that fails on the Jobs page', () => {
     expect(screen.queryByText('Failed to load the tasks of Customer')).toBeNull();
   });
 
+  it('lists two failed reads above one Reload, which waits while the definitions are read again', async () => {
+    routes['/erp/api/v1/meta'] = () => ok([{ name: 'Customer' }, { name: 'Supplier' }]);
+    const failed = () => new Response(JSON.stringify({ message: 'meta store unavailable' }), { status: 500 });
+    routes['/erp/api/v1/meta/Customer'] = failed;
+    routes['/erp/api/v1/meta/Supplier'] = failed;
+    mountJobs(new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+    expect(await screen.findByText('Failed to load the tasks of Customer')).toBeInTheDocument();
+    expect(screen.getByText('Failed to load the tasks of Supplier')).toBeInTheDocument();
+    const reload = screen.getByTestId('action:jobs-tasks-reload');
+    expect(reload).toBeEnabled();
+
+    // The second read hangs, so the page shows it as running and takes no second click.
+    let release!: () => void;
+    const hung = new Promise<void>((resolve) => (release = resolve));
+    vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).includes('/api/v1/meta/')) await hung;
+      return fakeJobsWorld(String(url), init);
+    });
+    fireEvent.click(reload);
+    await waitFor(() => expect(screen.getByTestId('action:jobs-tasks-reload')).toBeDisabled());
+    release();
+    await waitFor(() => expect(screen.getByTestId('action:jobs-tasks-reload')).toBeEnabled());
+  });
+
   it('reads a result with failures again when the page opens again', async () => {
     const reads = countCustomerReads(1);
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
