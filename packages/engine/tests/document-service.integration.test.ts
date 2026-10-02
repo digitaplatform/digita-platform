@@ -2410,3 +2410,22 @@ describe("A read_only field refuses every role's write, an Administrator's inclu
     expect(((await db.findOne("RoInvoice", created._id, "app")) as Record<string, unknown>)["sale"] ?? null).toBeNull();
   });
 });
+
+describe("A save stores only declared fields, an Administrator's included", () => {
+  beforeAll(async () => {
+    registry.register(makeEntity({
+      name: "DeclaredDoc",
+      fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
+    } as unknown as Partial<EntityDefinition>));
+    await db.ensureCollection("DeclaredDoc", "app");
+  });
+
+  it("drops an undeclared key from an Administrator's insert and update", async () => {
+    const created = await docService.insert("DeclaredDoc", { title: "x", titel: "typo on insert" }, adminUser);
+    await docService.update("DeclaredDoc", created._id, { title: "y", colour: "a field nobody declared" }, adminUser);
+    const stored = (await db.findOne("DeclaredDoc", created._id, "app")) as Record<string, unknown>;
+    expect(stored["title"]).toBe("y");
+    expect("titel" in stored).toBe(false);
+    expect("colour" in stored).toBe(false);
+  });
+});
