@@ -1,3 +1,4 @@
+import type { LocaleResolver } from "../i18n/locale-resolver.js";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { UserContext } from "../permissions/types.js";
 import { ResponseContext } from "./response-context.js";
@@ -29,13 +30,19 @@ export function registerViewRoutes(
   prefix: string,
   registry: ViewRegistry,
   executor: ViewEngine,
+  localeResolver: LocaleResolver,
 ): void {
   const basePath = `${prefix}/view`;
 
   const handler = async (request: FastifyRequest, reply: FastifyReply) => {
     const params = request.params as { viewName: string; rootName?: string };
     const view = viewOrThrow(registry, params.viewName);
-    const ctx = new ResponseContext();
+    // The reader's language (token → Accept-Language → default), in which the sections read rows.
+    const locale = await localeResolver.resolveLanguage(
+      getUser(request).language,
+      request.headers["accept-language"] as string | undefined,
+    );
+    const ctx = new ResponseContext(locale);
 
     const result = await executor.execute(
       view,

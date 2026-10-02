@@ -472,7 +472,7 @@ export async function createApp(
       documentService,
       permissionChecker,
     );
-    registerViewRoutes(scope, env.API_PREFIX, viewRegistry, viewExecutor);
+    registerViewRoutes(scope, env.API_PREFIX, viewRegistry, viewExecutor, localeResolver);
   });
 
   // ─── Real-time WebSocket gateway ──────────────────────
