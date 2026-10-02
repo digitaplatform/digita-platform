@@ -227,9 +227,9 @@ export const env = {
   // The engine VERIFIES access tokens minted by digita-auth (offline, via
   // cached JWKS). It no longer issues tokens — login/refresh/2fa/sessions
   // live in digita-auth.
-  AUTH_JWKS_URL: getEnv("AUTH_JWKS_URL", "http://localhost:3100/.well-known/jwks.json"),
-  AUTH_ISSUER: getEnv("AUTH_ISSUER", "https://auth.digita.local"),
-  AUTH_AUDIENCE: getEnv("AUTH_AUDIENCE", "digita"),
+  AUTH_JWKS_URL: getEnvRequired("AUTH_JWKS_URL"),
+  AUTH_ISSUER: getEnvRequired("AUTH_ISSUER"),
+  AUTH_AUDIENCE: getEnvRequired("AUTH_AUDIENCE"),
   // digita-auth BASE url — the engine MINTS on-behalf delegation tokens here for
   // hooks that call a satellite service (e.g. the ERP ZUGFeRD hook → digita-report).
   // No silent fallback: empty ⇒ `HookServices.mintDelegation` throws loudly AT USE
