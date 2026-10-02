@@ -52,6 +52,11 @@ describe("applyScopeFilters (D10c — union/OR semantics)", () => {
     expect(r).toEqual({ $or: [{ dept: "Sales" }, { owner: "u1@test.local" }] });
   });
 
+  it("counts only a level-0 read row: an unrestricted read row of a higher level opens no rows", () => {
+    const e = entityWith([P("Sales", { if_owner: true }), P("Sales", { level: 1 })]);
+    expect(applyScopeFilters(e, user(["Sales"]), {})).toEqual({ owner: "u1@test.local" });
+  });
+
   it("an unrestricted read role (no scope, no if_owner) → no scope filter", () => {
     const e = entityWith([
       P("Sales", { scope: { field: "dept", user_field: "department" } }),

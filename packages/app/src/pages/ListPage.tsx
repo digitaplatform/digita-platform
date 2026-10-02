@@ -18,6 +18,7 @@ import type { ListPreferenceDoc, ViewVisibility } from '@/services/listPreferenc
 import { hasEntityPermission, readableFieldPredicate, type PermAction } from '@/lib/permissions';
 import { useSessionStore } from '@/stores/session';
 import { SegmentedControl, ReportPreviewDialog } from '@digitaplatform/components';
+import { canGrantActionTo } from '@digitaplatform/shared';
 import { ListRenderer } from '@/components/render/ListRenderer';
 import { TreeEditor } from '@/components/render/TreeEditor';
 import { ListToolbar } from '@/components/list/ListToolbar';
@@ -93,7 +94,7 @@ export default function ListPage() {
     if (!meta) return undefined;
     const canReadField = readableFieldPredicate(meta, user);
     const listsSharedRows = !(meta.permissions ?? []).some(
-      (p) => (p.level ?? 0) === 0 && p.read === 1 && !!p.condition && !!user?.roles.includes(p.role),
+      (p) => !!user && canGrantActionTo(p, user.roles) && p.read === 1 && !!p.condition,
     );
     return {
       ...meta,
