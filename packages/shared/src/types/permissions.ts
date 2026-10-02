@@ -70,9 +70,10 @@ export function opensField(row: ReadRow, fieldname: string, level: number): bool
   return row.level === level && (!row.fields || row.fields.includes(fieldname));
 }
 
-/** Whether a user's read rows open `owner` and `modified_by`: unless every one of them carries `fields`. */
+/** Whether a user's read rows open `owner` and `modified_by`: where one of them carries no `fields`.
+ *  A reader with no read row reads none of them. */
 export function opensOperatorFields(rows: readonly ReadRow[]): boolean {
-  return rows.length === 0 || rows.some((row) => !row.fields);
+  return rows.some((row) => !row.fields);
 }
 
 /** The stored fields every readable row shows: what the row is and when it changed. */

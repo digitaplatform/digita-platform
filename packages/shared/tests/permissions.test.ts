@@ -29,7 +29,7 @@ describe("opensOperatorFields", () => {
     expect(opensOperatorFields([{ level: 0, fields: ["name"] }])).toBe(false);
   });
 
-  it("opens them where no row restricts them, as a share admits a record", () => {
-    expect(opensOperatorFields([])).toBe(true);
+  it("PLANTED DEFECT: opens none to a reader with no read row", () => {
+    expect(opensOperatorFields([])).toBe(false);
   });
 });

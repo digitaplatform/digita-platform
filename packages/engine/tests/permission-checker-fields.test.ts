@@ -115,7 +115,7 @@ describe("PermissionChecker — fields on a permission row", () => {
 
   it("keeps owner filterable where no row names fields, for a role that reads only its own rows above level 0", () => {
     const checker = checkerFor([{ role: "Clerk", level: 0, select: 1 }, { role: "Clerk", level: 1, read: 1, if_owner: true }]);
-    expect(checker.getReadableFields(clerk, "Item", { _id: "I-1", owner: "other@test" })!.has("owner")).toBe(true);
+    expect(checker.getReadableFields(clerk, "Item", { _id: "I-1", owner: "other@test" })!.has("owner")).toBe(false);
     expect(checker.getReadableFields(clerk, "Item", { _id: "I-2", owner: "c@test" })!.has("owner")).toBe(true);
     expect(checker.getFilterAllowlist(clerk, "Item").has("owner")).toBe(true);
   });
@@ -136,5 +136,19 @@ describe("PermissionChecker — fields on a permission row", () => {
     ]);
     expect(checker.getFilterableFields(clerk, "Item")).toEqual(new Set(["title"]));
     expect(checker.isPickerTitleVisible(clerk, "Item", "title")).toBe(true);
+  });
+
+  it("PLANTED DEFECT: reads no owner or modified_by on every row when each read row of the user is gated", () => {
+    const checker = checkerFor([
+      { role: "Clerk", level: 0, select: 1, read: 1, if_owner: true },
+      { role: "Clerk", level: 0, select: 1, read: 1, condition: "eval:doc.title=='x'" },
+    ]);
+    const everyRow = checker.getReadableFieldsOnEveryRow(clerk, "Item");
+    expect([everyRow?.has("owner"), everyRow?.has("modified_by"), everyRow?.has("title")]).toEqual([false, false, false]);
+  });
+
+  it("PLANTED INNOCENT: reads owner and modified_by on every row through an ungated row that opens every field", () => {
+    const everyRow = checkerFor([{ role: "Clerk", level: 0, select: 1, read: 1 }]).getReadableFieldsOnEveryRow(clerk, "Item");
+    expect([everyRow?.has("owner"), everyRow?.has("modified_by"), everyRow?.has("title")]).toEqual([true, true, true]);
   });
 });
