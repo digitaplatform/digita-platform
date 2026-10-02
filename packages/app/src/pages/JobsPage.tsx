@@ -523,7 +523,8 @@ function JobConfigDialog({
     staleTime: 5 * 60_000,
     queryFn: async () => String(unwrap(await appEngine.single(app, task.entity))._id ?? ''),
   });
-  const effectiveDoc = task.isSingle ? (singleDocQ.data ?? '') : doc;
+  // A target of blanks names no document, as a name of blanks names no job.
+  const effectiveDoc = task.isSingle ? (singleDocQ.data ?? '') : doc.trim();
   // A new schedule needs its cron, as its label says. An edited job may go without one and is then
   // run by hand only, as the edit dialog's label says.
   const valid = !!effectiveDoc && (!isSchedule || (!!name.trim() && (!!job || !!cron.trim())));
