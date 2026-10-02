@@ -157,10 +157,6 @@ export class LocaleResolver {
     return this.enabledLanguages!;
   }
 
-  getDefaultLanguage(): string {
-    return this.defaultLanguage;
-  }
-
   getFallbackLanguage(): string {
     return this.fallbackLanguage;
   }
