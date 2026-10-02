@@ -7,6 +7,7 @@ import type { DocumentService } from "../document/document-service.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
 import { successResponse } from "./response-model.js";
+import { wholeNumberParam } from "./list-query.js";
 
 export function registerSidebarRoutes(
   app: FastifyInstance,
@@ -47,7 +48,7 @@ export function registerSidebarRoutes(
       const { doctype, name } = request.params as { doctype: string; name: string };
       const doc = await assertCanRead(request, doctype, name);
       const query = request.query as Record<string, string>;
-      const limit = parseInt(query["limit"] ?? "20", 10);
+      const limit = wholeNumberParam(query, "limit", 1) ?? 20;
       const versions = await versionService.getVersions(doctype, name, limit);
       // Mask field-level changes the user may not read (perm_level), mirroring
       // getDoc's field filtering — a version row must not leak a gated field's
@@ -75,7 +76,7 @@ export function registerSidebarRoutes(
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { doctype, name } = request.params as { doctype: string; name: string };
       const query = request.query as Record<string, string>;
-      const limit = parseInt(query["limit"] ?? "20", 10);
+      const limit = wholeNumberParam(query, "limit", 1) ?? 20;
       const views = await documentService.getViewLog(doctype, name, request.user as UserContext | undefined, limit);
       return reply.send(successResponse(views));
     },
