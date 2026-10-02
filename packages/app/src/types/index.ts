@@ -7,7 +7,7 @@
  * and plugin placement/layout comes from the plugin manifest, not /boot.
  */
 
-import type { AudienceGrant, AudienceMap, Audience } from '@digitaplatform/shared';
+import type { AudienceGrant, AudienceMap, Audience, TreeConfig } from '@digitaplatform/shared';
 
 export interface SessionUser {
   _id: string;
@@ -122,6 +122,8 @@ export interface EntitySummary {
   is_single?: boolean;
   is_log?: boolean;
   track_changes?: boolean;
+  /** The entity's tree, where it declares one; `menu: "app"` makes it the app's left menu. */
+  tree?: TreeConfig;
   /** Engine-flagged: a real app entity (vs engine plumbing/log/settings) — the
    *  fallback dashboard + command palette iterate the navigable set. */
   navigable?: boolean;

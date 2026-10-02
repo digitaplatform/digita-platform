@@ -14,7 +14,7 @@ const HOST_DIRS = ['packages/app/src', 'packages/web/src', 'packages/theme/src',
 /** The exports only a plugin reads, outside this repository, each with the plugin use that
  *  reads it. An export is added here with its use, or not at all. */
 const READ_BY_PLUGINS: Record<string, string> = {
-  useHost: 'a component plugin reads the host services with it, as the usermenu plugin does',
+  useHost: 'a component plugin reads the host services with it, as the app-menu plugin does',
 };
 
 /** The lines of a source text that are code: a comment that names a thing reads nothing. */

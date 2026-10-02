@@ -12,8 +12,8 @@ import type { Audience, AudienceConfig, AudienceMap } from "@digitaplatform/shar
  *
  * Shape (all keys optional):
  *   {
- *     "plugins": [{ "id": "usermenu", "title": "Navigation" }],
- *     "layout":  { "template": "classic", "regions": { "left": "usermenu" } }
+ *     "plugins": [{ "id": "app-menu", "title": "Navigation" }],
+ *     "layout":  { "template": "classic", "regions": { "left": "app-menu" } }
  *   }
  */
 

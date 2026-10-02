@@ -28,9 +28,6 @@ importers:
       '@digitaplatform/theme':
         specifier: workspace:*
         version: link:../theme
-      '@digitaplatform/usermenu':
-        specifier: ^0.3.0
-        version: 0.3.0(@digitaplatform/components@packages+components)(@digitaplatform/plugins@packages+plugins+sdk)(lucide-react@0.562.0(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react-router-dom@7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-router@7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)
       '@digitaplatform/veloluck-lakeside':
         specifier: ^0.3.7
         version: 0.3.7
@@ -657,17 +654,6 @@ packages:
 
   '@digitaplatform/simetrix@0.3.2':
     resolution: {integrity: sha512-bq7r5eB/n2yb4LLdWXrNN36rvqcb3+8BHo1K9g/C/xOSiCGLMylrEsuenuxn7/BXuT2xQJcZ7zsI9yp8C4ggeA==, tarball: https://npm.pkg.github.com/download/@digitaplatform/simetrix/0.3.2/c2aedd104f90325232e1a117d44c26b7db7897fc}
-
-  '@digitaplatform/usermenu@0.3.0':
-    resolution: {integrity: sha512-pzsFJp8wj7fXAUHwhOIEuM57Q2zZYXeZwmxzudK9XTjMtzelXs6l82J10Y9hvCGjCYhyRpGbzK3U96qmXJHq9g==, tarball: https://npm.pkg.github.com/download/@digitaplatform/usermenu/0.3.0/9ac9d1f0f47146ea44533c1d5c43a6bf958b8311}
-    peerDependencies:
-      '@digitaplatform/components': ^0.3.0
-      '@digitaplatform/plugins': ^0.3.0
-      lucide-react: ^0.562.0
-      react: ^19.0.0
-      react-dom: ^19.0.0
-      react-router: ^7.0.0
-      react-router-dom: ^7.0.0
 
   '@digitaplatform/veloluck-lakeside@0.3.7':
     resolution: {integrity: sha512-VKugmwMBM4K1m05A7VegwhVErygNKbcPeEEdgDRnCnZKbV1UvpjIk4sazwLDxNEcdtQCmtXpSTLYAgmVUZAtxQ==, tarball: https://npm.pkg.github.com/download/@digitaplatform/veloluck-lakeside/0.3.7/9b88c5cafba13ddeeefa8bdc4937fcc04b3b0068}
@@ -4337,16 +4323,6 @@ snapshots:
   '@digitaplatform/minimal@0.3.9': {}
 
   '@digitaplatform/simetrix@0.3.2': {}
-
-  '@digitaplatform/usermenu@0.3.0(@digitaplatform/components@packages+components)(@digitaplatform/plugins@packages+plugins+sdk)(lucide-react@0.562.0(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react-router-dom@7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-router@7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)':
-    dependencies:
-      '@digitaplatform/components': link:packages/components
-      '@digitaplatform/plugins': link:packages/plugins/sdk
-      lucide-react: 0.562.0(react@19.2.7)
-      react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
-      react-router: 7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      react-router-dom: 7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
 
   '@digitaplatform/veloluck-lakeside@0.3.7': {}
 

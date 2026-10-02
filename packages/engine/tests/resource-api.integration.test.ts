@@ -928,6 +928,22 @@ describe("Resource API Integration", () => {
       expect(ws?.navigable).toBe(false);
     });
 
+    it("/meta answers the tree of an entity that declares one, so the app finds its menu entity", async () => {
+      registry.register({
+        name: "MetaMenuNode",
+        module: "test",
+        database: "core",
+        tree: { menu: "app" },
+        fields: [{ fieldname: "label", fieldtype: "Data", label: "Label" }],
+        permissions: [{ role: "System User", level: 0, select: 1, read: 1 }],
+      } as unknown as EntityDefinition);
+      const res = await app.inject({ method: "GET", url: "/api/v1/meta", headers: authHeaders() });
+      const items = res.json().data as { name: string; tree?: unknown }[];
+      expect(items.find((e) => e.name === "MetaMenuNode")?.tree).toEqual({ menu: "app" });
+      // PLANTED INNOCENT: an entity without a tree carries none.
+      expect(items.find((e) => e.name === "Workspace")).not.toHaveProperty("tree");
+    });
+
     it("/meta answers no icon or color of an entity, which no client reads", async () => {
       const res = await app.inject({ method: "GET", url: "/api/v1/meta", headers: authHeaders() });
       const items = res.json().data as Record<string, unknown>[];

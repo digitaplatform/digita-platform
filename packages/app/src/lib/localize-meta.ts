@@ -149,7 +149,7 @@ export function viewValueLabel(t: Dict, view: string, section: string, key: stri
 }
 
 /** Localize a workspace: its name and the texts of its cards. The keys name the workspace by its
- *  `_id` and a card by its `id`, the way the usermenu keys `user_menu.<_id>.label`. A links entry
+ *  `_id` and a card by its `id`. A links entry
  *  has no id, so its key names its position in `links`; reordering the entries moves their texts. */
 export function localizeWorkspace(ws: WorkspaceDoc, t: Dict): WorkspaceDoc {
   const w = `workspace.${ws._id}`;
