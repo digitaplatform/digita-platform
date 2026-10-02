@@ -1076,8 +1076,10 @@ export class DocumentService {
     await this.permissionChecker.check(user, doctype, "create");
 
     // An app that is not set up takes no new record, whoever creates it: a person, an import,
-    // a hook or a rule all arrive here. Seeds do not: they write their rows themselves.
-    await assertSetupAllowsCreate(entity, this.setupStateDeps());
+    // a hook or a rule all arrive here. Seeds do not: they write their rows themselves. Under a
+    // caller's session the settings are read as that transaction holds them, so a hook of the save
+    // that completes them creates.
+    await assertSetupAllowsCreate(entity, this.setupStateDeps(), sessionOverride);
 
     // Write-field-level permissions: strip fields the user may not write
     // (perm_level / read_only) from the raw input BEFORE defaults / fetch_from /
