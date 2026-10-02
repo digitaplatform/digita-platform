@@ -7,7 +7,7 @@ import { PermissionDeniedError } from "../../permissions/permission-checker.js";
 import type { UserContext } from "../../permissions/types.js";
 import { applyScopeFilters } from "../../permissions/scope-filter.js";
 import { resolveTokens, type ResolverContext } from "../param-resolver.js";
-import { collectFieldReferences } from "./pipeline-field-walker.js";
+import { collectFieldReferences, WHOLE_DOCUMENT } from "./pipeline-field-walker.js";
 import { coerceMatchDates } from "../../database/filter-value-coercer.js";
 import { readStoredRow } from "../../entity/field-types.js";
 
@@ -123,6 +123,15 @@ export async function runAggregateSection(
     if (readable === null || readable === undefined) continue; // null = all readable (admin/missing); permissive
     if (META_FIELDS.has(ref.field)) continue;
     if (ref.field.startsWith("_")) continue;
+
+    // $$ROOT or $$CURRENT before a reshape hands every field on, so the reader must read them all.
+    if (ref.field === WHOLE_DOCUMENT) {
+      const allFields = allFieldsByEntity.get(ref.entity) ?? new Set<string>();
+      if ([...allFields].some((f) => !META_FIELDS.has(f) && !f.startsWith("_") && !readable.has(f))) {
+        throw new PermissionDeniedError("aggregation_references_protected_field", { doctype: ref.entity });
+      }
+      continue;
+    }
 
     if (ref.origin === "source") {
       if (!readable.has(ref.field)) {

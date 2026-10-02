@@ -236,14 +236,14 @@ describe("runAggregateSection — field-level perm_level enforcement", () => {
 describe("collectFieldReferences — token / system-var skipping", () => {
   const reg = fakeRegistry;
 
-  it("skips $$ROOT and $$NOW", () => {
+  it("reads $$ROOT as the whole document and skips $$NOW", () => {
     const refs = collectFieldReferences(
       [{ $project: { x: "$$ROOT", y: "$$NOW" } }],
       "Employee",
       reg,
     );
-    const sources = refs.filter((r) => r.origin === "source");
-    expect(sources.length).toBe(0);
+    const sources = refs.filter((r) => r.origin === "source").map((r) => r.field);
+    expect(sources).toEqual(["*"]);
   });
 
   it("skips $root.x / $user.x / $param.x in VALUE positions (keys are still source refs)", () => {
@@ -406,5 +406,46 @@ describe("runAggregateSection — rows a read condition hides", () => {
 
   it("counts the rows of an entity the reader reads without a condition", async () => {
     await expect(runAggregateSection(countPosts, rctx, guest, conditionDeps({}))).resolves.toEqual([{ n: 24 }]);
+  });
+});
+
+describe("runAggregateSection — names an earlier stage produced", () => {
+  const everyField = new Set(["name", "dept", "dept_id", "salary"]);
+  const section = (pipeline: Array<Record<string, unknown>>) => ({ key: "k", kind: "aggregate" as const, entity: "Employee", pipeline });
+
+  it("runs the grouped, projected and sorted pipeline for a reader of every field, not only an Administrator", async () => {
+    const pipeline = [
+      { $group: { _id: { month: "$dept", category: "$name" }, n: { $sum: 1 } } },
+      { $project: { category: "$_id.category", month: "$_id.month", n: 1 } },
+      { $sort: { month: 1 } },
+      { $match: { n: { $gt: 0 } } },
+    ];
+    await expect(runAggregateSection(section(pipeline), rctx, user, makeDeps({ readable: everyField }))).resolves.toEqual([]);
+  });
+
+  it("groups by $dateToString without reading its arguments as fields", async () => {
+    const pipeline = [{ $group: { _id: { $dateToString: { format: "%Y-%m", date: "$dept" } }, n: { $sum: 1 } } }];
+    await expect(runAggregateSection(section(pipeline), rctx, user, makeDeps({ readable: everyField }))).resolves.toEqual([]);
+    const sources = collectFieldReferences(pipeline, "Employee", fakeRegistry).filter((r) => r.origin === "source").map((r) => r.field);
+    expect(sources).toEqual(["dept"]);
+  });
+
+  it("still refuses a protected field named before the first reshaping stage", async () => {
+    const partial = new Set(["name", "dept", "dept_id"]);
+    const pipeline = [{ $sort: { salary: 1 } }, { $group: { _id: "$dept", n: { $sum: 1 } } }];
+    await expect(runAggregateSection(section(pipeline), rctx, user, makeDeps({ readable: partial }))).rejects.toThrow(PermissionDeniedError);
+  });
+
+  it("refuses $$ROOT before a reshape to a reader who does not read every field, and allows it to one who does", async () => {
+    const partial = new Set(["name", "dept", "dept_id"]);
+    const pipeline = [{ $group: { _id: null, rows: { $push: "$$ROOT" } } }];
+    await expect(runAggregateSection(section(pipeline), rctx, user, makeDeps({ readable: partial }))).rejects.toThrow(PermissionDeniedError);
+    await expect(runAggregateSection(section(pipeline), rctx, user, makeDeps({ readable: everyField }))).resolves.toEqual([]);
+  });
+
+  it("reads $$ROOT after a reshape as the reshaped document, not the entity's", async () => {
+    const partial = new Set(["name", "dept", "dept_id"]);
+    const pipeline = [{ $group: { _id: "$dept", n: { $sum: 1 } } }, { $project: { group: "$$ROOT" } }];
+    await expect(runAggregateSection(section(pipeline), rctx, user, makeDeps({ readable: partial }))).resolves.toEqual([]);
   });
 });
