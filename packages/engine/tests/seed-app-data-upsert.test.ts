@@ -33,6 +33,7 @@ import type { TranslationService } from "../src/core/i18n/translation-service.js
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { DeleteBlockedError, NotFoundError } from "../src/core/document/document-service.js";
 import { seedAppData, seedHash } from "../src/core/setup/seed-app-data.js";
+import { readStoredRow } from "../src/core/entity/field-types.js";
 import { registerAdminReseedRoutes } from "../src/core/api/admin-reseed-router.js";
 
 const page: EntityDefinition = {
@@ -560,5 +561,74 @@ describe("seedAppData tiers in insert mode", () => {
     expect(reply.code).not.toHaveBeenCalled();
     // The planted defect this test guards: a reseed that loads each tier on its own.
     expect(stored.get("shop")).toMatchObject({ company_name: "Veloluck Velo AG", hourly_rate: 120, quote_threshold: 150 });
+  });
+});
+
+describe("the seed's stamp", () => {
+  /** An entity as a later release ships it, with one more field than the stamp knew. */
+  const grown = (entity: EntityDefinition): EntityDefinition => ({
+    ...entity,
+    fields: [...entity.fields, { fieldname: "added_later", fieldtype: "Data", label: "Added later" }],
+  } as EntityDefinition);
+  const registryOf = (...entities: EntityDefinition[]) => {
+    const reg = new EntityRegistry();
+    for (const entity of entities) reg.register(entity);
+    return reg;
+  };
+  let app: string;
+  const neutralValues = {
+    _id: "shop", company_name: "Workshop", quote_threshold: 150,
+    doctype: "ShopSetting", docstatus: 0, owner: "system", modified_by: "system",
+    creation: new Date("2026-01-01T00:00:00Z"), modified: new Date("2026-01-01T00:00:00Z"),
+  };
+  const tiers = () => [join(app, "seeds"), join(app, "seeds-demo")];
+
+  beforeEach(async () => {
+    app = await mkdtemp(join(tmpdir(), "seed-stamp-"));
+    await mkdir(join(app, "seeds"));
+    await mkdir(join(app, "seeds-demo"));
+    await writeFile(join(app, "seeds", "ShopSetting.seed.json"), JSON.stringify([{ _id: "shop", company_name: "Workshop", quote_threshold: 150 }]));
+    await writeFile(join(app, "seeds-demo", "ShopSetting.seed.json"), JSON.stringify([{ _id: "shop", hourly_rate: 130 }]));
+  });
+  afterEach(async () => {
+    await rm(app, { recursive: true, force: true });
+  });
+
+  it("still sweeps a page the seed dropped after a release adds a field", async () => {
+    const values = { ...storedHome, _id: "site::en::dropped", title: "Dropped", owner: "system", modified_by: "system" };
+    const { db, stored } = mockDb([{ ...values, _seed_hash: seedHash(page, values) }]);
+    await seedAppData(db, registryOf(grown(page), menu, shopSetting), {} as NamingService, [dir], {
+      mode: "upsert-delete", site: "site", documentService: mockDocumentService(stored),
+    });
+    expect(stored.has("site::en::dropped")).toBe(false);
+  });
+
+  it("still lands a later tier after a release adds a field", async () => {
+    const { db, stored } = mockDb([{ ...neutralValues, _seed_hash: seedHash(shopSetting, neutralValues) }]);
+    await seedAppData(db, registryOf(page, menu, grown(shopSetting)), {} as NamingService, tiers());
+    expect(stored.get("shop")?.hourly_rate).toBe(130);
+  });
+
+  it("stamps the row a later tier layered, over all it holds", async () => {
+    const { db, stored } = mockDb([]);
+    await seedAppData(db, registry(), {} as NamingService, tiers());
+    const shop = stored.get("shop")!;
+    expect(shop.hourly_rate).toBe(130);
+    expect(shop._seed_hash).toBe(seedHash(shopSetting, shop));
+  });
+
+  it("leaves a row whose docstatus a person changed, though its values are the seed's", async () => {
+    const { db, stored } = mockDb([{ ...neutralValues, docstatus: 1, _seed_hash: seedHash(shopSetting, neutralValues) }]);
+    await seedAppData(db, registry(), {} as NamingService, tiers());
+    expect(stored.get("shop")?.hourly_rate).toBeUndefined();
+  });
+
+  it("hashes an object value whatever the order of its keys", () => {
+    const json = { ...page, fields: [{ fieldname: "props", fieldtype: "JSON", label: "Props" }] } as EntityDefinition;
+    expect(seedHash(json, { props: { a: 1, b: 2 } })).toBe(seedHash(json, { props: { b: 2, a: 1 } }));
+  });
+
+  it("never shows the stamp to a read", () => {
+    expect(readStoredRow(page, { _id: "p", title: "t", _seed_hash: "abc" })).not.toHaveProperty("_seed_hash");
   });
 });

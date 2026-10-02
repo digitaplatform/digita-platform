@@ -103,9 +103,14 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value instanceof ObjectId ? value.toHexString() : (value ?? null));
 }
 
-/** The hash of the declared values of a stored row, which the seed stamps on every row it writes. */
+/**
+ * The hash of the declared values a stored row holds, which the seed stamps on every row it
+ * writes. A field the row does not hold stays out of it, so a field a release adds leaves the
+ * hash of every stored row as it was.
+ */
 export function seedHash(entity: EntityDefinition, doc: Record<string, unknown>): string {
-  const values = Object.fromEntries(entity.fields.map((f) => [f.fieldname, doc[f.fieldname] ?? null]));
+  const held = entity.fields.filter((f) => doc[f.fieldname] !== undefined);
+  const values = Object.fromEntries(held.map((f) => [f.fieldname, doc[f.fieldname]]));
   return createHash("sha256").update(canonicalJson({ values, docstatus: doc["docstatus"] ?? 0 })).digest("hex");
 }
 
