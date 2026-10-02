@@ -74,10 +74,11 @@ export function bootIdentity(options: BootIdentityOptions = {}): BootedIdentity 
 }
 
 /** The id of the <script type="application/json"> a server-rendered page writes its
- *  identity data into: { signature, signatures, branding }, the options its pre-paint boot runs with. */
+ *  identity data into: { signature, signatures, branding, mode }, the options its pre-paint boot
+ *  runs with. A page names a mode only when it must paint that one, as under its tenant's lock. */
 export const PAGE_IDENTITY_ELEMENT_ID = 'digita-identity';
 
-export type PageIdentity = Pick<BootIdentityOptions, 'signature' | 'signatures' | 'branding'>;
+export type PageIdentity = Pick<BootIdentityOptions, 'signature' | 'signatures' | 'branding' | 'mode'>;
 
 /** The identity data this server-rendered page carries, or null on a page without it. */
 export function readPageIdentity(doc: Document = document): PageIdentity | null {

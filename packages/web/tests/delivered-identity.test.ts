@@ -135,6 +135,22 @@ describe("loadDeliveredIdentity", () => {
     expect(root().getAttribute("data-signature")).toBe("simetrix");
   });
 
+  it("paints the mode the page names under the tenant's lock, over the visitor's stored dark", async () => {
+    signIn();
+    const page = document.createElement("script");
+    page.type = "application/json";
+    page.id = PAGE_IDENTITY_ELEMENT_ID;
+    page.textContent = JSON.stringify({ signature: "simetrix", signatures: [siteSignature], mode: "system" });
+    document.head.appendChild(page);
+    serve({ prefs: prefs({ "ui.theme_mode": "dark" }) });
+
+    await loadDeliveredIdentity(sources);
+
+    // jsdom's system mode is light, so the visitor's dark does not reach the page.
+    expect(root().classList.contains("dark")).toBe(false);
+    page.remove();
+  });
+
   it("refreshes an expired session once through the IdP, then continues", async () => {
     signIn();
     const calls = serve({

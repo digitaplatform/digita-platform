@@ -26,10 +26,11 @@ vi.mock("next/headers", () => ({
 let site: WebSite;
 let publishedSlugs: Record<string, string[]> = { en: [""], de: [""] };
 let websiteLook: string | undefined;
+let branding: Record<string, unknown> | null = null;
 vi.mock("../src/lib/engine-client", () => ({
   getSite: async () => site,
   getNav: async () => null,
-  getBranding: async () => null,
+  getBranding: async () => branding,
   findWebsiteSignature: async () => websiteLook,
   listPublishedSlugs: async () => publishedSlugs,
 }));
@@ -67,6 +68,7 @@ beforeEach(() => {
   publishedSlugs = { en: [""], de: [""] };
   requestHeaders = { "x-nonce": "bm9uY2U=" };
   localeCookie = undefined;
+  branding = null;
   redirect.mockClear();
 });
 
@@ -83,6 +85,20 @@ describe("the locale layout", () => {
     expect(await render()).not.toContain('aria-label="language"');
     publishedSlugs = { en: [""], de: [""] };
     expect(await render()).toContain('aria-label="language"');
+  });
+
+  it("draws no light/dark button and paints the system mode under the tenant's lock", async () => {
+    branding = { allow_user_theme_mode: false };
+    const html = await render();
+    expect(html).not.toContain("data-look-cookie-domain");
+    expect(html).toContain('"mode":"system"');
+  });
+
+  it("PLANTED INNOCENT: draws the button and names no mode where the tenant leaves the mode to the person", async () => {
+    branding = { allow_user_theme_mode: true };
+    const html = await render();
+    expect(html).toContain("data-look-cookie-domain");
+    expect(html).not.toContain('"mode":');
   });
 
   it("hands the light/dark button the Domain of the look cookie, the zone of the tenant's sign-in address", async () => {

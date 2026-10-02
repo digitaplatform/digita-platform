@@ -83,6 +83,8 @@ export default async function LocaleLayout({
   const nonce = (await headers()).get("x-nonce");
   if (!nonce) throw new Error("[digita-web] the request carries no x-nonce: the middleware did not run");
   const identitySources = { apps: config.tenantApps, authUrl: config.authUrl, authCookieSuffix: config.authCookieSuffix };
+  // The site follows its engine's lock, as the app does: no mode button, and the system mode painted.
+  const modeLocked = branding?.allow_user_theme_mode === false;
 
   return (
     <html lang={locale} style={properties as CSSProperties} {...attributes} suppressHydrationWarning>
@@ -90,7 +92,7 @@ export default async function LocaleLayout({
         <script
           type="application/json"
           id={PAGE_IDENTITY_ELEMENT_ID}
-          dangerouslySetInnerHTML={{ __html: jsonForScript({ signature: signature.id, signatures: [signature], branding }) }}
+          dangerouslySetInnerHTML={{ __html: jsonForScript({ signature: signature.id, signatures: [signature], branding, ...(modeLocked ? { mode: "system" } : {}) }) }}
         />
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: IDENTITY_BOOT_SCRIPT }} />
         {darkBandRule && <style dangerouslySetInnerHTML={{ __html: darkBandRule }} />}
@@ -116,6 +118,7 @@ export default async function LocaleLayout({
               publishedSlugs={publishedSlugs}
               enabledLocales={(site?.enabled_locales ?? []).filter(Boolean)}
               lookCookieDomain={lookCookieDomain(config.authUrl ?? "")}
+              modeLocked={modeLocked}
             />
             <main id="main" className="flex-1">
               {children}

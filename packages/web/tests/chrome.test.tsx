@@ -113,6 +113,7 @@ const renderHeader = (contactEnabled: boolean, publishedSlugs: Record<string, st
         publishedSlugs={publishedSlugs}
         enabledLocales={[]}
         lookCookieDomain={undefined}
+        modeLocked={false}
       />
     </ConfigProvider>,
   );
