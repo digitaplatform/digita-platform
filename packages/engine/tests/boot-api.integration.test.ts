@@ -245,6 +245,14 @@ describe("Boot API Integration", () => {
       expect((await branding()).default_signature).toBe("veloluck-workbench");
     });
 
+    it("hands the tenant's time zone, whose day the form's __today__ names", async () => {
+      const zone = async () => (await app.inject({ method: "GET", url: "/api/v1/boot" })).json().data.system_settings.timezone;
+      await db.updateOne("Setting", "settings", { timezone: "Europe/Zurich" }, "core");
+      expect(await zone()).toBe("Europe/Zurich");
+      await db.updateOne("Setting", "settings", { timezone: null }, "core");
+      expect(await zone()).toBe("UTC");
+    });
+
     it("relays no allow_user_template_override, which nothing reads, even from a row that still holds it", async () => {
       const branding = async () => (await app.inject({ method: "GET", url: "/api/v1/boot" })).json().data.branding;
       await db.updateOne("BrandingSetting", "branding", { allow_user_template_override: false }, "core");

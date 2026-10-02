@@ -144,7 +144,7 @@ export {
 } from "./css-values.js";
 export { countWrappedLines, type FontWidthTable } from "./text-metrics.js";
 
-export { calendarDay } from "./calendar-day.js";
+export { calendarDay, isTimeZone } from "./calendar-day.js";
 export type { ActionChunkResult, ActionChunkProgress } from "./types/jobs.js";
 export { JOBS_CURSOR_PARAM, ENGINE_SERVICE_HEADERS } from "./types/jobs.js";
 export type {

@@ -1,6 +1,6 @@
 import { z, type ZodTypeAny } from "zod";
 import type { EntityDefinition, FieldDefinition, FieldType } from "@digitaplatform/shared";
-import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from "@digitaplatform/shared";
+import { isTimeZone, LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from "@digitaplatform/shared";
 import { isValidColor } from "../validation/validators/color.js";
 import { evaluateExpression } from "../expression/expression-evaluator.js";
 import { isBlank } from "./field-types.js";
@@ -166,6 +166,8 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
       // gate them here too.
       return z.coerce.number().int("field_invalid_duration").min(0, "field_invalid_duration");
     case "Select":
+      // A zone no runtime knows would make every __today__ default and $now Date filter throw.
+      if (field.options_source === "timezones") return z.string().refine(isTimeZone, "field_invalid_select");
       if (Array.isArray(field.options) && field.options.length > 0) {
         return z.enum(field.options as [string, ...string[]], "field_invalid_select");
       }

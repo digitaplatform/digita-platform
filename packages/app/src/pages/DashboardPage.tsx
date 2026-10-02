@@ -4,6 +4,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LayoutDashboard } from 'lucide-react';
 import type { ViewResult, ResponseMessage } from '@digitaplatform/shared';
 import { useSessionStore } from '@/stores/session';
+import { resolveDeepLinkTokens } from '@/lib/deep-link-tokens';
+import { tenantTimeZoneOf } from '@/lib/default-tokens';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useWorkspaceCatalog } from '@/hooks/useWorkspaceCatalog';
 import { useWorkspace } from '@/hooks/useWorkspace';
@@ -28,24 +30,12 @@ function viewRead(name: string, params: ViewParams | undefined) {
 }
 type ViewRead = ReturnType<typeof viewRead>;
 
-/** Resolve unanchored deep-link tokens client-side ($user.* / $now). An unresolved
- *  $token → dev error + null (drop the nav rather than route to junk). */
-function resolveTokens(to: string, user: Record<string, unknown> | null): string | null {
-  const out = to
-    .replace(/\$user\.(\w+)/g, (_, k: string) => String(user?.[k] ?? ''))
-    .replace(/\$now/g, new Date().toISOString().slice(0, 10));
-  if (out.includes('$')) {
-    if (import.meta.env.DEV) console.error('[dashboard] unresolved deep-link token:', to);
-    return null;
-  }
-  return out;
-}
-
 export default function DashboardPage() {
   const navigate = useNavigate();
   const [sp] = useSearchParams();
   const override = sp.get('workspace') ?? undefined;
   const user = useSessionStore((s) => s.user) as unknown as Record<string, unknown> | null;
+  const timeZone = useSessionStore((s) => tenantTimeZoneOf(s.settings));
   const defaultWorkspace = useSessionStore((s) => s.default_workspace);
   const tc = useChrome();
 
@@ -135,7 +125,7 @@ export default function DashboardPage() {
   };
 
   const go = (to: string) => {
-    const resolved = resolveTokens(to, user);
+    const resolved = resolveDeepLinkTokens(to, user, timeZone);
     if (resolved) navigate(resolved);
   };
 
