@@ -160,9 +160,10 @@ export class PermissionChecker {
         }
       }
 
-      // Check if_owner
+      // Check if_owner. The engine stamps owner with the email, and the list filter matches the
+      // email alone, so the row check does too.
       if (perm.if_owner && doc) {
-        if (doc["owner"] !== user.email && doc["owner"] !== user._id) {
+        if (doc["owner"] !== user.email) {
           continue; // Not the owner, try next permission
         }
       }
@@ -207,7 +208,7 @@ export class PermissionChecker {
     doc?: Record<string, unknown>,
   ): boolean {
     if (!doc) return true;
-    if (perm.if_owner && doc["owner"] !== user.email && doc["owner"] !== user._id) return false;
+    if (perm.if_owner && doc["owner"] !== user.email) return false;
     if (perm.condition) {
       const met = evaluateExpression(
         perm.condition,
