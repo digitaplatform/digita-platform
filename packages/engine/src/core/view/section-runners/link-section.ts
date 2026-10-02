@@ -30,7 +30,7 @@ export async function runLinkSection(
     return null;
   }
 
-  const doc = await deps.documentService.getDoc(section.entity, targetValue, user, ctx);
+  const doc = await deps.documentService.getDoc(section.entity, targetValue, user, ctx, ctx.locale);
   const data = doc.toJSON() as Record<string, unknown>;
   if (section.fields?.length) {
     const projected: Record<string, unknown> = {};
