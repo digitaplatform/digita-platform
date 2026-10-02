@@ -764,9 +764,10 @@ export class PermissionChecker {
   }
 
   /**
-   * `data` without its `read_only` fields and its undeclared keys, for a writer whose role opens
-   * every field: a stripped top-level field keeps its stored value through the update's merge, and a Table row matched by
-   * `_row_id` keeps the stored values of its read_only cells, since a Table is stored whole.
+   * `data` without its `read_only` fields and its undeclared keys, also in Table rows, for a writer
+   * whose role opens every field: a stripped top-level field keeps its stored value through the
+   * update's merge, and a Table row matched by `_row_id` keeps the stored values of its read_only
+   * cells, since a Table is stored whole.
    */
   private withoutReadOnlyFields(
     entity: EntityDefinition,
@@ -780,11 +781,13 @@ export class PermissionChecker {
       // An undeclared key is dropped as from every other role's write; the engine's `_` keys pass.
       if (readOnly.has(key) || !(declared.has(key) || key.startsWith("_"))) continue;
       const table = entity.fields.find((f) => f.fieldname === key && f.fieldtype === "Table");
-      const readOnlyCells = new Set((table?.child_fields ?? []).filter((c) => c.read_only).map((c) => c.fieldname));
-      if (!table || readOnlyCells.size === 0 || !Array.isArray(value)) {
+      if (!table?.child_fields || !Array.isArray(value)) {
         out[key] = value;
         continue;
       }
+      const readOnlyCells = new Set(table.child_fields.filter((c) => c.read_only).map((c) => c.fieldname));
+      // A row's cells are filtered as the top level is: undeclared ones go, `_` keys pass.
+      const writableCells = new Set(table.child_fields.filter((c) => !c.read_only).map((c) => c.fieldname));
       const storedTable = contextDoc?.[key];
       const storedRows = new Map(
         (Array.isArray(storedTable) ? (storedTable as Array<Record<string, unknown>>) : []).map((r) => [r?.[ROW_ID_FIELD], r]),
@@ -794,7 +797,7 @@ export class PermissionChecker {
         if (!row || typeof row !== "object" || Array.isArray(row)) return row;
         const stored = storedRows.get((row as Record<string, unknown>)[ROW_ID_FIELD]);
         const kept: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(row)) if (!readOnlyCells.has(k)) kept[k] = v;
+        for (const [k, v] of Object.entries(row)) if (writableCells.has(k) || k.startsWith("_")) kept[k] = v;
         for (const cell of readOnlyCells) if (stored && cell in stored) kept[cell] = stored[cell];
         return kept;
       });
