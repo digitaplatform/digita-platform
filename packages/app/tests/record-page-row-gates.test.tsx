@@ -88,12 +88,12 @@ describe('RecordPage evaluates if_owner on the loaded record', () => {
     expect(deleteButton()).toBeNull();
   });
 
-  it('offers Delete to the owner, named by email or by id', () => {
+  it('offers Delete to the owner named by email, and not to one named by id, as the engine matches the email', () => {
     renderLoan([ownDelete], { owner: 'ann@example.com' });
     expect(deleteButton()).toBeInTheDocument();
     cleanup();
     renderLoan([ownDelete], { owner: 'u-ann' });
-    expect(deleteButton()).toBeInTheDocument();
+    expect(deleteButton()).toBeNull();
   });
 
   it("offers Delete on another user's record through a row without if_owner", () => {

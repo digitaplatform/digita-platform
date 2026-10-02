@@ -25,6 +25,14 @@ function workOrder(extra: Partial<EntityDefinition> = {}): EntityDefinition {
   } as unknown as EntityDefinition;
 }
 
+describe('hasRecordPermission and if_owner', () => {
+  it("matches the owner by email alone, as the engine does, and refuses one given as the user's _id (#421)", () => {
+    const own = workOrder({ permissions: [{ role: 'Reception', level: 0, read: 1, write: 1, if_owner: true }], states: [] });
+    expect(hasRecordPermission(own, reception, 'write', { owner: 'rita@example.com' })).toBe(true);
+    expect(hasRecordPermission(own, reception, 'write', { owner: 'u1' })).toBe(false);
+  });
+});
+
 describe('hasRecordPermission and workflow state strips', () => {
   it('refuses an action the record state strips from the only granting role', () => {
     expect(hasRecordPermission(workOrder(), reception, 'write', { status: 'in_repair' })).toBe(false);

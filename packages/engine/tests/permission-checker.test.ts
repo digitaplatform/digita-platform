@@ -13,6 +13,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { PermissionAction, SYSTEM_ROLES } from "@digitaplatform/shared";
 import { PermissionChecker, PermissionDeniedError } from "../src/core/permissions/permission-checker.js";
+import { applyScopeFilters } from "../src/core/permissions/scope-filter.js";
 import type { UserContext } from "../src/core/permissions/types.js";
 
 // ─── Mock EntityRegistry ─────────────────────────────────────────────────────
@@ -255,14 +256,13 @@ describe("PermissionChecker", () => {
       expect(result.allowed).toBe(true);
     });
 
-    it("allows when doc.owner matches user._id", async () => {
-      const result = await checker.hasPermission(
-        makeUser({ _id: "user-001", email: "user@example.com" }),
-        "TestDoc",
-        "read",
-        { owner: "user-001" },
-      );
-      expect(result.allowed).toBe(true);
+    it("denies an owner given as the user's _id, as the list filter does (#421)", async () => {
+      const user = makeUser({ _id: "user-001", email: "user@example.com" });
+      const result = await checker.hasPermission(user, "TestDoc", "read", { owner: "user-001" });
+      expect(result.allowed).toBe(false);
+      registry.register(makeEntity({ permissions: [{ role: "System User", level: 0, read: 1, write: 1, if_owner: true }] }));
+      expect([...checker.getWritableFields(user, "TestDoc", { owner: "user-001" })!]).toEqual([]);
+      expect(applyScopeFilters(registry.get("TestDoc"), user, {})).toEqual({ owner: "user@example.com" });
     });
 
     it("denies when doc.owner does not match user", async () => {

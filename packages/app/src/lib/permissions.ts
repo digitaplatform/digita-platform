@@ -74,7 +74,8 @@ export function hasRecordPermission(
  */
 function rowAdmits(p: EntityPermission, user: SessionUser, record: Record<string, unknown>): boolean {
   const owner = record['owner'];
-  if (p.if_owner && owner !== undefined && owner !== user.email && owner !== user._id) return false;
+  // The engine matches an owner by email alone, in a row check as in a list.
+  if (p.if_owner && owner !== undefined && owner !== user.email) return false;
   if (p.condition) {
     const met = evaluateExpr(p.condition, {
       doc: record,
