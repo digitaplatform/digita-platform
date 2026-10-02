@@ -51,6 +51,7 @@ import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import type { HookRunner } from "../src/core/hooks/hook-runner.js";
 import type { EntityDefinition } from "@digitaplatform/shared";
+import { readBundle } from "@digitaplatform/shared/i18n-node";
 import { SchemaMigrator } from "../src/core/database/schema-migrator.js";
 import { encryptPassword, decryptPassword, isEncryptedPassword } from "../src/core/entity/password-cipher.js";
 
@@ -215,13 +216,23 @@ describe("a Password value at rest", () => {
   });
 });
 
+/**
+ * The message a Password value in the stored form is refused with, as an English request reads it:
+ * the text of its code, or the code itself while the engine's catalog has no text for it.
+ */
+function notAsStored(field: string): string {
+  const text = readBundle(process.env.TRANSLATIONS_DIR!).en!["field_password_not_as_stored"];
+  return text ? text.replaceAll("{field}", field) : "field_password_not_as_stored";
+}
+
 describe("a Password value in the stored form sent by a client", () => {
   const forged = { key_id: "k1", iv: "AAAA", tag: "AAAA", data: "AAAA" };
 
   it("is refused when the engine never encrypted it", async () => {
     const res = await app.inject({ method: "POST", url: "/api/v1/resource/Vault", headers: authHeaders(), payload: { title: "Forged", secret: forged } });
     expect(res.statusCode).toBe(400);
-    expect(JSON.stringify(res.json())).toContain("field_password_not_as_stored");
+    expect(res.json().error.code).toBe("VALIDATION_ERROR");
+    expect(res.json().messages[0]).toMatchObject({ path: "secret", text: notAsStored("secret") });
     expect(await db.findManyByFilter("Vault", { title: "Forged" }, "app")).toEqual([]);
   });
 
@@ -362,7 +373,8 @@ describe("a Table Password cell of a copied or amended document", () => {
     const read = await app.inject({ method: "GET", url: `/api/v1/resource/Vault/${source.json().data._id}`, headers: authHeaders() });
     const res = await post("Vault", { title: "Copied by hand", accounts: read.json().data.accounts });
     expect(res.statusCode).toBe(400);
-    expect(JSON.stringify(res.json())).toContain("field_password_not_as_stored");
+    expect(res.json().error.code).toBe("VALIDATION_ERROR");
+    expect(res.json().messages[0]).toMatchObject({ path: "accounts.password", text: notAsStored("accounts.password") });
   });
 });
 
