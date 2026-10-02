@@ -242,17 +242,18 @@ export function registerMetaRoutes(
       name: doctype, // name is immutable
     };
 
-    // Update in MongoDB
-    await db.updateOne(
-      DIGITA.COLLECTIONS.ENTITY,
-      doctype,
-      {
-        ...merged,
-        modified_by: user,
-        modified: new Date(),
-      },
-      DIGITA.DATABASES.CORE,
-    );
+    // An entity whose definition only its file holds, after a DELETE of the stored one, gets its
+    // row back here, so the change outlives a restart.
+    const now = new Date();
+    if (await db.findOne(DIGITA.COLLECTIONS.ENTITY, doctype, DIGITA.DATABASES.CORE)) {
+      await db.updateOne(DIGITA.COLLECTIONS.ENTITY, doctype, { ...merged, modified_by: user, modified: now }, DIGITA.DATABASES.CORE);
+    } else {
+      await db.insertOne(
+        DIGITA.COLLECTIONS.ENTITY,
+        { _id: doctype, ...merged, owner: user, modified_by: user, creation: now, modified: now },
+        DIGITA.DATABASES.CORE,
+      );
+    }
 
     // Reload in memory
     registry.register(merged);
