@@ -114,6 +114,7 @@ const renderHeader = (contactEnabled: boolean, publishedSlugs: Record<string, st
         enabledLocales={[]}
         lookCookieDomain={undefined}
         modeLocked={false}
+        identity={{ apps: [], authUrl: null, authCookieSuffix: null }}
       />
     </ConfigProvider>,
   );

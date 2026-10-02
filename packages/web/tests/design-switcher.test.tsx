@@ -11,7 +11,8 @@ import { DESIGN_STORAGE_KEY, LOOK_COOKIE_NAME, readLookCookie } from "@digitapla
 vi.mock("server-only", () => ({}));
 setSiteEnv();
 const loadDesignFromApps = vi.fn((): Promise<boolean> => new Promise(() => {}));
-vi.mock("../src/lib/delivered-identity", () => ({ loadDesignFromApps }));
+const storeIdentityChoiceOnAccount = vi.fn(async () => {});
+vi.mock("../src/lib/delivered-identity", () => ({ loadDesignFromApps, storeIdentityChoiceOnAccount }));
 
 const { DesignSwitcher } = await import("../src/components/DesignSwitcher");
 
@@ -37,6 +38,8 @@ describe("the design switcher", () => {
     await act(async () => minimal.click());
     expect(localStorage.getItem(DESIGN_STORAGE_KEY)).toBe("minimal");
     expect(readLookCookie().design).toBe("minimal");
+    // PLANTED DEFECT: a signed-in visitor's account keeps it too, or the next page load takes the account's back.
+    expect(storeIdentityChoiceOnAccount).toHaveBeenCalledWith({ design: "minimal" }, { apps: ["crm"], authUrl: null, authCookieSuffix: null });
     document.cookie = `${LOOK_COOKIE_NAME}=; Path=/; Max-Age=0`;
     localStorage.clear();
   });

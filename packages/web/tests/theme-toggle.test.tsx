@@ -25,7 +25,7 @@ async function renderToggle(cookieDomain: string | undefined) {
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  await act(async () => root!.render(<ThemeToggle label="Toggle theme" lookCookieDomain={cookieDomain} />));
+  await act(async () => root!.render(<ThemeToggle label="Toggle theme" lookCookieDomain={cookieDomain} identity={{ apps: [], authUrl: null, authCookieSuffix: null }} />));
   return container.querySelector("button")!;
 }
 
