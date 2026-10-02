@@ -86,7 +86,7 @@ describe("seedViewsFromFiles — orphan pruning (PRUNE_ORPHAN_VIEWS=true)", () =
   it("deletes a DB row whose backing file was removed or renamed", async () => {
     await db.insertOne(
       DIGITA.COLLECTIONS.VIEW,
-      { _id: "removed-widget", name: "Removed Widget", sections: [], overridden: false },
+      { _id: "removed-widget", name: "Removed Widget", sections: [], overridden: false, owner: "system" },
       DIGITA.DATABASES.CORE,
     );
 
@@ -121,7 +121,7 @@ describe("seedViewsFromFiles — orphan pruning (PRUNE_ORPHAN_VIEWS=true)", () =
   it("reports the pruned count in the seed summary and leaves unrelated rows untouched", async () => {
     await db.insertOne(
       DIGITA.COLLECTIONS.VIEW,
-      { _id: "removed-widget", name: "Removed Widget", sections: [], overridden: false },
+      { _id: "removed-widget", name: "Removed Widget", sections: [], overridden: false, owner: "system" },
       DIGITA.DATABASES.CORE,
     );
     await db.insertOne(
@@ -151,7 +151,7 @@ describe("seedViewsFromFiles — orphan pruning (PRUNE_ORPHAN_VIEWS=false, defau
   it("does NOT delete a DB row whose backing file was removed — it survives", async () => {
     await db.insertOne(
       DIGITA.COLLECTIONS.VIEW,
-      { _id: "removed-widget", name: "Removed Widget", sections: [], overridden: false },
+      { _id: "removed-widget", name: "Removed Widget", sections: [], overridden: false, owner: "system" },
       DIGITA.DATABASES.CORE,
     );
 
@@ -178,7 +178,7 @@ describe("seedViewsFromFiles — orphan pruning (PRUNE_ORPHAN_VIEWS=false, defau
   it("reports the orphan as detected (not pruned) in the seed summary, and leaves it in place", async () => {
     await db.insertOne(
       DIGITA.COLLECTIONS.VIEW,
-      { _id: "removed-widget", name: "Removed Widget", sections: [], overridden: false },
+      { _id: "removed-widget", name: "Removed Widget", sections: [], overridden: false, owner: "system" },
       DIGITA.DATABASES.CORE,
     );
     await db.insertOne(
