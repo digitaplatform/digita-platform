@@ -9,7 +9,7 @@ import type { TranslationService } from "../i18n/translation-service.js";
 import type { RoleRegistry } from "../permissions/role-registry.js";
 import type { DomainDirectory } from "../database/app-db-discovery.js";
 import { seedRulesFromFiles, clearRuleCache } from "../rules/rule-loader.js";
-import { seedViewsFromFiles } from "../view/view-loader.js";
+import { seedViewsFromFiles, VIEW_FILE_OWNER } from "../view/view-loader.js";
 import { successResponse } from "./response-model.js";
 import { BadRequestError } from "../view/view-engine.js";
 import { createLogger } from "../logging/logger.js";
@@ -160,7 +160,8 @@ async function performReload(deps: AdminReloadDefinitionsDeps): Promise<ReloadSu
   const rulesAfter = (await db.find(DIGITA.COLLECTIONS.RULE, {}, DIGITA.DATABASES.CORE)).length;
 
   // 5. Wipe + re-seed DocumentView from `<appDir>/views/**.view.json`.
-  const viewsBefore = await db.deleteMany(DIGITA.COLLECTIONS.VIEW, {}, DIGITA.DATABASES.CORE);
+  // Only the rows the seed took from files are replaced; a View saved through the API stays.
+  const viewsBefore = await db.deleteMany(DIGITA.COLLECTIONS.VIEW, { owner: VIEW_FILE_OWNER }, DIGITA.DATABASES.CORE);
   const viewDirs = [...deps.appDirs, ...domainDirs.map((d) => d.root)];
   await seedViewsFromFiles(db, viewDirs, viewRegistry, new Set(["*"]));
   await viewRegistry.loadFromDb(db);

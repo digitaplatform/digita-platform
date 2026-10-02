@@ -44,6 +44,12 @@ export interface ViewSeedSummary {
  * left in place — a momentarily misconfigured or partially mounted
  * `APPS_DIRS` at boot must never silently delete a real app's views.
  */
+/**
+ * The owner the seed writes on every View row it takes from a file. A View an Administrator saves
+ * through the API carries that person instead, so it is never taken for the row of a file.
+ */
+export const VIEW_FILE_OWNER = "system";
+
 export async function seedViewsFromFiles(
   db: MongoDBService,
   appDirs: string[],
@@ -99,8 +105,8 @@ export async function seedViewsFromFiles(
           enabled: view.enabled ?? true,
           overridden: false,
           modified: now,
-          modified_by: "system",
-          owner: "system",
+          modified_by: VIEW_FILE_OWNER,
+          owner: VIEW_FILE_OWNER,
           creation: existingRow?.["creation"] ?? now,
           docstatus: 0,
         };
@@ -155,7 +161,8 @@ async function pruneOrphanViews(
   const orphanIds = rows
     .filter((row) => {
       const id = row["_id"];
-      return typeof id === "string" && !currentFileIds.has(id) && row["overridden"] !== true;
+      // Only a row the seed took from a file can lose its file; a View saved through the API never had one.
+      return typeof id === "string" && !currentFileIds.has(id) && row["overridden"] !== true && row["owner"] === VIEW_FILE_OWNER;
     })
     .map((row) => row["_id"] as string);
 
