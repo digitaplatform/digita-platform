@@ -511,6 +511,68 @@ describe("An engine error reaches a person in their language (#24)", () => {
     expect(res.json().error).toMatchObject({ code: "NAMING_FIELD_REQUIRED", detail: "naming_field_required", field: "code" });
   });
 
+  it("answers a save into a closed period and a date no period covers in German", async () => {
+    const de = readBundle(process.env.TRANSLATIONS_DIR!).de!;
+    const FiscalPeriod = {
+      name: "FiscalPeriod", module: "test", database: "app", naming: { strategy: "system" },
+      is_submittable: false, is_log: false, track_changes: false, track_views: false,
+      fields: [
+        { fieldname: "start_date", fieldtype: "Date", label: "Start" },
+        { fieldname: "end_date", fieldtype: "Date", label: "End" },
+        { fieldname: "is_closed", fieldtype: "Check", label: "Closed" },
+      ],
+      permissions: [ADMIN_PERM],
+    } as unknown as EntityDefinition;
+    const Voucher = {
+      name: "Voucher", module: "test", database: "app", naming: { strategy: "system" },
+      is_submittable: false, is_log: false, track_changes: false, track_views: false,
+      period_check: { date_field: "posting_date", period_entity: "FiscalPeriod", block_on: ["insert"] },
+      fields: [{ fieldname: "posting_date", fieldtype: "Date", label: "Posting date" }],
+      permissions: [ADMIN_PERM],
+    } as unknown as EntityDefinition;
+    for (const e of [FiscalPeriod, Voucher]) {
+      registry.register(e);
+      await db.ensureCollection(e.name, "app");
+    }
+    const period = await app.inject({
+      method: "POST", url: "/api/v1/resource/FiscalPeriod", headers: bearer(adminTok),
+      payload: { start_date: "2026-01-01", end_date: "2026-01-31", is_closed: 1 },
+    });
+    expect(period.statusCode).toBe(201);
+
+    const closed = await app.inject({ method: "POST", url: "/api/v1/resource/Voucher", headers: german(adminTok), payload: { posting_date: "2026-01-15" } });
+    expect(closed.statusCode).toBe(409);
+    expect(closed.json().messages[0].text).toBe(de["period_closed"]);
+    expect(closed.json().error).toMatchObject({ code: "PERIOD_CLOSED", detail: "period_closed" });
+
+    const uncovered = await app.inject({ method: "POST", url: "/api/v1/resource/Voucher", headers: german(adminTok), payload: { posting_date: "2027-05-01" } });
+    expect(uncovered.statusCode).toBe(400);
+    expect(uncovered.json().messages[0].text).toBe(de["period_not_found_for_date"]);
+    expect(uncovered.json().error).toMatchObject({ code: "PERIOD_NOT_FOUND", detail: "period_not_found_for_date" });
+    expect(await db.count("Voucher", [], "app")).toBe(0);
+  });
+
+  it("answers a state the workflow does not allow with 409 in German", async () => {
+    const Ticket = {
+      name: "FlowTicket", module: "test", database: "app", naming: { strategy: "system" },
+      is_submittable: false, is_log: false, track_changes: false, track_views: false,
+      fields: [{ fieldname: "status", fieldtype: "Data", label: "Status" }],
+      states: [{ value: "open", is_initial: true }, { value: "done" }],
+      transitions: [{ from: "open", to: "done" }],
+      permissions: [ADMIN_PERM],
+    } as unknown as EntityDefinition;
+    registry.register(Ticket);
+    await db.ensureCollection("FlowTicket", "app");
+    const created = await app.inject({ method: "POST", url: "/api/v1/resource/FlowTicket", headers: bearer(adminTok), payload: {} });
+    expect(created.statusCode).toBe(201);
+    const res = await app.inject({
+      method: "PUT", url: `/api/v1/resource/FlowTicket/${created.json().data._id as string}`, headers: german(adminTok), payload: { status: "archived" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().messages[0].text).toBe(readBundle(process.env.TRANSLATIONS_DIR!).de!["illegal_transition"]);
+    expect(res.json().error).toMatchObject({ code: "ILLEGAL_TRANSITION", detail: "illegal_transition" });
+  });
+
   it("answers a role rename with 400 in German, not a 500", async () => {
     const created = await app.inject({ method: "POST", url: "/api/v1/resource/Role", headers: bearer(adminTok), payload: { name: "Courier", label: "Courier" } });
     expect(created.statusCode).toBe(201);

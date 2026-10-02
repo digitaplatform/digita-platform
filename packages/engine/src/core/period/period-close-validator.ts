@@ -2,6 +2,7 @@ import type { ClientSession } from "mongodb";
 import type { EntityDefinition, PeriodCheckConfig } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
+import { EngineError } from "../errors/engine-error.js";
 import { createLogger } from "../logging/logger.js";
 import { PeriodCache } from "./period-cache.js";
 
@@ -17,7 +18,10 @@ const log = createLogger("period-close-validator");
  */
 export type PeriodCheckPhase = "insert" | "update" | "submit" | "cancel" | "post_submit_update";
 
-export class PeriodClosedError extends Error {
+/** A date as a person reads it in a message: the day of a Date, or the stored text. */
+const dateText = (value: Date | string | null) => (value instanceof Date ? value.toISOString().slice(0, 10) : String(value ?? ""));
+
+export class PeriodClosedError extends EngineError {
   constructor(
     public readonly entity: string,
     public readonly periodEntity: string,
@@ -25,19 +29,17 @@ export class PeriodClosedError extends Error {
     public readonly dateValue: Date | string | null,
     public readonly phase: PeriodCheckPhase,
   ) {
-    super(`Period "${periodId ?? "<by-date>"}" on ${entity}.${phase} is closed (${periodEntity})`);
-    this.name = "PeriodClosedError";
+    super("period_closed", { doctype: entity, period: periodId ?? "", phase }, 409, "PERIOD_CLOSED");
   }
 }
 
-export class NoMatchingPeriodError extends Error {
+export class NoMatchingPeriodError extends EngineError {
   constructor(
     public readonly entity: string,
     public readonly periodEntity: string,
     public readonly dateValue: Date | string,
   ) {
-    super(`No ${periodEntity} period covers ${String(dateValue)} for ${entity}`);
-    this.name = "NoMatchingPeriodError";
+    super("period_not_found_for_date", { doctype: entity, date: dateText(dateValue) }, 400, "PERIOD_NOT_FOUND");
   }
 }
 
@@ -46,7 +48,7 @@ export class NoMatchingPeriodError extends Error {
  * Resolving such a date to an arbitrary period is a period-close bypass, so fail
  * loud instead of silently picking the first match.
  */
-export class AmbiguousPeriodError extends Error {
+export class AmbiguousPeriodError extends EngineError {
   constructor(
     public readonly entity: string,
     public readonly periodEntity: string,
@@ -54,10 +56,11 @@ export class AmbiguousPeriodError extends Error {
     public readonly periodIds: string[],
   ) {
     super(
-      `Multiple ${periodEntity} periods cover ${String(dateValue)} for ${entity}: ` +
-        `${periodIds.join(", ")} (overlapping fiscal calendar)`,
+      "period_ambiguous_for_date",
+      { doctype: entity, date: dateText(dateValue), periods: periodIds.join(", ") },
+      400,
+      "PERIOD_AMBIGUOUS",
     );
-    this.name = "AmbiguousPeriodError";
   }
 }
 
@@ -69,7 +72,7 @@ export class AmbiguousPeriodError extends Error {
  * pre-fills the period link by hand to a row that doesn't cover the
  * doc's date.
  */
-export class DateOutsidePeriodError extends Error {
+export class DateOutsidePeriodError extends EngineError {
   constructor(
     public readonly entity: string,
     public readonly periodEntity: string,
@@ -80,9 +83,12 @@ export class DateOutsidePeriodError extends Error {
     public readonly periodEnd: Date | string,
   ) {
     super(
-      `${entity}.${dateField}=${String(dateValue)} falls outside ${periodEntity} "${periodId}" range (${String(periodStart)}..${String(periodEnd)})`,
+      "date_outside_period",
+      { doctype: entity, date: dateText(dateValue), period: periodId, start: dateText(periodStart), end: dateText(periodEnd) },
+      400,
+      "DATE_OUTSIDE_PERIOD",
+      dateField,
     );
-    this.name = "DateOutsidePeriodError";
   }
 }
 

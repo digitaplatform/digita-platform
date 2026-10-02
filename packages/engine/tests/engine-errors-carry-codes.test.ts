@@ -15,6 +15,9 @@ const CHECKED_FILES = [
   "core/document/docstatus-engine.ts",
   "core/document/naming-service.ts",
   "core/entity/field-types.ts",
+  "core/period/period-close-validator.ts",
+  "core/snapshot/snapshot-resolver.ts",
+  "core/workflow/workflow-engine.ts",
 ];
 
 /**

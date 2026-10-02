@@ -8,13 +8,6 @@ import {
   MongoWriteConcernError,
 } from "mongodb";
 import { ValidationFailedError } from "../../document/document-service.js";
-import { IllegalTransitionError } from "../../workflow/workflow-engine.js";
-import {
-  PeriodClosedError,
-  NoMatchingPeriodError,
-  AmbiguousPeriodError,
-  DateOutsidePeriodError,
-} from "../../period/period-close-validator.js";
 import { ViewNotFoundError, BadRequestError } from "../../view/view-engine.js";
 import { UnknownDoctypeError } from "../../entity/entity-registry.js";
 import { FilterFieldNotAllowedError, MalformedFieldsError, MalformedFilterValueError } from "../../database/filter-builder.js";
@@ -232,66 +225,6 @@ export function globalErrorHandler(
       error: { code: "RESEED_FAILED", detail: error.message, trace_id: traceId },
     };
     reply.code(500).send(response);
-    return;
-  }
-
-  if (error instanceof IllegalTransitionError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 409,
-      data: null,
-      messages: [{ text: error.message, type: "error", show: true }],
-      error: { code: "ILLEGAL_TRANSITION", detail: error.message, trace_id: traceId },
-    };
-    reply.code(409).send(response);
-    return;
-  }
-
-  if (error instanceof PeriodClosedError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 409,
-      data: null,
-      messages: [{ text: "period_closed", type: "error", show: true }],
-      error: { code: "PERIOD_CLOSED", detail: error.message, trace_id: traceId },
-    };
-    reply.code(409).send(response);
-    return;
-  }
-
-  if (error instanceof NoMatchingPeriodError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 400,
-      data: null,
-      messages: [{ text: "period_not_found_for_date", type: "error", show: true }],
-      error: { code: "PERIOD_NOT_FOUND", detail: error.message, trace_id: traceId },
-    };
-    reply.code(400).send(response);
-    return;
-  }
-
-  if (error instanceof AmbiguousPeriodError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 400,
-      data: null,
-      messages: [{ text: "period_ambiguous_for_date", type: "error", show: true }],
-      error: { code: "PERIOD_AMBIGUOUS", detail: error.message, trace_id: traceId },
-    };
-    reply.code(400).send(response);
-    return;
-  }
-
-  if (error instanceof DateOutsidePeriodError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 400,
-      data: null,
-      messages: [{ text: "date_outside_period", type: "error", show: true }],
-      error: { code: "DATE_OUTSIDE_PERIOD", detail: error.message, trace_id: traceId },
-    };
-    reply.code(400).send(response);
     return;
   }
 
