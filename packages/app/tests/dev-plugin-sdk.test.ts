@@ -18,7 +18,9 @@ beforeAll(async () => {
     root: appDir,
     cacheDir,
     logLevel: 'error',
-    server: { middlewareMode: true, hmr: false, ws: false },
+    // Vite merges this config into the app's file and skips a `watch: null` there, so every path is
+    // ignored instead.
+    server: { middlewareMode: true, hmr: false, ws: false, watch: { ignored: () => true } },
   });
 }, 120_000);
 
@@ -44,4 +46,11 @@ describe('vite dev serves the plugin SDK once', () => {
 
     expect(await importUrl(usermenu!, 'useHost')).toBe(provided);
   }, 120_000);
+
+  // The server only transforms modules once and closes, so it needs no watcher. A watcher takes
+  // inotify watches for the app and its dependencies, and where the machine's table is nearly
+  // full, every watch it asks for fails the run with ENOSPC although each test passed.
+  it('PLANTED DEFECT: watches no file', () => {
+    expect(server.watcher.getWatched()).toEqual({});
+  });
 });
