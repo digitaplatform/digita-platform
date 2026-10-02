@@ -1219,8 +1219,9 @@ describe("updateSubmitted — a read_only_depends_on lock holds for a hook, a ru
     expect(((await db.findOne("LockDoc", id, "app"))?.["lines"] as unknown[]).length).toBe(2);
   });
 
-  it("lets a hook acting for an Administrator drop a row that holds a locked cell", async () => {
+  it("holds a hook acting for an Administrator that drops a row with a locked cell, as it holds him", async () => {
     const { id, rowIds } = await lockedDoc();
+    const before = ((await db.findOne("LockDoc", id, "app"))?.["lines"] as unknown[]).length;
     (hookRunner as unknown as { hooks: Map<string, Map<string, unknown>> }).hooks.set(
       "LockDoc",
       new Map([["before_submitted_update", (doc: BaseDocument) => {
@@ -1228,16 +1229,18 @@ describe("updateSubmitted — a read_only_depends_on lock holds for a hook, a ru
       }]]),
     );
     try {
-      await docService.updateSubmitted(
-        "LockDoc",
-        id,
-        { children: [{ table: "lines", row_id: rowIds[0]!, increment: { delivered: 1 } }] },
-        admin,
-      );
+      await expect(
+        docService.updateSubmitted(
+          "LockDoc",
+          id,
+          { children: [{ table: "lines", row_id: rowIds[0]!, increment: { delivered: 1 } }] },
+          admin,
+        ),
+      ).rejects.toBeInstanceOf(PermissionDeniedError);
     } finally {
       (hookRunner as unknown as { hooks: Map<string, unknown> }).hooks.delete("LockDoc");
     }
-    expect(((await db.findOne("LockDoc", id, "app"))?.["lines"] as unknown[]).length).toBe(1);
+    expect(((await db.findOne("LockDoc", id, "app"))?.["lines"] as unknown[]).length).toBe(before);
   });
 
   it("leaves a computed Table out: its hook may drop a row that holds a locked cell", async () => {
