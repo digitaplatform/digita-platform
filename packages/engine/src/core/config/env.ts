@@ -254,11 +254,6 @@ export const env = {
   LOG_PRETTY: getEnvBool("LOG_PRETTY", true),
   LOG_TO_FILE: getEnvBool("LOG_TO_FILE", false),
   LOG_FILE_PATH: getEnv("LOG_FILE_PATH", "./logs"),
-  LOG_FILE_MAX_SIZE: getEnv("LOG_FILE_MAX_SIZE", "50M"),
-  LOG_FILE_MAX_FILES: getEnvInt("LOG_FILE_MAX_FILES", 10),
-  LOG_FILE_ROTATE: getEnv("LOG_FILE_ROTATE", "daily"),
-  LOG_TO_MONGO: getEnvBool("LOG_TO_MONGO", false),
-  LOG_MONGO_TTL_DAYS: getEnvInt("LOG_MONGO_TTL_DAYS", 30),
   LOG_REDACT_FIELDS: getEnvArray("LOG_REDACT_FIELDS", [
     "password",
     "secret",
@@ -276,8 +271,6 @@ export const env = {
   // as the base a tenant overrides.
   TRANSLATIONS_DIR: getEnvRequired("TRANSLATIONS_DIR"),
   TRANSLATION_SOURCE: getEnv("TRANSLATION_SOURCE", "both") as "file" | "mongodb" | "both",
-  TRANSLATION_CACHE: getEnv("TRANSLATION_CACHE", "memory") as "redis" | "memory" | "none",
-  TRANSLATION_CACHE_TTL_SEC: getEnvInt("TRANSLATION_CACHE_TTL_SEC", 3600),
   TRANSLATION_SEED_ON_BOOT: getEnvBool("TRANSLATION_SEED_ON_BOOT", true),
   TRANSLATION_FALLBACK_LOCALE: getEnv("TRANSLATION_FALLBACK_LOCALE", "en"),
 
@@ -299,7 +292,6 @@ export const env = {
   // A list whose rows a read condition gates re-checks every matching row, so one request
   // loads them all; past this many matching rows it answers 400 and asks for a narrower filter.
   LIST_GATED_MAX_ROWS: getEnvPositiveInt("LIST_GATED_MAX_ROWS", 5000),
-  API_TIMEOUT_MS: getEnvInt("API_TIMEOUT_MS", 60000),
   CORS_ORIGINS: getEnvArray("CORS_ORIGINS", ["http://localhost:5173"]),
   CORS_CREDENTIALS: getEnvBool("CORS_CREDENTIALS", true),
 
@@ -365,18 +357,6 @@ export const env = {
   // the union block in app.ts) to re-arm the license gate over the same bytes.
   PLUGINS_LICENSE_DISABLED: getEnvBool("PLUGINS_LICENSE_DISABLED", true),
 
-  // ─── BACKGROUND JOBS ─────────────────────────────────
-  // NOTE (go-live audit): there is NO background-job runtime today. Every hook
-  // runs SYNCHRONOUSLY inside the request transaction (see hook-runner.ts); hooks
-  // that spawn side-effect docs (e.g. an on_submit posting a ledger entry) do so inline via
-  // documentService.insert() on the same ClientSession. These JOBS_* settings are
-  // reserved for a future queue (e.g. large exports / scheduled reports) and are
-  // currently inert — nothing reads them at runtime.
-  JOBS_ENABLED: getEnvBool("JOBS_ENABLED", true),
-  JOBS_CONCURRENCY: getEnvInt("JOBS_CONCURRENCY", 5),
-  JOBS_RETRY_ATTEMPTS: getEnvInt("JOBS_RETRY_ATTEMPTS", 3),
-  JOBS_RETRY_DELAY_MS: getEnvInt("JOBS_RETRY_DELAY_MS", 5000),
-
   // ─── REALTIME / WEBSOCKET ────────────────────────────
   REALTIME_ENABLED: getEnvBool("REALTIME_ENABLED", true),
   WS_PATH: getEnv("WS_PATH", "/ws"),
@@ -419,7 +399,6 @@ export const env = {
   // always logs detected orphan view ids at boot regardless of this flag
   // (visibility); the flag only controls whether they get deleted.
   PRUNE_ORPHAN_VIEWS: getEnvBool("PRUNE_ORPHAN_VIEWS", false),
-  TRACK_CHANGES_DEFAULT: getEnvBool("TRACK_CHANGES_DEFAULT", true),
 
   // The key set a Password field's value is encrypted with at rest (AES-256-GCM):
   // `<id>=<base64 of 32 bytes>` pairs, comma separated, and the id of the key that
