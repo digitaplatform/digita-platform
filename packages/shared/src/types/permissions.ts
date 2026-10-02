@@ -57,6 +57,24 @@ export function canGrantActionTo(permission: EntityPermission, roles: readonly s
   return permission.level === 0 && roles.includes(permission.role);
 }
 
+/** The part of a read row that decides which fields it opens. */
+export type ReadRow = Pick<EntityPermission, "level" | "fields">;
+
+/**
+ * Whether a read row opens the field `fieldname` of `level`, or a child of `level` of the Table
+ * `fieldname`: the row's level, and its `fields`, when it has them, name the field. The engine
+ * decides every field a read answers through this rule, and so does whatever else answers
+ * stored rows, such as the report service.
+ */
+export function opensField(row: ReadRow, fieldname: string, level: number): boolean {
+  return row.level === level && (!row.fields || row.fields.includes(fieldname));
+}
+
+/** Whether a user's read rows open `owner` and `modified_by`: unless every one of them carries `fields`. */
+export function opensOperatorFields(rows: readonly ReadRow[]): boolean {
+  return rows.length === 0 || rows.some((row) => !row.fields);
+}
+
 export const SYSTEM_ROLES = {
   ADMINISTRATOR: "Administrator",
   SYSTEM_USER: "System User",
