@@ -198,6 +198,7 @@ export {
 } from "./expression.js";
 export type { ExprNode, ExprBinaryOperator, ExprUnaryOperator, ExprIdentifierResolver } from "./expression.js";
 export {
+  TREE_ACTIVE_FIELD,
   TREE_BLOCK_SHAPE_KEYS,
   TREE_KIND_FIELD,
   TREE_LABEL_FIELD,

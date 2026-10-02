@@ -382,4 +382,26 @@ describe('LinkControl — tree mode', () => {
     expect(within(dialog).getByRole('treeitem', { name: 'Retail' })).toHaveAttribute('aria-expanded', 'true');
     expect(within(dialog).getByText('Zurich')).toBeInTheDocument();
   });
+
+  it('PLANTED DEFECT: offers no switched-off node, nor any node under it', async () => {
+    listState.rows = [
+      { _id: 'N-1', label: 'Root', parent: null },
+      { _id: 'N-2', label: 'Child', parent: 'N-1' },
+      { _id: 'N-3', label: 'Retired', parent: null, active: 0 },
+      { _id: 'N-4', label: 'Under retired', parent: 'N-3' },
+    ];
+    const user = userEvent.setup();
+    render(<Host field={makeField({ target: 'Folder' })} onChange={vi.fn()} />);
+    await user.click(screen.getByRole('combobox'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('treeitem', { name: 'Root' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('treeitem', { name: 'Retired' })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('treeitem', { name: 'Under retired' })).not.toBeInTheDocument();
+  });
+
+  it('shows a held node that is switched off by its path, as any held node', () => {
+    listState.rows = [{ _id: 'N-3', label: 'Retired', parent: null, active: 0 }];
+    render(<Host field={makeField({ target: 'Folder' })} value="N-3" />);
+    expect((screen.getByRole('combobox') as HTMLInputElement).value).toBe('Retired');
+  });
 });
