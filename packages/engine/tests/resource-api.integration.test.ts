@@ -767,6 +767,12 @@ describe("Resource API Integration", () => {
     });
   });
 
+  it("serves no schema drift routes", async () => {
+    const list = await app.inject({ method: "GET", url: "/api/v1/admin/schema-drift", headers: authHeaders() });
+    const reseed = await app.inject({ method: "POST", url: "/api/v1/admin/schema-drift/File/reseed", headers: authHeaders() });
+    expect([list.statusCode, reseed.statusCode]).toEqual([404, 404]);
+  });
+
   describe("BrandingSetting.default_signature", () => {
     it("a System User's PUT of BrandingSetting.default_signature is refused with 403, an Administrator's is saved", async () => {
       await db.deleteMany("BrandingSetting", {}, "core");
