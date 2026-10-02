@@ -1,6 +1,6 @@
 import type { EntityDefinition, FieldType, FieldDefinition } from "@digitaplatform/shared";
 import { LAYOUT_FIELD_TYPES } from "@digitaplatform/shared";
-import { childPasswordFields, encryptPassword, isEncryptedPassword } from "./password-cipher.js";
+import { encryptPassword, isEncryptedPassword } from "./password-cipher.js";
 
 /**
  * Field-type handlers cover (de)serialization for MongoDB storage. Validation
@@ -307,12 +307,21 @@ const tableHandler: FieldTypeHandler = {
   isStored: true,
   toStorage(value, field) {
     const rows = (value || []) as unknown[];
-    const secrets = childPasswordFields(field);
-    if (secrets.length === 0) return rows;
-    return rows.map((row) => {
-      if (!row || typeof row !== "object") return row;
+    // Each declared cell is stored as a field of its type is, so "42" in an Int cell is the number 42.
+    const cells = (field.child_fields ?? []).filter((c) => isStoredFieldType(c.fieldtype));
+    return rows.map((row, index) => {
+      // A row that is no object stays as it is, for the schema to refuse.
+      if (!row || typeof row !== "object" || Array.isArray(row)) return row;
       const stored = { ...(row as Record<string, unknown>) };
-      for (const f of secrets) if (f.fieldname in stored) stored[f.fieldname] = passwordHandler.toStorage(stored[f.fieldname], f);
+      for (const cell of cells) {
+        if (stored[cell.fieldname] === undefined) continue;
+        try {
+          stored[cell.fieldname] = getFieldTypeHandler(cell.fieldtype).toStorage(stored[cell.fieldname], cell);
+        } catch (err) {
+          if (!(err instanceof FieldValueError)) throw err;
+          throw new FieldValueError(`${field.fieldname}.${index}.${cell.fieldname}`, err.message_key, err.params);
+        }
+      }
       return stored;
     });
   },
