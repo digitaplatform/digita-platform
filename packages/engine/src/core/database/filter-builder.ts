@@ -21,8 +21,8 @@ export class FilterFieldNotAllowedError extends Error {
  *  or an object, which MongoDB would read as operators of its own. Refused before any query
  *  runs, so a value never filters on a field other than the one the allow-list checked. */
 export class MalformedFilterValueError extends Error {
-  constructor(public readonly operator: string, value: unknown) {
-    super(`Malformed filter value for "${operator}": ${JSON.stringify(value)}`);
+  constructor(public readonly operator: string, value: unknown, reason?: string) {
+    super(`Malformed filter value for "${operator}": ${JSON.stringify(value)}${reason ? ` (${reason})` : ""}`);
     this.name = "MalformedFilterValueError";
   }
 }
@@ -264,12 +264,12 @@ const MAX_REGEX_LENGTH = 256;
  * backtracking shape like `(a+)+`, `(a*)*`, `(.*)*`.
  */
 export function safeUserRegex(value: unknown): string {
-  if (typeof value !== "string") throw new Error("regex filter value must be a string");
+  if (typeof value !== "string") throw new MalformedFilterValueError("regex", value, "a regex is a string");
   if (value.length > MAX_REGEX_LENGTH) {
-    throw new Error(`regex filter too long (max ${MAX_REGEX_LENGTH} chars)`);
+    throw new MalformedFilterValueError("regex", value, `longer than ${MAX_REGEX_LENGTH} characters`);
   }
   if (/\([^)]*[+*][^)]*\)\s*[+*]/.test(value)) {
-    throw new Error("regex filter rejected (potential ReDoS: nested quantifiers)");
+    throw new MalformedFilterValueError("regex", value, "nested quantifiers can take exponential time");
   }
   return value;
 }

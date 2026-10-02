@@ -621,6 +621,51 @@ describe("Resource API Integration", () => {
 
   // The default signature decides the first look of every user of the app, so only an
   // Administrator may write it.
+  describe("malformed list inputs answer 400", () => {
+    let fileName: string;
+    beforeAll(async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/v1/resource/File",
+        headers: authHeaders(),
+        payload: { file_name: "inputs.pdf", file_url: "/uploads/inputs.pdf", file_size: 1, file_type: "application/pdf" },
+      });
+      fileName = res.json().data._id;
+    });
+
+    const q = (value: unknown) => encodeURIComponent(typeof value === "string" ? value : JSON.stringify(value));
+    const malformed: Array<() => string> = [
+      () => `/api/v1/resource/File?limit=abc`,
+      () => `/api/v1/resource/File?limit=0`,
+      () => `/api/v1/resource/File?page=0&page_size=5`,
+      () => `/api/v1/resource/File?page_size=1.5`,
+      () => `/api/v1/resource/File?offset=-1`,
+      () => `/api/v1/resource/File?filters=${q([1])}`,
+      () => `/api/v1/resource/File?filters=5`,
+      () => `/api/v1/resource/File?filters=${q({ a: 1 })}`,
+      () => `/api/v1/resource/File?or_filters=${q([["file_name", "="]])}`,
+      () => `/api/v1/resource/File?order_by=file_name&order_by=creation`,
+      () => `/api/v1/resource/File?filters=${q([["file_name", "regex", "(a+)+"]])}`,
+      () => `/api/v1/resource/File/count?filters=${q("[")}`,
+      () => `/api/v1/resource/File/count?filters=${q({ file_name: "x" })}`,
+      () => `/api/v1/search/File?q=in&limit=0`,
+      () => `/api/v1/search/File?q=in&filters=${q("[")}`,
+      () => `/api/v1/search?q=inputs&limit=abc`,
+      () => `/api/v1/resource/File/${fileName}/versions?limit=abc`,
+    ];
+
+    it.each(malformed.map((url, i) => [i + 1, url] as const))("answers 400 for malformed shape %i", async (_i, url) => {
+      const res = await app.inject({ method: "GET", url: url(), headers: authHeaders() });
+      expect([url(), res.statusCode]).toEqual([url(), 400]);
+    });
+
+    it("still answers a well-formed list with its limit", async () => {
+      const res = await app.inject({ method: "GET", url: "/api/v1/resource/File?limit=1&offset=0", headers: authHeaders() });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).toHaveLength(1);
+    });
+  });
+
   describe("DELETE /meta/:doctype", () => {
     it("stops serving an entity /meta created, and says nothing is deleted from the data", async () => {
       const created = await app.inject({
