@@ -110,7 +110,13 @@ export class RuleEngine {
     const exec: RuleExecContext = { doc, user, now: new Date(), session, entityName, mutations };
 
     if (rule.condition) {
-      const ok = evaluateExpression(rule.condition, exec);
+      let ok: unknown;
+      try {
+        ok = evaluateExpression(rule.condition, exec);
+      } catch (err) {
+        // The save stays refused; the error names the rule so its author can find it.
+        throw new Error(`rule "${rule._id}": ${(err as Error).message}`, { cause: err });
+      }
       if (!ok) {
         log.debug({ rule: rule._id }, "rule condition false; skipping");
         return;
