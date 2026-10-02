@@ -663,6 +663,12 @@ describe("validateEntityDataZod — a failed rule answers the key it names", () 
     ["Attach with a script URL", { fieldtype: "Attach" }, "javascript:alert(1)", "field_invalid_url"],
     ["Int given text", { fieldtype: "Int" }, "abc", "field_invalid_type"],
     ["Int with a fraction", { fieldtype: "Int" }, 1.9, "field_invalid_int"],
+    ["Date given a number", { fieldtype: "Date" }, 20260930, "field_invalid_date"],
+    ["Datetime given a number", { fieldtype: "Datetime" }, 5, "field_invalid_date"],
+    ["Time given a number", { fieldtype: "Time" }, 1430, "field_invalid_time"],
+    ["Color given a list", { fieldtype: "Color" }, ["#ffffff"], "field_invalid_color"],
+    ["Geolocation outside the range", { fieldtype: "Geolocation" }, { type: "Point", coordinates: [200, 0] }, "field_invalid_geolocation"],
+    ["Geolocation given text", { fieldtype: "Geolocation" }, "Zurich", "field_invalid_geolocation"],
   ];
   for (const [rule, field, value, key, params] of cases) {
     it(`${rule} answers ${key}`, () => {
@@ -672,6 +678,39 @@ describe("validateEntityDataZod — a failed rule answers the key it names", () 
       expect(r.errors[0]?.params).toEqual({ field: "f", ...params });
     });
   }
+
+  it("a Table cell of the wrong type answers its type's key on the cell's path", () => {
+    const e = entity([
+      {
+        fieldname: "lines",
+        fieldtype: "Table",
+        label: "Lines",
+        child_fields: [
+          { fieldname: "shade", fieldtype: "Color", label: "Shade" },
+          { fieldname: "due", fieldtype: "Date", label: "Due" },
+        ],
+      },
+    ]);
+    builder.invalidate("TestDoc");
+    const r = validateEntityDataZod(e, { lines: [{ shade: ["#ffffff"], due: 5 }] }, builder);
+    expect(r.errors.map((x) => [x.field, x.message_key])).toEqual([
+      ["lines[0].shade", "field_invalid_color"],
+      ["lines[0].due", "field_invalid_date"],
+    ]);
+  });
+
+  it("a Date field the handler refuses names the field for the text", () => {
+    const due = { fieldname: "due", fieldtype: "Date", label: "Due" } as never;
+    for (const value of [5, "30.09.2026", new Date("not a day")]) {
+      let thrown: unknown;
+      try {
+        getFieldTypeHandler("Date").toStorage(value, due);
+      } catch (err) {
+        thrown = err;
+      }
+      expect(thrown).toMatchObject({ message_key: "field_invalid_date", params: { field: "Due" } });
+    }
+  });
 
   it("a Table row count answers table_min_rows and table_max_rows with the bound", () => {
     const e = entity([

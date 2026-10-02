@@ -136,13 +136,13 @@ const dateHandler: FieldTypeHandler = {
     // write instead of silently mis-comparing against Date filters later.
     if (value instanceof Date) {
       if (isNaN(value.getTime())) {
-        throw new FieldValueError(field.fieldname, "field_invalid_date", { value: String(value) });
+        throw new FieldValueError(field.fieldname, "field_invalid_date", { field: field.label || field.fieldname, value: String(value) });
       }
       return value.toISOString().slice(0, 10);
     }
     const s = String(value);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || isNaN(new Date(s).getTime())) {
-      throw new FieldValueError(field.fieldname, "field_invalid_date", { value: s });
+      throw new FieldValueError(field.fieldname, "field_invalid_date", { field: field.label || field.fieldname, value: s });
     }
     return s;
   },
