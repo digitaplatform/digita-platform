@@ -1,6 +1,7 @@
 import type { EntityDefinition } from "@digitaplatform/shared";
-import { LAYOUT_FIELD_TYPES } from "@digitaplatform/shared";
+import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from "@digitaplatform/shared";
 import { decryptPassword, isEncryptedPassword } from "../entity/password-cipher.js";
+import { generateRowId } from "./row-id.js";
 
 /**
  * Create a copy of document data, respecting no_copy flags. `sourceData` is the
@@ -45,11 +46,12 @@ export function copyDocumentData(
           }
         } else {
           // No declared child_fields: pass the row through verbatim instead of
-          // wiping it down to {idx}. Drop the stable per-row identity so insert()
-          // re-stamps a fresh _row_id (matching the declared-child_fields path).
+          // wiping it down to {idx}.
           rowCopy = { ...row };
-          delete rowCopy["_row_id"];
         }
+        // A row of the copy is a new row with its own identity. It gets it here rather than in
+        // insert, so the copy's caller can name each row as the copy holds it.
+        rowCopy[ROW_ID_FIELD] = generateRowId();
         rowCopy["idx"] = idx;
         return rowCopy;
       });

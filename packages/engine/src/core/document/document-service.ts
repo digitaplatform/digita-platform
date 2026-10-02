@@ -1022,6 +1022,10 @@ export class DocumentService {
     sessionOverride?: import("mongodb").ClientSession,
     /** What only the engine sets on a new document: an amendment's `amended_from`. */
     engineSet: { amended_from?: string } = {},
+    /** The values a copy or an amendment carries over from its source. A Link among them was
+     *  checked when it was set, by whoever set it, so only a Link the insert changes must name a
+     *  row the writer may select. */
+    carriedOver?: Record<string, unknown>,
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
 
@@ -1110,7 +1114,7 @@ export class DocumentService {
       }
 
       // Link validation
-      const linkErrors = await this.linkValidator.validate(entity, doc._data, session, { user });
+      const linkErrors = await this.linkValidator.validate(entity, doc._data, session, { user, stored: carriedOver });
       if (linkErrors.length > 0) {
         for (const err of linkErrors) {
           ctx?.error(err.message_key, err.params);
@@ -2640,7 +2644,7 @@ export class DocumentService {
     const newDoc = await this.inTransaction(sessionOverride, async (session) => {
       const copyData = copyDocumentData(entity, doc._data, stored);
       await this.cloneAttachments(entity, doc._id, copyData, user, session);
-      return this.insert(doctype, copyData, user, ctx, session, amendData);
+      return this.insert(doctype, copyData, user, ctx, session, amendData, structuredClone(copyData));
     });
 
     // The "Amended" entry is written after the amendment's own transaction. A caller's session
@@ -2686,7 +2690,7 @@ export class DocumentService {
     return this.inTransaction(sessionOverride, async (session) => {
       const copyData = copyDocumentData(entity, doc._data, stored);
       await this.cloneAttachments(entity, doc._id, copyData, user, session);
-      return this.insert(doctype, copyData, user, ctx, session);
+      return this.insert(doctype, copyData, user, ctx, session, {}, structuredClone(copyData));
     });
   }
 
