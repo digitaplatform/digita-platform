@@ -254,8 +254,9 @@ function applyStringConstraints(schema: ZodTypeAny, field: FieldDefinition): Zod
     try {
       s = s.regex(new RegExp(field.regex), field.regex_message ?? "field_invalid_regex");
     } catch {
-      // bad regex in entity JSON — surfaces at boot via the loader;
-      // here we degrade silently rather than blowing up parse() at runtime.
+      // A file's regex is refused at load (EntityRegistry.validateFieldDefinitions). A definition
+      // written through POST or PUT /meta is not checked there, so its bad pattern is skipped here
+      // rather than failing every parse of the entity.
     }
   }
   return s;

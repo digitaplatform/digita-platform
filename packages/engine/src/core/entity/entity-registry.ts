@@ -287,7 +287,8 @@ export class EntityRegistry {
   /**
    * Refuse a field the engine cannot handle, in every field list a file carries: the entity's
    * fields, a Table's child_fields and an action's dialog_fields. An unknown fieldtype would
-   * otherwise load as an untyped field that stores and accepts any value.
+   * otherwise load as an untyped field that stores and accepts any value, and a regex that does
+   * not compile would leave its rule off on both sides.
    */
   private validateFieldDefinitions(entity: EntityDefinition): void {
     const check = (fields: FieldDefinition[] | undefined, owner: string): void => {
@@ -297,6 +298,16 @@ export class EntityRegistry {
             `Field "${field.fieldname}" of ${owner} has the unknown fieldtype "${field.fieldtype}"; ` +
               "use one of the field types of @digitaplatform/shared",
           );
+        }
+        if (field.regex !== undefined) {
+          try {
+            new RegExp(field.regex);
+          } catch (err) {
+            throw new Error(
+              `Field "${field.fieldname}" of ${owner} has the regex ${JSON.stringify(field.regex)}, ` +
+                `which does not compile: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
         }
         if (field.fieldtype === "Table") check(field.child_fields, `Table "${entity.name}.${field.fieldname}"`);
       }

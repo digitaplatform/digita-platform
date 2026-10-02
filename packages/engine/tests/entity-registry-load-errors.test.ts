@@ -101,3 +101,28 @@ describe("EntityRegistry refuses an unknown fieldtype at load", () => {
     expect(await loadBook({ fields })).toBeUndefined();
   });
 });
+
+describe("EntityRegistry refuses a field regex that does not compile at load", () => {
+  const loadBook = async (fields: Record<string, unknown>[]): Promise<Error | undefined> => {
+    const dir = await mkdtemp(join(tmpdir(), "reg-regex-"));
+    await writeFile(join(dir, "book.entity.json"), JSON.stringify({ ...okEntity("Book"), fields }));
+    const err = await new EntityRegistry().loadAll(dir).then(() => undefined, (e: Error) => e);
+    await rm(dir, { recursive: true, force: true });
+    return err;
+  };
+
+  it("refuses it on a field, naming the entity, the field and the pattern", async () => {
+    const err = await loadBook([{ fieldname: "code", fieldtype: "Data", label: "Code", regex: "^[A-Z" }]);
+    expect(err?.message).toContain('Field "code" of entity "Book" has the regex "^[A-Z", which does not compile');
+  });
+
+  it("refuses it on a Table row field", async () => {
+    const child = { fieldname: "code", fieldtype: "Data", label: "Code", regex: "(a" };
+    const err = await loadBook([{ fieldname: "lines", fieldtype: "Table", label: "Lines", child_fields: [child] }]);
+    expect(err?.message).toContain('Field "code" of Table "Book.lines" has the regex "(a", which does not compile');
+  });
+
+  it("PLANTED INNOCENT: loads a regex that compiles", async () => {
+    expect(await loadBook([{ fieldname: "code", fieldtype: "Data", label: "Code", regex: "^[A-Z]{2,4}$" }])).toBeUndefined();
+  });
+});
