@@ -1,14 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdtemp, writeFile, rm } from "fs/promises";
+import { mkdir, mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 
 // A seed file that grows after the first boot: a new row links, by business key, a row
 // the first boot stored. The link must name the stored row, whatever the target's naming.
-vi.mock("../src/core/logging/logger.js", () => {
-  const log = { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() };
-  return { createLogger: () => log, getRootLogger: () => log };
-});
+const { log } = vi.hoisted(() => ({ log: { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() } }));
+vi.mock("../src/core/logging/logger.js", () => ({ createLogger: () => log, getRootLogger: () => log }));
 vi.mock("../src/core/config/env.js", () => ({
   env: {
     MONGODB_URI: "", MONGODB_MIN_POOL: 1, MONGODB_MAX_POOL: 5, MONGODB_TIMEOUT_MS: 30000,
@@ -22,6 +20,8 @@ import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import type { NamingService } from "../src/core/document/naming-service.js";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { seedAppData } from "../src/core/setup/seed-app-data.js";
+import { reseedAppData } from "../src/core/setup/reseed-app-data.js";
+import type { TranslationService } from "../src/core/i18n/translation-service.js";
 
 const STORED_AUTHOR = { _id: "stored-author-id", name: "Ursula" };
 
@@ -139,5 +139,64 @@ describe("a seed pass without the target's file links to the target's stored row
       { file: join(dir, "Book.seed.json"), row: 2, field: "author", value: "Frank" },
     ]);
     expect(inserted["Book"]?.map((b) => b["author"])).toEqual([STORED_AUTHOR._id, "Frank"]);
+  });
+});
+
+describe("a seed pass links by business key to a row the same pass mints", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "digita-seed-same-pass-"));
+    await writeFile(join(dir, "Author.seed.json"), JSON.stringify([{ name: "Ursula" }]), "utf-8");
+    await writeFile(join(dir, "Book.seed.json"), JSON.stringify([{ title: "Earthsea", author: "Ursula" }]), "utf-8");
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("links to the minted row, and reads the stored Authors once", async () => {
+    const inserted: Record<string, Array<Record<string, unknown>>> = {};
+    const db = {
+      find: vi.fn(async () => []),
+      findOne: vi.fn(async () => null),
+      insertMany: vi.fn(async (coll: string, docs: Array<Record<string, unknown>>) => {
+        (inserted[coll] ??= []).push(...docs);
+      }),
+      getNextSequence: vi.fn(async () => 1),
+      setSequenceValue: vi.fn(async () => {}),
+      setSequenceFloor: vi.fn(async () => {}),
+      deleteMany: vi.fn(async () => 0),
+    } as unknown as MongoDBService;
+
+    await seedAppData(db, registry("system"), {} as NamingService, [dir]);
+
+    expect(inserted["Book"]?.map((b) => String(b["author"]))).toEqual([String(inserted["Author"]![0]!["_id"])]);
+    expect((db.find as ReturnType<typeof vi.fn>).mock.calls.filter(([coll]) => coll === "Author")).toHaveLength(1);
+  });
+});
+
+describe("the reseed answers a seed Link that matches no business key", () => {
+  let app: string;
+  beforeEach(async () => {
+    app = await mkdtemp(join(tmpdir(), "digita-reseed-unresolved-"));
+    await mkdir(join(app, "seeds"));
+    await writeFile(join(app, "seeds", "Book.seed.json"), JSON.stringify([{ title: "Dune", author: "Frank" }]), "utf-8");
+    log.error.mockClear();
+  });
+  afterEach(async () => {
+    await rm(app, { recursive: true, force: true });
+  });
+
+  it("in its summary and in an error log line", async () => {
+    const { db } = mockDb();
+    Object.assign(db, { listAppDatabases: vi.fn(() => [{ name: "app" }]), updateOne: vi.fn(async () => true) });
+    const reg = registry("system");
+
+    const summary = await reseedAppData("template", {
+      db, registry: reg, translationService: {} as TranslationService, appDirs: [app], getDomainDirs: () => [],
+    });
+
+    const expected = [{ file: join(app, "seeds", "Book.seed.json"), row: 1, field: "author", value: "Frank" }];
+    expect(summary.unresolved_links).toEqual(expected);
+    expect(log.error).toHaveBeenCalledWith({ unresolved_links: expected }, expect.stringContaining("match no business key"));
   });
 });
