@@ -57,99 +57,6 @@ const FORBIDDEN_OPERATORS = new Set([
   "$unionWith",
 ]);
 
-const ALLOWED_OPERATORS = new Set([
-  // arithmetic
-  "$add",
-  "$subtract",
-  "$multiply",
-  "$divide",
-  "$mod",
-  "$abs",
-  "$ceil",
-  "$floor",
-  "$round",
-  "$trunc",
-  // comparison
-  "$eq",
-  "$ne",
-  "$gt",
-  "$gte",
-  "$lt",
-  "$lte",
-  "$cmp",
-  // conditional
-  "$cond",
-  "$ifNull",
-  "$switch",
-  // accumulators
-  "$sum",
-  "$avg",
-  "$min",
-  "$max",
-  "$first",
-  "$last",
-  "$push",
-  "$addToSet",
-  "$count",
-  // array
-  "$size",
-  "$arrayElemAt",
-  "$slice",
-  "$filter",
-  "$map",
-  "$concatArrays",
-  "$in",
-  "$isArray",
-  // string
-  "$concat",
-  "$toLower",
-  "$toUpper",
-  "$split",
-  "$substr",
-  "$strLen",
-  "$trim",
-  "$regexMatch",
-  // date
-  "$year",
-  "$month",
-  "$dayOfMonth",
-  "$dayOfWeek",
-  "$dayOfYear",
-  "$hour",
-  "$minute",
-  "$second",
-  "$dateToString",
-  "$dateFromString",
-  "$dateTrunc",
-  "$dateAdd",
-  "$dateSubtract",
-  "$dateDiff",
-  // type
-  "$toString",
-  "$toInt",
-  "$toLong",
-  "$toDouble",
-  "$toDecimal",
-  "$toDate",
-  "$toBool",
-  "$type",
-  "$convert",
-  // logical
-  "$and",
-  "$or",
-  "$not",
-  // misc / common pipeline expression keys (plumbing — not stages)
-  "$expr",
-  "$exists",
-  "$elemMatch",
-  "$regex",
-  "$options",
-  "$gte",
-  "$lte",
-  "$mergeObjects",
-  "$literal",
-]);
-
 const RESERVED_PREFIXES = ["$root.", "$user.", "$param."];
 
 export interface ValidationFailure {
@@ -432,7 +339,6 @@ function walkStrings(node: unknown, fn: (s: string) => void): void {
 
 export const VIEW_VALIDATOR_INTERNAL = {
   ALLOWED_STAGES,
-  ALLOWED_OPERATORS,
   FORBIDDEN_OPERATORS,
   FILTER_OPS,
 };
