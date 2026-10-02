@@ -68,7 +68,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     // A value the engine refuses is the visitor's to correct, and the engine's own budget of creates
     // names its wait: the sheet tells either as it tells the route's own.
-    if (status === 400) return answer(400, { ok: false, message: "Invalid request", ...(field === undefined ? {} : { field }) });
+    // An engine 413 is a body too large for it: the visitor's to shorten, as the record route answers it.
+    if (status === 400 || status === 413) {
+      return answer(400, { ok: false, message: "Invalid request", ...(field === undefined ? {} : { field }) });
+    }
     if (status === 429) return tellRetryAfter(answer(429, { ok: false, message: "Too many requests" }), retryAfter);
     throw new Error(`the engine answered HTTP ${status} to the ContactRequest create`);
   } catch (err) {
