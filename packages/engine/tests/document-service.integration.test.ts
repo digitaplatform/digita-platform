@@ -690,7 +690,7 @@ describe("A Table write that repeats a _row_id is refused", () => {
       ),
     );
     expect(err.errors).toEqual([
-      expect.objectContaining({ field: "checklist[1]", message_key: "table_row_unique_violation" }),
+      expect.objectContaining({ field: "checklist[1]", message_key: "table_row_repeated" }),
     ]);
     expect(await storedRows(created._id)).toEqual([stored]);
   });
