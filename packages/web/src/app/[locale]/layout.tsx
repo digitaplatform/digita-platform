@@ -16,7 +16,7 @@ import { getSite, getNav, getBranding, findWebsiteSignature, listPublishedSlugs 
 import { siteSignature } from "@/lib/identity";
 import { localePath } from "@/lib/nav";
 import { jsonForScript } from "@/lib/json-script";
-import { mediaUrl } from "@/lib/media";
+import { brandingImageUrl } from "@/lib/media";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { DeliveredIdentity } from "@/components/DeliveredIdentity";
@@ -74,7 +74,7 @@ export default async function LocaleLayout({
   // which names the tenant's apps, not its public site.
   const brand = {
     name: site?.site_name ?? branding?.app_name ?? "Digita",
-    logoUrl: branding?.logo ? mediaUrl(branding.logo) : undefined,
+    logoUrl: brandingImageUrl(branding?.logo),
     nameIsCustom: Boolean(site?.site_name ?? branding?.app_name),
     signature,
   };

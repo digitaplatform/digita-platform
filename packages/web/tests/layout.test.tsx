@@ -87,6 +87,18 @@ describe("the locale layout", () => {
     expect(await render()).toContain('aria-label="language"');
   });
 
+  it("PLANTED DEFECT: draws the tenant's own logo, and no logo the branding names on another host", async () => {
+    // The pre-paint script's data carries the branding as it is, for its colors; only an element's
+    // address loads anything, so that is what this reads.
+    const loads = (html: string) => /(?:src|href)="[^"]*evil\.example|url\([^)]*evil\.example/.test(html);
+    branding = { logo: "/api/v1/public/file/LOGO" };
+    expect(await render()).toContain('src="/api/v1/public/file/LOGO"');
+    branding = { logo: "https://evil.example/logo.png" };
+    expect(loads(await render())).toBe(false);
+    branding = { logo: "//evil.example/logo.png" };
+    expect(loads(await render())).toBe(false);
+  });
+
   it("draws no light/dark button and paints the system mode under the tenant's lock", async () => {
     branding = { allow_user_theme_mode: false };
     const html = await render();
