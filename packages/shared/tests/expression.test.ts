@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ExpressionError,
   evaluateNode,
+  foreignRuleRoots,
   identifiersOf,
   isTruthy,
   parseExpression,
@@ -138,5 +139,20 @@ describe("parseExpression — bounded input", () => {
     const long = `doc.a${" + 1".repeat(1022)}`;
     expect(long.length).toBeLessThanOrEqual(4096);
     expect(() => parseExpression(long)).not.toThrow();
+  });
+});
+
+describe("foreignRuleRoots", () => {
+  it("names a root a rule cannot read, as the engine refuses it when it loads the bundle", () => {
+    expect(foreignRuleRoots("$now > doc.date")).toEqual(["$now"]);
+    expect(foreignRuleRoots("doc.total > other.limit")).toEqual(["other"]);
+  });
+
+  it("PLANTED INNOCENT: names nothing in an expression over the rule roots", () => {
+    expect(foreignRuleRoots("doc.date < now && row.qty > 0 && item_index < 3 && user.name != item.owner")).toEqual([]);
+  });
+
+  it("throws on text the grammar does not read", () => {
+    expect(() => foreignRuleRoots("doc.date >")).toThrow(ExpressionError);
   });
 });

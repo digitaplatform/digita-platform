@@ -166,9 +166,8 @@ export function assertFieldExpressionParsable(expression: string): void {
 /**
  * Assert (no runtime context) that `expression` parses and every node is on the
  * allowlist, with identifiers restricted to `allowedRoots`. Throws with the
- * offending token in the message. Used at rule-seed time so an unparsable /
- * disallowed rule expression fails loud at boot instead of inside every
- * triggering transaction.
+ * offending token in the message. Used when an entity loads, so an unparsable or
+ * disallowed field expression fails loud at boot instead of inside every save.
  */
 export function assertExpressionParsableIn(
   expression: string,
