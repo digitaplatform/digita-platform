@@ -7,7 +7,10 @@
   "naming": { "strategy": "user_set" },
   "hooks": {
     "before_insert": "rule/rule.beforeSave",
-    "before_save": "rule/rule.beforeSave"
+    "before_save": "rule/rule.beforeSave",
+    "after_insert": "rule/rule.forgetCachedRules",
+    "on_update": "rule/rule.forgetCachedRules",
+    "after_delete": "rule/rule.forgetCachedRules"
   },
   "is_submittable": false,
   "track_changes": true,
