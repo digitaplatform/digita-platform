@@ -209,6 +209,15 @@ describe('RecordPage links', () => {
     expect(await screen.findByRole('link', { name: 'Returns 2' })).toBeInTheDocument();
   });
 
+  it("shows no refusal an answer for another entity carries", async () => {
+    state.links = [INVOICES];
+    answerRelated([{ label: 'Payments', entity: 'Payment', error: 'The list of Payment matches more than 5000 rows' }]);
+    renderSale();
+
+    const invoices = await screen.findByRole('link', { name: 'Invoices —' });
+    await waitFor(() => expect(within(invoices).getByText('—')).not.toHaveAttribute('title', 'The list of Payment matches more than 5000 rows'));
+  });
+
   it('shows no links and asks no count for an entity without links', async () => {
     renderSale();
 
