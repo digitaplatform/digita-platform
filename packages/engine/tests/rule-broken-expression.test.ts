@@ -233,3 +233,21 @@ describe("a stored rule whose condition does not parse", () => {
     await expect(docService.insert("Widget", { title: "T", amount: 0 }, admin)).rejects.toThrow(/amount must be positive/);
   });
 });
+
+describe("a Rule saved, changed or deleted through the document service", () => {
+  it("PLANTED DEFECT: acts on the very next save of its entity, and stops on the next save after its delete", async () => {
+    // A save before reads and caches the entity's rules, as a running engine has them.
+    await docService.insert("Widget", { title: "Before", amount: 0 }, admin);
+    await docService.insert("Rule", rule({ _id: "r-now" }), admin);
+    await expect(docService.insert("Widget", { title: "Refused", amount: 0 }, admin)).rejects.toThrow(/amount must be positive/);
+
+    await docService.update("Rule", "r-now", { enabled: 0 }, admin);
+    await expect(docService.insert("Widget", { title: "Off", amount: 0 }, admin)).resolves.toBeDefined();
+
+    await docService.update("Rule", "r-now", { enabled: 1 }, admin);
+    // A save between reads the rule back into the cache, so only the delete's clear can drop it.
+    await expect(docService.insert("Widget", { title: "On again", amount: 0 }, admin)).rejects.toThrow(/amount must be positive/);
+    await docService.deleteDoc("Rule", "r-now", admin);
+    await expect(docService.insert("Widget", { title: "Gone", amount: 0 }, admin)).resolves.toBeDefined();
+  });
+});

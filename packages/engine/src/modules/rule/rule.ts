@@ -2,7 +2,7 @@ import type { BaseDocument } from "../../core/document/base-document.js";
 import type { ResponseContext } from "../../core/api/response-context.js";
 import type { HookServices } from "../../core/hooks/hook-runner.js";
 import { ValidationFailedError } from "../../core/document/document-service.js";
-import { findRuleLintError, findUnparsableRuleExpression } from "../../core/rules/rule-loader.js";
+import { clearRuleCache, findRuleLintError, findUnparsableRuleExpression } from "../../core/rules/rule-loader.js";
 import type { RuleDefinition } from "../../core/rules/rule-types.js";
 
 /**
@@ -22,4 +22,13 @@ export async function beforeSave(doc: BaseDocument, _ctx?: ResponseContext, serv
   const lint = services?.registry ? findRuleLintError(rule, services.registry) : null;
   // The event is a Select, so a lint of a Rule save can only fail on its actions.
   if (lint) throw new ValidationFailedError("Rule", [{ field: "actions", message_key: "rule_invalid", params: { error: lint } }]);
+}
+
+/**
+ * Rule — after_insert / on_update / after_delete: the rule engine caches each entity's active
+ * rules, so a saved or deleted rule acts from the next save on. The cache is this engine's own; a
+ * second pod of the same engine sees the change when its cache runs out.
+ */
+export async function forgetCachedRules(): Promise<void> {
+  clearRuleCache();
 }
