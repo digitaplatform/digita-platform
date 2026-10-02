@@ -345,9 +345,10 @@ describe("The resource API refuses a Table write that repeats a _row_id", () => 
       payload: { lines: [row, { ...row, amount: 2 }] },
     });
     expect(res.statusCode).toBe(400);
-    // The engine answers the key table_row_unique_violation, translated with its params.
+    // The engine answers the key table_row_repeated, translated with its 1-based rows.
     expect(res.json().messages).toEqual([expect.objectContaining({ type: "error", path: "lines[1]" })]);
-    expect(res.json().messages[0].text).toContain("_row_id");
+    expect(res.json().messages[0].text).toContain("1,2");
+    expect(res.json().messages[0].text).not.toContain("_row_id");
     const stored = (await findOne("Item", { item_no: "RID2" }))!.lines as Record<string, unknown>[];
     expect(stored.map((l) => l.amount)).toEqual([1]);
   });
