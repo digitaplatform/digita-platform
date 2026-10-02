@@ -413,18 +413,35 @@ describe("seedDataTranslations (co-located *.translations.json)", () => {
     expect(es.json().data.name).toBe("Banco");
   });
 
-  it("is non-destructive: an existing translation is not overwritten by a re-seed", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "digita-dt-seed2-"));
-    // 1200 already has a de translation seeded in beforeAll — a re-seed must skip it.
-    await writeFile(
-      join(dir, "GlAcct.translations.json"),
-      JSON.stringify([{ _id: "1200", field: "name", de: "OVERWRITE ATTEMPT" }]),
-      "utf-8",
-    );
+  /** Seeds one GlAcct translation file holding `rows`. */
+  const seedFile = async (rows: Record<string, unknown>[]) => {
+    const dir = await mkdtemp(join(tmpdir(), "digita-dt-reseed-"));
+    await writeFile(join(dir, "GlAcct.translations.json"), JSON.stringify(rows), "utf-8");
     await seedDataTranslations(db, registry, new TranslationService(db), [dir]);
+  };
 
+  it("PLANTED DEFECT: brings a corrected file value to a seeded translation nobody changed", async () => {
+    // 1200's de row came from a file in beforeAll and nobody overrode it.
+    await seedFile([{ _id: "1200", field: "name", de: "Forderungen (berichtigt)" }]);
     const de = await get("/api/v1/resource/GlAcct/1200", "de");
-    expect(de.json().data.name).toBe("Forderungen aus Lieferungen und Leistungen");
+    expect(de.json().data.name).toBe("Forderungen (berichtigt)");
+  });
+
+  it("keeps an Administrator's edit when the file's value changes", async () => {
+    await new TranslationService(db).setTranslation({
+      namespace: "data", locale: "it", key: "GlAcct.1200.name", value: "Crediti (admin)", user: "admin@digita.local",
+      entity: "GlAcct", document_name: "1200", fieldname: "name",
+    });
+    await seedFile([{ _id: "1200", field: "name", it: "Crediti (file nuovo)" }]);
+    const it = await get("/api/v1/resource/GlAcct/1200", "it");
+    expect(it.json().data.name).toBe("Crediti (admin)");
+  });
+
+  it("keeps a translation that did not come from a file", async () => {
+    // The bulk endpoint above wrote 1100's es row as a person's.
+    await seedFile([{ _id: "1100", field: "name", es: "Banco (file)" }]);
+    const es = await get("/api/v1/resource/GlAcct/1100", "es");
+    expect(es.json().data.name).toBe("Banco");
   });
 });
 
