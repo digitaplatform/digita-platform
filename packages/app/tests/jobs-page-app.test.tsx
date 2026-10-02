@@ -337,6 +337,18 @@ describe('editing a saved job of the chosen app', () => {
     expect(saves[0]!.body.schedule).toEqual({ cron: '0 4 * * *' });
   });
 
+  it('says a job made by Run now still runs only by hand after an edit without a cron', async () => {
+    renderJobs();
+    fireEvent.click(await screen.findByTestId('action:job-edit'));
+    await screen.findByRole('dialog');
+    expect(screen.getByLabelText(/^Cron/)).toHaveValue('');
+    fireEvent.click(screen.getByTestId('action:job-save'));
+
+    expect(await screen.findByText('Saved. The job now runs only when started by hand.')).toBeInTheDocument();
+    expect(screen.queryByText('Schedule saved.')).toBeNull();
+    expect(saves[0]!.body.schedule).toBeNull();
+  });
+
   it('says the job now runs only by hand when the cron is cleared', async () => {
     await editSweep();
     fireEvent.change(screen.getByLabelText(/^Cron/), { target: { value: '' } });
