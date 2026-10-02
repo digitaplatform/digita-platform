@@ -505,8 +505,8 @@ function JobConfigDialog({
     queryFn: async () => String(unwrap(await appEngine.single(app, task.entity))._id ?? ''),
   });
   const effectiveDoc = task.isSingle ? (singleDocQ.data ?? '') : doc;
-  // A new schedule needs its cron. An edited job may go without one and is then run by hand only,
-  // as the cron field's label says.
+  // A new schedule needs its cron, as its label says. An edited job may go without one and is then
+  // run by hand only, as the edit dialog's label says.
   const valid = !!effectiveDoc && (!isSchedule || (!!name.trim() && (!!job || !!cron.trim())));
 
   const submit = async () => {
@@ -615,8 +615,8 @@ function JobConfigDialog({
         <ParamFields defs={task.params} values={values} onChange={(k, v) => setValues((s) => ({ ...s, [k]: v }))} />
         {isSchedule && (
           <label className="block space-y-1">
-            <span className="text-caption text-textMuted">{tc('ui.jobs.cron')}</span>
-            <Input value={cron} onChange={(e) => setCron(e.target.value)} placeholder="0 3 * * *" />
+            <span className="text-caption text-textMuted">{tc(job ? 'ui.jobs.cron' : 'ui.jobs.cronRequired')}</span>
+            <Input value={cron} onChange={(e) => setCron(e.target.value)} placeholder="0 3 * * *" required={!job} />
             <span className="text-micro text-textMuted">{tc('ui.jobs.cronHint')}</span>
           </label>
         )}
