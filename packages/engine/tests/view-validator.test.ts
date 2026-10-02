@@ -217,3 +217,16 @@ describe("validateViewDefinition — params + tokens", () => {
     expect(validateViewDefinition(v)).toEqual([]);
   });
 });
+
+describe("validateViewDefinition — the view's own limits", () => {
+  it("refuses a default_limit or max_limit below 1, which would read every row, in a file as in a row", () => {
+    for (const limits of [{ default_limit: 0 }, { default_limit: -3 }, { max_limit: 0 }, { default_limit: 2.5 }]) {
+      const errors = validateViewDefinition({ ...(VALID as Record<string, unknown>), ...limits });
+      expect(errors.map((e) => e.message)).toEqual([`\`${Object.keys(limits)[0]}\` must be a whole number of at least 1`]);
+    }
+  });
+
+  it("PLANTED INNOCENT: accepts positive whole limits", () => {
+    expect(validateViewDefinition({ ...(VALID as Record<string, unknown>), default_limit: 50, max_limit: 200 })).toEqual([]);
+  });
+});

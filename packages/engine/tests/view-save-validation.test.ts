@@ -78,11 +78,6 @@ function widgetEntity(): EntityDefinition {
   } as EntityDefinition;
 }
 
-async function seedRule(rule: Record<string, unknown>): Promise<void> {
-  await db.insertOne("Rule", { enabled: true, priority: 100, ...rule }, "core");
-  clearRuleCache();
-}
-
 beforeAll(async () => {
   replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   (env as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
@@ -147,9 +142,6 @@ beforeEach(async () => {
 });
 
 
-/** A Rule needs at least one action; this one passes every check. */
-const VALID_ACTIONS = [{ type: "validate", condition: "doc.amount > 0", message: "amount must be positive" }];
-
 /** An unanchored view of one list section with `limit`. */
 const listView = (id: string, limit: number) => ({ _id: id, name: id, anchored: false, sections: [{ key: "rows", kind: "list", entity: "Widget", limit }] });
 
@@ -182,6 +174,13 @@ describe("a View saved through the document service", () => {
     const sections = [{ key: "rows", kind: "list", entity: "Widget", limit: 0 }];
     await refusal(docService.update("View", "books", { sections }, admin));
     expect(((await db.findOne("View", "books", "core"))?.["sections"] as Array<{ limit: number }>)[0]?.limit).toBe(20);
+  });
+
+  it("is refused when its default_limit or max_limit would read without a limit", async () => {
+    for (const limits of [{ default_limit: 0 }, { default_limit: -3 }, { max_limit: 0 }]) {
+      const view = { ...listView("limits", 10), sections: [{ key: "rows", kind: "list", entity: "Widget" }], ...limits };
+      expect((await refusal(docService.insert("View", view, admin))).error).toContain(Object.keys(limits)[0]);
+    }
   });
 
   it("PLANTED INNOCENT: is stored when it passes the checks", async () => {
