@@ -9,6 +9,7 @@ import { registerBuiltinTemplates } from '@/templates/template-registry';
 import { installHostServices } from '@/plugins/host-services';
 import { loadAppComposition } from '@/plugins/composition';
 import { APP_BASE_PATH } from '@/lib/appBase';
+import { useBrandName } from '@/hooks/useBrandName';
 import LoginPage from '@/pages/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
 import RecordPage from '@/pages/RecordPage';
@@ -104,6 +105,13 @@ export default function App() {
   const loadI18n = useI18nStore((s) => s.load);
   const [ready, setReady] = useState(false);
   const [bootError, setBootError] = useState<Error | null>(null);
+  const brandName = useBrandName();
+
+  // The browser tab names the tenant as the header does; index.html's title stands only until
+  // the app runs.
+  useEffect(() => {
+    document.title = brandName;
+  }, [brandName]);
 
   // Boot: expose host services to plugins, resolve the session + translations,
   // then (when authenticated) load the app's plugins from the manifest and apply

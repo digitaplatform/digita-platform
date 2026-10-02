@@ -6,6 +6,7 @@ import { useSessionStore } from '@/stores/session';
 import { useThemeStore } from '@/stores/theme';
 import { useChrome } from '@/lib/chrome-i18n';
 import { brandingImageUrl } from '@/lib/appBase';
+import { useBrandName } from '@/hooks/useBrandName';
 
 interface BrandChromeProps {
   /** Where the host region docks — drives vertical (rail) vs horizontal (bar) chrome. */
@@ -20,8 +21,8 @@ interface BrandChromeProps {
 }
 
 /**
- * The single brand-chrome unit: logo (or a monogram) + app name, sourced from
- * the branding payload (→ platform name → "Digita"). Rendered by the shell
+ * The single brand-chrome unit: logo (or a monogram) + the tenant's name
+ * (useBrandName). Rendered by the shell
  * wherever a region declares `brand: true`. Vertical header for left/right
  * rails; compact inline variant for top/bottom bars.
  */
@@ -29,8 +30,7 @@ export function BrandChrome({ side, collapsed, collapsible, onToggleCollapse, on
   const tc = useChrome();
   const branding = useSessionStore((s) => s.branding);
   const signatureId = useThemeStore((s) => s.signature);
-  // The tenant's brand is its BrandingSetting.app_name alone; without it, the look's own name.
-  const appName = branding?.app_name ?? getSignature(signatureId).name;
+  const appName = useBrandName();
   // One precedence for every frontend (the kit's BrandMark): the signature's
   // wordmark when the tenant set neither a logo nor a name; otherwise the tenant's
   // logo, else the signature's monogram, else the initial — each with the name.

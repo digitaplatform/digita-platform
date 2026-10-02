@@ -5,18 +5,17 @@ import { useSessionStore } from '@/stores/session';
 import { useThemeStore } from '@/stores/theme';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
 import { brandingImageUrl } from '@/lib/appBase';
+import { useBrandName } from '@/hooks/useBrandName';
 
 /** Unauthenticated chrome — a centered card on the branded background. The brand
  *  is the kit's BrandMark with the one precedence every surface shares (the
  *  family lockup, the signature wordmark, the tenant logo, the monogram); the
- *  name comes from the branding payload (falls back to the platform name, then
- *  "Digita"). A language picker (backend languages) sits top-right so the
+ *  name is the tenant's (useBrandName). A language picker (backend languages) sits top-right so the
  *  operator can choose their language before signing in. */
 export function AuthShell({ children }: { children: ReactNode }) {
   const branding = useSessionStore((s) => s.branding);
   const signatureId = useThemeStore((s) => s.signature);
-  // The tenant's brand is its BrandingSetting.app_name alone; without it, the look's own name.
-  const appName = branding?.app_name ?? getSignature(signatureId).name;
+  const appName = useBrandName();
   const background = brandingImageUrl(branding?.login_background);
 
   return (
