@@ -1106,51 +1106,14 @@ export class EntityRegistry {
 
   // ─── Field Query Methods ───────────────────────────────
 
-  getFields(name: string): FieldDefinition[] {
-    return this.get(name).fields;
-  }
-
-  getStoredFields(name: string): FieldDefinition[] {
-    return this.get(name).fields.filter((f) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype));
-  }
-
-  getLinkFields(name: string): FieldDefinition[] {
-    return this.get(name).fields.filter((f) => f.fieldtype === "Link");
-  }
-
-  getTableFields(name: string): FieldDefinition[] {
-    return this.get(name).fields.filter((f) => f.fieldtype === "Table");
-  }
-
-  getSearchFields(name: string): string[] {
-    return this.get(name).search_fields ?? [];
-  }
-
   getTranslatableFields(name: string): string[] {
     return this.get(name)
       .fields.filter((f) => f.translatable)
       .map((f) => f.fieldname);
   }
 
-  getRequiredFields(name: string): FieldDefinition[] {
-    return this.get(name).fields.filter(
-      (f) => f.required && !LAYOUT_FIELD_TYPES.includes(f.fieldtype),
-    );
-  }
-
-  getUniqueFields(name: string): FieldDefinition[] {
-    return this.get(name).fields.filter(
-      (f) => f.unique && !LAYOUT_FIELD_TYPES.includes(f.fieldtype),
-    );
-  }
-
   getField(entityName: string, fieldname: string): FieldDefinition | undefined {
     return this.get(entityName).fields.find((f) => f.fieldname === fieldname);
-  }
-
-  getTitleField(name: string): string {
-    const entity = this.get(name);
-    return entity.title_field ?? "_id";
   }
 
   /**
