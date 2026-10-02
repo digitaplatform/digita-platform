@@ -198,8 +198,9 @@ function validateListSection(s: ListSection, idx: number, fail: (m: string) => v
     if (!s.expand.field) fail(`sections[${idx}].expand.field required`);
     if (!s.expand.entity) fail(`sections[${idx}].expand.entity required`);
   }
-  if (s.limit !== undefined && (typeof s.limit !== "number" || s.limit < 0)) {
-    fail(`sections[${idx}].limit must be a non-negative number`);
+  // A limit of 0 reads every row, since the database reads it as none.
+  if (s.limit !== undefined && !(Number.isInteger(s.limit) && s.limit >= 1)) {
+    fail(`sections[${idx}].limit must be a whole number of at least 1`);
   }
 }
 
