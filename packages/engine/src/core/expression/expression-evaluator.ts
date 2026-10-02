@@ -148,7 +148,7 @@ export function evaluateExpressionValueIn(
 ): unknown {
   const ast = parseExpression(expression);
   const resolveId: IdentifierResolver = (name) => {
-    if (!(name in roots)) throw new UnsafeExpressionError(`Identifier:${name}`);
+    if (!Object.hasOwn(roots, name)) throw new UnsafeExpressionError(`Identifier:${name}`);
     return roots[name];
   };
   return evaluateNode(ast, resolveId);
