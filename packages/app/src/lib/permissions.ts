@@ -1,5 +1,5 @@
 import type { EntityDefinition, EntityPermission, FieldDefinition, PermissionAction } from '@digitaplatform/shared';
-import { SYSTEM_ROLES, canGrantActionTo } from '@digitaplatform/shared';
+import { SYSTEM_ROLES, canGrantActionTo, opensField } from '@digitaplatform/shared';
 import type { SessionUser } from '@/types';
 import { evaluateExpr } from '@/lib/expression';
 import { resolveWorkflowField } from '@/lib/workflow-field';
@@ -158,7 +158,7 @@ export function readableFieldPredicate(
     (p) => p.read === 1 && user.roles.includes(p.role) && (!record || rowAdmits(p, user, record)),
   );
   if (record && !hasRecordPermission(entity, user, 'read', record)) rows.push({ level: 0 });
-  return (fieldname, level) => rows.some((row) => row.level === level && (!row.fields || row.fields.includes(fieldname)));
+  return (fieldname, level) => rows.some((row) => opensField(row, fieldname, level));
 }
 
 /** The child fields of a Table the user may read. Like the engine, a Table whose children all
