@@ -7,23 +7,24 @@ import type { EntityRegistry } from "../../entity/entity-registry.js";
  * entity the caller cannot read at that level are rejected.
  *
  * Reference shape:
- *   Source ref: a string starting with `$` matching `$<word>(.<path>)*`,
- *     e.g. `"$lines.product"` (records the leading segment, `lines`).
- *   Output ref: a key in `$project`, `$group` (other than `_id`),
- *     `$addFields`, `$set`. Recorded against the active context entity.
+ *   Source ref: a name a stage reads as a field of the entity: a `$<name>` string in an
+ *     expression, a plain key of `$match`, a `$sort` key, `$lookup.localField` (the leading
+ *     segment is recorded). `$$ROOT` / `$$CURRENT` record `WHOLE_DOCUMENT`.
+ *   Output ref: a key in `$project`, `$group` (other than `_id`), `$addFields`, `$set` and
+ *     `$lookup.as`. Recorded against the active context entity.
  *
- * Skipped:
- *   System variables: `$$ROOT`, `$$NOW`, `$$REMOVE`, `$$CURRENT`.
+ * Not field references:
+ *   A name an earlier stage of the same pipeline produced, and every name after a stage that
+ *     replaced the documents ($group, $project, $count, $replaceRoot, $replaceWith, $facet).
+ *   A plain key inside an expression: an output name ($group's object `_id`) or a named
+ *     argument of an operator (`format`, `date`, `if`, `then`, `input`).
+ *   Variables: `$$NOW`, `$$REMOVE` and the names $let, $map and $filter bind.
  *   Param-resolver tokens: `$root.x`, `$user.x`, `$param.x`.
- *   Mongo expression operators (`$multiply`, `$first`, `$cond`, etc.) —
- *     keys starting with `$` and matching one of the operator names just
- *     descend into their arguments. The walker treats them as plumbing,
- *     not field refs.
  *
  * Context entity tracking:
  *   Top-level pipeline runs against `rootEntity`.
  *   Inside `$lookup.pipeline`, the active context entity is `lookup.from`.
- *   `$facet` branches reset to sibling pipelines against the parent context.
+ *   `$facet` branches walk sibling pipelines against the parent context.
  */
 
 export interface FieldReference {
@@ -149,6 +150,23 @@ const STAGE_OPERATORS = new Set<string>([
 ]);
 
 /**
+ * The field a reference to the whole current document stands for: `$$ROOT` or `$$CURRENT`
+ * before the first reshaping stage hands every field of the entity on.
+ */
+export const WHOLE_DOCUMENT = "*";
+
+/**
+ * What a stage of one pipeline sees: the entity whose fields a name means, the names earlier
+ * stages produced, and whether a reshaping stage ($group, $project, $count, $replaceRoot,
+ * $replaceWith, $facet) has replaced the documents, after which no name means an entity field.
+ */
+interface WalkState {
+  entity: string;
+  produced: Set<string>;
+  reshaped: boolean;
+}
+
+/**
  * Walk the pipeline and produce flat refs.
  */
 export function collectFieldReferences(
@@ -158,15 +176,17 @@ export function collectFieldReferences(
 ): FieldReference[] {
   const out: FieldReference[] = [];
   if (!Array.isArray(pipeline)) return out;
-  for (const stage of pipeline) {
-    walkStage(stage, rootEntity, registry, out);
-  }
+  walkPipeline(pipeline, { entity: rootEntity, produced: new Set(), reshaped: false }, registry, out);
   return out;
+}
+
+function walkPipeline(pipeline: unknown[], state: WalkState, registry: EntityRegistry, out: FieldReference[]): void {
+  for (const stage of pipeline) walkStage(stage, state, registry, out);
 }
 
 function walkStage(
   stage: unknown,
-  contextEntity: string,
+  state: WalkState,
   registry: EntityRegistry,
   out: FieldReference[],
 ): void {
@@ -180,36 +200,49 @@ function walkStage(
 
   switch (stageKey) {
     case "$match":
-      walkExpr(body, contextEntity, out);
+      walkQuery(body, state, out);
       return;
     case "$project":
     case "$addFields":
     case "$set":
       if (body && typeof body === "object") {
         for (const [k, v] of Object.entries(body)) {
-          recordOutput(contextEntity, k, out);
-          walkExpr(v, contextEntity, out);
+          if (!state.produced.has(k) && !state.reshaped) recordOutput(state.entity, k, out);
+          walkExpr(v, state, out);
         }
+        for (const k of Object.keys(body)) state.produced.add(k);
+        if (stageKey === "$project") state.reshaped = true;
       }
       return;
     case "$group":
       if (body && typeof body === "object") {
         const groupBody = body as Record<string, unknown>;
-        if ("_id" in groupBody) walkExpr(groupBody["_id"], contextEntity, out);
+        if ("_id" in groupBody) walkExpr(groupBody["_id"], state, out);
         for (const [k, v] of Object.entries(groupBody)) {
           if (k === "_id") continue;
-          recordOutput(contextEntity, k, out);
-          walkExpr(v, contextEntity, out);
+          if (!state.produced.has(k) && !state.reshaped) recordOutput(state.entity, k, out);
+          walkExpr(v, state, out);
         }
+        for (const k of Object.keys(groupBody)) state.produced.add(k);
+        state.reshaped = true;
       }
       return;
     case "$unwind":
-      walkExpr(body, contextEntity, out);
+      if (typeof body === "string") walkExpr(body, state, out);
+      else if (body && typeof body === "object") {
+        const unwind = body as Record<string, unknown>;
+        walkExpr(unwind["path"], state, out);
+        if (typeof unwind["includeArrayIndex"] === "string") state.produced.add(unwind["includeArrayIndex"]);
+      }
       return;
     case "$sort":
       if (body && typeof body === "object") {
-        for (const k of Object.keys(body)) recordSource(contextEntity, k, out);
+        for (const k of Object.keys(body)) recordName(state, k, out);
       }
+      return;
+    case "$count":
+      if (typeof body === "string") state.produced.add(body);
+      state.reshaped = true;
       return;
     case "$lookup":
       if (body && typeof body === "object") {
@@ -219,28 +252,32 @@ function walkStage(
         const foreignField = lookup["foreignField"];
         const subPipeline = lookup["pipeline"];
         const as = lookup["as"];
-        if (typeof localField === "string") recordSource(contextEntity, localField, out);
+        if (typeof localField === "string") recordName(state, localField, out);
         if (typeof from === "string" && typeof foreignField === "string") {
           recordSource(from, foreignField, out);
         }
-        if (typeof as === "string") recordOutput(contextEntity, as, out);
+        if (typeof as === "string" && !state.produced.has(as) && !state.reshaped) recordOutput(state.entity, as, out);
         if (Array.isArray(subPipeline) && typeof from === "string") {
-          for (const child of subPipeline) walkStage(child, from, registry, out);
+          walkPipeline(subPipeline, { entity: from, produced: new Set(), reshaped: false }, registry, out);
         }
+        if (typeof as === "string") state.produced.add(as);
       }
       return;
     case "$facet":
       if (body && typeof body === "object") {
         for (const childPipe of Object.values(body)) {
           if (Array.isArray(childPipe)) {
-            for (const child of childPipe) walkStage(child, contextEntity, registry, out);
+            walkPipeline(childPipe, { entity: state.entity, produced: new Set(state.produced), reshaped: state.reshaped }, registry, out);
           }
         }
+        for (const k of Object.keys(body)) state.produced.add(k);
+        state.reshaped = true;
       }
       return;
     case "$replaceRoot":
     case "$replaceWith":
-      walkExpr(body, contextEntity, out);
+      walkExpr(body, state, out);
+      state.reshaped = true;
       return;
     default:
       // Unknown stage — view-validator should already reject. Ignore here.
@@ -249,41 +286,57 @@ function walkStage(
 }
 
 /**
- * Walk a Mongo expression tree, recording any leaf that's a field reference
- * (`$<segment>...`). Operator keys like `$multiply` aren't refs; their values
- * are descended.
+ * Walk a $match body, the query language: a plain key names a field of the documents, and the
+ * logical operators hold further queries. `$expr` holds an aggregation expression.
  */
-function walkExpr(node: unknown, contextEntity: string, out: FieldReference[]): void {
-  if (node === null || node === undefined) return;
+function walkQuery(node: unknown, state: WalkState, out: FieldReference[]): void {
+  if (!node || typeof node !== "object") return;
   if (Array.isArray(node)) {
-    for (const child of node) walkExpr(child, contextEntity, out);
+    for (const child of node) walkQuery(child, state, out);
     return;
   }
-  if (typeof node === "object") {
-    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-      if (k.startsWith("$")) {
-        if (MONGO_OPERATORS.has(k) || STAGE_OPERATORS.has(k)) {
-          walkExpr(v, contextEntity, out);
-        } else {
-          // Unknown $-prefixed key in expr context — leave alone.
-          walkExpr(v, contextEntity, out);
-        }
-      } else {
-        // Plain field key in $match: { customer: "X" }
-        recordSource(contextEntity, k, out);
-        walkExpr(v, contextEntity, out);
-      }
+  for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+    if (k === "$and" || k === "$or" || k === "$nor") walkQuery(v, state, out);
+    else if (k === "$expr") walkExpr(v, state, out);
+    else if (k.startsWith("$")) walkExpr(v, state, out);
+    else {
+      recordName(state, k, out);
+      walkExpr(v, state, out);
     }
-    return;
-  }
-  if (typeof node === "string") {
-    recordIfFieldRef(node, contextEntity, out);
   }
 }
 
-function recordIfFieldRef(s: string, contextEntity: string, out: FieldReference[]): void {
+/**
+ * Walk an aggregation expression. A string `$<name>` reads a field; a key that starts with `$`
+ * is an operator whose value is walked; any other key is an output name or a named argument
+ * of an operator ($group's object _id, `format` and `date` of $dateToString, `if` of $cond),
+ * never a field.
+ */
+function walkExpr(node: unknown, state: WalkState, out: FieldReference[]): void {
+  if (node === null || node === undefined) return;
+  if (Array.isArray(node)) {
+    for (const child of node) walkExpr(child, state, out);
+    return;
+  }
+  if (typeof node === "object") {
+    for (const v of Object.values(node as Record<string, unknown>)) walkExpr(v, state, out);
+    return;
+  }
+  if (typeof node === "string") recordIfFieldRef(node, state, out);
+}
+
+function recordIfFieldRef(s: string, state: WalkState, out: FieldReference[]): void {
   if (!s.startsWith("$")) return;
-  if (s.startsWith("$$")) return; // system variable
+  if (s.startsWith("$$")) {
+    // The whole current document hands on every field until a stage reshapes it; other
+    // variables ($$NOW, $$REMOVE, a $let or $map name) read no field of the entity.
+    const m = s.match(/^\$\$(ROOT|CURRENT)(?:\.([a-zA-Z_][\w]*)[\w.]*)?$/);
+    if (m && !state.reshaped) {
+      if (m[2]) recordName(state, m[2], out);
+      else recordSource(state.entity, WHOLE_DOCUMENT, out);
+    }
+    return;
+  }
   // Skip param-resolver tokens (already substituted earlier) — defensive.
   for (const p of RESERVED_TOKEN_PREFIXES) {
     if (s.startsWith(p) || s === "$now") return;
@@ -293,8 +346,14 @@ function recordIfFieldRef(s: string, contextEntity: string, out: FieldReference[
   // Extract the leading segment after `$`.
   const m = s.match(/^\$([a-zA-Z_][\w]*)(?:\.[\w.]+)?$/);
   if (!m) return;
-  const fieldName = m[1]!;
-  recordSource(contextEntity, fieldName, out);
+  recordName(state, m[1]!, out);
+}
+
+/** A name a stage reads: a field of the entity, unless an earlier stage produced it or replaced the documents. */
+function recordName(state: WalkState, name: string, out: FieldReference[]): void {
+  const leading = name.split(".")[0]!;
+  if (state.produced.has(leading) || state.reshaped) return;
+  recordSource(state.entity, leading, out);
 }
 
 function recordSource(entity: string, field: string, out: FieldReference[]): void {
