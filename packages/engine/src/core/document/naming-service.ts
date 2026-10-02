@@ -2,6 +2,7 @@ import type { EntityDefinition, DatabaseTarget } from "@digitaplatform/shared";
 import { ObjectId, type ClientSession } from "mongodb";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { createLogger } from "../logging/logger.js";
+import { EngineError } from "../errors/engine-error.js";
 import { randomUUID } from "crypto";
 
 const log = createLogger("naming-service");
@@ -13,15 +14,20 @@ const log = createLogger("naming-service");
  * user-fixable input problem from unexpected engine errors so the API can
  * respond 400 (naming the offending field) instead of a generic 500.
  */
-export class NamingSeriesFieldEmptyError extends Error {
+export class NamingSeriesFieldEmptyError extends EngineError {
+  declare readonly field: string;
+
   constructor(
     public readonly entity: string,
-    public readonly field: string,
+    field: string,
   ) {
-    super(`Naming series for ${entity} needs field "${field}", which is empty`);
-    this.name = "NamingSeriesFieldEmptyError";
+    super("naming_field_required", { field }, 400, "NAMING_FIELD_REQUIRED", field);
   }
 }
+
+/** A naming configuration of an entity that lacks what its strategy needs: a fault of the app's author. */
+const namingConfigInvalid = (entity: EntityDefinition) =>
+  new EngineError("naming_config_invalid", { doctype: entity.name, strategy: String(entity.naming?.strategy) }, 500, "NAMING_CONFIG_INVALID");
 
 /**
  * Bound on how many times the self-heal loop (see `resolveUniqueSequence`)
@@ -81,13 +87,11 @@ export class NamingService {
       case "by_field": {
         const fieldName = naming.field;
         if (!fieldName) {
-          throw new Error(
-            `Naming strategy "by_field" requires "field" in naming config for ${entity.name}`,
-          );
+          throw namingConfigInvalid(entity);
         }
         const value = data[fieldName];
         if (!value) {
-          throw new Error(`Field "${fieldName}" is required for naming in ${entity.name}`);
+          throw new NamingSeriesFieldEmptyError(entity.name, fieldName);
         }
         return String(value);
       }
@@ -95,9 +99,7 @@ export class NamingService {
       case "expression": {
         const expr = naming.expression;
         if (!expr) {
-          throw new Error(
-            `Naming strategy "expression" requires "expression" in naming config for ${entity.name}`,
-          );
+          throw namingConfigInvalid(entity);
         }
         return await this.evaluateNamingExpression(
           entity.name,
@@ -111,16 +113,13 @@ export class NamingService {
       case "user_set": {
         const id = data["_id"];
         if (!id) {
-          throw new Error(
-            `Name (_id) is required for entity "${entity.name}" (user_set naming` +
-              `${entity.is_single ? ", is_single" : ""}) — provide an explicit _id`,
-          );
+          throw new EngineError("naming_name_required", { doctype: entity.name }, 400, "NAMING_NAME_REQUIRED", "_id");
         }
         return String(id);
       }
 
       default:
-        throw new Error(`Unknown naming strategy: ${naming.strategy}`);
+        throw namingConfigInvalid(entity);
     }
   }
 
@@ -280,11 +279,13 @@ export class NamingService {
     while (await this.db.existsByField(collectionName, keyField, candidate, target, session)) {
       skipped++;
       if (skipped > MAX_SEQUENCE_SKIP_ATTEMPTS) {
-        throw new Error(
-          `Naming sequence "${sequenceName}" could not find a free "${keyField}" value in ` +
-            `"${collectionName}" after skipping ${MAX_SEQUENCE_SKIP_ATTEMPTS} occupied candidates. ` +
-            `The counter likely lags far behind existing keys — resync it out of band ` +
-            `(schema-migrator initializeSequence) rather than self-healing inside the insert transaction.`,
+        // The counter lags far behind the stored keys; it is resynced out of band
+        // (schema-migrator initializeSequence), not inside the insert transaction.
+        throw new EngineError(
+          "naming_sequence_exhausted",
+          { sequence: sequenceName, field: keyField, attempts: String(MAX_SEQUENCE_SKIP_ATTEMPTS) },
+          500,
+          "NAMING_SEQUENCE_EXHAUSTED",
         );
       }
       seq = await this.db.getNextSequence(sequenceName, "naming_seq", target, session);

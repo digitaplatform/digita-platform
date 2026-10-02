@@ -125,7 +125,7 @@ describe("validateEntityDataZod — Table per-row mandatory_depends_on", () => {
     expect(r.valid).toBe(false);
     expect(
       r.errors.some(
-        (err) => err.field === "items[0].account" && err.message_key === "field_mandatory_depends_on",
+        (err) => err.field === "items[0].account" && err.code === "field_mandatory_depends_on",
       ),
     ).toBe(true);
   });
@@ -298,7 +298,7 @@ describe("validateEntityDataZod — Table rows", () => {
       addresses: [{ purpose: "billing" }, { purpose: "billing" }],
     }, builder);
     expect(r.valid).toBe(false);
-    const dup = r.errors.find((er) => er.message_key === "table_row_unique_violation");
+    const dup = r.errors.find((er) => er.code === "table_row_unique_violation");
     expect(dup).toBeDefined();
   });
 });
@@ -414,7 +414,7 @@ describe("validateEntityDataZod — Duration is whole non-negative seconds (A6)"
 
 describe("validateEntityDataZod — a Duration refuses a boolean and a list", () => {
   const dur = { fieldname: "dur", fieldtype: "Duration", label: "Dur" };
-  const keysOf = (r: ReturnType<typeof validateEntityDataZod>) => r.errors.map((e) => [e.field, e.message_key]);
+  const keysOf = (r: ReturnType<typeof validateEntityDataZod>) => r.errors.map((e) => [e.field, e.code]);
 
   it("as a field: the handler refuses it before it is stored as 0 or 1", () => {
     for (const value of [true, false, [], [7]]) {
@@ -449,7 +449,7 @@ describe("validateEntityDataZod — a Datetime field takes only a string or a Da
       } catch (err) {
         thrown = err;
       }
-      expect(thrown).toMatchObject({ field: "at", message_key: "field_invalid_date", params: { field: "At" } });
+      expect(thrown).toMatchObject({ field: "at", code: "field_invalid_date", params: { field: "At" } });
     }
   });
 
@@ -471,7 +471,7 @@ describe("validateEntityDataZod — top-level conditional-required (A11)", () =>
   it("rejects an empty conditionally-required field when its condition holds", () => {
     const r = validateEntityDataZod(e(), { type: "debit", reason: "" }, builder);
     expect(r.valid).toBe(false);
-    expect(r.errors.some((x) => x.field === "reason" && x.message_key === "field_mandatory_depends_on")).toBe(true);
+    expect(r.errors.some((x) => x.field === "reason" && x.code === "field_mandatory_depends_on")).toBe(true);
   });
   it("accepts it when filled, or when the condition is false", () => {
     expect(validateEntityDataZod(e(), { type: "debit", reason: "x" }, builder).valid).toBe(true);
@@ -498,7 +498,7 @@ describe("validateEntityDataZod — a blank value is no value", () => {
     for (const value of ["", "   "]) {
       it(`a required ${fieldtype} field refuses ${JSON.stringify(value)} with field_required`, () => {
         const r = validateStored({ fieldname: "f", fieldtype, label: "F", required: true }, value);
-        expect(r.errors.map((e) => [e.field, e.message_key])).toEqual([["f", "field_required"]]);
+        expect(r.errors.map((e) => [e.field, e.code])).toEqual([["f", "field_required"]]);
       });
     }
   }
@@ -556,7 +556,7 @@ describe("validateEntityDataZod — a blank value is no value", () => {
       },
     ]);
     const r = validateEntityDataZod(e, { lines: [{ sku: "A-1" }, { sku: "   " }] }, builder);
-    expect(r.errors.map((x) => [x.field, x.message_key])).toEqual([["lines[1].sku", "field_required"]]);
+    expect(r.errors.map((x) => [x.field, x.code])).toEqual([["lines[1].sku", "field_required"]]);
   });
 
   it("a field whose mandatory_depends_on holds refuses a whitespace-only value", () => {
@@ -565,7 +565,7 @@ describe("validateEntityDataZod — a blank value is no value", () => {
       { fieldname: "reason", fieldtype: "Text", label: "Reason", mandatory_depends_on: "eval:doc.type=='debit'" },
     ]);
     const r = validateEntityDataZod(e, { type: "debit", reason: "   " }, builder);
-    expect(r.errors.map((x) => [x.field, x.message_key])).toEqual([["reason", "field_mandatory_depends_on"]]);
+    expect(r.errors.map((x) => [x.field, x.code])).toEqual([["reason", "field_mandatory_depends_on"]]);
   });
 });
 
@@ -576,7 +576,7 @@ describe("validateEntityDataZod — a required Check must be ticked and a requir
     const stored = getFieldTypeHandler(field.fieldtype as never).toStorage(value, field as never);
     return validateEntityDataZod(entity([field]), { [field.fieldname as string]: stored }, builder);
   };
-  const keys = (r: ReturnType<typeof validateStored>) => r.errors.map((e) => [e.field, e.message_key]);
+  const keys = (r: ReturnType<typeof validateStored>) => r.errors.map((e) => [e.field, e.code]);
   const check = { fieldname: "f", fieldtype: "Check", label: "F" };
   const rating = { fieldname: "f", fieldtype: "Rating", label: "F" };
 
@@ -672,7 +672,7 @@ describe("validateEntityDataZod — a failed rule answers the key it names", () 
   for (const [rule, field, value, key, params] of cases) {
     it(`${rule} answers ${key}`, () => {
       const r = validateEntityDataZod(entity([{ fieldname: "f", label: "F", ...field }]), { f: value }, builder);
-      expect(r.errors.map((e) => [e.field, e.message_key])).toEqual([["f", key]]);
+      expect(r.errors.map((e) => [e.field, e.code])).toEqual([["f", key]]);
       expect(r.errors[0]?.params).toEqual({ field: "f", ...params });
     });
   }
@@ -690,7 +690,7 @@ describe("validateEntityDataZod — a failed rule answers the key it names", () 
       },
     ]);
     const r = validateEntityDataZod(e, { lines: [{ shade: ["#ffffff"], due: 5 }] }, builder);
-    expect(r.errors.map((x) => [x.field, x.message_key])).toEqual([
+    expect(r.errors.map((x) => [x.field, x.code])).toEqual([
       ["lines[0].shade", "field_invalid_color"],
       ["lines[0].due", "field_invalid_date"],
     ]);
@@ -705,7 +705,7 @@ describe("validateEntityDataZod — a failed rule answers the key it names", () 
       } catch (err) {
         thrown = err;
       }
-      expect(thrown).toMatchObject({ message_key: "field_invalid_date", params: { field: "Due" } });
+      expect(thrown).toMatchObject({ code: "field_invalid_date", params: { field: "Due" } });
     }
   });
 
@@ -717,7 +717,7 @@ describe("validateEntityDataZod — a failed rule answers the key it names", () 
       if (key !== "field_invalid_regex" && "regex_message" in field) continue;
       const [error] = validateEntityDataZod(entity([{ fieldname: "f", label: "F", ...field }]), { f: value }, builder).errors;
       for (const locale of Object.keys(bundle)) {
-        expect(translator.t(error!.message_key, error!.params, locale), `${rule} in ${locale}`).not.toMatch(/\{\w+\}/);
+        expect(translator.t(error!.code, error!.params, locale), `${rule} in ${locale}`).not.toMatch(/\{\w+\}/);
       }
     }
   });
@@ -727,9 +727,9 @@ describe("validateEntityDataZod — a failed rule answers the key it names", () 
       { fieldname: "lines", fieldtype: "Table", label: "Lines", min_rows: 2, max_rows: 3, child_fields: [] },
     ]);
     const few = validateEntityDataZod(e, { lines: [{}] }, builder).errors;
-    expect(few.map((x) => [x.field, x.message_key, x.params])).toEqual([["lines", "table_min_rows", { field: "lines", min: "2" }]]);
+    expect(few.map((x) => [x.field, x.code, x.params])).toEqual([["lines", "table_min_rows", { field: "lines", min: "2" }]]);
     const many = validateEntityDataZod(e, { lines: [{}, {}, {}, {}] }, builder).errors;
-    expect(many.map((x) => [x.field, x.message_key, x.params])).toEqual([["lines", "table_max_rows", { field: "lines", max: "3" }]]);
+    expect(many.map((x) => [x.field, x.code, x.params])).toEqual([["lines", "table_max_rows", { field: "lines", max: "3" }]]);
   });
 
   it("a Table cell answers the key of its own rule on the cell's path", () => {
@@ -742,7 +742,7 @@ describe("validateEntityDataZod — a failed rule answers the key it names", () 
       },
     ]);
     const r = validateEntityDataZod(e, { lines: [{ qty: 0 }] }, builder);
-    expect(r.errors.map((x) => [x.field, x.message_key])).toEqual([["lines[0].qty", "field_min_value"]]);
+    expect(r.errors.map((x) => [x.field, x.code])).toEqual([["lines[0].qty", "field_min_value"]]);
   });
 });
 
@@ -759,7 +759,7 @@ describe("a Select of time zones", () => {
 
   it("refuses a zone no runtime knows", () => {
     const r = validateEntityDataZod(settings, { timezone: "Mars/Olympus" }, builder);
-    expect(r.errors.map((x) => [x.field, x.message_key])).toEqual([["timezone", "field_invalid_select"]]);
+    expect(r.errors.map((x) => [x.field, x.code])).toEqual([["timezone", "field_invalid_select"]]);
   });
 });
 

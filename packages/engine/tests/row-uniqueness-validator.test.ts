@@ -35,7 +35,7 @@ describe("validateRowUniqueness", () => {
     });
     expect(errs.length).toBe(1);
     expect(errs[0]!.field).toBe("addresses[1]");
-    expect(errs[0]!.message_key).toBe("table_row_unique_violation");
+    expect(errs[0]!.code).toBe("table_row_unique_violation");
     // A person counts rows from 1.
     expect(errs[0]!.params).toEqual({ field: "Addresses", rows: "1,2", keys: "purpose, is_default" });
   });
@@ -47,7 +47,7 @@ describe("validateRowUniqueness", () => {
     expect(errs).toEqual([
       {
         field: "addresses[2]",
-        message_key: "table_row_repeated",
+        code: "table_row_repeated",
         message: "Addresses rows 1 and 3 are the same row twice",
         params: { field: "Addresses", rows: "1,3" },
       },

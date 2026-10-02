@@ -12,7 +12,7 @@ import { PermissionDeniedError } from "../src/core/permissions/permission-checke
  * The calls whose first literal argument is a key: a text the code translates, and the code an
  * engine error carries, which an EngineError subclass passes to `super` or a throw site to the class.
  */
-const KEY_CALLS = ["t", "super", "PermissionDeniedError"];
+const KEY_CALLS = ["t", "super", "PermissionDeniedError", "EngineError", "DocStatusError", "FieldValueError"];
 
 // The logger reads the real env; a test below imports that env itself, on purpose.
 vi.mock("../src/core/logging/logger.js", () => ({

@@ -58,7 +58,7 @@ function coerceScalar(fieldtype: string, field: string, value: unknown, timeZone
   if (typeof value === "string") {
     const d = new Date(value);
     if (isNaN(d.getTime())) {
-      throw new FieldValueError(field, "field_invalid_date", { value });
+      throw new FieldValueError("field_invalid_date", field, { value });
     }
     return d;
   }

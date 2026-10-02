@@ -108,8 +108,8 @@ describe("globalErrorHandler – NotFoundError", () => {
 describe("globalErrorHandler – ValidationFailedError", () => {
   it("returns 400 with VALIDATION_ERROR code", () => {
     const errors = [
-      { field: "email", message_key: "field_required" },
-      { field: "name", message_key: "field_too_short" },
+      { field: "email", code: "field_required" },
+      { field: "name", code: "field_too_short" },
     ];
     const error = new ValidationFailedError("user", errors);
     const reply = mockReply();
@@ -122,8 +122,8 @@ describe("globalErrorHandler – ValidationFailedError", () => {
 
   it("maps each validation error to a message entry", () => {
     const errors = [
-      { field: "email", message_key: "field_required" },
-      { field: "name", message_key: "field_too_short" },
+      { field: "email", code: "field_required" },
+      { field: "name", code: "field_too_short" },
     ];
     const error = new ValidationFailedError("user", errors);
     const reply = mockReply();
@@ -137,7 +137,7 @@ describe("globalErrorHandler – ValidationFailedError", () => {
   });
 
   it("puts validation count in detail", () => {
-    const errors = [{ field: "email", message_key: "field_required" }];
+    const errors = [{ field: "email", code: "field_required" }];
     const error = new ValidationFailedError("user", errors);
     const reply = mockReply();
 
@@ -147,7 +147,7 @@ describe("globalErrorHandler – ValidationFailedError", () => {
   });
 
   it("passes the trace_id through", () => {
-    const error = new ValidationFailedError("user", [{ field: "x", message_key: "required" }]);
+    const error = new ValidationFailedError("user", [{ field: "x", code: "required" }]);
     const req = mockRequest({ traceId: "trace-val" });
     const reply = mockReply();
 
@@ -158,8 +158,8 @@ describe("globalErrorHandler – ValidationFailedError", () => {
 
   it("binds each message to its field via path (frontend field-binding)", () => {
     const errors = [
-      { field: "email", message_key: "field_required" },
-      { field: "name", message_key: "field_too_short", params: { field: "Name" } },
+      { field: "email", code: "field_required" },
+      { field: "name", code: "field_too_short", params: { field: "Name" } },
     ];
     const error = new ValidationFailedError("user", errors);
     const reply = mockReply();
@@ -173,7 +173,7 @@ describe("globalErrorHandler – ValidationFailedError", () => {
   });
 
   it("exposes the field on the error envelope for a single-field failure", () => {
-    const error = new ValidationFailedError("user", [{ field: "email", message_key: "field_required" }]);
+    const error = new ValidationFailedError("user", [{ field: "email", code: "field_required" }]);
     const reply = mockReply();
 
     globalErrorHandler(error, mockRequest(), reply);
@@ -183,8 +183,8 @@ describe("globalErrorHandler – ValidationFailedError", () => {
 
   it("omits the envelope field for a multi-field failure (use per-message path)", () => {
     const errors = [
-      { field: "email", message_key: "field_required" },
-      { field: "name", message_key: "field_required" },
+      { field: "email", code: "field_required" },
+      { field: "name", code: "field_required" },
     ];
     const error = new ValidationFailedError("user", errors);
     const reply = mockReply();
@@ -315,7 +315,7 @@ describe("globalErrorHandler – DocStatusError", () => {
     expect(reply.sentData.success).toBe(false);
   });
 
-  it("uses error.messageKey for messages text and detail", () => {
+  it("uses the error's code for messages text and detail", () => {
     const error = new DocStatusError("cannot_submit_cancelled", { doctype: "Invoice", name: "INV-001" });
     const reply = mockReply();
 
@@ -508,7 +508,7 @@ describe("globalErrorHandler – declared client error (statusCode 4xx)", () => 
   });
 
   it("answers an action whose show_if is false with 409 and action_not_available", () => {
-    const error = new ActionNotAvailableError("Loan", "L-1", { action: "placeHold", label: "Place hold" });
+    const error = new ActionNotAvailableError({ action: "placeHold", label: "Place hold" } as never);
     const reply = mockReply();
 
     globalErrorHandler(error, mockRequest(), reply);

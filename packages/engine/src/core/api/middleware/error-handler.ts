@@ -7,15 +7,7 @@ import {
   MongoServerSelectionError,
   MongoWriteConcernError,
 } from "mongodb";
-import {
-  ValidationFailedError,
-  ConcurrentModificationError,
-  DeleteBlockedError,
-  GatedListTooBroadError,
-  LinkTargetCancelledError,
-  TimeSeriesImmutableError,
-} from "../../document/document-service.js";
-import { NamingSeriesFieldEmptyError } from "../../document/naming-service.js";
+import { ValidationFailedError } from "../../document/document-service.js";
 import { IllegalTransitionError } from "../../workflow/workflow-engine.js";
 import {
   PeriodClosedError,
@@ -23,11 +15,9 @@ import {
   AmbiguousPeriodError,
   DateOutsidePeriodError,
 } from "../../period/period-close-validator.js";
-import { DocStatusError } from "../../document/docstatus-engine.js";
 import { ViewNotFoundError, BadRequestError } from "../../view/view-engine.js";
 import { UnknownDoctypeError } from "../../entity/entity-registry.js";
 import { FilterFieldNotAllowedError, MalformedFieldsError, MalformedFilterValueError } from "../../database/filter-builder.js";
-import { FieldValueError } from "../../entity/field-types.js";
 import { PasswordKeyNotListedError } from "../../entity/password-cipher.js";
 import { EngineError } from "../../errors/engine-error.js";
 import { ReseedRunningError, ReseedSeedFailedError, ReseedWritesRunningError } from "../../setup/reseed-app-data.js";
@@ -63,12 +53,41 @@ export function globalErrorHandler(
       { trace_id: traceId, code: error.code, params: error.params, text: englishText(error.code, error.params) },
       "Request refused",
     );
+    // A refused save answers with one message per field it refuses.
+    if (error instanceof ValidationFailedError) {
+      const response: ApiResponse<null> = {
+        success: false,
+        status_code: 400,
+        data: null,
+        // `path` carries the offending fieldname so the frontend can bind the
+        // error to the exact control; `params` lets the i18n hook interpolate the
+        // field label into the message text.
+        messages: error.errors.map((e) => ({
+          text: e.code,
+          type: "error" as const,
+          show: true,
+          ...(e.field ? { path: e.field } : {}),
+          ...(e.params ? { params: e.params } : {}),
+        })),
+        error: {
+          code: "VALIDATION_ERROR",
+          detail: `${error.errors.length} validation error(s)`,
+          trace_id: traceId,
+          // Single-field failure → also expose it on the error envelope.
+          ...(error.errors.length === 1 && error.errors[0]?.field
+            ? { field: error.errors[0].field }
+            : {}),
+        },
+      };
+      reply.code(400).send(response);
+      return;
+    }
     const response: ApiResponse<null> = {
       success: false,
       status_code: error.status,
       data: null,
-      messages: [{ text: error.code, type: "error", show: true, params: error.params }],
-      error: { code: error.responseCode, detail: error.code, trace_id: traceId },
+      messages: [{ text: error.code, type: "error", show: true, params: error.params, ...(error.field ? { path: error.field } : {}) }],
+      error: { code: error.responseCode, detail: error.code, trace_id: traceId, ...(error.field ? { field: error.field } : {}) },
     };
     reply.code(error.status).send(response);
     return;
@@ -134,29 +153,6 @@ export function globalErrorHandler(
     return;
   }
 
-  // A field-type handler (e.g. a date filter value that isn't a valid date) rejected
-  // a value. Normally serializeFields rewraps this into a ValidationFailedError on
-  // the write path; on the READ/filter path it surfaces directly — map it to 400 so
-  // an uncoercible filter fails LOUD (never a silent 0-row match).
-  if (error instanceof FieldValueError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 400,
-      data: null,
-      messages: [
-        {
-          text: error.message_key,
-          type: "error",
-          show: true,
-          params: { field: error.field, ...(error.params ?? {}) },
-        },
-      ],
-      error: { code: "FIELD_VALUE_INVALID", detail: error.message, trace_id: traceId },
-    };
-    reply.code(400).send(response);
-    return;
-  }
-
   // Unknown doctype — EntityRegistry.get throws a typed UnknownDoctypeError
   // carrying the requested name + closest registered match. Surface both so the
   // 404 is self-diagnosing ("…\"userMenu\" — did you mean \"UserMenu\"?") — the
@@ -186,47 +182,6 @@ export function globalErrorHandler(
       },
     };
     reply.code(404).send(response);
-    return;
-  }
-
-  if (error instanceof ValidationFailedError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 400,
-      data: null,
-      // `path` carries the offending fieldname so the frontend can bind the
-      // error to the exact control; `params` lets the i18n hook interpolate the
-      // field label into the message text. Both were previously dropped.
-      messages: error.errors.map((e) => ({
-        text: e.message_key,
-        type: "error" as const,
-        show: true,
-        ...(e.field ? { path: e.field } : {}),
-        ...(e.params ? { params: e.params } : {}),
-      })),
-      error: {
-        code: "VALIDATION_ERROR",
-        detail: `${error.errors.length} validation error(s)`,
-        trace_id: traceId,
-        // Single-field failure → also expose it on the error envelope.
-        ...(error.errors.length === 1 && error.errors[0]?.field
-          ? { field: error.errors[0].field }
-          : {}),
-      },
-    };
-    reply.code(400).send(response);
-    return;
-  }
-
-  if (error instanceof ConcurrentModificationError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 409,
-      data: null,
-      messages: [{ text: "document_modified", type: "error", show: true }],
-      error: { code: "CONCURRENT_MODIFICATION", detail: error.message, trace_id: traceId },
-    };
-    reply.code(409).send(response);
     return;
   }
 
@@ -292,18 +247,6 @@ export function globalErrorHandler(
     return;
   }
 
-  if (error instanceof TimeSeriesImmutableError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 400,
-      data: null,
-      messages: [{ text: error.message, type: "error", show: true }],
-      error: { code: "TIME_SERIES_IMMUTABLE", detail: error.message, trace_id: traceId },
-    };
-    reply.code(400).send(response);
-    return;
-  }
-
   if (error instanceof PeriodClosedError) {
     const response: ApiResponse<null> = {
       success: false,
@@ -352,30 +295,6 @@ export function globalErrorHandler(
     return;
   }
 
-  if (error instanceof NamingSeriesFieldEmptyError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 400,
-      data: null,
-      messages: [
-        {
-          text: "naming_field_required",
-          type: "error",
-          show: true,
-          params: { field: error.field },
-        },
-      ],
-      error: {
-        code: "NAMING_FIELD_REQUIRED",
-        detail: error.message,
-        field: error.field,
-        trace_id: traceId,
-      },
-    };
-    reply.code(400).send(response);
-    return;
-  }
-
   if (error instanceof PasswordKeyNotListedError) {
     const response: ApiResponse<null> = {
       success: false,
@@ -385,68 +304,6 @@ export function globalErrorHandler(
       error: { code: "PASSWORD_KEY_NOT_LISTED", detail: error.message, trace_id: traceId },
     };
     reply.code(409).send(response);
-    return;
-  }
-
-  if (error instanceof GatedListTooBroadError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 400,
-      data: null,
-      messages: [{ text: error.message, type: "error", show: true }],
-      error: { code: "LIST_TOO_BROAD", detail: error.message, trace_id: traceId },
-    };
-    reply.code(400).send(response);
-    return;
-  }
-
-  if (error instanceof DeleteBlockedError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 409,
-      data: null,
-      messages: [{ text: error.message, type: "error", show: true }],
-      error: { code: "DELETE_BLOCKED", detail: error.message, trace_id: traceId },
-    };
-    reply.code(409).send(response);
-    return;
-  }
-
-  // A submit that would forward into a concurrently-cancelled link target (the
-  // write-skew guard's "cancel committed first" branch) — 409, like the other
-  // lifecycle-conflict errors.
-  if (error instanceof LinkTargetCancelledError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 409,
-      data: null,
-      messages: [
-        {
-          text: "link_target_cancelled",
-          type: "error",
-          show: true,
-          params: {
-            fieldname: error.fieldname,
-            target: error.targetEntity,
-            name: error.targetName,
-          },
-        },
-      ],
-      error: { code: "LINK_TARGET_CANCELLED", detail: error.message, trace_id: traceId },
-    };
-    reply.code(409).send(response);
-    return;
-  }
-
-  if (error instanceof DocStatusError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 400,
-      data: null,
-      messages: [{ text: error.messageKey, type: "error", show: true }],
-      error: { code: "DOCSTATUS_ERROR", detail: error.messageKey, trace_id: traceId },
-    };
-    reply.code(400).send(response);
     return;
   }
 

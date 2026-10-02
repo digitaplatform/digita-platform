@@ -156,7 +156,7 @@ async function refusal(save: Promise<unknown>): Promise<{ field: string; error: 
   const err = await save.then(() => undefined, (e: unknown) => e);
   expect(err).toBeInstanceOf(ValidationFailedError);
   const [first] = (err as ValidationFailedError).errors;
-  expect(first?.message_key).toBe("rule_expression_invalid");
+  expect(first?.code).toBe("rule_expression_invalid");
   return { field: first!.field, error: first!.params?.["error"] };
 }
 
@@ -191,7 +191,7 @@ describe("a Rule saved that the start would refuse as a file", () => {
     const err = await save.then(() => undefined, (e: unknown) => e);
     expect(err).toBeInstanceOf(ValidationFailedError);
     const [first] = (err as ValidationFailedError).errors;
-    expect(first?.message_key).toBe("rule_invalid");
+    expect(first?.code).toBe("rule_invalid");
     return { field: first!.field, error: first!.params?.["error"] };
   }
 

@@ -15,7 +15,7 @@ export type {
 export interface ValidationError {
   field: string;
   message: string;
-  message_key: string;
+  code: string;
   params?: Record<string, string>;
 }
 

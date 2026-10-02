@@ -144,7 +144,7 @@ export class ImportService {
         report.errors.push({
           row: rowNo,
           message: "circular reference between imported rows",
-          message_key: "import_circular_reference",
+          code: "import_circular_reference",
         });
         continue;
       }
@@ -169,7 +169,7 @@ export class ImportService {
             report.errors.push({
               row: rowNo,
               message: "row is missing its business key",
-              message_key: "import_missing_business_key",
+              code: "import_missing_business_key",
             });
             continue;
           }
@@ -338,7 +338,7 @@ export class ImportService {
     if (linkErrors.length) {
       throw new ValidationFailedError(
         entity.name,
-        linkErrors.map((e) => ({ field: e.field, message_key: e.message_key, params: e.params })),
+        linkErrors.map((e) => ({ field: e.field, code: e.code, params: e.params })),
       );
     }
 
@@ -381,8 +381,8 @@ export class ImportService {
       return {
         row,
         field: e.field,
-        message: e.field ? `${e.field}: ${e.message_key}` : e.message_key,
-        message_key: e.message_key,
+        message: e.field ? `${e.field}: ${e.code}` : e.code,
+        code: e.code,
         params: e.params,
       };
     }
@@ -390,14 +390,14 @@ export class ImportService {
     // never the driver's text.
     if (err instanceof MongoServerError && err.code === 11000) {
       const field = Object.keys(err.keyPattern ?? {})[0] ?? "unknown";
-      return { row, field, message: `${field}: duplicate_key`, message_key: "duplicate_key", params: { field } };
+      return { row, field, message: `${field}: duplicate_key`, code: "duplicate_key", params: { field } };
     }
     if (err instanceof FieldValueError) {
       return {
         row,
         field: err.field,
-        message: err.message_key,
-        message_key: err.message_key,
+        message: err.code,
+        code: err.code,
         params: err.params,
       };
     }

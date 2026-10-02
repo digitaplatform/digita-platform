@@ -1,14 +1,11 @@
 import { DocStatus, NUMERIC_FIELD_TYPES } from "@digitaplatform/shared";
 import type { EntityDefinition, FieldDefinition } from "@digitaplatform/shared";
 import type { BaseDocument } from "./base-document.js";
+import { EngineError } from "../errors/engine-error.js";
 
-export class DocStatusError extends Error {
-  constructor(
-    public messageKey: string,
-    public params: Record<string, string>,
-  ) {
-    super(`DocStatus error: ${messageKey}`);
-    this.name = "DocStatusError";
+export class DocStatusError extends EngineError {
+  constructor(code: string, params: Record<string, string>) {
+    super(code, params, 400, "DOCSTATUS_ERROR");
   }
 }
 
