@@ -2904,6 +2904,13 @@ export class DocumentService {
       }
     }
 
+    // An undeclared key reaches here only from the engine, the workflow state among them: every
+    // writer's input loses its undeclared keys in filterFieldsForWrite.
+    for (const [key, value] of Object.entries(data)) {
+      if (key.startsWith("_") || result[key] !== undefined) continue;
+      if (!entity.fields.some((f) => f.fieldname === key)) result[key] = value;
+    }
+
     return result;
   }
 }
