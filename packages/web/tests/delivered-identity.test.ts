@@ -99,6 +99,20 @@ describe("loadDeliveredIdentity", () => {
     expect(root().getAttribute("data-design-variant")).toBe("material");
   });
 
+  it("writes the visitor's choices into the look cookie for the tenant's zone", async () => {
+    signIn();
+    serve({ prefs: prefs({ "ui.theme_mode": "dark" }) });
+    const written: string[] = [];
+    const cookie = Object.getOwnPropertyDescriptor(Document.prototype, "cookie")!;
+    const spy = vi.spyOn(Document.prototype, "cookie", "set").mockImplementation(function (this: Document, value: string) {
+      written.push(value);
+      cookie.set!.call(this, value);
+    });
+    await loadDeliveredIdentity({ ...sources, authUrl: "https://auth.tenant.example" });
+    spy.mockRestore();
+    expect(written.filter((value) => value.startsWith(`${LOOK_COOKIE_NAME}=`))).toEqual([expect.stringContaining("; Domain=tenant.example")]);
+  });
+
   it("keeps the site's signature and stores no signature of the visitor's", async () => {
     // As in production: the pre-paint boot registered the page's signature in its own module
     // instance, so this chunk's registry is empty and the page's signatures are all it has.

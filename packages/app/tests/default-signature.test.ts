@@ -172,6 +172,19 @@ describe('the signature a person sees', () => {
     }
   });
 
+  it('each app of the origin keeps its own light/dark lock under its base path', async () => {
+    const page = window as unknown as Record<string, unknown>;
+    page.__APP_BASE_PATH__ = '/workshop';
+    try {
+      const app = await loadApp({ default_signature: 'veloluck-workbench', allow_user_theme_mode: false });
+      await app.bootstrap();
+      expect(localStorage.getItem('digita-app:mode-lock/workshop')).not.toBeNull();
+      expect(localStorage.getItem('digita-app:mode-lock')).toBeNull();
+    } finally {
+      delete page.__APP_BASE_PATH__;
+    }
+  });
+
   it('a cached look the app does not offer draws digita until /boot answers, then the tenant default', async () => {
     localStorage.setItem(CACHE_KEY, 'aurora');
     const app = await loadApp({ default_signature: 'harbor-yard' });

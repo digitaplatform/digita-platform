@@ -77,6 +77,7 @@ function drawHeader(items: NavItem[]) {
         brand={{ name: "example" }}
         publishedSlugs={{ en: [""], de: [""] }}
         enabledLocales={[]}
+        lookCookieDomain={undefined}
       />
     </ConfigProvider>,
   );
@@ -265,6 +266,7 @@ describe("the phone's mode button", () => {
             brand={{ name: "example" }}
             publishedSlugs={{ en: [""], de: [""] }}
             enabledLocales={[]}
+            lookCookieDomain={undefined}
           />
         </ConfigProvider>,
       ),

@@ -112,6 +112,7 @@ const renderHeader = (contactEnabled: boolean, publishedSlugs: Record<string, st
         brand={{ name: "example" }}
         publishedSlugs={publishedSlugs}
         enabledLocales={[]}
+        lookCookieDomain={undefined}
       />
     </ConfigProvider>,
   );

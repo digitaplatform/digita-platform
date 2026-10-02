@@ -63,11 +63,13 @@ describe('the Domain of the look cookie', () => {
 });
 
 describe('writing the look cookie', () => {
-  it('writes the choices with the Domain for a tenant routed by host, and the host alone by path', () => {
+  it('writes the choices and the time with the Domain for a tenant routed by host, and the host alone by path', () => {
+    vi.useFakeTimers({ now: 1759400000000 });
     const byHost = recordingJar();
     writeLookCookie({ design: 'fluent', mode: 'dark', density: 'compact' }, lookCookieDomain('https://auth.show.digitacloud.app'), byHost);
+    vi.useRealTimers();
     expect(byHost.written).toEqual([
-      `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=fluent&mode=dark&density=compact')}; Path=/; Max-Age=31536000; SameSite=Lax; Domain=show.digitacloud.app; Secure`,
+      `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=fluent&mode=dark&density=compact&t=1759400000000')}; Path=/; Max-Age=31536000; SameSite=Lax; Domain=show.digitacloud.app; Secure`,
     ]);
 
     const byPath = recordingJar('http:');
@@ -85,6 +87,71 @@ describe('writing the look cookie', () => {
   it('reads only valid choices back', () => {
     const jar = recordingJar('https:', `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=../x&mode=purple&density=compact')}`);
     expect(readLookCookie(jar)).toEqual({ density: 'compact' });
+  });
+
+  it('reads the newest of two entries, a host-only one and a Domain one, in either order', () => {
+    // A tenant that moved between routing by path and by host leaves both; the browser lists the
+    // older one first, whichever variant it is.
+    const older = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=minimal&mode=dark&t=1759400000000')}`;
+    const newer = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=editorial&mode=light&t=1759400000001')}`;
+    expect(readLookCookie(recordingJar('https:', `${older}; ${newer}`))).toEqual({ design: 'editorial', mode: 'light' });
+    expect(readLookCookie(recordingJar('https:', `${newer}; ${older}`))).toEqual({ design: 'editorial', mode: 'light' });
+  });
+
+  it('counts an entry without a valid time as the oldest', () => {
+    const untimed = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=minimal')}`;
+    const badTime = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=fluent&t=soon')}`;
+    const timed = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=editorial&t=1')}`;
+    expect(readLookCookie(recordingJar('https:', `${untimed}; ${badTime}; ${timed}`))).toEqual({ design: 'editorial' });
+  });
+
+  it('merges a write into the newest entry and writes it newer than both', () => {
+    const older = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=minimal&mode=dark&t=100')}`;
+    const newer = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=editorial&mode=light&t=200')}`;
+    const jar = recordingJar('https:', `${newer}; ${older}`);
+    writeLookCookie({ density: 'compact' }, undefined, jar);
+    const written = decodeURIComponent(jar.written[0]!.split(';')[0]!.slice(LOOK_COOKIE_NAME.length + 1));
+    expect(written).toMatch(/^design=editorial&mode=light&density=compact&t=\d+$/);
+    expect(readLookCookie(recordingJar('https:', `${older}; ${newer}; ${jar.written[0]!.split(';')[0]}`))).toEqual({
+      design: 'editorial',
+      mode: 'light',
+      density: 'compact',
+    });
+  });
+
+  it('reads no density the runtime does not know', () => {
+    const jar = recordingJar('https:', `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=ios&density=huge')}`);
+    expect(readLookCookie(jar)).toEqual({ design: 'ios' });
+  });
+
+  it('reads the cookie of its own name, not one whose name only ends in it', () => {
+    const jar = recordingJar(
+      'https:',
+      `my-${LOOK_COOKIE_NAME}=${encodeURIComponent('design=ios')}; ${LOOK_COOKIE_NAME}=${encodeURIComponent('design=fluent')}`,
+    );
+    expect(readLookCookie(jar)).toEqual({ design: 'fluent' });
+  });
+
+  it('writes nothing while there is no choice to carry', () => {
+    const jar = recordingJar();
+    writeLookCookie({}, undefined, jar);
+    expect(jar.written).toEqual([]);
+
+    storeIdentityPreferences({ mode: undefined, density: undefined, design: undefined }, undefined);
+    expect(document.cookie).not.toContain(`${LOOK_COOKIE_NAME}=`);
+  });
+
+  it("writes the server's choices after sign-in for the Domain it is given", () => {
+    const written: string[] = [];
+    const cookie = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie')!;
+    vi.spyOn(Document.prototype, 'cookie', 'set').mockImplementation(function (this: Document, value: string) {
+      written.push(value);
+      cookie.set!.call(this, value);
+    });
+    storeIdentityPreferences({ mode: 'dark', density: undefined, design: undefined }, 'acme.example');
+    expect(written.filter((value) => value.startsWith(`${LOOK_COOKIE_NAME}=`))).toEqual([
+      expect.stringContaining('; Domain=acme.example'),
+    ]);
   });
 
   it("is written with every choice the app keeps, and the server's choices after sign-in", () => {
