@@ -252,9 +252,9 @@ describe("seedAppData upsert-delete mode", () => {
   /** Rows of the site the seed no longer carries: one the seed wrote, one a person last changed. */
   // The seed stamps the hash of the values it wrote; a person's change breaks it.
   const seedWroteValues = { ...storedHome, _id: "site::en::dropped", title: "Dropped", owner: "system", modified_by: "system" };
-  const seedWrote = { ...seedWroteValues, _seed_hash: seedHash(page, seedWroteValues) };
+  const seedWrote = { ...seedWroteValues, _seed_hash: seedHash(seedWroteValues) };
   const personChangedValues = { ...storedHome, _id: "site::en::mine", title: "Mine", owner: "system", modified_by: "admin@example.com" };
-  const personChanged = { ...personChangedValues, _seed_hash: seedHash(page, { ...personChangedValues, title: "Seeded" }) };
+  const personChanged = { ...personChangedValues, _seed_hash: seedHash({ ...personChangedValues, title: "Seeded" }) };
   const otherSite = { ...seedWrote, _id: "other::en::dropped", site: "other" };
 
   it("deletes a row the seed wrote and no longer carries, through the document service, and logs it", async () => {
@@ -318,8 +318,10 @@ describe("seedAppData upsert-delete mode", () => {
 
   it("deletes a stale row before the seed writes, so a carried row can take its unique key", async () => {
     // The catalog renamed the slug of `plans` to `pricing` and dropped the page that held it.
-    const stalePricing = { ...seedWrote, _id: "site::en::pricing", slug: "pricing" };
-    const storedPlans = { ...seedWrote, _id: "site::en::plans", title: "Plans", slug: "plans" };
+    // Each as the seed wrote it, its slug among the values it stamped.
+    const stamped = (values: Record<string, unknown>) => ({ ...values, _seed_hash: seedHash(values) });
+    const stalePricing = stamped({ ...seedWroteValues, _id: "site::en::pricing", slug: "pricing" });
+    const storedPlans = stamped({ ...seedWroteValues, _id: "site::en::plans", title: "Plans", slug: "plans" });
     await seedFile([seedHome, { ...seedConcept, _id: "site::en::plans", title: "Plans", slug: "pricing" }]);
     const { db, stored } = mockDb([storedHome, stalePricing, storedPlans]);
     const documentService = mockDocumentService(stored);
@@ -336,7 +338,7 @@ describe("seedAppData upsert-delete mode", () => {
     // menu still links `dropped` when the sweep runs, so its delete is refused until Pass 4
     // has rewritten the menu.
     const menuValues = { ...seedWroteValues, _id: "site::main", doctype: "WebNavMenu", items: [{ page: "site::en::dropped", _row_id: "row0000000000002" }] };
-    const storedMenu = { ...menuValues, _seed_hash: seedHash(menu, menuValues) };
+    const storedMenu = { ...menuValues, _seed_hash: seedHash(menuValues) };
     await writeFile(join(dir, "WebNavMenu.seed.json"), JSON.stringify([{ _id: "site::main", site: "site", items: [{ page: "site::en::" }] }]));
     const { db, stored } = mockDb([storedHome, seedWrote, storedMenu]);
     const documentService = mockDocumentService(stored);
@@ -370,7 +372,7 @@ describe("seedAppData upsert-delete mode", () => {
     // the retry after the write would delete the page; a person changed the page through
     // another engine meanwhile, so the retry reads it again and keeps it.
     const menuValues = { ...seedWroteValues, _id: "site::main", doctype: "WebNavMenu", items: [{ page: "site::en::dropped", _row_id: "row0000000000002" }] };
-    const storedMenu = { ...menuValues, _seed_hash: seedHash(menu, menuValues) };
+    const storedMenu = { ...menuValues, _seed_hash: seedHash(menuValues) };
     await writeFile(join(dir, "WebNavMenu.seed.json"), JSON.stringify([{ _id: "site::main", site: "site", items: [{ page: "site::en::" }] }]));
     const { db, stored } = mockDb([storedHome, seedWrote, storedMenu]);
     const refusing = mockDocumentService(stored);
@@ -431,7 +433,7 @@ describe("seedAppData tiers in insert mode", () => {
     modified_by: "system",
     modified: new Date("2026-01-01T00:00:00Z"),
   };
-  const storedNeutral = { ...neutralValues, _seed_hash: seedHash(shopSetting, neutralValues) };
+  const storedNeutral = { ...neutralValues, _seed_hash: seedHash(neutralValues) };
   const bothTiers = () => [join(app, "seeds"), join(app, "seeds-demo")];
   const seedTiers = (db: MongoDBService, dirs: string[] = bothTiers()) =>
     seedAppData(db, registry(), {} as NamingService, dirs);
@@ -596,7 +598,7 @@ describe("the seed's stamp", () => {
 
   it("still sweeps a page the seed dropped after a release adds a field", async () => {
     const values = { ...storedHome, _id: "site::en::dropped", title: "Dropped", owner: "system", modified_by: "system" };
-    const { db, stored } = mockDb([{ ...values, _seed_hash: seedHash(page, values) }]);
+    const { db, stored } = mockDb([{ ...values, _seed_hash: seedHash(values) }]);
     await seedAppData(db, registryOf(grown(page), menu, shopSetting), {} as NamingService, [dir], {
       mode: "upsert-delete", site: "site", documentService: mockDocumentService(stored),
     });
@@ -604,8 +606,25 @@ describe("the seed's stamp", () => {
   });
 
   it("still lands a later tier after a release adds a field", async () => {
-    const { db, stored } = mockDb([{ ...neutralValues, _seed_hash: seedHash(shopSetting, neutralValues) }]);
+    const { db, stored } = mockDb([{ ...neutralValues, _seed_hash: seedHash(neutralValues) }]);
     await seedAppData(db, registryOf(page, menu, grown(shopSetting)), {} as NamingService, tiers());
+    expect(stored.get("shop")?.hourly_rate).toBe(130);
+  });
+
+  it("still lands a later tier after a release removes a field", async () => {
+    const shrunk = { ...shopSetting, fields: shopSetting.fields.filter((f) => f.fieldname !== "quote_threshold") } as EntityDefinition;
+    const { db, stored } = mockDb([{ ...neutralValues, _seed_hash: seedHash(neutralValues) }]);
+    await seedAppData(db, registryOf(page, menu, shrunk), {} as NamingService, tiers());
+    expect(stored.get("shop")?.hourly_rate).toBe(130);
+  });
+
+  it("still lands a later tier after a release renames a field", async () => {
+    const renamed = {
+      ...shopSetting,
+      fields: shopSetting.fields.map((f) => (f.fieldname === "company_name" ? { ...f, fieldname: "company" } : f)),
+    } as EntityDefinition;
+    const { db, stored } = mockDb([{ ...neutralValues, _seed_hash: seedHash(neutralValues) }]);
+    await seedAppData(db, registryOf(page, menu, renamed), {} as NamingService, tiers());
     expect(stored.get("shop")?.hourly_rate).toBe(130);
   });
 
@@ -614,18 +633,26 @@ describe("the seed's stamp", () => {
     await seedAppData(db, registry(), {} as NamingService, tiers());
     const shop = stored.get("shop")!;
     expect(shop.hourly_rate).toBe(130);
-    expect(shop._seed_hash).toBe(seedHash(shopSetting, shop));
+    expect(shop._seed_hash).toBe(seedHash(shop));
   });
 
   it("leaves a row whose docstatus a person changed, though its values are the seed's", async () => {
-    const { db, stored } = mockDb([{ ...neutralValues, docstatus: 1, _seed_hash: seedHash(shopSetting, neutralValues) }]);
+    const { db, stored } = mockDb([{ ...neutralValues, docstatus: 1, _seed_hash: seedHash(neutralValues) }]);
     await seedAppData(db, registry(), {} as NamingService, tiers());
     expect(stored.get("shop")?.hourly_rate).toBeUndefined();
   });
 
+  it("tells two dates apart, so a person's change of a Date or Datetime breaks the stamp", () => {
+    expect(seedHash({ due: new Date("2026-01-01T00:00:00Z") })).not.toBe(seedHash({ due: new Date("2026-01-02T00:00:00Z") }));
+  });
+
+  it("leaves every _ key out, so the engine's own keys on a row keep the stamp", () => {
+    expect(seedHash({ title: "t", _assign: ["clerk@test"], _liked_by: [] })).toBe(seedHash({ title: "t" }));
+  });
+
   it("hashes an object value whatever the order of its keys", () => {
     const json = { ...page, fields: [{ fieldname: "props", fieldtype: "JSON", label: "Props" }] } as EntityDefinition;
-    expect(seedHash(json, { props: { a: 1, b: 2 } })).toBe(seedHash(json, { props: { b: 2, a: 1 } }));
+    expect(seedHash({ props: { a: 1, b: 2 } })).toBe(seedHash({ props: { b: 2, a: 1 } }));
   });
 
   it("never shows the stamp to a read", () => {
