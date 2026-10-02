@@ -1,6 +1,7 @@
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { DIGITA } from "@digitaplatform/shared";
 import { createLogger } from "../logging/logger.js";
+import { runForwardMigrationOnce } from "../database/forward-migration.js";
 
 const log = createLogger("seed-languages");
 
@@ -88,6 +89,8 @@ export async function seedLanguages(db: MongoDBService): Promise<void> {
         DIGITA.COLLECTIONS.LANGUAGE,
         {
           ...lang,
+          // Language is named by its code, which it requires: the row's id is that code.
+          code: lang._id,
           owner: "system",
           modified_by: "system",
           creation: new Date(),
@@ -98,4 +101,20 @@ export async function seedLanguages(db: MongoDBService): Promise<void> {
       log.info({ language: lang._id, name: lang.name }, "Language seeded");
     }
   }
+  await fillLanguageCodesOnce(db);
+}
+
+/**
+ * The seed stored its languages without the code they are named by and that a save requires, so
+ * no seeded language could be saved. The code is set from the id where it is blank, once per
+ * database.
+ */
+export async function fillLanguageCodesOnce(db: MongoDBService): Promise<void> {
+  await runForwardMigrationOnce(db, "fill-language-code", async () => ({
+    filled: (
+      await db
+        .collection(DIGITA.COLLECTIONS.LANGUAGE, DIGITA.DATABASES.CORE)
+        .updateMany({ $or: [{ code: { $exists: false } }, { code: null }, { code: "" }] }, [{ $set: { code: "$_id" } }])
+    ).modifiedCount,
+  }));
 }
