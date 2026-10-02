@@ -140,6 +140,9 @@ async function request<T>(method: string, url: string, opts: RequestOptions = {}
     const refreshed = await attemptRefresh();
     if (refreshed) response = await exec();
     if (response.status === 401) {
+      // The retry may answer the request itself, as the first 401 could have.
+      const retried = refreshed ? await parseBody(response) : body;
+      if (isAnswer401(url, retried)) throw toApiError(401, retried);
       redirectToLogin();
       throw new ApiClientError('Unauthorized', 401);
     }

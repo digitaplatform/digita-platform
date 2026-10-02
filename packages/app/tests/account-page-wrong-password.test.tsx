@@ -95,6 +95,26 @@ describe('a password change with a wrong current password', () => {
     expect(calls).toEqual(['POST /api/v1/auth/password', 'POST /api/v1/auth/refresh', 'POST /api/v1/auth/password']);
   });
 
+  it('shows a wrong current password that the retry after a refresh answers, with no navigation', async () => {
+    // The form was filled slowly: the access cookie expired, so the first answer is unauthorized.
+    let first = true;
+    answers['POST /api/v1/auth/password'] = () => {
+      const answer = first ? json({ error: 'unauthorized' }, 401) : json({ error: 'invalid_current_password' }, 401);
+      first = false;
+      return answer;
+    };
+    renderAccount();
+    fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'wrong' } });
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'next-secret' } });
+    fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'next-secret' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Change password' }));
+
+    expect(await screen.findByText('Current password is incorrect.')).toBeInTheDocument();
+    expect(calls).toEqual(['GET /api/v1/auth/sessions', 'POST /api/v1/auth/password', 'POST /api/v1/auth/refresh', 'POST /api/v1/auth/password']);
+    expect(redirectToIdpLogin).not.toHaveBeenCalled();
+  });
+
   it('still refreshes and retries a 401 from an ordinary engine call', async () => {
     let first = true;
     answers['GET /api/v1/resource/Customer'] = () => {
