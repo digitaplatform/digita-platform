@@ -86,6 +86,7 @@ const SIDE_ROUTES: Array<[string, () => string]> = [
   ["related", () => `/api/v1/resource/SideReadCustomer/${customerId}/related`],
   ["shares", () => `/api/v1/resource/SideReadCustomer/${customerId}/shares`],
   ["activity", () => `/api/v1/activity/SideReadCustomer/${customerId}`],
+  ["translations", () => `/api/v1/resource/SideReadCustomer/${customerId}/translations`],
 ];
 
 const get = (url: string, tok: string) => app.inject({ method: "GET", url, headers: bearer(tok) });

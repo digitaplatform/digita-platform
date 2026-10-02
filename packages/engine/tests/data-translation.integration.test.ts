@@ -283,6 +283,30 @@ describe("GET /resource/:entity/:name/translations is read-gated", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().data.translations.de).toEqual({ title: "Miete" });
   });
+
+  it("gives a reader of level 1 the translation of the level-1 field too", async () => {
+    // GlMemo and its translations come from the test above.
+    registry.register({
+      ...registry.get("GlMemo"),
+      permissions: [...ADMIN_PERMS, { role: "System User", level: 0, select: 1, read: 1 }, { role: "Auditor", level: 1, read: 1 }],
+    } as unknown as EntityDefinition);
+    const auditorTok = await ta.sign({ sub: "auditor@d", email: "auditor@d", roles: ["System User", "Auditor"] });
+    const res = await app.inject({ method: "GET", url: "/api/v1/resource/GlMemo/M1/translations", headers: { authorization: `Bearer ${auditorTok}` } });
+    expect(res.json().data.translations.de).toEqual({ title: "Miete", memo: "Vermieter schuldet eine Erstattung" });
+  });
+
+  it("gives a reader only a share admits the level-0 translations, as getDoc shows them", async () => {
+    const guestTok = await ta.sign({ sub: "guest@d", email: "guest@d", roles: ["Outsider"] });
+    const now = new Date();
+    await db.insertOne(
+      DIGITA.COLLECTIONS.DOC_SHARE,
+      { _id: "GlMemo:M1:guest@d", entity: "GlMemo", document_name: "M1", shared_with: "guest@d", can_read: 1, can_share: 0, shared_by: "system", owner: "system", modified_by: "system", creation: now, modified: now },
+      DIGITA.DATABASES.IDENTITY,
+    );
+    const res = await app.inject({ method: "GET", url: "/api/v1/resource/GlMemo/M1/translations", headers: { authorization: `Bearer ${guestTok}` } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.translations.de).toEqual({ title: "Miete" });
+  });
 });
 
 // A data row is a document value: only an Administrator gets it from the locale
