@@ -185,12 +185,17 @@ export function registerMetaRoutes(
         );
     }
 
+    // The checks every entity file passes; the prepared definition is what is stored and served.
+    const definition = structuredClone(data);
+    const refusal = refusalOf(() => registry.prepareDefinition(definition));
+    if (refusal) return reply.code(400).send(definitionRefused(data.name, refusal, request.traceId ?? ""));
+
     // Insert into MongoDB
     await db.insertOne(
       DIGITA.COLLECTIONS.ENTITY,
       {
         _id: data.name,
-        ...data,
+        ...definition,
         owner: user,
         modified_by: user,
         creation: new Date(),
@@ -200,17 +205,17 @@ export function registerMetaRoutes(
     );
 
     // Register in memory
-    registry.register(data);
+    registry.register(definition);
 
     // Run schema migration for the new entity
     const migrator = new SchemaMigrator(db);
-    await migrator.migrate(data);
+    await migrator.migrate(definition);
 
     const ctx = new ResponseContext();
     ctx.success("entity_created", { name: data.name });
     log.info({ entity: data.name, user }, "Entity definition created");
 
-    return reply.code(201).send(successResponse(data, ctx.getMessages()));
+    return reply.code(201).send(successResponse(definition, ctx.getMessages()));
   });
 
   // Update an entity definition
@@ -236,11 +241,13 @@ export function registerMetaRoutes(
 
     // Merge with existing
     const existing = registry.get(doctype);
-    const merged: EntityDefinition = {
+    const merged: EntityDefinition = structuredClone({
       ...existing,
       ...updates,
       name: doctype, // name is immutable
-    };
+    });
+    const refusal = refusalOf(() => registry.prepareDefinition(merged));
+    if (refusal) return reply.code(400).send(definitionRefused(doctype, refusal, request.traceId ?? ""));
 
     // An entity whose definition only its file holds, after a DELETE of the stored one, gets its
     // row back here, so the change outlives a restart.
@@ -334,4 +341,19 @@ export function registerMetaRoutes(
       successResponse({ name: doctype, deleted: true, restored_from_file: Boolean(fileDefinition) }, ctx.getMessages()),
     );
   });
+}
+
+/** The reason `prepare` refuses a definition with, or undefined when it passes. */
+function refusalOf(prepare: () => void): string | undefined {
+  try {
+    prepare();
+    return undefined;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
+}
+
+/** The 400 answer for a definition the entity files' checks refuse, with their reason. */
+function definitionRefused(entity: string, reason: string, traceId: string) {
+  return errorResponse(400, "VALIDATION_ERROR", `Refused entity definition (entity "${entity}"): ${reason}`, [{ text: reason, type: "error", show: true }], traceId);
 }
