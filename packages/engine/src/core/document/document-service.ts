@@ -459,6 +459,21 @@ export class DocumentService {
     }
   }
 
+  /**
+   * The fields of the stored document the user may read, masked as `getDoc` masks them. It logs
+   * no view: a route that answers something beside the record, not the record, reads it here.
+   */
+  async getReadableData(doctype: string, name: string, user: UserContext = GUEST_USER): Promise<Record<string, unknown>> {
+    const doc = await this.loadReadableDoc(this.registry.get(doctype), doctype, name, user);
+    const sharedForRead = await this.isSharedForReadOnly(user, doctype, doc._data);
+    return this.permissionChecker.filterFieldsForRead(user, doctype, doc._data, sharedForRead);
+  }
+
+  /** Whether only a share admits the user to the row, which then shows its level-0 fields. */
+  private async isSharedForReadOnly(user: UserContext, doctype: string, data: Record<string, unknown>): Promise<boolean> {
+    return !(await this.permissionChecker.hasPermission(user, doctype, "read", data)).allowed;
+  }
+
   /** The stored document, for a user who may read it, as `getDoc` checks that. */
   private async loadReadableDoc(
     entity: EntityDefinition,
@@ -513,7 +528,7 @@ export class DocumentService {
     // Filter fields by read permission before anything is derived from them: a
     // link title or a status color resolved from a masked field would show it.
     // When no role may read the row, the share admitted it and shows level 0.
-    const sharedForRead = !(await this.permissionChecker.hasPermission(user, doctype, "read", doc._data)).allowed;
+    const sharedForRead = await this.isSharedForReadOnly(user, doctype, doc._data);
     const readable = this.permissionChecker.getReadableFields(user, doctype, doc._data, sharedForRead);
     doc._hidesOperatorFields = readable !== null && !readable.has("owner");
     doc._data = this.permissionChecker.filterFieldsForRead(user, doctype, doc._data, sharedForRead);
