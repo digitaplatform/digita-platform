@@ -785,6 +785,18 @@ describe("Resource API Integration", () => {
       ["a regex that does not compile", base("MetaRegex", field({ fieldname: "code", fieldtype: "Data", label: "Code", regex: "(" })), "code"],
       ["a reserved entity name", base("app"), "reserved"],
       ["a name in the app's underscore namespace", base("_jobs"), "reserved"],
+      [
+        "a mandatory_depends_on that does not parse",
+        base("MetaMandatory", field({ fieldname: "note", fieldtype: "Data", label: "Note", mandatory_depends_on: "eval:doc.kind ==" })),
+        "note.mandatory_depends_on does not parse",
+      ],
+      ["a show_if that reads window", base("MetaShowIf", { actions: [{ action: "go", label: "Go", show_if: "window.x" }] }), "action go show_if reads window"],
+      [
+        "a Table cell lock that does not parse",
+        base("MetaCell", field({ fieldname: "lines", fieldtype: "Table", label: "Lines", child_fields: [{ fieldname: "qty", fieldtype: "Int", label: "Qty", read_only_depends_on: "doc.sealed ==== 1" }] })),
+        "lines.qty.read_only_depends_on does not parse",
+      ],
+      ["a permission condition that does not parse", base("MetaPermCond", { permissions: [{ role: "Administrator", level: 0, read: 1, condition: "doc.owner = user.email" }] }), "permissions[0].condition does not parse"],
       ["an inconsistent workflow", base("MetaFlow", { states: [{ value: "A", is_initial: true }], transitions: [{ from: "A", to: "B", action: "go" }] }), "workflow"],
       ["no naming", base("MetaNoNaming", { naming: undefined }), "naming"],
       ["a naming that is a text", base("MetaTextNaming", { naming: "user_set" }), "naming"],
@@ -817,6 +829,14 @@ describe("Resource API Integration", () => {
       expect(res.json().error.detail).toContain(`entity "${definition["name"]}"`);
       expect(res.json().error.detail).toContain(named);
       expect(registry.has(definition["name"] as string)).toBe(false);
+    });
+
+    it("PLANTED INNOCENT: stores an entity whose expressions parse, with eval: and without", async () => {
+      const definition = base("MetaGoodExpressions", {
+        ...field({ fieldname: "note", fieldtype: "Data", label: "Note", mandatory_depends_on: "eval:doc.title == 'x'", read_only_depends_on: "'Clerk' in user.roles" }),
+        actions: [{ action: "go", label: "Go", show_if: "doc.title" }],
+      });
+      expect((await app.inject({ method: "POST", url: "/api/v1/meta", headers: authHeaders(), payload: definition })).statusCode).toBe(201);
     });
 
     it("PLANTED INNOCENT: stores an entity named by_field after a declared Data field", async () => {
