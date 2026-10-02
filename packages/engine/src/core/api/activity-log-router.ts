@@ -4,6 +4,7 @@ import type { DocumentService } from "../document/document-service.js";
 import type { UserContext } from "../permissions/types.js";
 import { requireAdministrator } from "../auth/require-admin.js";
 import { successResponse } from "./response-model.js";
+import { wholeNumberParam } from "./list-query.js";
 
 export function registerActivityLogRoutes(
   app: FastifyInstance,
@@ -27,7 +28,7 @@ export function registerActivityLogRoutes(
       const { entity, name } = request.params as { entity: string; name: string };
       await assertCanRead(request, entity, name);
       const query = request.query as Record<string, string>;
-      const limit = parseInt(query["limit"] ?? "50", 10);
+      const limit = wholeNumberParam(query, "limit", 1) ?? 50;
 
       const logs = await activityLogService.getLog(entity, name, limit);
       return reply.send(successResponse(logs));
@@ -47,8 +48,8 @@ export function registerActivityLogRoutes(
     if (query["user"]) filters["user"] = query["user"];
     if (query["action"]) filters["action"] = query["action"];
 
-    const limit = parseInt(query["limit"] ?? "50", 10);
-    const offset = parseInt(query["offset"] ?? "0", 10);
+    const limit = wholeNumberParam(query, "limit", 1) ?? 50;
+    const offset = wholeNumberParam(query, "offset", 0) ?? 0;
 
     const result = await activityLogService.query(filters, limit, offset);
     return reply.send(

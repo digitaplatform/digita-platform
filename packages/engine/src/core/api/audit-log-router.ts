@@ -3,6 +3,7 @@ import type { EntityRegistry } from "../entity/entity-registry.js";
 import { readVersionChanges, type VersionService } from "../version/version-service.js";
 import { requireAdministrator } from "../auth/require-admin.js";
 import { successResponse } from "./response-model.js";
+import { wholeNumberParam } from "./list-query.js";
 
 /**
  * Audit log — the field-level change history (`_versions`) across ALL
@@ -29,8 +30,8 @@ export function registerAuditLogRoutes(
     if (query["entity"]) filters["entity"] = query["entity"];
     if (query["user"]) filters["changed_by"] = query["user"];
 
-    const limit = parseInt(query["limit"] ?? "50", 10);
-    const offset = parseInt(query["offset"] ?? "0", 10);
+    const limit = wholeNumberParam(query, "limit", 1) ?? 50;
+    const offset = wholeNumberParam(query, "offset", 0) ?? 0;
 
     const result = await versionService.queryVersions(filters, limit, offset);
     // A row of an entity no longer registered has no field types left to read it by, so it goes out as stored.
