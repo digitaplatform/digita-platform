@@ -140,8 +140,6 @@ export function registerMetaRoutes(
         database: e.database,
         label: e.label ?? e.name,
         label_plural: e.label_plural,
-        icon: e.icon,
-        color: e.color,
         is_submittable: e.is_submittable,
         is_single: e.is_single,
         is_log: e.is_log,
