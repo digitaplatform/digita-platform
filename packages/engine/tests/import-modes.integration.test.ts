@@ -48,6 +48,7 @@ import type { FastifyInstance } from "fastify";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
+import { readBundle } from "@digitaplatform/shared/i18n-node";
 import { IndexManager } from "../src/core/database/index-manager.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
@@ -460,5 +461,39 @@ describe("An engine error reaches a person in their language (#24)", () => {
     expect(refused.json().messages[0].text).toBe("Du hast keine Berechtigung, Item zu löschen");
     expect(refused.json().error).toMatchObject({ code: "PERMISSION_DENIED", detail: "permission_denied_delete" });
     expect(JSON.stringify(refused.json())).not.toContain("ed@d");
+  });
+
+  it("PLANTED DEFECT: answers a save a validate rule refuses with 400 and the rule's message, not a 500", async () => {
+    // An entity of its own: the rule engine caches each entity's rules for a while once read.
+    const Parcel = {
+      name: "RuleParcel", module: "test", database: "app", naming: { strategy: "system" },
+      is_submittable: false, is_log: false, track_changes: false, track_views: false,
+      fields: [{ fieldname: "weight", fieldtype: "Int", label: "Weight" }],
+      permissions: [ADMIN_PERM],
+    } as unknown as EntityDefinition;
+    registry.register(Parcel);
+    await db.ensureCollection("RuleParcel", "app");
+    const rule = await app.inject({
+      method: "POST", url: "/api/v1/resource/Rule", headers: bearer(adminTok),
+      payload: {
+        _id: "parcel-weight", label: "Parcels weigh something", entity: "RuleParcel", event: "validate", enabled: 1,
+        actions: [{ type: "validate", condition: "doc.weight > 0", message: "A parcel weighs more than nothing" }],
+      },
+    });
+    expect(rule.statusCode).toBe(201);
+    const res = await app.inject({ method: "POST", url: "/api/v1/resource/RuleParcel", headers: german(adminTok), payload: { weight: 0 } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().messages[0].text).toBe("A parcel weighs more than nothing");
+    expect(res.json().error).toMatchObject({ code: "RULE_REFUSED", detail: "rule_refused" });
+    expect(await db.count("RuleParcel", [], "app")).toBe(0);
+  });
+
+  it("answers a role rename with 400 in German, not a 500", async () => {
+    const created = await app.inject({ method: "POST", url: "/api/v1/resource/Role", headers: bearer(adminTok), payload: { name: "Courier", label: "Courier" } });
+    expect(created.statusCode).toBe(201);
+    const res = await app.inject({ method: "PUT", url: "/api/v1/resource/Role/Courier", headers: german(adminTok), payload: { name: "Driver" } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().messages[0].text).toBe(readBundle(process.env.TRANSLATIONS_DIR!).de!["role_name_immutable"]);
+    expect(res.json().error).toMatchObject({ code: "ROLE_NAME_IMMUTABLE", detail: "role_name_immutable" });
   });
 });
