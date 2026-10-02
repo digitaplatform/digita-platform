@@ -121,7 +121,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-function answerRelated(entries: Array<{ label: string; entity: string; count: number }>) {
+function answerRelated(entries: Array<{ label: string; entity: string; count?: number; error?: string }>) {
   state.related = { status: 200, body: { success: true, status_code: 200, data: entries, messages: [] } };
 }
 
@@ -193,6 +193,20 @@ describe('RecordPage links', () => {
     const invoices = await screen.findByRole('link', { name: 'Invoices —' });
     await waitFor(() => expect(within(invoices).getByText('—')).toHaveAttribute('title', 'filter_field_not_allowed'));
     expect(screen.getByRole('link', { name: 'Payments' })).toBeInTheDocument();
+  });
+
+  it("shows a link's own refusal on its badge and the other link's count", async () => {
+    const RETURNS: LinkDefinition = { label: 'Returns', entity: 'Invoice', link_field: 'return_of', show_count: true };
+    state.links = [INVOICES, RETURNS];
+    answerRelated([
+      { label: 'Invoices', entity: 'Invoice', error: 'The list of Invoice matches more than 5000 rows' },
+      { label: 'Returns', entity: 'Invoice', count: 2 },
+    ]);
+    renderSale();
+
+    const invoices = await screen.findByRole('link', { name: 'Invoices —' });
+    expect(within(invoices).getByText('—')).toHaveAttribute('title', 'The list of Invoice matches more than 5000 rows');
+    expect(await screen.findByRole('link', { name: 'Returns 2' })).toBeInTheDocument();
   });
 
   it('shows no links and asks no count for an entity without links', async () => {
