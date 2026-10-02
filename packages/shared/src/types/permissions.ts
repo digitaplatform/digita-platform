@@ -78,6 +78,12 @@ export function opensOperatorFields(rows: readonly ReadRow[]): boolean {
 export const SYSTEM_ROLES = {
   ADMINISTRATOR: "Administrator",
   SYSTEM_USER: "System User",
-  WEBSITE_USER: "Website User",
   GUEST: "Guest",
 } as const;
+
+/**
+ * Tenant-global super-roles every engine honors regardless of app scope. They are deliberately
+ * cross-app (platform administration), so they ride the token unprefixed and are never namespaced
+ * to a single app. digita-auth's seed keeps exactly these unprefixed too.
+ */
+export const TENANT_GLOBAL_ROLES: readonly string[] = [SYSTEM_ROLES.ADMINISTRATOR, SYSTEM_ROLES.SYSTEM_USER];

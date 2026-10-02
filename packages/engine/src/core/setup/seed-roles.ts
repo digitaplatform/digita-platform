@@ -1,5 +1,6 @@
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { DIGITA } from "@digitaplatform/shared";
+import { runForwardMigrationOnce } from "../database/forward-migration.js";
 import { createLogger } from "../logging/logger.js";
 
 const log = createLogger("seed-roles");
@@ -15,12 +16,6 @@ const DEFAULT_ROLES = [
     _id: "System User",
     name: "System User",
     label: "System User",
-    is_custom: false,
-  },
-  {
-    _id: "Website User",
-    name: "Website User",
-    label: "Website User",
     is_custom: false,
   },
   {
@@ -57,4 +52,16 @@ export async function seedRoles(db: MongoDBService): Promise<void> {
       log.info({ role: role._id }, "Role.name back-filled");
     }
   }
+}
+
+/**
+ * "Website User" was seeded as a system role, but nothing gave it a meaning: no engine honors it
+ * and no permission row names it. The seed no longer writes it, and its stored row is removed,
+ * once per database.
+ */
+export async function removeWebsiteUserRoleOnce(db: MongoDBService): Promise<void> {
+  await runForwardMigrationOnce(db, "remove-website-user-role", async () => {
+    await db.deleteOne(DIGITA.COLLECTIONS.ROLE, "Website User", DIGITA.DATABASES.IDENTITY);
+    return {};
+  });
 }

@@ -1,4 +1,4 @@
-import { SYSTEM_ROLES, type AudienceGrant } from "@digitaplatform/shared";
+import { SYSTEM_ROLES, TENANT_GLOBAL_ROLES, type AudienceGrant } from "@digitaplatform/shared";
 
 export type { EntityPermission } from "@digitaplatform/shared";
 export { PermissionAction } from "@digitaplatform/shared";
@@ -49,16 +49,6 @@ export function rolesToStringArray(raw: unknown): string[] {
     })
     .filter((r): r is string => r !== null);
 }
-
-/**
- * Tenant-global super-roles every engine honors regardless of app scope. They
- * are deliberately cross-app (platform administration), so they ride the token
- * UNPREFIXED and are never namespaced to a single app.
- */
-export const TENANT_GLOBAL_ROLES: readonly string[] = [
-  SYSTEM_ROLES.ADMINISTRATOR,
-  SYSTEM_ROLES.SYSTEM_USER,
-];
 
 const TENANT_GLOBAL_ROLE_SET: ReadonlySet<string> = new Set(TENANT_GLOBAL_ROLES);
 
