@@ -31,6 +31,7 @@ import { FieldValueError } from "../../entity/field-types.js";
 import { PasswordKeyNotListedError } from "../../entity/password-cipher.js";
 import { EngineError } from "../../errors/engine-error.js";
 import { ReseedRunningError, ReseedSeedFailedError } from "../../setup/reseed-app-data.js";
+import { ReseedWriteRefusedError } from "../../setup/reseed-lock.js";
 import { englishText } from "../../../i18n.js";
 import { createLogger } from "../../logging/logger.js";
 import { urlPath } from "../../logging/url-path.js";
@@ -240,6 +241,18 @@ export function globalErrorHandler(
       messages: [
         { text: "reseed_running", type: "error", show: true, params: { running: error.running, requested: error.requested } },
       ],
+      error: { code: "RESEED_RUNNING", detail: error.message, trace_id: traceId },
+    };
+    reply.code(409).send(response);
+    return;
+  }
+
+  if (error instanceof ReseedWriteRefusedError) {
+    const response: ApiResponse<null> = {
+      success: false,
+      status_code: 409,
+      data: null,
+      messages: [{ text: "reseed_write_refused", type: "error", show: true, params: { doctype: error.doctype, running: error.running } }],
       error: { code: "RESEED_RUNNING", detail: error.message, trace_id: traceId },
     };
     reply.code(409).send(response);

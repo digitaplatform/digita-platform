@@ -8,6 +8,7 @@ import { NamingService } from "../document/naming-service.js";
 import { seedAppData, type UnresolvedSeedLink } from "./seed-app-data.js";
 import { seedDataTranslations } from "./seed-data-translations.js";
 import { createLogger } from "../logging/logger.js";
+import { markReseedRunning } from "./reseed-lock.js";
 import { env } from "../config/env.js";
 
 const log = createLogger("reseed-app-data");
@@ -104,8 +105,11 @@ export async function reseedAppData(mode: ReseedMode, deps: ReseedDeps): Promise
     if (running.mode !== mode) throw new ReseedRunningError(running.mode, mode);
     return running.done;
   }
+  // Marked before the reset starts: its wipe begins before reseedOnce first yields.
+  markReseedRunning(mode);
   const done = reseedOnce(mode, deps).finally(() => {
     running = null;
+    markReseedRunning(undefined);
   });
   running = { mode, done };
   return done;

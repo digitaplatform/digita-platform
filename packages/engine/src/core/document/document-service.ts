@@ -21,6 +21,7 @@ import { resolveDefaults, applyNewChildRowDefaults, type DefaultContext } from "
 import { applyScopeFilters, applyRoleVisibilityFilter, isRoleVisible, readsThroughRoleList } from "../permissions/scope-filter.js";
 import { env } from "../config/env.js";
 import { PermissionDeniedError, type PatchChange } from "../permissions/permission-checker.js";
+import { ReseedWriteRefusedError, runningReseedMode } from "../setup/reseed-lock.js";
 import { DocumentShareService } from "../permissions/document-share-service.js";
 import { entityHasAnySnapshot, entityHasAnyFreeze } from "../snapshot/snapshot-resolver.js";
 import { resolveStatusIndicator } from "../status/status-resolver.js";
@@ -1018,6 +1019,7 @@ export class DocumentService {
     carriedOver?: Record<string, unknown>,
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
+    this.refuseDuringReset(entity);
 
     log.debug({ doctype, user: user.email }, "Insert started");
 
@@ -1237,6 +1239,7 @@ export class DocumentService {
     } = {},
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
+    this.refuseDuringReset(entity);
 
     // Load existing — under the caller's session, so a write earlier in its
     // transaction is visible.
@@ -1583,6 +1586,7 @@ export class DocumentService {
     } = {},
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
+    this.refuseDuringReset(entity);
     if (entity.is_log) {
       throw new DocStatusError("cannot_edit_log", { doctype: entity.name });
     }
@@ -2023,6 +2027,7 @@ export class DocumentService {
     sessionOverride?: import("mongodb").ClientSession,
   ): Promise<void> {
     const entity = this.registry.get(doctype);
+    this.refuseDuringReset(entity);
     const doc = await this.loadDocInternal(doctype, name, sessionOverride);
 
     // Permission check
@@ -2285,6 +2290,7 @@ export class DocumentService {
     sessionOverride?: import("mongodb").ClientSession,
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
+    this.refuseDuringReset(entity);
     // Read-side joins the override session so a just-inserted doc in
     // the parent transaction is visible to this submit.
     const doc = await this.loadDocInternal(doctype, name, sessionOverride);
@@ -2462,6 +2468,7 @@ export class DocumentService {
     sessionOverride?: import("mongodb").ClientSession,
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
+    this.refuseDuringReset(entity);
     const doc = await this.loadDocInternal(doctype, name, sessionOverride);
 
     // Permission check
@@ -2606,6 +2613,16 @@ export class DocumentService {
     // As every write answers: the link titles in the caller's locale.
     doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user, ctx?.locale);
     return doc;
+  }
+
+  /** A write to a database the running demo reset wipes is refused, so it neither survives the
+   *  wipe nor takes an id the seed then wants. The reset keeps the core, identity and log databases,
+   *  so their writes go on. */
+  private refuseDuringReset(entity: EntityDefinition): void {
+    const mode = runningReseedMode();
+    if (mode && this.db.listAppDatabases().some((d) => d.name === entity.database)) {
+      throw new ReseedWriteRefusedError(entity.name, mode);
+    }
   }
 
   // ─── AMEND ─────────────────────────────────────────────
