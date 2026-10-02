@@ -2364,6 +2364,15 @@ describe("A read_only field refuses every role's write, an Administrator's inclu
     expect((stored["lines"] as Array<Record<string, unknown>>)[0]).toEqual(expect.objectContaining({ item: "b", booked: "yes" }));
   });
 
+  it("drops the read_only cell of a new row an Administrator sends", async () => {
+    const created = await docService.insert("RoInvoice", { title: "Inv", lines: [{ item: "a", booked: "forged" }] }, adminUser);
+    const row = ((await db.findOne("RoInvoice", created._id, "app")) as { lines: Array<Record<string, unknown>> }).lines[0]!;
+    await docService.update("RoInvoice", created._id, { lines: [row, { item: "b", booked: "forged" }] }, adminUser);
+
+    const lines = ((await db.findOne("RoInvoice", created._id, "app")) as { lines: Array<Record<string, unknown>> }).lines;
+    expect(lines.map((l) => [l["item"], l["booked"] ?? null])).toEqual([["a", null], ["b", null]]);
+  });
+
   it("drops a read_only field an Administrator's create sends", async () => {
     const created = await docService.insert("RoInvoice", { title: "Inv", sale: "SALE-9" }, adminUser);
     expect(((await db.findOne("RoInvoice", created._id, "app")) as Record<string, unknown>)["sale"] ?? null).toBeNull();
