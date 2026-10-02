@@ -684,8 +684,8 @@ export class PermissionChecker {
   }
 
   /**
-   * `data` without its `read_only` fields, for a writer whose role opens every field: a stripped
-   * top-level field keeps its stored value through the update's merge, and a Table row matched by
+   * `data` without its `read_only` fields and its undeclared keys, for a writer whose role opens
+   * every field: a stripped top-level field keeps its stored value through the update's merge, and a Table row matched by
    * `_row_id` keeps the stored values of its read_only cells, since a Table is stored whole.
    */
   private withoutReadOnlyFields(
@@ -694,9 +694,11 @@ export class PermissionChecker {
     contextDoc?: Record<string, unknown>,
   ): Record<string, unknown> {
     const readOnly = new Set(entity.fields.filter((f) => f.read_only).map((f) => f.fieldname));
+    const declared = new Set(entity.fields.map((f) => f.fieldname));
     const out: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
-      if (readOnly.has(key)) continue;
+      // An undeclared key is dropped as from every other role's write; the engine's `_` keys pass.
+      if (readOnly.has(key) || !(declared.has(key) || key.startsWith("_"))) continue;
       const table = entity.fields.find((f) => f.fieldname === key && f.fieldtype === "Table");
       const readOnlyCells = new Set((table?.child_fields ?? []).filter((c) => c.read_only).map((c) => c.fieldname));
       if (!table || readOnlyCells.size === 0 || !Array.isArray(value)) {
