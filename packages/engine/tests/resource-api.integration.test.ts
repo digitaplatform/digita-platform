@@ -795,6 +795,22 @@ describe("Resource API Integration", () => {
       expect(registry.has(definition["name"] as string)).toBe(false);
     });
 
+    it("stores and serves the prepared definition: a freeze directive's generated field", async () => {
+      const definition = {
+        ...base("MetaFreeze"),
+        fields: [
+          { fieldname: "title", fieldtype: "Data", label: "Title" },
+          { fieldname: "doc", fieldtype: "Link", label: "Doc", target: "File", freeze: { flatten: [{ from: "file_name", as: "doc_name_at_save" }] } },
+        ],
+      };
+      expect((await app.inject({ method: "POST", url: "/api/v1/meta", headers: authHeaders(), payload: definition })).statusCode).toBe(201);
+      const stored = await db.findOne(DIGITA.COLLECTIONS.ENTITY, "MetaFreeze", DIGITA.DATABASES.CORE);
+      const served = await app.inject({ method: "GET", url: "/api/v1/meta/MetaFreeze", headers: authHeaders() });
+      const names = (fields: Array<{ fieldname: string }>) => fields.map((f) => f.fieldname);
+      expect(names(stored?.["fields"] as Array<{ fieldname: string }>)).toContain("doc_name_at_save");
+      expect(names(served.json().data.fields)).toContain("doc_name_at_save");
+    });
+
     it("refuses a PUT that adds such a field, and keeps the definition it had", async () => {
       expect((await app.inject({ method: "POST", url: "/api/v1/meta", headers: authHeaders(), payload: base("MetaPut") })).statusCode).toBe(201);
       const res = await app.inject({
