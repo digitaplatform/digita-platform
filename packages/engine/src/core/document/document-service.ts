@@ -1416,6 +1416,10 @@ export class DocumentService {
       // The record as the caller's input made it; what a hook or a rule changes after it is held
       // to the read_only_depends_on locks before the write.
       const afterInput = JSON.parse(JSON.stringify(doc._data)) as Record<string, unknown>;
+      // The rows as stored, copied before any hook runs: a Table the input does not name is the
+      // same array in the data and in `_original`, so a hook that changes it in place would
+      // otherwise change the rows it is judged against.
+      const storedBefore = JSON.parse(JSON.stringify(doc._original)) as Record<string, unknown>;
 
       // Run field change hooks (transactional)
       await this.hookRunner.runFieldChangeHooks(doctype, doc, changedFields, ctx, session, user);
@@ -1476,7 +1480,7 @@ export class DocumentService {
         // set_value here is rejected by the engine's event gate (fail loud).
         await this.ruleEngine.execute(doctype, "before_save", doc._data, user, session);
       }
-      this.assertHookChangesKeepLocks(user, entity, afterInput, doc);
+      this.assertHookChangesKeepLocks(user, entity, afterInput, storedBefore, doc);
 
       // Apply workflow transition side-effects + fire the rule event,
       // INSIDE the transaction so child writes roll back on failure.
@@ -2729,6 +2733,7 @@ export class DocumentService {
     user: UserContext,
     entity: EntityDefinition,
     afterInput: Record<string, unknown>,
+    storedBefore: Record<string, unknown>,
     doc: BaseDocument,
   ): void {
     const computedTargets = new Set(Object.keys(entity.hooks?.computed ?? {}));
@@ -2737,7 +2742,7 @@ export class DocumentService {
       const name = field.fieldname;
       if (computedTargets.has(name)) continue;
       if (field.fieldtype === "Table") {
-        changes.push(...this.tableLockChanges(user, entity, name, afterInput[name], doc.get(name), doc._original[name]));
+        changes.push(...this.tableLockChanges(user, entity, name, afterInput[name], doc.get(name), storedBefore[name]));
       } else if (JSON.stringify(afterInput[name] ?? null) !== JSON.stringify(doc.get(name) ?? null)) {
         changes.push({ field: name, old: afterInput[name], new: doc.get(name) });
       }
