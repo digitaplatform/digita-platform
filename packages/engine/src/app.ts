@@ -843,8 +843,6 @@ export async function createApp(
       );
     }
 
-    await translationService.loadTranslationsForLocale(localeResolver.getDefaultLanguage());
-
     // Demo orchestrator is NOT triggered at boot — see admin reseed
     // endpoint (registered below) which the setup wizard calls.
 
