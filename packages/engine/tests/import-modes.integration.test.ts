@@ -48,6 +48,7 @@ import type { FastifyInstance } from "fastify";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
+import { IndexManager } from "../src/core/database/index-manager.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 
@@ -329,6 +330,31 @@ describe("Import modes — insert / upsert / validate", () => {
       [stored[1]!._row_id, "Brakes", true],
       [expect.any(String), "Extra step", false],
     ]);
+  });
+});
+
+describe("An import row that repeats a unique value", () => {
+  const Coupon = {
+    name: "Coupon", module: "test", database: "app", naming: { strategy: "system" },
+    is_submittable: false, is_log: false, track_changes: false, track_views: false,
+    fields: [{ fieldname: "code", fieldtype: "Data", label: "Code", unique: true }],
+    permissions: [ADMIN_PERM],
+  } as unknown as EntityDefinition;
+
+  beforeAll(async () => {
+    registry.register(Coupon);
+    await db.ensureCollection("Coupon", "app");
+    await new IndexManager(db).ensureIndexes(Coupon);
+  });
+
+  it("PLANTED DEFECT: fails that row by the field, as the resource route refuses it, without the database's text", async () => {
+    expect((await imp("Coupon", adminTok, { rows: [{ code: "SPRING" }], mode: "insert" })).json().data.inserted).toBe(1);
+    const res = await imp("Coupon", adminTok, { rows: [{ code: "SPRING" }, { code: "SUMMER" }], mode: "insert" });
+    expect(res.statusCode).toBe(200);
+    const report = res.json().data;
+    expect([report.inserted, report.failed]).toEqual([1, 1]);
+    expect(report.errors[0]).toMatchObject({ row: 1, field: "code", message_key: "duplicate_key", params: { field: "code" } });
+    expect(res.body).not.toMatch(/E11000|dup key|idx_uniq/);
   });
 });
 

@@ -5,6 +5,7 @@ import type {
   ImportRowError,
 } from "@digitaplatform/shared";
 import { ROW_ID_FIELD } from "@digitaplatform/shared";
+import { MongoServerError } from "mongodb";
 import type { DocumentService } from "../document/document-service.js";
 import { ValidationFailedError } from "../document/document-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
@@ -384,6 +385,12 @@ export class ImportService {
         message_key: e.message_key,
         params: e.params,
       };
+    }
+    // A unique index refused the row: name the field, as the resource route's error handler does,
+    // never the driver's text.
+    if (err instanceof MongoServerError && err.code === 11000) {
+      const field = Object.keys(err.keyPattern ?? {})[0] ?? "unknown";
+      return { row, field, message: `${field}: duplicate_key`, message_key: "duplicate_key", params: { field } };
     }
     if (err instanceof FieldValueError) {
       return {
