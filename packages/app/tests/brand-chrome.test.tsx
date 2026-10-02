@@ -62,4 +62,12 @@ describe('BrandChrome — signature wordmark', () => {
     render(<BrandChrome side="top" />);
     expect(screen.queryByTestId('brand-wordmark')).toBeNull();
   });
+
+  it('PLANTED DEFECT: draws no logo the branding names on another host', () => {
+    useThemeStore.setState({ signature: 'digita' });
+    useSessionStore.setState({ branding: { app_name: 'Acme', logo: 'https://evil.example/logo.png', logo_dark: '//evil.example/dark.png' } as BootBranding });
+    const { container } = render(<BrandChrome side="top" />);
+    expect(container.innerHTML).not.toContain('evil.example');
+    expect(screen.getByText('Acme')).toBeInTheDocument();
+  });
 });

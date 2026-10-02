@@ -54,6 +54,14 @@ describe('the branding a tenant sets', () => {
     expect(document.head.querySelectorAll('link[rel="icon"]')).toHaveLength(1);
   });
 
+  it("PLANTED DEFECT: shows the platform's favicon, not one the branding names on another host", async () => {
+    const store = await loadThemeStore();
+    store.getState().setBranding({ favicon: 'https://evil.example/favicon.png' });
+    expect(iconHref()).toContain('favicon.svg');
+    store.getState().setBranding({ favicon: '//evil.example/favicon.png' });
+    expect(iconHref()).toContain('favicon.svg');
+  });
+
   it('follows the system mode while the tenant allows no light/dark choice, also over a roamed one', async () => {
     localStorage.setItem('digita-app:theme-mode', 'dark');
     const store = await loadThemeStore();

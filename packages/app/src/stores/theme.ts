@@ -29,7 +29,7 @@ import { signature as veloluckWorkbench } from '@digitaplatform/veloluck-workben
 import { nextMode } from '@digitaplatform/components';
 import faviconUrl from '@digitaplatform/theme/favicon.svg?no-inline';
 import { getUserPreference, setUserPreference } from '@/services/userPreference';
-import { APP_BASE_PATH, appUrl } from '@/lib/appBase';
+import { APP_BASE_PATH, brandingImageUrl } from '@/lib/appBase';
 import { AUTH_URL } from '@/lib/authConfig';
 
 // The tenant's look this app drew last in this browser, kept only as a CACHE so the first paint,
@@ -181,7 +181,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     const mode = isNowModeLocked ? 'system' : wasModeLocked ? resolveInitialMode() : get().mode;
     if (mode !== get().mode || isNowModeLocked !== wasModeLocked) applyMode(mode);
     set({ branding, density: resolveInitialDensity(undefined, branding.density), mode });
-    showFavicon(branding.favicon ? appUrl(branding.favicon) : faviconUrl);
+    showFavicon(brandingImageUrl(branding.favicon) ?? faviconUrl);
     get().reapplySignature();
   },
   loadRemotePrefs: async () => {

@@ -1,11 +1,10 @@
 import { type ReactNode } from 'react';
 import { getSignature } from '@digitaplatform/theme';
-import { brandingImageKind } from '@digitaplatform/shared';
 import { BrandMark } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
 import { useThemeStore } from '@/stores/theme';
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';
-import { appUrl } from '@/lib/appBase';
+import { brandingImageUrl } from '@/lib/appBase';
 
 /** Unauthenticated chrome — a centered card on the branded background. The brand
  *  is the kit's BrandMark with the one precedence every surface shares (the
@@ -18,8 +17,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
   const platformName = useSessionStore((s) => s.settings?.platform_name);
   const appName = branding?.app_name ?? platformName ?? 'Digita';
   const signatureId = useThemeStore((s) => s.signature);
-  const background = branding?.login_background;
-  const backgroundKind = background ? brandingImageKind(background) : null;
+  const background = brandingImageUrl(branding?.login_background);
 
   return (
     <div
@@ -31,9 +29,9 @@ export function AuthShell({ children }: { children: ReactNode }) {
     >
       {/* An image element takes the address as it is: written into a CSS url(), a quote in it
           could end the address and add another. Only the app's own paths and inline images load. */}
-      {background && backgroundKind && (
+      {background && (
         <img
-          src={backgroundKind === 'path' ? appUrl(background) : background}
+          src={background}
           alt=""
           aria-hidden="true"
           data-testid="auth-background"
@@ -47,8 +45,8 @@ export function AuthShell({ children }: { children: ReactNode }) {
         <div className="mb-6 flex items-center justify-center gap-2 text-[28px]">
           <BrandMark
             name={appName}
-            logoUrl={branding?.logo ? appUrl(branding.logo) : undefined}
-            logoDarkUrl={branding?.logo_dark ? appUrl(branding.logo_dark) : undefined}
+            logoUrl={brandingImageUrl(branding?.logo)}
+            logoDarkUrl={brandingImageUrl(branding?.logo_dark)}
             nameIsCustom={Boolean(branding?.app_name)}
             signature={getSignature(signatureId)}
           />

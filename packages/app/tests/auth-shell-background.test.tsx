@@ -41,4 +41,14 @@ describe("the sign-in page's background", () => {
       cleanup();
     }
   });
+
+  it("PLANTED DEFECT: draws the app's own logos under its base path, and no logo from another host", () => {
+    useSessionStore.setState({ branding: { logo: '/api/v1/public/file/LOGO', logo_dark: '/api/v1/public/file/DARK' } as never });
+    const own = render(<AuthShell>form</AuthShell>);
+    expect(own.container.querySelectorAll('img[src="/erp/api/v1/public/file/LOGO"], img[src="/erp/api/v1/public/file/DARK"]').length).toBeGreaterThan(0);
+    cleanup();
+    useSessionStore.setState({ branding: { logo: 'https://evil.example/logo.png', logo_dark: '//evil.example/dark.png' } as never });
+    const outside = render(<AuthShell>form</AuthShell>);
+    expect(outside.container.innerHTML).not.toContain('evil.example');
+  });
 });
