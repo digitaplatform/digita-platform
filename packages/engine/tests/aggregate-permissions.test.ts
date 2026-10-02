@@ -451,3 +451,46 @@ describe("runAggregateSection — names an earlier stage produced", () => {
     await expect(runAggregateSection(section(pipeline), rctx, user, makeDeps({ readable: partial }))).resolves.toEqual([]);
   });
 });
+
+// A reader of Employee `name`, `dept` and `dept_id`, not `salary`, and of Department `name`, not
+// `budget`. Each refused pipeline hands a protected value on, as a run against MongoDB shows.
+describe("runAggregateSection — every way a stage hands a protected field on", () => {
+  const partial = new Set(["name", "dept", "dept_id"]);
+  const deps = () => makeDeps({ readable: partial, readableByLookup: new Map([["Department", new Set(["name"])]]) });
+  const section = (pipeline: Array<Record<string, unknown>>) => ({ key: "k", kind: "aggregate" as const, entity: "Employee", pipeline });
+  const join = { $lookup: { from: "Department", localField: "dept_id", foreignField: "_id", as: "d" } };
+
+  const refused: Array<[string, Array<Record<string, unknown>>]> = [
+    ["an exclusion $project, then a read of salary", [{ $project: { name: 0 } }, { $addFields: { x: "$salary" } }]],
+    ["an exclusion of _id, then a sum of salary", [{ $project: { _id: 0 } }, { $group: { _id: "$dept", total: { $sum: "$salary" } } }]],
+    ["an exclusion $project, then a sort by salary", [{ $project: { name: 0 } }, { $sort: { salary: -1 } }]],
+    ["an exclusion $project, then a match on salary", [{ $project: { name: 0 } }, { $match: { salary: { $gt: 5000 } } }]],
+    ["a path through a $lookup's as to budget", [join, { $addFields: { leak: { $first: "$d.budget" } } }]],
+    ["a $lookup, an $unwind and a group by budget", [join, { $unwind: "$d" }, { $group: { _id: "$d.budget", n: { $sum: 1 } } }]],
+    ["the joined documents copied under another name", [join, { $addFields: { copy: "$d" } }]],
+    ["a $facet branch that hands the documents on whole", [{ $facet: { all: [{ $match: { dept: "CH" } }] } }]],
+    ["a $facet branch that hands joined documents on", [{ $facet: { all: [join, { $project: { name: 1, d: 1 } }] } }]],
+    ["a $lookup.let bound to salary", [{ $lookup: { from: "Department", let: { s: "$salary" }, pipeline: [{ $match: { $expr: { $gt: ["$$s", 0] } } }, { $project: { name: 1 } }], as: "d" } }]],
+    ["$getField by a plain name", [{ $addFields: { x: { $getField: "salary" } } }]],
+    ["$getField with a computed name", [{ $addFields: { x: { $getField: { field: { $literal: "salary" } } } } }]],
+  ];
+  for (const [what, pipeline] of refused) {
+    it(`refuses ${what}`, async () => {
+      await expect(runAggregateSection(section(pipeline), rctx, user, deps())).rejects.toThrow(PermissionDeniedError);
+    });
+  }
+
+  const allowed: Array<[string, Array<Record<string, unknown>>]> = [
+    ["PLANTED INNOCENT: an exclusion of salary, then a read of name", [{ $project: { salary: 0 } }, { $addFields: { x: "$name" } }]],
+    ["PLANTED INNOCENT: a $lookup, an $unwind and a group by the joined name", [join, { $unwind: "$d" }, { $group: { _id: "$d.name", n: { $sum: 1 } } }]],
+    ["PLANTED INNOCENT: a $lookup kept under its own name", [join, { $project: { name: 1, d: 1 } }]],
+    ["PLANTED INNOCENT: a $facet branch that counts", [{ $facet: { total: [{ $count: "n" }] } }]],
+    ["PLANTED INNOCENT: a $lookup.let bound to name", [{ $lookup: { from: "Department", let: { n: "$name" }, pipeline: [{ $match: { $expr: { $eq: ["$name", "$$n"] } } }, { $project: { name: 1 } }], as: "d" } }]],
+    ["PLANTED INNOCENT: $getField by a readable name", [{ $addFields: { x: { $getField: "name" } } }]],
+  ];
+  for (const [what, pipeline] of allowed) {
+    it(`allows ${what.replace("PLANTED INNOCENT: ", "")} (PLANTED INNOCENT)`, async () => {
+      await expect(runAggregateSection(section(pipeline), rctx, user, deps())).resolves.toEqual([]);
+    });
+  }
+});
