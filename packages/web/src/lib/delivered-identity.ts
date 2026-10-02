@@ -45,7 +45,9 @@ export async function loadDeliveredIdentity(sources: DeliveredIdentitySources): 
   const before = currentChoices();
   const preferences = await findIdentityPreferences(`/${firstApp}`, sources);
   if (!preferences) return false;
-  storeIdentityPreferences(preferences);
+  // The page reads the app at /<app> of its own host, which only a tenant routed by path serves, so
+  // the look cookie is host-only, as the app's on that host.
+  storeIdentityPreferences(preferences, undefined);
   let changed = currentChoices() !== before;
 
   const design = resolveInitialDesign();
