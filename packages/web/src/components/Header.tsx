@@ -2,8 +2,8 @@ import Link from "next/link";
 import { Mail, icons, type LucideIcon } from "lucide-react";
 import { BrandMark, TopBar, buttonAttributes, cn, type BrandMarkProps } from "@digitaplatform/components";
 import type { Locale } from "@/i18n/config";
-import type { NavItem, WebNavMenu, WebSite } from "@/lib/types";
-import { isContactItem, localePath, navHref, sortNav } from "@/lib/nav";
+import type { NavItem, WebSite } from "@/lib/types";
+import { isContactItem, localePath, navHref } from "@/lib/nav";
 import { t } from "@/i18n/messages";
 import { SheetButton } from "@/blocks/marketing/SheetButton";
 import { NavIconLink, NavLinks } from "./NavLinks";
@@ -58,8 +58,8 @@ export function Header({
   locale: Locale;
   defaultLocale: Locale;
   site: WebSite | null;
-  nav: WebNavMenu | null;
-  family: WebNavMenu | null;
+  nav: NavItem[];
+  family: NavItem[];
   apps: string[];
   brand: BrandMarkProps;
   /** The published pages per locale, as slugs, handed to the language menu. */
@@ -73,9 +73,8 @@ export function Header({
   /** Where a signed-in visitor's account keeps the mode the button sets. */
   identity: DeliveredIdentitySources;
 }) {
-  const all = sortNav(nav?.items);
-  const contact = all.find(isContactItem);
-  const items = all.filter((item) => item !== contact);
+  const contact = nav.find(isContactItem);
+  const items = nav.filter((item) => item !== contact);
   // A link past the bar's room shows as text on a tablet, as one that names no icon does.
   const iconLinks = items
     .flatMap((item) => {
@@ -85,7 +84,6 @@ export function Header({
     })
     .slice(0, ICON_LINK_FROM.length);
   const textItems = items.filter((item) => !iconLinks.some((link) => link.item === item));
-  const familyItems = sortNav(family?.items);
   const comingLabel = t("familyComing", locale);
 
   return (
@@ -114,9 +112,9 @@ export function Header({
         </nav>
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          {familyItems.length > 0 && (
+          {family.length > 0 && (
             <div className="hidden items-center gap-1 md:flex">
-              <FamilySwitcher locale={locale} items={familyItems} domain={site?.domain} label={t("familyLabel", locale)} comingLabel={comingLabel} />
+              <FamilySwitcher locale={locale} items={family} domain={site?.domain} label={t("familyLabel", locale)} comingLabel={comingLabel} />
             </div>
           )}
           <LocaleSwitcher current={locale} publishedSlugs={publishedSlugs} enabledLocales={enabledLocales} label={t("language", locale)} />
@@ -134,7 +132,7 @@ export function Header({
             locale={locale}
             items={items}
             apps={apps}
-            family={familyItems}
+            family={family}
             domain={site?.domain}
             brand={brand}
             label={t("navigation", locale)}

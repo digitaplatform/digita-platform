@@ -1,4 +1,4 @@
-import type { NavItem } from "./types";
+import type { NavItem, WebNavMenu, WebPage } from "./types";
 
 /** The URL of a site path in `locale`. The default locale's pages live at the bare path; the
  *  middleware rewrites it to the locale route. Every other locale lives under /<locale>. */
@@ -49,8 +49,54 @@ export function navHref(locale: string, defaultLocale: string, item: NavItem): s
   return null;
 }
 
-export function sortNav(items: NavItem[] | undefined): NavItem[] {
-  return [...(items ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+/**
+ * The menu a visitor sees in `locale`, built from the active nodes of a site's menu tree: children
+ * under their `parent`, siblings by `position`, then `label`. A node that links a page takes the
+ * published page of the same `translation_group` in `locale`; where there is none, the node is not
+ * drawn, nor is a heading whose children are all left out. A node with only `href` is drawn in every
+ * language. A node whose parent is not among `nodes` (an inactive one) is not drawn.
+ */
+export function buildNavTree(
+  nodes: WebNavMenu[],
+  pages: Pick<WebPage, "_id" | "locale" | "translation_group">[],
+  locale: string,
+): NavItem[] {
+  const pageById = new Map(pages.map((page) => [page._id, page]));
+  const pageIn = (id: string): string | undefined => {
+    const page = pageById.get(id);
+    if (!page) return undefined;
+    if (page.locale === locale) return page._id;
+    if (!page.translation_group) return undefined;
+    return pages.find((p) => p.translation_group === page.translation_group && p.locale === locale)?._id;
+  };
+  const childrenOf = new Map<string | null, WebNavMenu[]>();
+  for (const node of nodes) {
+    const parent = node.parent || null;
+    childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), node]);
+  }
+  const siblingOrder = (a: WebNavMenu, b: WebNavMenu) => (a.position ?? 0) - (b.position ?? 0) || a.label.localeCompare(b.label);
+  const build = (parent: string | null): NavItem[] =>
+    [...(childrenOf.get(parent) ?? [])].sort(siblingOrder).flatMap((node): NavItem[] => {
+      const children = build(node._id);
+      if (childrenOf.has(node._id)) return children.length ? [{ label: node.label, ...(node.icon ? { icon: node.icon } : {}), children }] : [];
+      const item: NavItem = { label: node.label };
+      if (node.icon) item.icon = node.icon;
+      if (node.href) item.href = node.href;
+      if (node.page) {
+        const page = pageIn(node.page);
+        if (!page) return [];
+        item.page = page;
+      }
+      return [item];
+    });
+  return build(null);
+}
+
+/** A menu's entries in the order a list draws them: each heading, then what lies under it. */
+export type MenuEntry = { heading: string } | { item: NavItem };
+
+export function menuEntries(items: NavItem[]): MenuEntry[] {
+  return items.flatMap((item): MenuEntry[] => (item.children ? [{ heading: item.label }, ...menuEntries(item.children)] : [{ item }]));
 }
 
 /** The href of a menu item that stands for the contact sheet. No element of a page is its anchor,

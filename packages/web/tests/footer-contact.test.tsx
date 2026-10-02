@@ -11,7 +11,7 @@ import { Footer } from "../src/components/Footer";
 import { FamilySwitcher } from "../src/components/FamilySwitcher";
 import { MobileNav } from "../src/components/MobileNav";
 import { closeContactSheet, useContactSheetOpen } from "../src/lib/contact-sheet";
-import type { NavItem, WebNavMenu, WebSite } from "../src/lib/types";
+import type { NavItem, WebSite } from "../src/lib/types";
 
 vi.mock("server-only", () => ({}));
 vi.mock("../src/i18n/messages", () => ({ t: (key: string) => key }));
@@ -29,16 +29,10 @@ const siteConfig = (contactEnabled: boolean): PublicSiteConfig => ({
   notFound: { title: "", body: "", home: "" },
 });
 
-const footerNav: WebNavMenu = {
-  _id: "footer",
-  site: "example",
-  locale: "en",
-  location: "footer",
-  items: [
-    { label: "Privacy", href: "/privacy", order: 0 },
-    { label: "Write to us", href: "#contact", order: 1 },
-  ],
-};
+const footerNav: NavItem[] = [
+  { label: "Privacy", href: "/privacy" },
+  { label: "Write to us", href: "#contact" },
+];
 
 /** What the page's contact sheet reads: whether it is open. */
 function SheetState() {
@@ -102,8 +96,8 @@ describe("a #contact item of the footer menu", () => {
 });
 
 const family: NavItem[] = [
-  { label: "Other site", href: "https://other.example.org", order: 0 },
-  { label: "Write to us", href: "#contact", order: 1 },
+  { label: "Other site", href: "https://other.example.org" },
+  { label: "Write to us", href: "#contact" },
 ];
 
 /** Draws `menu` with the page's sheet state beside it, and opens it with the button `opener` names. */

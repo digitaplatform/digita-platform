@@ -1,7 +1,7 @@
 import { BrandMark, type BrandMarkProps } from "@digitaplatform/components";
 import type { Locale } from "@/i18n/config";
-import type { WebNavMenu, WebSite } from "@/lib/types";
-import { isContactItem, sortNav } from "@/lib/nav";
+import type { NavItem, WebSite } from "@/lib/types";
+import { isContactItem, menuEntries } from "@/lib/nav";
 import { t } from "@/i18n/messages";
 import { NavItemLink } from "./NavItemLink";
 
@@ -22,14 +22,14 @@ export function Footer({
 }: {
   locale: Locale;
   site: WebSite | null;
-  nav: WebNavMenu | null;
+  nav: NavItem[];
   brand: BrandMarkProps;
   /** Whether the page offers the contact sheet, by the layout's rule the header and the drawer
    *  read too (publicConfig): a server component cannot read the site config's context. */
   contactEnabled: boolean;
 }) {
   // Without the sheet an item for it would lead nowhere, so it is left out.
-  const items = sortNav(nav?.items).filter((item) => contactEnabled || !isContactItem(item));
+  const entries = menuEntries(nav).filter((entry) => !("item" in entry) || contactEnabled || !isContactItem(entry.item));
 
   return (
     <footer className="mt-auto border-t border-border">
@@ -45,14 +45,20 @@ export function Footer({
               </a>
             )}
           </div>
-          {items.length > 0 && (
+          {entries.length > 0 && (
             <nav aria-label={t("navFooter", locale)} className="md:col-span-2">
               <ul className="gap-x-8 sm:columns-2 lg:columns-3">
-                {items.map((item, i) => (
-                  <li key={`${item.label}-${i}`} className="mb-2.5 break-inside-avoid">
-                    <NavItemLink locale={locale} item={item} comingLabel={t("familyComing", locale)} className={LINK} />
-                  </li>
-                ))}
+                {entries.map((entry, i) =>
+                  "heading" in entry ? (
+                    <li key={`${entry.heading}-${i}`} className="mb-2.5 break-inside-avoid text-sm font-medium text-textMuted">
+                      {entry.heading}
+                    </li>
+                  ) : (
+                    <li key={`${entry.item.label}-${i}`} className="mb-2.5 break-inside-avoid">
+                      <NavItemLink locale={locale} item={entry.item} comingLabel={t("familyComing", locale)} className={LINK} />
+                    </li>
+                  ),
+                )}
               </ul>
             </nav>
           )}
