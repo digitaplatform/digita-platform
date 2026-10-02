@@ -20,10 +20,11 @@ type Doc = Record<string, unknown>;
 
 /** Metadata-driven (NOT a hardcoded entity set): after writing an entity flagged
  *  reload_boot_on_write (Setting/BrandingSetting), narrow-re-apply /boot-derived
- *  state so branding/default_workspace update without a full bootstrap. */
+ *  state so branding/default_workspace update without a full bootstrap. A single is
+ *  re-read too: the save of an app's settings record is what completes its setup. */
 function maybeRefreshBoot(qc: ReturnType<typeof useQueryClient>, doctype: string) {
   const meta = qc.getQueryData<EntityDefinition>(qk.meta(doctype));
-  if (meta?.reload_boot_on_write) void useSessionStore.getState().refreshBranding();
+  if (meta?.reload_boot_on_write || meta?.is_single) void useSessionStore.getState().refreshBootState();
 }
 
 /** Load one document. Create mode (no name) does NOT fetch. */

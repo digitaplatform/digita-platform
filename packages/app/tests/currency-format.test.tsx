@@ -73,7 +73,7 @@ describe('CurrencyControl', () => {
     );
     expect(input(container).value).toBe('440');
     unmount();
-    useSessionStore.setState({ settings: { platform_name: 'p', default_currency: 'CHF', allow_user_language: false, is_first_run: false, timezone: 'UTC' } });
+    useSessionStore.setState({ settings: { platform_name: 'p', default_currency: 'CHF', allow_user_language: false, timezone: 'UTC' } });
     const again = render(<CurrencyControl {...props({ currency_field: 'currency' }, { value: 440, doc: {}, state: readOnly })} />);
     expect(input(again.container).value).toBe('440.00');
   });

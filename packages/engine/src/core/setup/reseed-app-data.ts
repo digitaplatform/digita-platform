@@ -1,4 +1,3 @@
-import { DIGITA } from "@digitaplatform/shared";
 import { join } from "path";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
@@ -79,8 +78,7 @@ let running: { mode: ReseedMode; done: Promise<ReseedSummary> } | null = null;
  *     mandatory is_single config the app declares.
  *
  *   "demo" — does the template mode AND also loads
- *     `<appDir>/<domain>/seeds-demo/*.seed.json`. Sets
- *     `Setting.is_first_run = false` at the end.
+ *     `<appDir>/<domain>/seeds-demo/*.seed.json`.
  *
  * Both modes are fully destructive. Reserved databases (`identity`,
  * `core`, `logs`) are preserved so the caller's session + UI chrome
@@ -174,23 +172,6 @@ async function reseedOnce(mode: ReseedMode, deps: ReseedDeps): Promise<ReseedSum
       log.warn({ attempt, err: message }, "seed after the wipe failed; running it again");
     }
   }
-
-  // is_first_run flag: demo mode flips it off (no further setup
-  // expected); template mode keeps it on so the wizard's Done step
-  // sees a fresh first-run state.
-  // db.updateOne wraps these fields in $set itself — pass the plain fields,
-  // not a $set document (else it double-wraps → "dollar-prefixed field $set
-  // not allowed in replacement", MongoServerError code 52).
-  await db.updateOne(
-    DIGITA.COLLECTIONS.SETTING,
-    "settings",
-    {
-      is_first_run: mode !== "demo",
-      modified: new Date(),
-      modified_by: "admin-reseed",
-    },
-    DIGITA.DATABASES.CORE,
-  );
 
   return {
     mode,

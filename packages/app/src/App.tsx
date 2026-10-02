@@ -12,6 +12,7 @@ import { APP_BASE_PATH } from '@/lib/appBase';
 import LoginPage from '@/pages/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
 import RecordPage from '@/pages/RecordPage';
+import SetupPage from '@/pages/SetupPage';
 import ListPage from '@/pages/ListPage';
 import AccountPage from '@/pages/AccountPage';
 import JobsPage from '@/pages/JobsPage';
@@ -86,6 +87,8 @@ const router = createBrowserRouter([
           // Design showcase: every design on every kit component, administrators only. The underscore
           // keeps the path off the namespace an app entity may take, as _jobs and _groups do.
           { path: '_design', element: <DesignPage /> },
+          // The settings an app cannot work without, for a user who may fill them.
+          { path: '_setup', element: <SetupPage /> },
           // Generic meta-driven renderer. `new` is static → ranked ahead of :name.
           { path: ':entity/new', element: <RecordPage />, errorElement: <PageError /> },
           { path: ':entity/:name', element: <RecordPage />, errorElement: <PageError /> },
@@ -122,6 +125,13 @@ export default function App() {
           await loadI18n(resolved);
           // Active audience is `internal` today (the only wired SPA runtime).
           await loadAppComposition('internal', data.branding?.default_template);
+          // A user who can complete a pending setup starts on its page. Only an entry at the
+          // start page is led there, and only here, once per page load: a link into the app
+          // keeps its target, and the start page stays reachable afterwards. The matched route
+          // tells the start page: the browser's path carries the app's base path.
+          if (data.setup?.records.length && router.state.matches.at(-1)?.route.index) {
+            await router.navigate('/_setup', { replace: true });
+          }
         } else {
           // Anonymous (login screen): chrome strings are bundled, so localize them
           // to the resolved language without the auth-gated /translations fetch
