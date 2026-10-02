@@ -57,6 +57,14 @@ function buildRoots(ctx: RuleExprContext): Record<string, unknown> {
   };
 }
 
+/** An expression or a token of a rule that fails at run time; the rule engine names the rule in it. */
+export class RuleExpressionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RuleExpressionError";
+  }
+}
+
 /**
  * Evaluate a rule EXPRESSION (condition / iterate / non-token value). Throws on
  * parse failure or a disallowed node/root — wrapped for debuggability.
@@ -65,7 +73,7 @@ export function evaluateExpression(expr: string, ctx: RuleExprContext): unknown 
   try {
     return evaluateExpressionValueIn(expr, buildRoots(ctx));
   } catch (err) {
-    throw new Error(`Expression failed (${expr}): ${(err as Error).message}`);
+    throw new RuleExpressionError(`Expression failed (${expr}): ${(err as Error).message}`);
   }
 }
 
@@ -85,7 +93,7 @@ function looksLikeToken(s: string): boolean {
 /** Resolve a value-slot token, throwing (never silently nulling) on failure. */
 function resolveValueToken(s: string, ctx: RuleExprContext): unknown {
   if (s.startsWith("$param.")) {
-    throw new Error(`$param tokens are not available in rules: "${s}"`);
+    throw new RuleExpressionError(`$param tokens are not available in rules: "${s}"`);
   }
   const warnings: string[] = [];
   const resolverCtx: ResolverContext = {
@@ -97,7 +105,7 @@ function resolveValueToken(s: string, ctx: RuleExprContext): unknown {
   };
   const v = resolveString(s, resolverCtx);
   if (warnings.length) {
-    throw new Error(`rule token failed (${s}): ${warnings.join("; ")}`);
+    throw new RuleExpressionError(`rule token failed (${s}): ${warnings.join("; ")}`);
   }
   return v;
 }

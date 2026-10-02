@@ -3,7 +3,7 @@ import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { UserContext } from "../permissions/types.js";
 import { loadActiveRules } from "./rule-loader.js";
-import { evaluateExpression } from "./rule-expression.js";
+import { evaluateExpression, RuleExpressionError } from "./rule-expression.js";
 import { executeCreateDocument } from "./actions/create-document.js";
 import { executeUpdateDocument } from "./actions/update-document.js";
 import { executeValidate } from "./actions/validate-rule.js";
@@ -109,18 +109,22 @@ export class RuleEngine {
   ): Promise<void> {
     const exec: RuleExecContext = { doc, user, now: new Date(), session, entityName, mutations };
 
-    if (rule.condition) {
-      const ok = evaluateExpression(rule.condition, exec);
-      if (!ok) {
+    try {
+      if (rule.condition && !evaluateExpression(rule.condition, exec)) {
         log.debug({ rule: rule._id }, "rule condition false; skipping");
         return;
       }
-    }
 
-    log.debug({ rule: rule._id, actions: rule.actions?.length ?? 0 }, "executing rule");
+      log.debug({ rule: rule._id, actions: rule.actions?.length ?? 0 }, "executing rule");
 
-    for (const action of rule.actions ?? []) {
-      await this.runAction(action, exec, session);
+      for (const action of rule.actions ?? []) {
+        await this.runAction(action, exec, session);
+      }
+    } catch (err) {
+      // An expression of the rule that fails keeps the save refused; the error names the rule so
+      // its author can find it. Every other error, a validate rule's refusal among them, passes as is.
+      if (err instanceof RuleExpressionError) throw new Error(`rule "${rule._id}": ${err.message}`, { cause: err });
+      throw err;
     }
   }
 
