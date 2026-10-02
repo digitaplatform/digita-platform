@@ -92,6 +92,38 @@ describe("PermissionChecker — child-field perm_level", () => {
     expect(checker.getReadableChildFields(sales, "Invoice", "lines")).toBeNull();
   });
 
+  describe("getReadableChildFieldsOnEveryRow", () => {
+    function checkerWith(salespersonLevel2: Record<string, unknown>): PermissionChecker {
+      const e = entityWithGatedChildField();
+      e.permissions.push({ role: "Salesperson", level: 2, read: 1, ...salespersonLevel2 } as never);
+      const registry = new EntityRegistry();
+      registry.register(e);
+      return new PermissionChecker(registry);
+    }
+    const sales: UserContext = { _id: "s", email: "s", roles: ["Salesperson"] };
+
+    it("leaves out a child field the role reads only on its own rows", () => {
+      const checker = checkerWith({ if_owner: 1 });
+      expect(checker.getReadableChildFields(sales, "Invoice", "lines", { owner: "s" })?.has("cost_price")).toBe(true);
+      expect(checker.getReadableChildFieldsOnEveryRow(sales, "Invoice", "lines")?.has("cost_price")).toBe(false);
+    });
+
+    it("leaves out a child field the role reads only under a condition or a scope", () => {
+      expect(
+        checkerWith({ condition: 'doc.status != "Closed"' }).getReadableChildFieldsOnEveryRow(sales, "Invoice", "lines")?.has("cost_price"),
+      ).toBe(false);
+      expect(
+        checkerWith({ scope: { field: "customer", user_field: "customer" } }).getReadableChildFieldsOnEveryRow(sales, "Invoice", "lines")?.has("cost_price"),
+      ).toBe(false);
+    });
+
+    it("PLANTED INNOCENT: keeps a child field the role reads on every row", () => {
+      const allowed = checkerWith({}).getReadableChildFieldsOnEveryRow(sales, "Invoice", "lines");
+      expect(allowed?.has("cost_price")).toBe(true);
+      expect(allowed?.has("qty")).toBe(true);
+    });
+  });
+
   it("filterFieldsForRead masks gated child fields per row", () => {
     const checker = makeChecker();
     const sales: UserContext = { _id: "s", email: "s", roles: ["Salesperson"] };

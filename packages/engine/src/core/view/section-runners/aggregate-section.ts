@@ -273,14 +273,17 @@ function unsetStage(paths: string[]): Document[] {
  * sub-pipeline, `$facet` branches included. A `$lookup` with `localField`/`foreignField` and no
  * sub-pipeline gets one of the $unset alone (MongoDB 5.0 and later take both together). A
  * `foreignField` on a hidden path is refused: MongoDB matches it on the stored rows, before the
- * sub-pipeline drops anything, so the join would tell who holds a guessed value.
+ * sub-pipeline drops anything, so the join would tell who holds a guessed value. An array index in
+ * it (`payments.0.amount`) names the same field as the path without it.
  */
 function unsetHiddenInLookups(stage: Document, hiddenOf: (entity: string) => string[]): Document {
   const lookup = stage["$lookup"];
   if (lookup && typeof lookup === "object" && typeof lookup["from"] === "string") {
     const hidden = hiddenOf(lookup["from"]);
     const foreignField = lookup["foreignField"];
-    if (typeof foreignField === "string" && hidden.some((h) => sharesPath(h, foreignField))) {
+    const matchedPath =
+      typeof foreignField === "string" ? foreignField.split(".").filter((s) => !/^\d+$/.test(s)).join(".") : undefined;
+    if (matchedPath !== undefined && hidden.some((h) => sharesPath(h, matchedPath))) {
       throw new PermissionDeniedError("aggregation_references_protected_field", { doctype: lookup["from"] });
     }
     const pipeline = Array.isArray(lookup["pipeline"])
