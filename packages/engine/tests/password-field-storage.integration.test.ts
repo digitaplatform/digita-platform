@@ -2,7 +2,7 @@ import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 
 vi.mock("../src/core/config/env.js", () => {
   return { env: {
-    NODE_ENV: "test", APP_VERSION: "0.1.0", SERVICE_NAME: "digita-test", PORT: 0, HOST: "127.0.0.1",
+    NODE_ENV: "test", SERVICE_NAME: "digita-test", PORT: 0, HOST: "127.0.0.1",
     BASE_URL: "http://localhost:3000", API_PREFIX: "/api/v1",
     MONGODB_URI: "", MONGODB_MIN_POOL: 1, MONGODB_MAX_POOL: 5, MONGODB_TIMEOUT_MS: 30000,
     MONGODB_RETRY_WRITES: true, MONGODB_IDENTITY_DB: "test_users", MONGODB_LOGS_DB: "test_logs", MONGODB_AUDITS_DB: "test_audits",

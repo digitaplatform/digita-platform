@@ -1,5 +1,6 @@
 import pino, { type Logger as PinoLogger, type TransportTargetOptions } from "pino";
 import { env } from "../config/env.js";
+import { BUILD_VERSION } from "../config/build-version.js";
 
 // The request line at debug carries the whole header set. These headers carry a
 // credential, so they are redacted whatever LOG_REDACT_FIELDS a deployment sets.
@@ -71,7 +72,7 @@ const rootLogger: PinoLogger = pino({
   },
   base: {
     service: env.SERVICE_NAME,
-    version: env.APP_VERSION,
+    version: BUILD_VERSION,
     env: env.NODE_ENV,
   },
   redact: {

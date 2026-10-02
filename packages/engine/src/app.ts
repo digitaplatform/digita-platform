@@ -9,6 +9,7 @@ import multipart from "@fastify/multipart";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { env } from "./core/config/env.js";
+import { BUILD_VERSION } from "./core/config/build-version.js";
 import { createLogger } from "./core/logging/logger.js";
 import { MongoDBService } from "./core/database/mongodb-service.js";
 import { loadAppEntityFiles } from "./core/setup/load-app-entity-files.js";
@@ -297,7 +298,7 @@ export async function createApp(
       info: {
         title: "Digita Platform API",
         description: "Auto-generated REST API from entity definitions",
-        version: env.APP_VERSION,
+        version: BUILD_VERSION,
       },
       servers: [{ url: env.BASE_URL }],
       components: {
@@ -360,7 +361,7 @@ export async function createApp(
   // ─── Public Routes (no auth) ──────────────────────────
 
   app.get("/health", async (_req, reply) => {
-    return reply.send(successResponse({ status: "ok", version: env.APP_VERSION }));
+    return reply.send(successResponse({ status: "ok", version: BUILD_VERSION }));
   });
 
   // Login / refresh / logout / 2FA are served by digita-auth, not the engine.
@@ -548,7 +549,7 @@ export async function createApp(
 
   const startup = async () => {
     const startTime = Date.now();
-    log.info({ env: env.NODE_ENV, version: env.APP_VERSION }, "Starting Digita Platform");
+    log.info({ env: env.NODE_ENV, version: BUILD_VERSION }, "Starting Digita Platform");
 
     // 1. Connect to MongoDB
     await db.connect();
