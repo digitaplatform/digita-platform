@@ -767,7 +767,7 @@ describe("a seeded Password value that decrypts to the same text is left alone",
   });
 
   it("writes nothing on the second upsert of a row whose Table row holds a Password", async () => {
-    await writeFile(join(app, "seeds", "PayGateway.seed.json"), JSON.stringify([{ _id: "gw", site: "site", label: "Gateway", slots: [{ label: "front", pin: "1234" }] }]));
+    await writeFile(join(app, "seeds", "PayGateway.seed.json"), JSON.stringify([{ _id: "gw", site: "site", label: "Gateway", slots: [{ label: "front", pin: "1234" }, { label: "back", pin: "5678" }] }]));
     const { db, stored } = mockDb([]);
     const upsert = () =>
       seedAppData(db, withGateway(), {} as NamingService, [join(app, "seeds")], {
@@ -779,6 +779,8 @@ describe("a seeded Password value that decrypts to the same text is left alone",
     await upsert();
 
     expect(db.upsertOne).not.toHaveBeenCalled();
+    const pins = (stored.get("gw")!.slots as Array<{ pin: unknown }>).map((slot) => decryptPassword(slot.pin));
+    expect(pins).toEqual(["1234", "5678"]);
   });
 
   it("writes nothing on the second upsert of a site", async () => {
