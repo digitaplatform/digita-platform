@@ -12,6 +12,11 @@ const log = createLogger("translation-service");
  *  raw driver Collection (default `_id: ObjectId`) is narrowed for the batched seeders. */
 type TranslationDoc = { _id: string } & Record<string, unknown>;
 
+/** The namespace a screen text's key files it under, which is part of its stored id. */
+export function translationNamespace(key: string): "entity" | "system" {
+  return key.startsWith("entity.") || key.startsWith("field.") || key.startsWith("option.") ? "entity" : "system";
+}
+
 export class TranslationService {
   private cache: Map<string, string> = new Map();
   private fileTranslations: Map<string, Map<string, string>> = new Map();
@@ -27,7 +32,7 @@ export class TranslationService {
 
     // 2. Try MongoDB (if source includes mongodb)
     if (!value && env.TRANSLATION_SOURCE !== "file") {
-      const namespace = this.detectNamespace(key);
+      const namespace = translationNamespace(key);
       const docId = `${namespace}:${locale}:${key}`;
       const doc = await this.db.findOne(DIGITA.COLLECTIONS.TRANSLATION, docId, DIGITA.DATABASES.CORE);
       if (doc) {
@@ -359,7 +364,7 @@ export class TranslationService {
 
       const now = new Date();
       const meta = entries.map(([key, value]) => {
-        const namespace = this.detectNamespace(key);
+        const namespace = translationNamespace(key);
         return { key, value, namespace, _id: `${namespace}:${locale}:${key}` };
       });
       const col = this.db.collection(
@@ -477,9 +482,11 @@ export class TranslationService {
     >[];
   }
 
-  async resetOverride(docId: string): Promise<boolean> {
+  /** Put an overridden screen text back to the value its file gave it. */
+  async resetOverride(locale: string, key: string): Promise<"reset" | "not_overridden" | "not_found"> {
+    const docId = `${translationNamespace(key)}:${locale}:${key}`;
     const existing = await this.db.findOne(DIGITA.COLLECTIONS.TRANSLATION, docId, DIGITA.DATABASES.CORE);
-    if (!existing) return false;
+    if (!existing) return "not_found";
     const d = existing as Record<string, unknown>;
     if (d["overridden"] && d["original_value"]) {
       await this.db.updateOne(
@@ -494,9 +501,9 @@ export class TranslationService {
         DIGITA.DATABASES.CORE,
       );
       this.cache.delete(`${d["locale"]}:${d["key"]}`);
-      return true;
+      return "reset";
     }
-    return false;
+    return "not_overridden";
   }
 
   // ─── Helpers ───────────────────────────────────────────
@@ -510,9 +517,4 @@ export class TranslationService {
     return result;
   }
 
-  private detectNamespace(key: string): string {
-    if (key.startsWith("entity.") || key.startsWith("field.") || key.startsWith("option."))
-      return "entity";
-    return "system";
-  }
 }
