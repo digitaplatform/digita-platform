@@ -3,26 +3,18 @@ import type { EntityDefinition } from "@digitaplatform/shared";
 import { buildEntitySchema } from "./field-to-zod.js";
 
 /**
- * Caches one Zod schema per entity definition. The schema is built lazily on
- * first access and reused thereafter — entity definitions don't change at
- * runtime, so the cache is safe for the process lifetime.
- *
- * Reset is exposed only for tests where entity defs are swapped between
- * cases.
+ * Caches one Zod schema per entity definition object, built on first use. PUT /meta, the
+ * fallback of DELETE /meta and a reload each register a new object, so a changed definition
+ * gets its own schema, and an old one goes with its object.
  */
 export class ZodSchemaBuilder {
-  private cache = new Map<string, ZodTypeAny>();
+  private cache = new WeakMap<EntityDefinition, ZodTypeAny>();
 
   get(entity: EntityDefinition): ZodTypeAny {
-    const cached = this.cache.get(entity.name);
+    const cached = this.cache.get(entity);
     if (cached) return cached;
     const schema = buildEntitySchema(entity);
-    this.cache.set(entity.name, schema);
+    this.cache.set(entity, schema);
     return schema;
-  }
-
-  invalidate(entityName?: string): void {
-    if (entityName) this.cache.delete(entityName);
-    else this.cache.clear();
   }
 }
