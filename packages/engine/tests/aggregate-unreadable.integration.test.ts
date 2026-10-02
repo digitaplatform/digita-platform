@@ -141,6 +141,7 @@ async function outcome(pipeline: unknown[], readable: Map<string, Set<string> | 
       {
         db,
         registry,
+        tenantTimeZone: () => "UTC",
         permissionChecker: {
           check: vi.fn().mockResolvedValue(undefined),
           getReadableFieldsOnEveryRow: vi.fn((_u: unknown, entity: string) => readable.get(entity) ?? null),
