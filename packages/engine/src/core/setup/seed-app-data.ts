@@ -103,25 +103,30 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value instanceof ObjectId ? value.toHexString() : (value ?? null));
 }
 
+/** The keys a stored row carries that the seed did not write as values: the engine's record of the row. */
+const RECORD_KEYS = new Set(["_id", "doctype", "docstatus", "owner", "modified_by", "creation", "modified"]);
+
 /**
- * The hash of the declared values a stored row holds, which the seed stamps on every row it
- * writes. A field the row does not hold stays out of it, so a field a release adds leaves the
- * hash of every stored row as it was.
+ * The hash of the values a stored row holds, which the seed stamps on every row it writes: every
+ * key but the record's and the engine's `_` keys, as stored, plus `docstatus`. It reads no entity
+ * definition, so a release that adds, removes or renames a field leaves the hash of every stored
+ * row as it was.
  */
-export function seedHash(entity: EntityDefinition, doc: Record<string, unknown>): string {
-  const held = entity.fields.filter((f) => doc[f.fieldname] !== undefined);
-  const values = Object.fromEntries(held.map((f) => [f.fieldname, doc[f.fieldname]]));
+export function seedHash(doc: Record<string, unknown>): string {
+  const values = Object.fromEntries(
+    Object.entries(doc).filter(([key, value]) => value !== undefined && !key.startsWith("_") && !RECORD_KEYS.has(key)),
+  );
   return createHash("sha256").update(canonicalJson({ values, docstatus: doc["docstatus"] ?? 0 })).digest("hex");
 }
 
 /**
- * A row is the seed's while its declared values still hash to what the seed stamped: a person's
+ * A row is the seed's while the values it holds still hash to what the seed stamped: a person's
  * change breaks the hash, and a write that changes no value, such as a rule's, keeps it. Its last
  * writer proves nothing, since a rule without a user also writes as "system". A row without a hash
  * was seeded before the stamp, or by nobody, and is not the seed's.
  */
-const seedWrote = (entity: EntityDefinition, doc: Record<string, unknown>) =>
-  typeof doc[SEED_HASH_FIELD] === "string" && doc[SEED_HASH_FIELD] === seedHash(entity, doc);
+const seedWrote = (doc: Record<string, unknown>) =>
+  typeof doc[SEED_HASH_FIELD] === "string" && doc[SEED_HASH_FIELD] === seedHash(doc);
 
 /**
  * The first workspace row that is the default for a role its role list hides it from. The role
@@ -359,7 +364,7 @@ export async function seedAppData(
       const retry: string[] = [];
       for (const id of ids) {
         const row = await db.findOne(entity.name, id, entity.database);
-        if (row != null && !seedWrote(entity, row)) {
+        if (row != null && !seedWrote(row)) {
           log.warn(
             { entity: entity.name, db: entity.database, site: options.site, id },
             "seed-app-data: a row the seed does not carry stays, a person changed it since the sweep",
@@ -453,14 +458,14 @@ async function findSiteRowsTheSeedWroteAndDoesNotCarry(
 ): Promise<string[]> {
   const stored = await db.find(entity.name, { filters: [{ site }] }, entity.database);
   const unseeded = stored.filter((doc) => !seeded.has(toIdString(String(doc._id))));
-  const kept = unseeded.filter((doc) => !seedWrote(entity, doc)).map((doc) => toIdString(String(doc._id)));
+  const kept = unseeded.filter((doc) => !seedWrote(doc)).map((doc) => toIdString(String(doc._id)));
   if (kept.length > 0) {
     log.warn(
       { entity: entity.name, db: entity.database, site, kept: kept.length, ids: kept },
       "seed-app-data: rows the seed does not carry stay, a person created or changed them",
     );
   }
-  return unseeded.filter((doc) => seedWrote(entity, doc)).map((doc) => toIdString(String(doc._id)));
+  return unseeded.filter((doc) => seedWrote(doc)).map((doc) => toIdString(String(doc._id)));
 }
 
 /** Deletes through the document service; returns the rows another row still links, with the link. */
@@ -547,7 +552,7 @@ async function insertRows(
     // there.
     const existing = await db.findOne(entity.name, idString, target);
     if (existing && mode === "insert") {
-      if (!carriedByEarlierFiles.has(idString) || !seedWrote(entity, existing)) {
+      if (!carriedByEarlierFiles.has(idString) || !seedWrote(existing)) {
         if (carriedByEarlierFiles.has(idString)) {
           log.warn(
             { entity: entity.name, db: target, id: idString },
@@ -570,7 +575,7 @@ async function insertRows(
       const written = await db.updateOne(
         entity.name,
         idString,
-        { ...changes, [SEED_HASH_FIELD]: seedHash(entity, { ...existing, ...changes }), modified_by: SEED_IDENTITY, modified: now },
+        { ...changes, [SEED_HASH_FIELD]: seedHash({ ...existing, ...changes }), modified_by: SEED_IDENTITY, modified: now },
         target,
         undefined,
         { modified: existing.modified },
@@ -595,7 +600,7 @@ async function insertRows(
         owner: existing.owner ?? SEED_IDENTITY,
         creation: existing.creation ?? now,
       };
-      candidate[SEED_HASH_FIELD] = seedHash(entity, candidate);
+      candidate[SEED_HASH_FIELD] = seedHash(candidate);
       if (sameDocument(candidate, existing)) {
         unchanged++;
         continue;
@@ -616,7 +621,7 @@ async function insertRows(
       _id: id,
       doctype: entity.name,
       docstatus,
-      [SEED_HASH_FIELD]: seedHash(entity, { ...serialized, docstatus }),
+      [SEED_HASH_FIELD]: seedHash({ ...serialized, docstatus }),
       owner: SEED_IDENTITY,
       modified_by: SEED_IDENTITY,
       creation: now,
