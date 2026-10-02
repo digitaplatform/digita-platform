@@ -72,10 +72,9 @@ function isNoState(value: unknown): boolean {
  *     to apply per-state permission deltas.
  *
  * Boot:
- *   `validateDefinition` returns warnings when the declarative model is
- *     internally inconsistent (multiple is_initial, dangling transitions,
- *     terminal-state outgoing transitions). Warnings are logged; the
- *     entity continues to load.
+ *   `workflowDefinitionProblems` (workflow-definition.ts) names what makes the
+ *     declarative model inconsistent (multiple is_initial, dangling transitions);
+ *     the entity registry refuses to load an entity file that has any.
  */
 /**
  * A generic docstatus flip (submit → 1 / cancel → 2) could not pick a single target
@@ -314,36 +313,5 @@ export class WorkflowEngine {
     if (!state?.permissions?.length) return null;
     return state.permissions.find((p) => p.role === role) ?? null;
   }
-
-  /**
-   * Boot-time consistency check. Returns a list of human-readable warnings;
-   * the loader logs them and continues. Mirrors the platform's "warn,
-   * don't fail" philosophy.
-   */
-  validateDefinition(entity: EntityDefinition): string[] {
-    const out: string[] = [];
-    if (!this.hasWorkflow(entity)) return out;
-    const states = entity.states ?? [];
-    const transitions = entity.transitions ?? [];
-    const stateValues = new Set(states.map((s) => s.value));
-
-    const initial = states.filter((s) => s.is_initial);
-    if (initial.length > 1) {
-      out.push(`multiple is_initial states: ${initial.map((s) => s.value).join(", ")}`);
-    }
-
-    for (const t of transitions) {
-      if (t.from !== "*" && !stateValues.has(t.from)) {
-        out.push(`transition.from "${t.from}" is not a declared state`);
-      }
-      if (!stateValues.has(t.to)) {
-        out.push(`transition.to "${t.to}" is not a declared state`);
-      }
-      // NOTE: a declared transition OUT of a terminal state is now permitted
-      // (terminal = "no exit unless explicitly declared", e.g. a Reopen) — so it
-      // is no longer flagged here; the runtime honors it in validateTransition.
-    }
-
-    return out;
-  }
 }
+
