@@ -28,7 +28,7 @@ const bootAnswer = (setup: unknown) => ({
     user: { _id: 'a', email: 'admin@digita.local', roles: ['Administrator'], demo: true },
     locale: { code: 'en' },
     available_languages: [],
-    system_settings: { platform_name: 'p', default_currency: null, allow_user_language: true, timezone: 'UTC' },
+    system_settings: { default_currency: null, allow_user_language: true, timezone: 'UTC' },
     setup,
   },
 });

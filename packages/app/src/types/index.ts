@@ -50,7 +50,6 @@ export interface BootLocale {
 }
 
 export interface BootSystemSettings {
-  platform_name: string;
   /** Optional — the platform bakes in no currency; null when unset. */
   default_currency: string | null;
   allow_user_language: boolean;

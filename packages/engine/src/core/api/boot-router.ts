@@ -181,7 +181,6 @@ export function registerBootRoutes(
           direction: l["direction"] ?? "ltr",
         })),
         system_settings: {
-          platform_name: settingsData["platform_name"] ?? "Digita Platform",
           // No silent currency fallback (F3): the field is required + boot-linted +
           // seeded, so this is always set; null only on a corrupted singleton, which
           // the frontend renders as an em-dash and warns about (never a wrong symbol).

@@ -60,7 +60,7 @@ import { readBundle } from "@digitaplatform/shared/i18n-node";
 import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
 import type { DocumentService } from "../src/core/document/document-service.js";
-import { removeFirstRunFlagOnce } from "../src/core/setup/seed-system-settings.js";
+import { removeFirstRunFlagOnce, removePlatformNameOnce } from "../src/core/setup/seed-system-settings.js";
 import { buildTestAuth } from "./_test-auth.js";
 
 const texts = readBundle(process.env["TRANSLATIONS_DIR"]!);
@@ -222,6 +222,20 @@ describe("an app whose seeded settings record passes its own save", () => {
       expect(await settings().findOne({ _id: "settings" })).toHaveProperty("is_first_run", true);
     } finally {
       await settings().updateOne({ _id: "settings" }, { $unset: { is_first_run: "" } });
+    }
+  });
+
+  it("PLANTED DEFECT: has lost the stored platform name with that start, once per database, and answers none", async () => {
+    expect(await settings().findOne({ _id: "settings" })).not.toHaveProperty("platform_name");
+    expect((await running.boot(running.admin)).system_settings).not.toHaveProperty("platform_name");
+
+    // A value that appears afterwards is not this migration's to remove.
+    await settings().updateOne({ _id: "settings" }, { $set: { platform_name: "later" } });
+    try {
+      await removePlatformNameOnce(running.db);
+      expect(await settings().findOne({ _id: "settings" })).toHaveProperty("platform_name", "later");
+    } finally {
+      await settings().updateOne({ _id: "settings" }, { $unset: { platform_name: "" } });
     }
   });
 
