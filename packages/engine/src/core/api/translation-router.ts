@@ -4,7 +4,7 @@ import type { DocumentService } from "../document/document-service.js";
 import type { UserContext } from "../permissions/types.js";
 import { SYSTEM_ROLES } from "@digitaplatform/shared";
 import { requireAdministrator } from "../auth/require-admin.js";
-import { successResponse } from "./response-model.js";
+import { errorResponse, successResponse } from "./response-model.js";
 import { ResponseContext } from "./response-context.js";
 
 /** The namespaces of the screen texts, which every signed-in caller may load. */
@@ -294,11 +294,19 @@ export function registerTranslationRoutes(
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!requireAdministrator(request, reply)) return; // P-SEC/R4
       const { locale, key } = request.params as { locale: string; key: string };
-      const namespace = key.startsWith("entity.") || key.startsWith("field.") ? "entity" : "system";
-      const docId = `${namespace}:${locale}:${key}`;
-
-      await translationService.resetOverride(docId);
-      return reply.send(successResponse({ key, locale, reset: true }));
+      const outcome = await translationService.resetOverride(locale, key);
+      if (outcome === "not_found") {
+        return reply.code(404).send(
+          errorResponse(
+            404,
+            "NOT_FOUND",
+            `No translation of "${key}" in "${locale}"`,
+            [{ text: "not_found", type: "error", show: true, params: { doctype: "Translation", name: `${locale}/${key}` } }],
+            request.traceId ?? "",
+          ),
+        );
+      }
+      return reply.send(successResponse({ key, locale, reset: outcome === "reset" }));
     },
   );
 }
