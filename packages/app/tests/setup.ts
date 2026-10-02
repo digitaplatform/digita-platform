@@ -19,8 +19,12 @@ if (typeof Element !== 'undefined') {
 
   // Without `globals: true` RTL's automatic cleanup never registers — wire it
   // explicitly so component tests don't leak DOM into each other.
-  const { cleanup } = await import('@testing-library/react');
+  const { cleanup, configure } = await import('@testing-library/react');
   afterEach(cleanup);
+
+  // A field's control is a lazy module, so findBy and waitFor wait for its import, which takes
+  // seconds on a machine busy with other runs; the default of 1 s failed the push gate there.
+  configure({ asyncUtilTimeout: 10_000 });
 
   // A component renders its chrome texts only after main.tsx has loaded them, so every DOM suite
   // loads them once, through the page's own fetch of translations/<language>.json. importActual
