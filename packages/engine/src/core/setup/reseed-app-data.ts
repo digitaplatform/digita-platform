@@ -5,7 +5,7 @@ import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { DomainDirectory } from "../database/app-db-discovery.js";
 import type { TranslationService } from "../i18n/translation-service.js";
 import { NamingService } from "../document/naming-service.js";
-import { seedAppData } from "./seed-app-data.js";
+import { seedAppData, type UnresolvedSeedLink } from "./seed-app-data.js";
 import { seedDataTranslations } from "./seed-data-translations.js";
 import { createLogger } from "../logging/logger.js";
 import { env } from "../config/env.js";
@@ -41,6 +41,8 @@ export interface ReseedSummary {
   app_databases_wiped: string[];
   collections_wiped: number;
   rows_deleted: number;
+  /** Seed Link values that name no business key of their target; each is stored as it stands. */
+  unresolved_links: UnresolvedSeedLink[];
 }
 
 /** A reset refused while one in the other mode runs; the caller starts it once that one has ended. */
@@ -161,9 +163,10 @@ async function reseedOnce(mode: ReseedMode, deps: ReseedDeps): Promise<ReseedSum
   }
   // The wipe has run, so a seed that fails leaves the app with only the rows it seeded before
   // the failure: it runs again, and a second failure fails the reset, naming the error.
+  let unresolved_links: UnresolvedSeedLink[] = [];
   for (let attempt = 1; ; attempt++) {
     try {
-      await seedAppData(db, registry, new NamingService(db), seedDirs);
+      ({ unresolved_links } = await seedAppData(db, registry, new NamingService(db), seedDirs));
       await seedDataTranslations(db, registry, translationService, seedDirs);
       break;
     } catch (e) {
@@ -197,5 +200,6 @@ async function reseedOnce(mode: ReseedMode, deps: ReseedDeps): Promise<ReseedSum
     app_databases_wiped: appDbs,
     collections_wiped: collectionsWiped,
     rows_deleted: rowsDeleted,
+    unresolved_links,
   };
 }

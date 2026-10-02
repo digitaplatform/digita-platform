@@ -35,6 +35,20 @@ interface Collected {
   file: string;
 }
 
+/** A seed row's Link value that names no business key of its target, and is stored as it stands. */
+export interface UnresolvedSeedLink {
+  file: string;
+  /** The row's position in its file, from 1. */
+  row: number;
+  /** The Link field, as `<table>.<field>` for a Table row's Link. */
+  field: string;
+  value: string;
+}
+
+export interface SeedResult {
+  unresolved_links: UnresolvedSeedLink[];
+}
+
 /**
  * Seed per-app-dir data fixtures.
  *
@@ -157,7 +171,7 @@ export async function seedAppData(
   namingService: NamingService,
   seedDirs: string[],
   options: SeedOptions = {},
-): Promise<void> {
+): Promise<SeedResult> {
   const mode = options.mode ?? "insert";
   // ── Pass 1: collect + validate every seed file across all dirs ──────
   const collected: Collected[] = [];
@@ -311,8 +325,28 @@ export async function seedAppData(
   }
 
   // ── Pass 3: resolve Link references by business key ─────────────────
-  for (const { entity, rows } of collected) {
-    for (const row of rows) resolveLinksByBk(entity.fields, row, bkIndex);
+  // A target no file of this call seeds is indexed from its stored rows, so a demo pass
+  // links to the reference rows an earlier pass stored.
+  for (const { entity } of collected) {
+    for (const [target, idx] of await bkResolver.indexLinkTargets(entity)) {
+      if (!bkIndex.has(target)) bkIndex.set(target, idx);
+    }
+  }
+  const idsOf = (target: string) => new Set(bkIndex.get(target)?.values());
+  const unresolvedLinks: UnresolvedSeedLink[] = [];
+  for (const { entity, rows, file } of collected) {
+    rows.forEach((row, i) => {
+      for (const link of resolveLinksByBk(entity.fields, row, bkIndex)) {
+        // A value that is already an id of the target names its row as it stands.
+        if (!idsOf(link.target).has(link.value)) unresolvedLinks.push({ file, row: i + 1, field: link.field, value: link.value });
+      }
+    });
+  }
+  if (unresolvedLinks.length > 0) {
+    log.error(
+      { unresolved_links: unresolvedLinks },
+      "seed Link values match no business key of their target and are stored as they stand",
+    );
   }
 
   // ── Pass 3b: compute deferred expression _ids ───────────────────────
@@ -433,6 +467,7 @@ export async function seedAppData(
   if (sealed > 0 || skippedSeal > 0) {
     log.info({ sealed, skippedSeal }, "Sealed snapshot/freeze fields on seeded submitted docs");
   }
+  return { unresolved_links: unresolvedLinks };
 }
 
 function seededIdsByEntity(collected: Collected[]): Map<string, { entity: EntityDefinition; seeded: Set<string> }> {

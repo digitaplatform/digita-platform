@@ -9,7 +9,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
 }));
 const { seedAppData } = vi.hoisted(() => ({ seedAppData: vi.fn() }));
 vi.mock("../src/core/setup/seed-app-data.js", () => ({ seedAppData }));
-vi.mock("../src/core/setup/seed-data-translations.js", () => ({ seedDataTranslations: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("../src/core/setup/seed-data-translations.js", () => ({ seedDataTranslations: vi.fn().mockResolvedValue({ unresolved_links: [] }) }));
 
 import Fastify from "fastify";
 import { registerAdminReseedRoutes } from "../src/core/api/admin-reseed-router.js";
@@ -35,13 +35,13 @@ afterAll(() => app.close());
 const post = (mode: string) => app.inject({ method: "POST", url: "/api/v1/admin/reseed", payload: { mode } });
 
 beforeEach(() => {
-  seedAppData.mockReset().mockResolvedValue(undefined);
+  seedAppData.mockReset().mockResolvedValue({ unresolved_links: [] });
 });
 
 describe("POST /admin/reseed answers a refused or failed reset with its reason", () => {
   it("answers 409 RESEED_RUNNING, naming both modes, while a reset in the other mode runs", async () => {
     let finish!: () => void;
-    seedAppData.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+    seedAppData.mockImplementation(() => new Promise((resolve) => (finish = () => resolve({ unresolved_links: [] }))));
     const demo = reseedAppData("demo", deps);
     await vi.waitFor(() => expect(seedAppData).toHaveBeenCalled());
 
