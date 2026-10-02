@@ -17,6 +17,7 @@ import { mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
+import { NON_STORED_FIELD_TYPES, STORED_FIELD_TYPES } from "@digitaplatform/shared";
 
 const okEntity = (name: string) => ({
   name,
@@ -61,5 +62,42 @@ describe("EntityRegistry load errors + duplicates (A13)", () => {
     // … and the later definition still wins (intentional app-over-core override preserved).
     expect(registry.get("Dup").module).toBe("app");
     await rm(dir, { recursive: true, force: true });
+  });
+});
+
+describe("EntityRegistry refuses an unknown fieldtype at load", () => {
+  const loadBook = async (book: Record<string, unknown>): Promise<Error | undefined> => {
+    const dir = await mkdtemp(join(tmpdir(), "reg-fieldtype-"));
+    await writeFile(join(dir, "book.entity.json"), JSON.stringify({ ...okEntity("Book"), ...book }));
+    const err = await new EntityRegistry().loadAll(dir).then(() => undefined, (e: Error) => e);
+    await rm(dir, { recursive: true, force: true });
+    return err;
+  };
+  const txet = { fieldname: "title", fieldtype: "Txet", label: "Title" };
+
+  it("refuses it on a field, naming the field and the type", async () => {
+    expect((await loadBook({ fields: [txet] }))?.message).toContain('Field "title" of entity "Book" has the unknown fieldtype "Txet"');
+  });
+
+  it("refuses it on a Table row field", async () => {
+    const lines = { fieldname: "lines", fieldtype: "Table", label: "Lines", child_fields: [txet] };
+    expect((await loadBook({ fields: [lines] }))?.message).toContain('Field "title" of Table "Book.lines" has the unknown fieldtype "Txet"');
+  });
+
+  it("refuses it on an action's dialog field", async () => {
+    const actions = [{ action: "lend", label: "Lend", dialog_fields: [txet] }];
+    expect((await loadBook({ actions }))?.message).toContain('Field "title" of action "lend" of entity "Book" has the unknown fieldtype "Txet"');
+  });
+
+  it("PLANTED INNOCENT: loads a file with every valid type", async () => {
+    const fields = [...STORED_FIELD_TYPES, ...NON_STORED_FIELD_TYPES].map((fieldtype, i) => ({
+      fieldname: `f${i}`,
+      fieldtype,
+      label: fieldtype,
+      ...(fieldtype === "Table" ? { child_fields: [{ fieldname: "note", fieldtype: "Data", label: "Note" }] } : {}),
+      ...(fieldtype === "Select" ? { options: ["a", "b"] } : {}),
+      ...(fieldtype === "Link" ? { target: "Book" } : {}),
+    }));
+    expect(await loadBook({ fields })).toBeUndefined();
   });
 });

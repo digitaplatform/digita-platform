@@ -2,7 +2,7 @@ import { readdir, readFile } from "fs/promises";
 import { join, extname } from "path";
 import type { EntityDefinition, FieldDefinition, FieldType, FreezeSpec } from "@digitaplatform/shared";
 import { DIGITA } from "@digitaplatform/shared";
-import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD, UPLOAD_FIELD_TYPES } from "@digitaplatform/shared";
+import { LAYOUT_FIELD_TYPES, NON_STORED_FIELD_TYPES, ROW_ID_FIELD, STORED_FIELD_TYPES, UPLOAD_FIELD_TYPES } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { createLogger } from "../logging/logger.js";
 import { isValidStoragePath, STORAGE_PATH_RULE } from "../storage/storage-path.js";
@@ -32,6 +32,8 @@ const RESERVED_ENTITY_NAMES = ["account", "app", "login"];
 
 /** Hook keys no engine code runs: an entity that declares one restricts and changes nothing. */
 const NEVER_RUN_HOOKS = ["has_permission", "on_list_load"];
+
+const KNOWN_FIELD_TYPES: ReadonlySet<string> = new Set<string>([...STORED_FIELD_TYPES, ...NON_STORED_FIELD_TYPES]);
 
 /**
  * What the engine writes itself, on every document (`BaseDocument.toMongo`) and on every Table
@@ -227,6 +229,7 @@ export class EntityRegistry {
       this.expandFlattenDirectives(entity);
       entity.fields.sort((a, b) => (a.idx ?? 0) - (b.idx ?? 0));
       this.validateFieldNames(entity);
+      this.validateFieldDefinitions(entity);
       this.validateHooks(entity);
       this.validateSnapshotManifest(entity);
       this.validateTimeSeriesConfig(entity);
@@ -278,6 +281,29 @@ export class EntityRegistry {
       for (const child of field.child_fields ?? []) {
         refuse(child, `Table "${entity.name}.${field.fieldname}"`, SYSTEM_ROW_FIELDS);
       }
+    }
+  }
+
+  /**
+   * Refuse a field the engine cannot handle, in every field list a file carries: the entity's
+   * fields, a Table's child_fields and an action's dialog_fields. An unknown fieldtype would
+   * otherwise load as an untyped field that stores and accepts any value.
+   */
+  private validateFieldDefinitions(entity: EntityDefinition): void {
+    const check = (fields: FieldDefinition[] | undefined, owner: string): void => {
+      for (const field of fields ?? []) {
+        if (!KNOWN_FIELD_TYPES.has(field.fieldtype)) {
+          throw new Error(
+            `Field "${field.fieldname}" of ${owner} has the unknown fieldtype "${field.fieldtype}"; ` +
+              "use one of the field types of @digitaplatform/shared",
+          );
+        }
+        if (field.fieldtype === "Table") check(field.child_fields, `Table "${entity.name}.${field.fieldname}"`);
+      }
+    };
+    check(entity.fields, `entity "${entity.name}"`);
+    for (const action of entity.actions ?? []) {
+      check(action.dialog_fields, `action "${action.action}" of entity "${entity.name}"`);
     }
   }
 
