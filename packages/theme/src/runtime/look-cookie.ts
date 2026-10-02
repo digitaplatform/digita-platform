@@ -56,9 +56,9 @@ function readNewestEntry(source: CookieJar): { count: number; params: URLSearchP
  * first, so each write counts one up from the newest entry it sees (`n`), and the entry with the
  * highest count is read. A count, not a time, so the cookie carries no value unique to a person.
  * A page on another host does not see a host-only entry. After a move from path to host routing,
- * the site at the zone reads its older host-only entry, and a light/dark switch there merges into
- * that entry, so the older design and density come back on every host until the person picks the
- * look once in the app.
+ * the site at the zone reads its older host-only entry while that entry's count is the higher one,
+ * and a light/dark switch there merges into it, so the older design and density come back on every
+ * host until the person picks the look once in the app.
  */
 export function readLookCookie(jar?: CookieJar): LookChoices {
   // A server render has no document, and no cookie of the person to read.
