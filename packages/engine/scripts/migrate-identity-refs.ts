@@ -20,6 +20,9 @@
  *          their current file definitions (Link → Data + name fields)
  *
  * Reads connection config from the engine env (root .env.development).
+ * The engine env must also carry AUTH_JWKS_URL, AUTH_ISSUER and AUTH_AUDIENCE: the env module
+ * refuses to load without them, although this script verifies no token. Against a local
+ * digita-auth: http://localhost:3100/.well-known/jwks.json, https://auth.digita.local, digita.
  * The engine READS the identity store (digita-auth owns it) — the only
  * identity-db writes here are the DocShare name backfills, and DocShare
  * is an engine-owned collection that merely lives in the identity db.

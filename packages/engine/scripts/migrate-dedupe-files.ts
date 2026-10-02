@@ -15,6 +15,9 @@
  * `--apply` to perform the backfill + dedup. Reads the engine env (storage
  * backend + Mongo). Legacy flat keys (/uploads/<name>, no storage_path) only get
  * their content_hash backfilled — they are not re-keyed.
+ * The engine env must also carry AUTH_JWKS_URL, AUTH_ISSUER and AUTH_AUDIENCE: the env module
+ * refuses to load without them, although this script verifies no token. Against a local
+ * digita-auth: http://localhost:3100/.well-known/jwks.json, https://auth.digita.local, digita.
  *
  * Run: pnpm --filter @digitaplatform/engine run migrate:dedupe-files [-- --apply]
  */
