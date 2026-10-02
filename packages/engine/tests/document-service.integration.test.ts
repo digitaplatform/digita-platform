@@ -86,7 +86,7 @@ beforeAll(async () => {
 
   const permissionChecker = new PermissionChecker(registry);
   const hookRunner = new HookRunner();
-  const linkValidator = new LinkValidator(registry, db);
+  const linkValidator = new LinkValidator(registry, db, permissionChecker);
   const linkTitleResolver = new LinkTitleResolver(registry, db, new TranslationService(db), permissionChecker);
   const fetchFromResolver = new FetchFromResolver(registry, db);
   const deleteProtection = new DeleteProtection(registry, db);
@@ -746,6 +746,11 @@ describe("An update re-derives the fetch_from fields of a row whose Link changed
         fields: [
           { fieldname: "product_no", fieldtype: "Data" as const, label: "Product No" },
           { fieldname: "sales_uom", fieldtype: "Data" as const, label: "Sales UOM" },
+        ],
+        // A Salesperson picks products for its lines; it may not open one.
+        permissions: [
+          { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
+          { role: "Salesperson", level: 0, select: 1 },
         ],
       }),
     );
@@ -2178,5 +2183,79 @@ describe("An update re-derives the fetched header fields of a Link it changed", 
     const order = await docService.insert("HeadOrder", { title: "O", product: "HP-FULL" }, adminUser);
     await docService.update("HeadOrder", order._id, { product: "HP-BARE", uom: "BOX" }, adminUser);
     expect((await stored(order._id))["uom"]).toBe("BOX");
+  });
+});
+
+describe("A Link names only a row its writer may select", () => {
+  const seller: UserContext = { _id: "sl-1", email: "seller@test.local", roles: ["Seller"], full_name: "Seller" };
+
+  beforeAll(async () => {
+    registry.register(makeEntity({
+      name: "SelProduct",
+      naming: { strategy: "user_set" },
+      fields: [
+        { fieldname: "product_no", fieldtype: "Data", label: "Product No" },
+        { fieldname: "secret", fieldtype: "Data", label: "Secret" },
+        { fieldname: "kind", fieldtype: "Data", label: "Kind" },
+      ],
+      // The Seller may pick the shop's products, never the internal ones; it may read none of them.
+      permissions: [
+        { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
+        { role: "Seller", level: 0, select: 1, condition: "eval:doc.kind == 'shop'" },
+      ],
+    } as unknown as Partial<EntityDefinition>));
+    registry.register(makeEntity({
+      name: "SelOrder",
+      fields: [
+        { fieldname: "title", fieldtype: "Data", label: "Title" },
+        { fieldname: "product", fieldtype: "Link", label: "Product", target: "SelProduct" },
+        { fieldname: "product_no", fieldtype: "Data", label: "Product No", read_only: true, fetch_from: "product.product_no" },
+        { fieldname: "secret", fieldtype: "Data", label: "Secret", read_only: true, fetch_from: "product.secret" },
+      ],
+      permissions: [
+        { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
+        { role: "Seller", level: 0, select: 1, read: 1, write: 1, create: 1 },
+      ],
+    } as unknown as Partial<EntityDefinition>));
+    await db.ensureCollection("SelProduct", "app");
+    await db.ensureCollection("SelOrder", "app");
+    await docService.insert("SelProduct", { _id: "SHOP-1", product_no: "S-1", secret: "cost 4", kind: "shop" }, adminUser);
+    await docService.insert("SelProduct", { _id: "INT-1", product_no: "I-1", secret: "cost 9", kind: "internal" }, adminUser);
+  });
+
+  const refusal = async (write: Promise<unknown>) => {
+    const err = (await write.then(() => undefined, (e: unknown) => e)) as { errors?: Array<{ field: string; message_key: string }> };
+    return err?.errors;
+  };
+
+  it("refuses a create that links a row the writer may not select, as a row that does not exist", async () => {
+    const unselectable = await refusal(docService.insert("SelOrder", { title: "x", product: "INT-1" }, seller));
+    const missing = await refusal(docService.insert("SelOrder", { title: "x", product: "NONE-1" }, seller));
+    expect(unselectable).toEqual([expect.objectContaining({ field: "product", message_key: "link_not_found" })]);
+    // The same answer as an id nobody has: only the value it names differs.
+    const shape = (errs?: Array<{ field: string; message_key: string }>) => errs?.map((e) => [e.field, e.message_key]);
+    expect(shape(missing)).toEqual(shape(unselectable));
+  });
+
+  it("copies the declared fields of a row the writer may select, though it may not read it", async () => {
+    const order = await docService.insert("SelOrder", { title: "x", product: "SHOP-1" }, seller);
+    const raw = (await db.findOne("SelOrder", order._id, "app")) as Record<string, unknown>;
+    expect([raw["product_no"], raw["secret"]]).toEqual(["S-1", "cost 4"]);
+  });
+
+  it("refuses an update that moves the Link to such a row, and keeps a Link it does not change", async () => {
+    const order = await docService.insert("SelOrder", { title: "x", product: "INT-1" }, adminUser);
+    // The Administrator linked an internal product; the Seller may still edit the order around it.
+    await docService.update("SelOrder", order._id, { title: "renamed" }, seller);
+    const shop = await docService.insert("SelOrder", { title: "y", product: "SHOP-1" }, seller);
+    const moved = await refusal(docService.update("SelOrder", shop._id, { product: "INT-1" }, seller));
+    expect(moved).toEqual([expect.objectContaining({ field: "product", message_key: "link_not_found" })]);
+  });
+
+  it("refuses the preview of such a Link before it reads the row", async () => {
+    const draft = await refusal(docService.preview("SelOrder", { title: "x", product: "INT-1" }, seller));
+    expect(draft).toEqual([expect.objectContaining({ field: "product", message_key: "link_not_found" })]);
+    const fine = await docService.preview("SelOrder", { title: "x", product: "SHOP-1" }, seller);
+    expect(fine._data["secret"]).toBe("cost 4");
   });
 });

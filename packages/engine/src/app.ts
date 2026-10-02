@@ -135,7 +135,7 @@ export async function createApp(
   const permissionChecker = new PermissionChecker(registry);
   const roleRegistry = new RoleRegistry(db);
   setRoleRegistry(roleRegistry);
-  const linkValidator = new LinkValidator(registry, db);
+  const linkValidator = new LinkValidator(registry, db, permissionChecker);
   const linkTitleResolver = new LinkTitleResolver(registry, db, translationService, permissionChecker);
   const realtimeService = new RealtimeService(permissionChecker);
   const revalidateNotifier = new RevalidateNotifier(permissionChecker, env);
