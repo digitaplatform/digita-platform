@@ -662,6 +662,7 @@ describe("validateEntityDataZod — a failed rule answers the key it names", () 
     ["Datetime", { fieldtype: "Datetime" }, "not a time", "field_invalid_date"],
     ["Attach with a script URL", { fieldtype: "Attach" }, "javascript:alert(1)", "field_invalid_url"],
     ["Int given text", { fieldtype: "Int" }, "abc", "field_invalid_type"],
+    ["Int with a fraction", { fieldtype: "Int" }, 1.9, "field_invalid_int"],
   ];
   for (const [rule, field, value, key, params] of cases) {
     it(`${rule} answers ${key}`, () => {

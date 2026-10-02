@@ -1358,6 +1358,45 @@ describe("Rating field — out-of-range input is rejected, not silently clamped"
   });
 });
 
+describe("Int field — a fraction is refused, not cut to a whole number", () => {
+  const intEntity = makeEntity({
+    name: "IntDoc",
+    fields: [
+      { fieldname: "title", fieldtype: "Data" as const, label: "Title", required: true },
+      { fieldname: "copies", fieldtype: "Int" as const, label: "Copies" },
+    ],
+  });
+
+  beforeEach(async () => {
+    registry.register(intEntity);
+    await db.ensureCollection("IntDoc", "app");
+  });
+
+  const refusedKeys = (write: Promise<unknown>) =>
+    write.then(
+      () => "stored",
+      (e: unknown) => (e instanceof ValidationFailedError ? e.errors.map((x) => [x.field, x.message_key]) : e),
+    );
+
+  it("refuses 1.9 and \"1.9\" on insert and on update with field_invalid_int on the field", async () => {
+    for (const copies of [1.9, "1.9", "12abc", true]) {
+      expect(await refusedKeys(docService.insert("IntDoc", { title: "t", copies }, adminUser))).toEqual([["copies", "field_invalid_int"]]);
+    }
+    const doc = await docService.insert("IntDoc", { title: "t", copies: 1 }, adminUser);
+    expect(await refusedKeys(docService.update("IntDoc", doc._id, { copies: 1.9 }, adminUser))).toEqual([["copies", "field_invalid_int"]]);
+    const raw = (await db.findOne("IntDoc", doc._id, "app")) as Record<string, unknown>;
+    expect(raw["copies"]).toBe(1);
+  });
+
+  it("PLANTED INNOCENT: stores \"42\" and 42 as 42", async () => {
+    for (const copies of ["42", 42]) {
+      const doc = await docService.insert("IntDoc", { title: "t", copies }, adminUser);
+      const raw = (await db.findOne("IntDoc", doc._id, "app")) as Record<string, unknown>;
+      expect(raw["copies"]).toBe(42);
+    }
+  });
+});
+
 describe("copyDoc clones File attachments (no shared File doc)", () => {
   const attachEntity = makeEntity({
     name: "AttachDoc",
