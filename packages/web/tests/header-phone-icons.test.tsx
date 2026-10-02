@@ -186,8 +186,9 @@ describe("the top bar from lg on", () => {
 
 /**
  * What the phone's top bar takes, in px, as Chromium lays it out: the row's padding (px-4 on both
- * sides); the language menu, the mode button, a call to action of seven letters ("Contact"), the
- * menu button and the gap before them; the brand's mark with the first letters of its name; and
+ * sides); the language menu, the mode button, the call to action measured with the label "Contact",
+ * which is wider than the mail icon a phone shows, so the check errs on the safe side; the menu
+ * button and the gap before them; the brand's mark with the first letters of its name; and
  * per icon link its button (p-1.5 around h-5) and the gap-1 before it, the first one the nav's
  * gap-6 instead.
  */
@@ -230,7 +231,7 @@ describe("the top bar's icon links on a phone", () => {
     const cta = document.querySelector(`button[aria-label="${longLabel}"]`)!;
     expect(cta).not.toBeNull();
     expect(cta.getAttribute("title")).toBe(longLabel);
-    // Below md the bar carries the icon in the room of a seven-letter label, which the fit check measures.
+    // Below md the bar carries the mail icon, narrower than the "Contact" label the fit check counts.
     expect(shown(`button[aria-label="${longLabel}"] span`, 320)).toHaveLength(0);
     expect(shown(`button[aria-label="${longLabel}"] svg`, 320)).toHaveLength(1);
     expect(overflowingWidths(PHONE_WIDTHS)).toEqual([]);
