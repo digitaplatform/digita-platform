@@ -69,6 +69,22 @@ describe("PermissionChecker", () => {
     checker = new PermissionChecker(registry as never);
   });
 
+  // ── The fields a row read check reads ─────────────────────────────────────
+
+  describe("listReadGateFields", () => {
+    it("reads the gates of level-0 read rows only, not those of a higher level", () => {
+      registry.register(
+        makeEntity({
+          permissions: [
+            { role: "System User", level: 0, read: 1 },
+            { role: "System User", level: 1, read: 1, if_owner: true },
+          ],
+        }),
+      );
+      expect(checker.listReadGateFields(makeUser(), "TestDoc")).not.toContain("owner");
+    });
+  });
+
   // ── A lock on the patch of a submitted document ───────────────────────────
 
   describe("assertPatchKeepsLocks", () => {
