@@ -1993,3 +1993,50 @@ describe("A save that may not write the workflow field moves no state and sets n
     expect(raw["approved_note"]).toBe("lent");
   });
 });
+
+describe("Every Table row the engine writes carries a _row_id", () => {
+  beforeAll(async () => {
+    registry.register(
+      makeEntity({
+        name: "RowStampDoc",
+        fields: [
+          { fieldname: "title", fieldtype: "Data", label: "Title", required: true },
+          { fieldname: "lines", fieldtype: "Table", label: "Lines", child_fields: [{ fieldname: "item", fieldtype: "Data", label: "Item" }] },
+          { fieldname: "line_count", fieldtype: "Int", label: "Lines" },
+        ],
+      } as unknown as Partial<EntityDefinition>),
+    );
+    await db.ensureCollection("RowStampDoc", "app");
+    // A computed hook that rebuilds the rows, as a hook that sorts or merges lines does.
+    const hooks = (docService as unknown as { hookRunner: { hooks: Map<string, Map<string, unknown>> } }).hookRunner.hooks;
+    hooks.set(
+      "RowStampDoc",
+      new Map([
+        [
+          "computed:line_count",
+          async (doc: { get(f: string): unknown; set(f: string, v: unknown): void }) => {
+            const lines = (doc.get("lines") as Array<{ item: string }> | undefined) ?? [];
+            doc.set("lines", lines.map((l) => ({ item: l.item.toUpperCase() })));
+            doc.set("line_count", lines.length);
+          },
+        ],
+      ]),
+    );
+  });
+
+  it("stamps the rows a computed hook rebuilt on insert", async () => {
+    const doc = await docService.insert("RowStampDoc", { title: "x", lines: [{ item: "a" }, { item: "b" }] }, adminUser);
+    const raw = (await db.findOne("RowStampDoc", doc._id, "app")) as { lines: Array<Record<string, unknown>> };
+    expect(raw.lines.map((l) => l["item"])).toEqual(["A", "B"]);
+    expect(raw.lines.every((l) => typeof l["_row_id"] === "string" && l["_row_id"] !== "")).toBe(true);
+  });
+
+  it("keeps the _row_id of a row an update added without one across two reads", async () => {
+    const doc = await docService.insert("RowStampDoc", { title: "y" }, adminUser);
+    await docService.update("RowStampDoc", doc._id, { lines: [{ item: "c" }] }, adminUser);
+    const first = (await docService.getDoc("RowStampDoc", doc._id, adminUser))._data["lines"] as Array<Record<string, unknown>>;
+    const second = (await docService.getDoc("RowStampDoc", doc._id, adminUser))._data["lines"] as Array<Record<string, unknown>>;
+    expect(first[0]!["_row_id"]).toBeTruthy();
+    expect(second[0]!["_row_id"]).toBe(first[0]!["_row_id"]);
+  });
+});

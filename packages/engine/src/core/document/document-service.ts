@@ -1137,6 +1137,10 @@ export class DocumentService {
       await usePublicUrlsOfPublicFiles(this.db, entity, doc._data, session);
       await assertAttachFilesReadable(this.fileAccess(), entity, doc._data, new Set(), user, session);
 
+      // A hook may have rebuilt a Table's rows since the stamp above; a row stored without a
+      // `_row_id` gets a new one on every load, so no later save could name it.
+      doc.ensureRowIds();
+
       // Store in DB
       await this.db.insertOne(entity.name, doc.toMongo(), entity.database, session);
       await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
