@@ -915,6 +915,24 @@ export class DocumentService {
     return { ...json, _link_titles: Object.fromEntries(Object.entries(titles).filter(([field]) => field in json)) };
   }
 
+  /** The preview refuses what the save would: a Link to a missing row or to one the writer may not
+   *  select, before `fetch_from` reads that row's fields. */
+  private async refuseUnselectableLinks(
+    entity: EntityDefinition,
+    data: Record<string, unknown>,
+    user: UserContext,
+    stored: Record<string, unknown> | undefined,
+    ctx?: ResponseContext,
+  ): Promise<void> {
+    const linkErrors = await this.linkValidator.validate(entity, data, undefined, { user, stored });
+    if (linkErrors.length === 0) return;
+    for (const err of linkErrors) ctx?.error(err.message_key, err.params);
+    throw new ValidationFailedError(
+      entity.name,
+      linkErrors.map((e) => ({ field: e.field, message_key: e.message_key, params: e.params })),
+    );
+  }
+
   async preview(
     doctype: string,
     data: Record<string, unknown>,
@@ -942,6 +960,8 @@ export class DocumentService {
       const writeData = this.permissionChecker.filterFieldsForWrite(user, doctype, data, doc._data);
       applyNewChildRowDefaults(entity, writeData, doc._original, this.defaultContext(user));
       doc.merge(this.serializeFields(entity, writeData));
+      // Before a source is read: the save would refuse a Link the writer may not select.
+      await this.refuseUnselectableLinks(entity, doc._data, user, doc._original, ctx);
       const changedFields = doc.getChangedFields();
       if (entity.fields.some((f) => f.fieldtype === "Link" && changedFields.includes(f.fieldname))) {
         doc.merge(await this.fetchFromResolver.resolve(entity, doc._data, undefined, doc._original));
@@ -950,6 +970,7 @@ export class DocumentService {
     } else {
       const writeData = this.permissionChecker.filterFieldsForWrite(user, doctype, data);
       let processed = resolveDefaults(entity, writeData, this.defaultContext(user));
+      await this.refuseUnselectableLinks(entity, processed, user, undefined, ctx);
       processed = await this.fetchFromResolver.resolve(entity, processed);
       doc = new BaseDocument(doctype);
       doc._data = { ...this.serializeFields(entity, processed) };
@@ -1089,7 +1110,7 @@ export class DocumentService {
       }
 
       // Link validation
-      const linkErrors = await this.linkValidator.validate(entity, doc._data, session);
+      const linkErrors = await this.linkValidator.validate(entity, doc._data, session, { user });
       if (linkErrors.length > 0) {
         for (const err of linkErrors) {
           ctx?.error(err.message_key, err.params);
@@ -1372,7 +1393,7 @@ export class DocumentService {
       }
 
       // Link validation
-      const linkErrors = await this.linkValidator.validate(entity, doc._data, session);
+      const linkErrors = await this.linkValidator.validate(entity, doc._data, session, { user, stored: doc._original });
       if (linkErrors.length > 0) {
         for (const err of linkErrors) {
           ctx?.error(err.message_key, err.params);
@@ -1817,7 +1838,7 @@ export class DocumentService {
           );
         });
       if (anyLinkTouched) {
-        const linkErrors = await this.linkValidator.validate(entity, doc._data, session);
+        const linkErrors = await this.linkValidator.validate(entity, doc._data, session, { user, stored: doc._original });
         if (linkErrors.length > 0) {
           for (const err of linkErrors) ctx?.error(err.message_key, err.params);
           throw new ValidationFailedError(

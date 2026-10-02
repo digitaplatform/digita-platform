@@ -4,9 +4,18 @@ import type { ClientSession } from "mongodb";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import { parseSubRowLink } from "../document/row-id.js";
+import type { PermissionChecker } from "../permissions/permission-checker.js";
+import type { UserContext } from "../permissions/types.js";
 import { createLogger } from "../logging/logger.js";
 
 const log = createLogger("link-validator");
+
+/** Who writes the Links, and the stored document an update changes: a Link value the write sets
+ *  must name a row the writer may `select`, as the Link search offers it. */
+export interface LinkWriter {
+  user: UserContext;
+  stored?: Record<string, unknown>;
+}
 
 export interface LinkValidationError {
   field: string;
@@ -23,6 +32,7 @@ export class LinkValidator {
   constructor(
     private registry: EntityRegistry,
     private db: MongoDBService,
+    private permissionChecker: PermissionChecker,
   ) {}
 
   async validate(
@@ -32,15 +42,19 @@ export class LinkValidator {
      *  link target created earlier in the SAME transaction is visible (a sessionless
      *  read runs outside the tx and would spuriously fail with link_not_found). */
     session?: ClientSession,
+    /** Without it only existence is checked: a pre-check whose write then checks the writer. */
+    writer?: LinkWriter,
   ): Promise<LinkValidationError[]> {
     const errors: LinkValidationError[] = [];
+    // A Link the write leaves as stored was checked when it was set; another role may have set it.
+    const writerOf = (value: unknown, previous: unknown) => (writer && value !== previous ? writer.user : undefined);
 
     // Validate top-level Link fields
     for (const field of entity.fields) {
       if (field.fieldtype === "Link" && field.target) {
         const value = data[field.fieldname];
         if (!value) continue;
-        await this.checkLink(field, String(value), field.fieldname, errors, session);
+        await this.checkLink(field, String(value), field.fieldname, errors, session, writerOf(value, writer?.stored?.[field.fieldname]));
         continue;
       }
 
@@ -49,14 +63,19 @@ export class LinkValidator {
         const rows = data[field.fieldname];
         if (!Array.isArray(rows)) continue;
 
+        const storedTable = writer?.stored?.[field.fieldname];
+        const storedRows = new Map(
+          (Array.isArray(storedTable) ? (storedTable as Array<Record<string, unknown>>) : []).map((r) => [r?.[ROW_ID_FIELD], r]),
+        );
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i] as Record<string, unknown>;
+          const storedRow = storedRows.get(row?.[ROW_ID_FIELD]);
           for (const childField of field.child_fields) {
             const childPath = `${field.fieldname}[${i}].${childField.fieldname}`;
             if (childField.fieldtype === "Link" && childField.target) {
               const value = row[childField.fieldname];
               if (!value) continue;
-              await this.checkLink(childField, String(value), childPath, errors, session);
+              await this.checkLink(childField, String(value), childPath, errors, session, writerOf(value, storedRow?.[childField.fieldname]));
             }
           }
         }
@@ -78,8 +97,14 @@ export class LinkValidator {
     fieldPath: string,
     errors: LinkValidationError[],
     session?: ClientSession,
+    /** The writer who sets this value: the target row must be one they may `select`. */
+    writer?: UserContext,
   ): Promise<void> {
     if (!field.target) return;
+    // A row the writer may not select answers as a row that does not exist, so a save never tells
+    // a writer which ids exist beyond the ones the Link search offers them.
+    const selectable = async (row: Record<string, unknown>) =>
+      !writer || (await this.permissionChecker.hasPermission(writer, field.target!, "select", row)).allowed;
 
     if (field.target_path) {
       const parsed = parseSubRowLink(value);
@@ -95,7 +120,7 @@ export class LinkValidator {
       }
       const targetDb = this.registry.get(field.target).database;
       const parent = await this.db.findOne(field.target, parsed.parentId, targetDb, session);
-      if (!parent) {
+      if (!parent || !(await selectable(parent as Record<string, unknown>))) {
         errors.push({
           field: fieldPath,
           target: field.target,
@@ -130,7 +155,9 @@ export class LinkValidator {
     }
 
     const targetDb = this.registry.get(field.target).database;
-    const exists = await this.db.exists(field.target, value, targetDb, session);
+    const exists = writer
+      ? await this.db.findOne(field.target, value, targetDb, session).then(async (row) => !!row && (await selectable(row as Record<string, unknown>)))
+      : await this.db.exists(field.target, value, targetDb, session);
     if (!exists) {
       errors.push({
         field: fieldPath,
