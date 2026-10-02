@@ -656,11 +656,24 @@ describe("Resource API Integration", () => {
       () => `/api/v1/search/File?q=in&filters=${q("[")}`,
       () => `/api/v1/search?q=inputs&limit=abc`,
       () => `/api/v1/resource/File/${fileName}/versions?limit=abc`,
+      () => `/api/v1/resource/File/${fileName}/views?limit=abc`,
+      () => `/api/v1/search/File?q=in&filters=${q([["file_name", "=", "x"]])}`,
+      () => `/api/v1/resource/File?limit=1e3`,
+      () => `/api/v1/activity/File/${fileName}?limit=abc`,
+      () => `/api/v1/activity?limit=0`,
+      () => `/api/v1/activity?offset=-1`,
+      () => `/api/v1/audit?limit=abc`,
+      () => `/api/v1/audit?offset=1.5`,
     ];
 
     it.each(malformed.map((url, i) => [i + 1, url] as const))("answers 400 for malformed shape %i", async (_i, url) => {
       const res = await app.inject({ method: "GET", url: url(), headers: authHeaders() });
       expect([url(), res.statusCode]).toEqual([url(), 400]);
+    });
+
+    it("refuses link search filters given as a list by their shape", async () => {
+      const res = await app.inject({ method: "GET", url: `/api/v1/search/File?q=in&filters=${q([["file_name", "=", "x"]])}`, headers: authHeaders() });
+      expect(res.json().error).toMatchObject({ code: "BAD_REQUEST", detail: "filters must be one { field: value } object" });
     });
 
     it("still answers a well-formed list with its limit", async () => {
