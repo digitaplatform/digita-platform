@@ -1,6 +1,9 @@
-import type { EntityDefinition, FieldDefinition } from "@digitaplatform/shared";
+import type { EntityDefinition } from "@digitaplatform/shared";
 import { LAYOUT_FIELD_TYPES } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
+import { EntityRegistry } from "../entity/entity-registry.js";
+import { isMissing } from "../entity/field-to-zod.js";
+import { loadAppEntityFiles } from "./load-app-entity-files.js";
 
 /** One counted field: how many stored documents an update would refuse for it. */
 export interface BlankRequiredCount {
@@ -12,39 +15,45 @@ export interface BlankRequiredCount {
 }
 
 /**
- * The stored value a required field refuses since every save validates the whole document:
- * the same rule as `isMissing` of field-to-zod, as a Mongo condition on `path`. A missing,
- * null or blank text value; an unticked Check; a Rating of 0.
- */
-export function missingValueCondition(field: FieldDefinition, path: string): Record<string, unknown> {
-  const blank: Record<string, unknown>[] = [{ [path]: { $exists: false } }, { [path]: null }, { [path]: { $regex: "^\\s*$" } }];
-  if (field.fieldtype === "Check") blank.push({ [path]: false }, { [path]: 0 });
-  if (field.fieldtype === "Rating") blank.push({ [path]: 0 });
-  return { $or: blank };
-}
-
-/**
- * Count, per entity and required field, the stored documents with a blank value there, which
- * any later update of the document refuses. Read-only, and it answers counts, never a value.
+ * Count, per entity and required field, the stored documents with a value there that the save
+ * refuses as missing (`isMissing`, the rule every save applies), which any later update of the
+ * document refuses. Read-only, and it answers counts, never a value. A field required only through
+ * `mandatory_depends_on` is not counted.
  */
 export async function countBlankRequired(db: MongoDBService, entities: EntityDefinition[]): Promise<BlankRequiredCount[]> {
   const out: BlankRequiredCount[] = [];
   for (const entity of entities) {
     if (entity.is_child || entity.is_virtual) continue;
-    for (const field of entity.fields ?? []) {
-      if (LAYOUT_FIELD_TYPES.includes(field.fieldtype)) continue;
-      if (field.required) {
-        const documents = await db.count(entity.name, [missingValueCondition(field, field.fieldname)], entity.database);
-        out.push({ database: entity.database, entity: entity.name, field: field.fieldname, documents });
-      }
-      if (field.fieldtype !== "Table") continue;
-      for (const child of field.child_fields ?? []) {
-        if (!child.required || LAYOUT_FIELD_TYPES.includes(child.fieldtype)) continue;
-        const row = missingValueCondition(child, child.fieldname);
-        const documents = await db.count(entity.name, [{ [field.fieldname]: { $elemMatch: row } }], entity.database);
-        out.push({ database: entity.database, entity: entity.name, field: `${field.fieldname}.${child.fieldname}`, documents });
+    const fields = (entity.fields ?? []).filter((f) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype));
+    const required = fields.filter((f) => f.required);
+    const tables = fields
+      .filter((f) => f.fieldtype === "Table")
+      .map((table) => ({ table, cells: (table.child_fields ?? []).filter((c) => c.required && !LAYOUT_FIELD_TYPES.includes(c.fieldtype)) }))
+      .filter(({ cells }) => cells.length > 0);
+    if (required.length === 0 && tables.length === 0) continue;
+    const projected = [...required, ...tables.map(({ table }) => table)].map((f) => f.fieldname);
+    const rows = (await db.find(entity.name, { fields: projected }, entity.database)) as Record<string, unknown>[];
+    for (const field of required) {
+      const documents = rows.filter((row) => isMissing(field, row[field.fieldname])).length;
+      out.push({ database: entity.database, entity: entity.name, field: field.fieldname, documents });
+    }
+    for (const { table, cells } of tables) {
+      for (const cell of cells) {
+        const documents = rows.filter((row) => {
+          const tableRows = row[table.fieldname];
+          return Array.isArray(tableRows) && tableRows.some((r) => isMissing(cell, (r as Record<string, unknown> | null)?.[cell.fieldname]));
+        }).length;
+        out.push({ database: entity.database, entity: entity.name, field: `${table.fieldname}.${cell.fieldname}`, documents });
       }
     }
   }
   return out;
+}
+
+/** Count for the app the engine runs, with its definitions loaded as the boot loads them. */
+export async function countBlankRequiredInApp(db: MongoDBService): Promise<BlankRequiredCount[]> {
+  const registry = new EntityRegistry();
+  await loadAppEntityFiles(db, registry);
+  await registry.loadFromDb(db);
+  return countBlankRequired(db, registry.getAll());
 }

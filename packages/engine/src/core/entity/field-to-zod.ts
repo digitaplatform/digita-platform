@@ -71,7 +71,7 @@ export function buildFieldSchema(field: FieldDefinition): ZodTypeAny {
  * The value a required field refuses. The handlers store a missing Check as
  * false and a missing Rating as 0, so an unticked box and a Rating of 0 are no value.
  */
-function isMissing(field: FieldDefinition, v: unknown): boolean {
+export function isMissing(field: FieldDefinition, v: unknown): boolean {
   if (isBlank(v)) return true;
   if (field.fieldtype === "Check") return v === false || v === 0;
   if (field.fieldtype === "Rating") return Number(v) === 0;
