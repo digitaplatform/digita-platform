@@ -169,7 +169,7 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
       // Non-negative integer count of seconds — no free strings (was silently
       // truncated/NaN'd). Child-table Duration cells bypass serializeFields, so
       // gate them here too.
-      return z.coerce.number().int("field_invalid_duration").min(0, "field_invalid_duration");
+      return z.coerce.number("field_invalid_duration").int("field_invalid_duration").min(0, "field_invalid_duration");
     case "Select":
       // A zone no runtime knows would make every __today__ default and $now Date filter throw.
       if (field.options_source === "timezones") return z.string().refine(isTimeZone, "field_invalid_select");
@@ -276,6 +276,7 @@ const NUMERIC_COERCE_TYPES: ReadonlySet<FieldType> = new Set<FieldType>([
   "Currency",
   "Percent",
   "Rating",
+  "Duration",
 ]);
 
 /**

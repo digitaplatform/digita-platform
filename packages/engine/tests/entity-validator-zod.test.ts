@@ -451,6 +451,35 @@ describe("validateEntityDataZod — Duration is whole non-negative seconds (A6)"
   });
 });
 
+describe("validateEntityDataZod — a Duration refuses a boolean and a list", () => {
+  const dur = { fieldname: "dur", fieldtype: "Duration", label: "Dur" };
+  const keysOf = (r: ReturnType<typeof validateEntityDataZod>) => r.errors.map((e) => [e.field, e.message_key]);
+
+  it("as a field: the handler refuses it before it is stored as 0 or 1", () => {
+    for (const value of [true, false, [], [7]]) {
+      expect(() => getFieldTypeHandler("Duration").toStorage(value, dur as never)).toThrow("field_invalid_duration");
+    }
+  });
+
+  it("PLANTED INNOCENT: as a field, a blank is no value and whole seconds are kept", () => {
+    builder.invalidate("TestDoc");
+    const stored = getFieldTypeHandler("Duration").toStorage("", dur as never);
+    expect(stored).toBeNull();
+    expect(validateEntityDataZod(entity([dur]), { dur: stored }, builder).valid).toBe(true);
+    expect(getFieldTypeHandler("Duration").toStorage("90", dur as never)).toBe(90);
+  });
+
+  it("as a Table cell: the schema refuses it with field_invalid_duration on the cell", () => {
+    const e = entity([{ fieldname: "lines", fieldtype: "Table", label: "Lines", child_fields: [dur] }]);
+    for (const value of [true, false, [], [7]]) {
+      builder.invalidate("TestDoc");
+      expect(keysOf(validateEntityDataZod(e, { lines: [{ dur: value }] }, builder))).toEqual([["lines[0].dur", "field_invalid_duration"]]);
+    }
+    builder.invalidate("TestDoc");
+    expect(validateEntityDataZod(e, { lines: [{ dur: 90 }, {}] }, builder).valid).toBe(true);
+  });
+});
+
 describe("validateEntityDataZod — top-level conditional-required (A11)", () => {
   const e = () =>
     entity([

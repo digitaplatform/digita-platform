@@ -77,9 +77,10 @@ const durationHandler: FieldTypeHandler = {
   isStored: true,
   toStorage(value, field) {
     if (isBlank(value)) return null;
-    const num = Number(value);
+    const num = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
     // Duration is a non-negative INTEGER count of seconds. Fail loud instead of
-    // silently truncating (parseInt("1.5") → 1) or storing NaN (parseInt("abc")).
+    // silently truncating (parseInt("1.5") → 1), storing NaN (parseInt("abc")) or
+    // reading a boolean or a list as a number (Number(true) is 1, Number([]) is 0).
     if (!Number.isFinite(num) || !Number.isInteger(num) || num < 0) {
       throw new FieldValueError(field.fieldname, "field_invalid_duration", {
         field: field.label || field.fieldname,
