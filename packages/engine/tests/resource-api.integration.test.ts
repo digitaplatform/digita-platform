@@ -785,6 +785,13 @@ describe("Resource API Integration", () => {
       ["a regex that does not compile", base("MetaRegex", field({ fieldname: "code", fieldtype: "Data", label: "Code", regex: "(" })), "code"],
       ["a reserved entity name", base("app"), "reserved"],
       ["an inconsistent workflow", base("MetaFlow", { states: [{ value: "A", is_initial: true }], transitions: [{ from: "A", to: "B", action: "go" }] }), "workflow"],
+      ["no naming", base("MetaNoNaming", { naming: undefined }), "naming"],
+      ["a naming that is a text", base("MetaTextNaming", { naming: "user_set" }), "naming"],
+      ["a naming strategy that does not exist", base("MetaBadStrategy", { naming: { strategy: "random" } }), "naming strategy"],
+      ["by_field without its field", base("MetaByField", { naming: { strategy: "by_field" } }), "naming.field"],
+      ["expression without its expression", base("MetaExpression", { naming: { strategy: "expression" } }), "naming.expression"],
+      ["permissions that are a text", base("MetaTextPerms", { permissions: "Administrator" }), "permissions"],
+      ["a permission row that is null", base("MetaNullPerm", { permissions: [null] }), "permissions"],
     ];
 
     it.each(refused)("refuses %s with 400, naming the entity and the key, and stores nothing", async (_case, definition, named) => {

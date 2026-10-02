@@ -1,6 +1,6 @@
 import { readdir, readFile } from "fs/promises";
 import { join, extname } from "path";
-import type { EntityDefinition, FieldDefinition, FieldType, FreezeSpec } from "@digitaplatform/shared";
+import type { EntityDefinition, FieldDefinition, FieldType, FreezeSpec, NamingStrategy } from "@digitaplatform/shared";
 import { DIGITA } from "@digitaplatform/shared";
 import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD, STORED_FIELD_TYPES, UPLOAD_FIELD_TYPES } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
@@ -42,6 +42,32 @@ function entityShapeProblem(value: unknown): string | undefined {
   const definition = value as Record<string, unknown>;
   if (typeof definition["name"] !== "string" || definition["name"] === "") return "the entity has no name";
   if (!Array.isArray(definition["fields"])) return `entity "${definition["name"]}" has no fields list`;
+  return undefined;
+}
+
+/** Every naming strategy the naming service knows; the type keeps the list complete. */
+const NAMING_STRATEGIES: Record<NamingStrategy, true> = {
+  auto_increment: true, uuid: true, by_field: true, expression: true, user_set: true, system: true,
+};
+
+/** Why a definition's naming or permissions would make every create or every read fail, or undefined. */
+function namingOrPermissionsProblem(entity: EntityDefinition): string | undefined {
+  const naming = entity.naming as unknown;
+  if (!naming || typeof naming !== "object" || Array.isArray(naming)) return `entity "${entity.name}" has no naming object`;
+  const { strategy, field, expression } = naming as Record<string, unknown>;
+  if (typeof strategy !== "string" || !(strategy in NAMING_STRATEGIES)) {
+    return `entity "${entity.name}" names no known naming strategy (${Object.keys(NAMING_STRATEGIES).join(", ")})`;
+  }
+  if (strategy === "by_field" && (typeof field !== "string" || field === "")) return `entity "${entity.name}" names by_field without naming.field`;
+  if (strategy === "expression" && (typeof expression !== "string" || expression === "")) {
+    return `entity "${entity.name}" names expression without naming.expression`;
+  }
+  const permissions = entity.permissions as unknown;
+  if (permissions === undefined) return undefined;
+  const isRow = (row: unknown) => !!row && typeof row === "object" && typeof (row as Record<string, unknown>)["role"] === "string";
+  if (!Array.isArray(permissions) || !permissions.every(isRow)) {
+    return `entity "${entity.name}" has permissions that are no list of rows with a role`;
+  }
   return undefined;
 }
 
@@ -195,7 +221,7 @@ export class EntityRegistry {
    * through it, so /meta stores no definition a file could not hold.
    */
   prepareDefinition(entity: EntityDefinition): void {
-    const shapeProblem = entityShapeProblem(entity);
+    const shapeProblem = entityShapeProblem(entity) ?? namingOrPermissionsProblem(entity);
     if (shapeProblem) throw new Error(shapeProblem);
     // The app matches its own pages case-sensitively, so an entity with exactly one of
     // these names would lose its list page to them; `Account` and its kin stay free.
