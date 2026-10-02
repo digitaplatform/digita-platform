@@ -102,10 +102,16 @@ async function applyExpand(
     // A reader may read the list's entity and not the one its expand names: the rows stay, without
     // their linked records, and the warning names no entity the reader may not see.
     if (!(err instanceof PermissionDeniedError)) throw err;
-    ctx.addRaw(`Section "${section.key}": linked records left out: permission denied`, "warning", true, {
-      path: `/sections/${section.key}`,
-      code: "expand_no_permission",
-    });
+    // The section's permission_fallback decides, as for a failed section: `error` fails the
+    // view, `silent` keeps the rows without a word, `warn` keeps them and says so.
+    const fallback = section.permission_fallback ?? "warn";
+    if (fallback === "error") throw err;
+    if (fallback === "warn") {
+      ctx.addRaw(`Section "${section.key}": linked records left out: permission denied`, "warning", true, {
+        path: `/sections/${section.key}`,
+        code: "expand_no_permission",
+      });
+    }
     return rows.map((r) => ({ ...r, [property]: null }));
   }
   const byId = new Map(expanded.data.map((d) => [String(d["_id"]), d]));
