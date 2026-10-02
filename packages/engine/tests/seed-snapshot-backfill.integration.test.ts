@@ -27,7 +27,7 @@ import { join } from "path";
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
-import { seedAppData } from "../src/core/setup/seed-app-data.js";
+import { seedAppData, seedHash } from "../src/core/setup/seed-app-data.js";
 import { configurePasswordFieldKeys, decryptPassword } from "../src/core/entity/password-cipher.js";
 import type { NamingService } from "../src/core/document/naming-service.js";
 import type { EntityDefinition } from "@digitaplatform/shared";
@@ -150,6 +150,35 @@ describe("seedAppData — Pass 5 seals snapshot/freeze on seeded submitted docs 
 
     const draft = await db.findOne("SnapDoc", "D2", "app");
     expect(draft?.["target_name_at_doc"]).toBeUndefined(); // drafts seal at their real submit
+  });
+
+  it("keeps a person's cancel of a seeded submitted document on the next seed", async () => {
+    await writeFile(join(dir, "SnapTarget.seed.json"), JSON.stringify([{ _id: "T1", name: "Acme GmbH" }]), "utf-8");
+    await writeFile(join(dir, "SnapDoc.seed.json"), JSON.stringify([{ _id: "D1", docstatus: 1, title: "submitted", target: "T1" }]), "utf-8");
+    await seedAppData(db, registry(), {} as NamingService, [dir]);
+    // A person cancels it.
+    await db.updateOne("SnapDoc", "D1", { docstatus: 2, modified_by: "clerk@test" }, "app");
+
+    await seedAppData(db, registry(), {} as NamingService, [dir]);
+
+    const stored = await db.findOne("SnapDoc", "D1", "app");
+    expect([stored?.["docstatus"], stored?.["modified_by"]]).toEqual([2, "clerk@test"]);
+  });
+
+  it("stamps the sealed values, so the sealed row stays the seed's", async () => {
+    // As the entity loader declares a freeze-flatten field.
+    const declared = docEntity();
+    declared.fields.push({ fieldname: "target_name_at_doc", fieldtype: "Data", label: "Target", read_only: true } as never);
+    const reg = registry();
+    reg.register(declared);
+    await writeFile(join(dir, "SnapTarget.seed.json"), JSON.stringify([{ _id: "T1", name: "Acme GmbH" }]), "utf-8");
+    await writeFile(join(dir, "SnapDoc.seed.json"), JSON.stringify([{ _id: "D1", docstatus: 1, title: "submitted", target: "T1" }]), "utf-8");
+
+    await seedAppData(db, reg, {} as NamingService, [dir]);
+
+    const stored = (await db.findOne("SnapDoc", "D1", "app")) as Record<string, unknown>;
+    expect(stored["target_name_at_doc"]).toBe("Acme GmbH");
+    expect(stored["_seed_hash"]).toBe(seedHash(stored));
   });
 
   it("seals freeze fields on a `system`-named submitted seed row (no explicit _id)", async () => {
