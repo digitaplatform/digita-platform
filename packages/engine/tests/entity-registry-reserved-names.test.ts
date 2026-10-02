@@ -16,6 +16,7 @@ import { mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
+import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 
 // The app serves its own pages at /account, /app/* and /login, matched case-sensitively,
 // so only these exact lowercase names would lose their list page to the app.
@@ -47,10 +48,27 @@ describe("entity names the app's own pages take", () => {
     expect(error!.message).toContain("account, app, login");
   });
 
-  it.each(["Account", "App", "Login"])("loads an entity named %s", async (name) => {
+  it.each(["_jobs", "_groups"])("refuses an entity named %s, in the namespace of the app's own pages", async (name) => {
+    const { dir, load } = await loadOne(name);
+    const error = await load.then(() => undefined, (e: unknown) => e as Error);
+    await rm(dir, { recursive: true, force: true });
+    expect(error?.message).toContain(`"${name}"`);
+  });
+
+  it.each(["Account", "App", "Login", "Jobs"])("loads an entity named %s", async (name) => {
     const { registry, dir, load } = await loadOne(name);
     await load;
     await rm(dir, { recursive: true, force: true });
     expect(registry.get(name).name).toBe(name);
+  });
+});
+
+describe("a stored definition with a reserved name", () => {
+  it("is skipped by the boot's load from the database, which goes on", async () => {
+    const stored = ["login", "_groups", "Login"].map((name) => ({ ...entity(name), fields: [...entity(name).fields] }));
+    const db = { find: vi.fn(async () => stored) } as unknown as MongoDBService;
+    const registry = new EntityRegistry();
+    await registry.loadFromDb(db);
+    expect([registry.has("login"), registry.has("_groups"), registry.has("Login")]).toEqual([false, false, true]);
   });
 });
