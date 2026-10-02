@@ -144,6 +144,8 @@ export function registerMetaRoutes(
         is_single: e.is_single,
         is_log: e.is_log,
         track_changes: e.track_changes,
+        // The app finds its menu entity, and the Groups page its trees, without reading every meta.
+        tree: e.tree,
         navigable: !INTERNAL_CORE.has(e.name) && !e.is_log,
       }));
     return reply.send(successResponse(entities));

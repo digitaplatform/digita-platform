@@ -17,13 +17,13 @@ afterEach(() => {
 describe("the host's t for plugins", () => {
   it('answers a ui.* key with the chrome text', () => {
     installHostServices();
-    expect(useHost().t('ui.usermenu.empty')).toBe(texts.en!['ui.usermenu.empty']);
+    expect(useHost().t('ui.appMenu.empty')).toBe(texts.en!['ui.appMenu.empty']);
   });
 
   it('answers a ui.* key in the session language', () => {
     useI18nStore.setState({ locale: 'de' });
     installHostServices();
-    expect(useHost().t('ui.usermenu.empty')).toBe(texts.de!['ui.usermenu.empty']);
+    expect(useHost().t('ui.appMenu.empty')).toBe(texts.de!['ui.appMenu.empty']);
   });
 
   it('still answers a data key from the i18n store', () => {

@@ -1,6 +1,6 @@
-// Under `vite` dev the built-in plugins come from node_modules, so Vite pre-bundles them. The host
-// provides its services to the plugin SDK module it imports; a plugin that reads them from another
-// copy of the SDK finds none and throws on its first render. This runs the app's own dev config.
+// The host provides its services to the plugin SDK module it imports under `vite` dev; a built-in
+// plugin that reads them from another copy of the SDK, such as a pre-bundled one, finds none and
+// throws on its first render. This runs the app's own dev config.
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -38,13 +38,9 @@ async function importUrl(url: string, name: string): Promise<string> {
 }
 
 describe('vite dev serves the plugin SDK once', () => {
-  it('usermenu reads its host services from the SDK module the host provides them to', async () => {
+  it('the app menu reads its host services from the SDK module the host provides them to', async () => {
     const provided = await importUrl('/src/plugins/host-services.ts', 'provideHostServices');
-    const builtins = await server.transformRequest('/src/plugins/builtins.ts');
-    const usermenu = builtins?.code.match(/from "([^"]*usermenu[^"]*)"/)?.[1];
-    expect(usermenu).toBeDefined();
-
-    expect(await importUrl(usermenu!, 'useHost')).toBe(provided);
+    expect(await importUrl('/src/plugins/app-menu/AppMenu.tsx', 'useHost')).toBe(provided);
   }, 120_000);
 
   // The server only transforms modules once and closes, so it needs no watcher. A watcher takes
