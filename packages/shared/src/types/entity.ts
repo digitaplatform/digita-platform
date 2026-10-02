@@ -1041,9 +1041,12 @@ export interface EntityDefinition {
    *  enforces this on list/read (Administrator bypasses). Generic — any entity may
    *  opt in (e.g. Workspace → "roles"). */
   role_visibility_field?: string;
-  /** Each row belongs to its `owner` alone: the engine lists, reads, changes and deletes a row only
-   *  for its owner, for every role, an Administrator included. For a person's own settings, such
-   *  as UserPreference, which no one else may see or overwrite. */
+  /** Each row belongs to its `owner` alone: the engine's resource routes list, count, read, change
+   *  and delete a row only for its owner (the email stamped at create), for every role, an
+   *  Administrator included. For a person's own settings, such as UserPreference. It does not
+   *  cover four other ways to a row: the audit stream of an entity with `track_changes`, a file
+   *  attached to the row, a share the owner grants, and digita-report, which reads the collections
+   *  itself. An entity that needs those closed keeps `track_changes` off and holds no attachment. */
   personal?: boolean;
 
   // Change tracking
