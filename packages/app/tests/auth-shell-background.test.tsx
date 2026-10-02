@@ -23,6 +23,7 @@ function shellWith(login_background: string) {
 
 afterEach(() => {
   cleanup();
+  useThemeStore.setState({ signature: 'digita' });
   useSessionStore.setState({ branding: null, settings: null });
 });
 
