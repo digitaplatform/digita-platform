@@ -29,8 +29,9 @@ function iconOf(item: NavItem): LucideIcon | undefined {
 
 /** The widths from which the phone's top bar has room for each icon link, in the links' order:
  *  measured in Chromium beside the brand's mark, the language menu, the mode button, a call to
- *  action of seven letters and the menu button. A phone narrower than the first shows the links in
- *  the menu only. Tailwind finds a class only where the source spells it out, so each is written whole. */
+ *  action as wide as the label "Contact" (the mail icon a phone shows is narrower) and the menu
+ *  button. A phone narrower than the first shows the links in the menu only. Tailwind finds a
+ *  class only where the source spells it out, so each is written whole. */
 const ICON_LINK_FROM = ["min-[380px]:flex", "min-[420px]:flex", "min-[460px]:flex", "min-[500px]:flex", "min-[540px]:flex"];
 
 /** Site header: the app's top bar (the kit's TopBar) with the app's brand precedence (BrandMark),
@@ -117,8 +118,8 @@ export function Header({
           <LocaleSwitcher current={locale} publishedSlugs={publishedSlugs} enabledLocales={enabledLocales} label={t("language", locale)} />
           {!modeLocked && <ThemeToggle label={t("toggleTheme", locale)} lookCookieDomain={lookCookieDomain} />}
           {/* The header menu's item for the contact sheet; SheetButton draws nothing where the site offers no sheet.
-              Below the tablet the bar has the room of a seven-letter label, so the button shows a mail
-              icon there and its label from md on; its name is the full label at every width. */}
+              Below the tablet a label of any length can crowd the bar, so the button shows a mail icon
+              there and its label from md on; its name is the full label at every width. */}
           {contact && (
             <SheetButton {...buttonAttributes({ size: "sm", className: "shrink-0" })} aria-label={contact.label} title={contact.label}>
               <Mail className="h-4 w-4 md:hidden" aria-hidden="true" />
