@@ -37,8 +37,8 @@ vi.mock("../src/lib/engine-client", () => ({
 
 // The light/dark button draws its Domain, so the markup shows what the layout handed it.
 vi.mock("../src/components/ThemeToggle", () => ({
-  ThemeToggle: ({ lookCookieDomain }: { lookCookieDomain: string | undefined }) => (
-    <span data-look-cookie-domain={lookCookieDomain ?? "host-only"} />
+  ThemeToggle: ({ lookCookieDomain, identity }: { lookCookieDomain: string | undefined; identity: { apps: string[] } }) => (
+    <span data-look-cookie-domain={lookCookieDomain ?? "host-only"} data-identity-apps={identity.apps.join(",")} />
   ),
 }));
 
@@ -85,6 +85,11 @@ describe("the locale layout", () => {
     expect(await render()).not.toContain('aria-label="language"');
     publishedSlugs = { en: [""], de: [""] };
     expect(await render()).toContain('aria-label="language"');
+  });
+
+  it("PLANTED DEFECT: hands the light/dark button the tenant's apps, where a signed-in visitor's account keeps the mode", async () => {
+    // A button handed no app keeps the choice in the browser only, and the next page load undoes it.
+    expect(await render()).toContain('data-identity-apps="crm"');
   });
 
   it("draws no light/dark button and paints the system mode under the tenant's lock", async () => {

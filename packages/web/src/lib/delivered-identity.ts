@@ -70,11 +70,19 @@ export const IDENTITY_DELIVERED_EVENT = "digita:identity-delivered";
  * choices on every page load, so a choice kept only in this browser would be undone by the next.
  * Without a session, and for the demo user, whose read the engine refuses, the choice stays in
  * this browser and nothing is written. A write the account refuses throws, naming the key.
+ * The page's writes run one after another, so a second click finds the row the first created.
  */
-export async function storeIdentityChoiceOnAccount(
-  choices: Partial<IdentityChoices>,
-  sources: DeliveredIdentitySources,
-): Promise<void> {
+export function storeIdentityChoiceOnAccount(choices: Partial<IdentityChoices>, sources: DeliveredIdentitySources): Promise<void> {
+  const write = accountWrites.then(() => writeIdentityChoices(choices, sources));
+  accountWrites = write.catch(() => {});
+  return write;
+}
+
+/** This page's account writes in order. Two overlapping lookups would both find no row, both
+ *  create one, and the account refuses the second row of the key, keeping the first choice. */
+let accountWrites: Promise<void> = Promise.resolve();
+
+async function writeIdentityChoices(choices: Partial<IdentityChoices>, sources: DeliveredIdentitySources): Promise<void> {
   const [firstApp] = sources.apps;
   if (!firstApp || !findCookie(document.cookie, csrfCookieName(sources))) return;
   const resource = `/${firstApp}/api/v1/resource/UserPreference`;
