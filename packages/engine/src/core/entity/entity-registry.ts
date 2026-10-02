@@ -31,6 +31,21 @@ export class UnknownDoctypeError extends Error {
 /** The paths the app serves its own pages at (/account, /app/*, /login). */
 const RESERVED_ENTITY_NAMES = ["account", "app", "login"];
 
+/**
+ * Why an entity may not take `name`, or null when it may. The app matches its own pages
+ * case-sensitively, so an entity with exactly one of the reserved names would lose its list page
+ * to them; `Account` and its kin stay free. The app's further pages (`_jobs`, `_groups`, ...) and
+ * the engine's own collections (`_sequences`, `_versions`, ...) start with an underscore, so no
+ * entity name may.
+ */
+function reservedNameProblem(name: string): string | null {
+  if (!RESERVED_ENTITY_NAMES.includes(name) && !name.startsWith("_")) return null;
+  return (
+    `Entity name "${name}" is reserved for the app's own pages (${RESERVED_ENTITY_NAMES.join(", ")}, ` +
+    "and every name that starts with an underscore); rename the entity, for example with a capital letter"
+  );
+}
+
 /** Hook keys no engine code runs: an entity that declares one restricts and changes nothing. */
 const NEVER_RUN_HOOKS = ["has_permission", "on_list_load"];
 
@@ -230,14 +245,8 @@ export class EntityRegistry {
   prepareDefinition(entity: EntityDefinition): void {
     const shapeProblem = entityShapeProblem(entity) ?? namingOrPermissionsProblem(entity);
     if (shapeProblem) throw new Error(shapeProblem);
-    // The app matches its own pages case-sensitively, so an entity with exactly one of
-    // these names would lose its list page to them; `Account` and its kin stay free.
-    if (RESERVED_ENTITY_NAMES.includes(entity.name)) {
-      throw new Error(
-        `Entity name "${entity.name}" is reserved for the app's own pages (${RESERVED_ENTITY_NAMES.join(", ")}); ` +
-          "rename the entity, for example with a capital letter",
-      );
-    }
+    const reserved = reservedNameProblem(entity.name);
+    if (reserved) throw new Error(reserved);
     this.applyDefaults(entity);
     this.expandFlattenDirectives(entity);
     entity.fields.sort((a, b) => (a.idx ?? 0) - (b.idx ?? 0));
@@ -865,6 +874,13 @@ export class EntityRegistry {
 
     for (const doc of docs) {
       const entity = doc as unknown as EntityDefinition;
+      // A definition stored before /meta checked the name would take an app page at every start;
+      // it is left out, and the start goes on.
+      const reserved = reservedNameProblem(entity.name);
+      if (reserved) {
+        log.error({ entity: entity.name }, `stored entity definition skipped: ${reserved}`);
+        continue;
+      }
       this.applyDefaults(entity);
       entity.fields.sort((a, b) => (a.idx ?? 0) - (b.idx ?? 0));
       this.entities.set(entity.name, entity);
