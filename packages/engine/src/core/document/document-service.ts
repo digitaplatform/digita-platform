@@ -1413,6 +1413,10 @@ export class DocumentService {
     // via merged services (`HookRunner.run/runFieldChangeHooks/runComputedHooks`).
     // OR join the caller's existing session when supplied.
     const runUpdate = async (session: import("mongodb").ClientSession) => {
+      // The record as the caller's input made it; what a hook or a rule changes after it is held
+      // to the read_only_depends_on locks before the write.
+      const afterInput = JSON.parse(JSON.stringify(doc._data)) as Record<string, unknown>;
+
       // Run field change hooks (transactional)
       await this.hookRunner.runFieldChangeHooks(doctype, doc, changedFields, ctx, session, user);
 
@@ -1472,6 +1476,7 @@ export class DocumentService {
         // set_value here is rejected by the engine's event gate (fail loud).
         await this.ruleEngine.execute(doctype, "before_save", doc._data, user, session);
       }
+      this.assertHookChangesKeepLocks(user, entity, afterInput, doc);
 
       // Apply workflow transition side-effects + fire the rule event,
       // INSIDE the transaction so child writes roll back on failure.
@@ -1951,23 +1956,7 @@ export class DocumentService {
         .filter((f) => !computedTargets.has(f) && !tableNames.includes(f))
         .map((field) => ({ field, old: doc._original[field], new: doc.get(field) }));
       for (const table of tableNames) {
-        const before = storedTables[table];
-        const after = doc.get(table);
-        if (computedTargets.has(table) || JSON.stringify(before) === JSON.stringify(after ?? null)) continue;
-        // A row a hook dropped is judged as on update: one that holds a locked cell stays.
-        const tableField = entity.fields.find((f) => f.fieldname === table)!;
-        this.permissionChecker.assertNoLockedRowDropped(user, entity.name, tableField, after, before);
-        changes.push({ field: table, old: before, new: after });
-        const storedRows = new Map(
-          (Array.isArray(before) ? (before as Array<Record<string, unknown>>) : []).map((r) => [r[ROW_ID_FIELD], r]),
-        );
-        for (const row of Array.isArray(after) ? (after as Array<Record<string, unknown>>) : []) {
-          const stored = storedRows.get(row[ROW_ID_FIELD]);
-          if (!stored) continue;
-          for (const field of new Set([...Object.keys(stored), ...Object.keys(row)])) {
-            if (!field.startsWith("_")) changes.push({ table, row, field, old: stored[field], new: row[field] });
-          }
-        }
+        if (!computedTargets.has(table)) changes.push(...this.tableLockChanges(user, entity, table, storedTables[table], doc.get(table)));
       }
       this.permissionChecker.assertPatchKeepsLocks(user, entity.name, doc._data, changes);
 
@@ -2688,6 +2677,70 @@ export class DocumentService {
     // As every write answers: the link titles in the caller's locale.
     doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user, ctx?.locale);
     return doc;
+  }
+
+  /**
+   * What a save changed in one Table since `before`, as the read_only_depends_on lock judges it:
+   * the Table as a whole, and each cell of a row `before` holds, on its row. A row dropped that
+   * holds a locked cell is refused here.
+   */
+  private tableLockChanges(
+    user: UserContext,
+    entity: EntityDefinition,
+    table: string,
+    before: unknown,
+    after: unknown,
+  ): PatchChange[] {
+    if (JSON.stringify(before ?? null) === JSON.stringify(after ?? null)) return [];
+    const tableField = entity.fields.find((f) => f.fieldname === table)!;
+    this.permissionChecker.assertNoLockedRowDropped(user, entity.name, tableField, after, before);
+    const changes: PatchChange[] = [{ field: table, old: before, new: after }];
+    // Only a row with a `_row_id` has a stored row to be held to; a row the save adds gets its id
+    // at the write, so rows without one are never paired with each other.
+    const rowId = (row: Record<string, unknown> | null | undefined) => {
+      const id = row?.[ROW_ID_FIELD];
+      return typeof id === "string" && id !== "" ? id : undefined;
+    };
+    const storedRows = new Map<string, Record<string, unknown>>();
+    for (const r of Array.isArray(before) ? (before as Array<Record<string, unknown>>) : []) {
+      const id = rowId(r);
+      if (id) storedRows.set(id, r);
+    }
+    for (const row of Array.isArray(after) ? (after as Array<Record<string, unknown>>) : []) {
+      const id = rowId(row);
+      const stored = id ? storedRows.get(id) : undefined;
+      if (!stored) continue;
+      for (const field of new Set([...Object.keys(stored), ...Object.keys(row)])) {
+        if (!field.startsWith("_")) changes.push({ table, row, field, old: stored[field], new: row[field] });
+      }
+    }
+    return changes;
+  }
+
+  /**
+   * Holds what the hooks and rules of an update changed after the caller's input to the
+   * read_only_depends_on locks, on what the save produces, as a submitted save is held. The input
+   * itself was judged when it was filtered for write. Declared computed targets are derived
+   * outputs and stay out.
+   */
+  private assertHookChangesKeepLocks(
+    user: UserContext,
+    entity: EntityDefinition,
+    afterInput: Record<string, unknown>,
+    doc: BaseDocument,
+  ): void {
+    const computedTargets = new Set(Object.keys(entity.hooks?.computed ?? {}));
+    const changes: PatchChange[] = [];
+    for (const field of entity.fields) {
+      const name = field.fieldname;
+      if (computedTargets.has(name)) continue;
+      if (field.fieldtype === "Table") {
+        changes.push(...this.tableLockChanges(user, entity, name, afterInput[name], doc.get(name)));
+      } else if (JSON.stringify(afterInput[name] ?? null) !== JSON.stringify(doc.get(name) ?? null)) {
+        changes.push({ field: name, old: afterInput[name], new: doc.get(name) });
+      }
+    }
+    this.permissionChecker.assertPatchKeepsLocks(user, entity.name, doc._data, changes);
   }
 
   /**
