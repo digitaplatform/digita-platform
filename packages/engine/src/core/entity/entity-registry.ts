@@ -7,6 +7,7 @@ import type { MongoDBService } from "../database/mongodb-service.js";
 import { createLogger } from "../logging/logger.js";
 import { isValidStoragePath, STORAGE_PATH_RULE } from "../storage/storage-path.js";
 import { workflowDefinitionProblems } from "../workflow/workflow-definition.js";
+import { assertFieldExpressionParsable, UnsafeExpressionError } from "../expression/expression-evaluator.js";
 
 const log = createLogger("entity-registry");
 
@@ -44,6 +45,39 @@ function reservedNameProblem(name: string): string | null {
     `Entity name "${name}" is reserved for the app's own pages (${RESERVED_ENTITY_NAMES.join(", ")}, ` +
     "and every name that starts with an underscore); rename the entity, for example with a capital letter"
   );
+}
+
+/**
+ * The first expression of the entity that does not parse or reads more than `doc` and `user`,
+ * named with its place, or null. Each falls back at run time to its safe default: a broken
+ * `mandatory_depends_on` makes its field required on every save, a broken `read_only_depends_on`
+ * locks it, and a broken condition refuses.
+ */
+function expressionProblem(entity: EntityDefinition): string | null {
+  const places: Array<[string, unknown]> = [];
+  const visit = (fields: FieldDefinition[] | undefined, prefix: string) => {
+    for (const f of fields ?? []) {
+      for (const key of ["depends_on", "mandatory_depends_on", "read_only_depends_on"] as const) places.push([`${prefix}${f.fieldname}.${key}`, f[key]]);
+      if (f.fieldtype === "Table") visit(f.child_fields, `${prefix}${f.fieldname}.`);
+    }
+  };
+  visit(entity.fields, "");
+  for (const t of entity.transitions ?? []) places.push([`transition ${t.from} to ${t.to} condition`, t.condition]);
+  for (const a of entity.actions ?? []) places.push([`action ${a.action} show_if`, a.show_if]);
+  (entity.permissions ?? []).forEach((p, i) => places.push([`permissions[${i}].condition`, p.condition]));
+  for (const [place, expression] of places) {
+    if (typeof expression !== "string" || !expression) continue;
+    try {
+      assertFieldExpressionParsable(expression);
+    } catch (err) {
+      const reason =
+        err instanceof UnsafeExpressionError
+          ? `reads ${err.detail.replace("Identifier:", "")}, but an expression reads only doc and user`
+          : `does not parse (${(err as Error).message})`;
+      return `entity "${entity.name}": ${place} ${reason}: ${expression}`;
+    }
+  }
+  return null;
 }
 
 /** Hook keys no engine code runs: an entity that declares one restricts and changes nothing. */
@@ -252,6 +286,8 @@ export class EntityRegistry {
     entity.fields.sort((a, b) => (a.idx ?? 0) - (b.idx ?? 0));
     this.validateFieldNames(entity);
     this.validateFieldDefinitions(entity);
+    const expression = expressionProblem(entity);
+    if (expression) throw new Error(expression);
     this.validateHooks(entity);
     this.validateSnapshotManifest(entity);
     this.validateTimeSeriesConfig(entity);
