@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { icons, type LucideIcon } from "lucide-react";
+import { Mail, icons, type LucideIcon } from "lucide-react";
 import { BrandMark, TopBar, buttonAttributes, cn, type BrandMarkProps } from "@digitaplatform/components";
 import type { Locale } from "@/i18n/config";
 import type { NavItem, WebNavMenu, WebSite } from "@/lib/types";
@@ -113,8 +113,15 @@ export function Header({
           )}
           <LocaleSwitcher current={locale} publishedSlugs={publishedSlugs} enabledLocales={enabledLocales} label={t("language", locale)} />
           <ThemeToggle label={t("toggleTheme", locale)} lookCookieDomain={lookCookieDomain} />
-          {/* The header menu's item for the contact sheet; SheetButton draws nothing where the site offers no sheet. */}
-          {contact && <SheetButton {...buttonAttributes({ size: "sm", className: "shrink-0" })}>{contact.label}</SheetButton>}
+          {/* The header menu's item for the contact sheet; SheetButton draws nothing where the site offers no sheet.
+              Below the tablet the bar has the room of a seven-letter label, so the button shows a mail
+              icon there and its label from md on; its name is the full label at every width. */}
+          {contact && (
+            <SheetButton {...buttonAttributes({ size: "sm", className: "shrink-0" })} aria-label={contact.label} title={contact.label}>
+              <Mail className="h-4 w-4 md:hidden" aria-hidden="true" />
+              <span className="hidden md:inline">{contact.label}</span>
+            </SheetButton>
+          )}
           <MobileNav
             locale={locale}
             items={items}
