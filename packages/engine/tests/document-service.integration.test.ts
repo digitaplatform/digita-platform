@@ -2419,6 +2419,10 @@ describe("A save stores only declared fields, an Administrator's included", () =
         { fieldname: "title", fieldtype: "Data", label: "Title" },
         { fieldname: "lines", fieldtype: "Table", label: "Lines", child_fields: [{ fieldname: "item", fieldtype: "Data", label: "Item" }] },
       ],
+      permissions: [
+        { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
+        { role: "Clerk", level: 0, select: 1, read: 1, write: 1, create: 1 },
+      ],
     } as unknown as Partial<EntityDefinition>));
     await db.ensureCollection("DeclaredDoc", "app");
     // The workflow names its state field without declaring it; the engine stores it.
@@ -2436,6 +2440,26 @@ describe("A save stores only declared fields, an Administrator's included", () =
     expect((await db.findOne("UndeclaredStateDoc", created._id, "app"))?.["status"]).toBe("Draft");
     await docService.transition("UndeclaredStateDoc", created._id, "Active", adminUser);
     expect((await db.findOne("UndeclaredStateDoc", created._id, "app"))?.["status"]).toBe("Active");
+  });
+
+  it("keeps the position of an Administrator's row", async () => {
+    const created = await docService.insert("DeclaredDoc", { title: "x", lines: [{ item: "a", idx: 0 }, { item: "b", idx: 1 }] }, adminUser);
+    const lines = ((await db.findOne("DeclaredDoc", created._id, "app")) as { lines: Array<Record<string, unknown>> }).lines;
+    expect(lines.map((l) => [l["item"], l["idx"]])).toEqual([["a", 0], ["b", 1]]);
+  });
+
+  it.each([null, "x", 5, ["item", "a"]])("refuses a Clerk's and an Administrator's Table row %j, which is no object", async (row) => {
+    const clerk: UserContext = { _id: "clerk-2", email: "clerk2@test.local", roles: ["Clerk"], full_name: "Clerk" };
+    for (const user of [clerk, adminUser]) {
+      await expect(docService.insert("DeclaredDoc", { title: "x", lines: [row] }, user)).rejects.toBeInstanceOf(ValidationFailedError);
+    }
+  });
+
+  it("drops an undeclared cell of a Table row that no cell gates, for every role", async () => {
+    const clerk: UserContext = { _id: "clerk-1", email: "clerk@test.local", roles: ["Clerk"], full_name: "Clerk" };
+    const created = await docService.insert("DeclaredDoc", { title: "x", lines: [{ item: "a", itme: "typo", idx: 0 }] }, clerk);
+    const row = ((await db.findOne("DeclaredDoc", created._id, "app")) as { lines: Array<Record<string, unknown>> }).lines[0]!;
+    expect(["itme" in row, row["item"], row["idx"]]).toEqual([false, "a", 0]);
   });
 
   it("drops an undeclared cell of a Table row from an Administrator's insert and update", async () => {
