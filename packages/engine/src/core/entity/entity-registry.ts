@@ -850,6 +850,22 @@ export class EntityRegistry {
     this.entities.set(entity.name, entity);
   }
 
+  /**
+   * Stop serving the definition `/meta` stored for `name`. An entity that an entity file also
+   * defines answers as the file defines it again, and that definition is returned; any other
+   * entity is no longer registered.
+   */
+  deleteStoredDefinition(name: string): EntityDefinition | undefined {
+    const file = this.fileEntities.get(name);
+    if (!file) {
+      this.entities.delete(name);
+      return undefined;
+    }
+    const restored: EntityDefinition = JSON.parse(JSON.stringify(file));
+    this.entities.set(name, restored);
+    return restored;
+  }
+
   // ─── Query Methods ─────────────────────────────────────
 
   get(name: string): EntityDefinition {
