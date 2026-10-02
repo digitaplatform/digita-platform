@@ -190,4 +190,13 @@ describe('editing a saved job on the Jobs page', () => {
     fireEvent.change(name, { target: { value: ' ' } });
     expect(within(dialog).getByTestId('action:job-save')).toBeDisabled();
   });
+
+  it('PLANTED DEFECT: refuses a target document of blanks, as it refuses a job name of blanks', async () => {
+    renderJobs();
+    fireEvent.click(await screen.findByTestId('action:task-schedule-sendDunning'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/^Cron/), { target: { value: '0 5 * * *' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Target document/), { target: { value: '   ' } });
+    expect(within(dialog).getByTestId('action:job-save')).toBeDisabled();
+  });
 });
