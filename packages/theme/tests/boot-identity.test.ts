@@ -150,6 +150,21 @@ describe('the pre-paint script', () => {
     data.remove();
   });
 
+  it("paints the mode the page names, over the one this browser stored: a site under its tenant's lock", async () => {
+    localStorage.setItem(MODE_STORAGE_KEY, 'dark');
+    const data = document.createElement('script');
+    data.type = 'application/json';
+    data.id = 'digita-identity';
+    data.textContent = JSON.stringify({ signature: 'brand1', signatures: [brand], mode: 'system' });
+    document.head.appendChild(data);
+
+    vi.resetModules();
+    await import('../src/runtime/identity-boot-script.js');
+
+    expect(root().classList.contains('dark')).toBe(window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false);
+    data.remove();
+  });
+
   it("keeps the page's signature over a person's former pick in this browser", async () => {
     localStorage.setItem(SIGNATURE_STORAGE_KEY, 'brand1');
     const data = document.createElement('script');

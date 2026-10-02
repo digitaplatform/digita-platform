@@ -54,7 +54,7 @@ export async function loadDeliveredIdentity(sources: DeliveredIdentitySources): 
 
   if (changed) {
     const page = readPageIdentity();
-    bootIdentity({ signature: page?.signature, signatures: page?.signatures, branding: page?.branding, followSystemMode: false });
+    bootIdentity({ signature: page?.signature, signatures: page?.signatures, branding: page?.branding, mode: page?.mode, followSystemMode: false });
   }
   return changed;
 }

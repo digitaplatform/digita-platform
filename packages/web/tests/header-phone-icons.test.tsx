@@ -78,6 +78,7 @@ function drawHeader(items: NavItem[], config = siteConfig) {
         publishedSlugs={{ en: [""], de: [""] }}
         enabledLocales={[]}
         lookCookieDomain={undefined}
+        modeLocked={false}
       />
     </ConfigProvider>,
   );
@@ -284,6 +285,7 @@ describe("the phone's mode button", () => {
             publishedSlugs={{ en: [""], de: [""] }}
             enabledLocales={[]}
             lookCookieDomain={undefined}
+            modeLocked={false}
           />
         </ConfigProvider>,
       ),
