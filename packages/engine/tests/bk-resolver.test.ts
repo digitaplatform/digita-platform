@@ -94,7 +94,7 @@ describe("resolveLinksByBk", () => {
     expect(row.group).toBe("MISSING"); // left in place → DocumentService fails loud
     expect(unresolved).toEqual([
       { field: "group", target: "Group", value: "MISSING" },
-      { field: "account", target: "Account", value: "NOPE" },
+      { field: "lines.account", target: "Account", value: "NOPE" },
     ]);
   });
 });
