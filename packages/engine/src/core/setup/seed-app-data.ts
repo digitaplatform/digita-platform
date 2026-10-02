@@ -223,6 +223,15 @@ export async function seedAppData(
         );
         continue;
       }
+      // by_field naming derives the _id from its field, as an insert does; a row without either has none.
+      const namingField = entity.naming?.strategy === "by_field" ? entity.naming.field : undefined;
+      if (namingField && rows.some((r) => r["_id"] == null && !r[namingField])) {
+        log.error(
+          { file: join(dir, file), entity: entity.name, field: namingField },
+          `seed file skipped: by_field naming needs "${namingField}" or an explicit _id on every row`,
+        );
+        continue;
+      }
 
       const hidden = entity.name === "Workspace" ? defaultHiddenByRoles(entity, rows) : undefined;
       if (hidden) {
@@ -302,6 +311,8 @@ export async function seedAppData(
         row.__seedId = String(row["_id"]);
       } else if (known !== undefined) {
         row.__seedId = known;
+      } else if (entity.naming?.strategy === "by_field" && entity.naming.field) {
+        row.__seedId = String(row[entity.naming.field]);
       } else if (isSystem) {
         row.__seedId = new ObjectId(); // native system id (see id-codec / docs/guides/id-concept.md)
       } else if (isExpression) {
