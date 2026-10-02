@@ -1213,6 +1213,27 @@ describe("updateSubmitted — a read_only_depends_on lock holds for a hook, a ru
     expect(((await db.findOne("LockDoc", id, "app"))?.["lines"] as unknown[]).length).toBe(2);
   });
 
+  it("lets a hook acting for an Administrator drop a row that holds a locked cell", async () => {
+    const { id, rowIds } = await lockedDoc();
+    (hookRunner as unknown as { hooks: Map<string, Map<string, unknown>> }).hooks.set(
+      "LockDoc",
+      new Map([["before_submitted_update", (doc: BaseDocument) => {
+        doc.set("lines", (doc.get("lines") as Array<Record<string, unknown>>).filter((l) => !l["sealed"]));
+      }]]),
+    );
+    try {
+      await docService.updateSubmitted(
+        "LockDoc",
+        id,
+        { children: [{ table: "lines", row_id: rowIds[0]!, increment: { delivered: 1 } }] },
+        admin,
+      );
+    } finally {
+      (hookRunner as unknown as { hooks: Map<string, unknown> }).hooks.delete("LockDoc");
+    }
+    expect(((await db.findOne("LockDoc", id, "app"))?.["lines"] as unknown[]).length).toBe(1);
+  });
+
   it("leaves a computed Table out: its hook may drop a row that holds a locked cell", async () => {
     registry.register({ ...lockEntity("LockDoc"), hooks: { computed: { lines: "lock/doc.rebuildLines" } } } as unknown as EntityDefinition);
     const { id, rowIds } = await lockedDoc();
