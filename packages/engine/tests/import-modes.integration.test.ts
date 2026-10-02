@@ -305,9 +305,11 @@ describe("Import modes — insert / upsert / validate", () => {
   });
 
   it("upsert keeps a stored row's read_only child value for a role that may not write it (#256)", async () => {
-    await imp("Checklist", adminTok, { rows: [{
-      code: "CL1", steps: [{ step: "Legacy", done: false }, { step: "Brakes", done: false }],
-    }], mode: "insert" });
+    // A read_only cell comes in through a seed or a hook, never an import: the rows are stored as a seed does.
+    await imp("Checklist", adminTok, { rows: [{ code: "CL1", steps: [{ done: false }, { done: false }] }], mode: "insert" });
+    const inserted = (await findOne("Checklist", { code: "CL1" }))!;
+    const seededSteps = (inserted.steps as Array<Record<string, unknown>>).map((row, i) => ({ ...row, step: ["Legacy", "Brakes"][i] }));
+    await db.updateOne("Checklist", String(inserted._id), { steps: seededSteps }, "app");
     const stored = (await findOne("Checklist", { code: "CL1" }))!.steps as Array<Record<string, unknown>>;
 
     // The file names each stored row by its _row_id, as an export writes it.

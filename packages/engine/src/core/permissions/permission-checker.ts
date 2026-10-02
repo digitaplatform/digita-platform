@@ -652,7 +652,8 @@ export class PermissionChecker {
     // payload may omit `owner`, which would wrongly fail if_owner and over-strip. On
     // create there is no contextDoc; the creator is the owner, so if_owner admits.
     const writableFields = this.getWritableFields(user, entityName, contextDoc);
-    if (!writableFields) return data; // null = all writable (admin / unrestricted)
+    // An Administrator writes every field but a read_only one, which only a hook or the engine sets.
+    if (!writableFields) return this.withoutReadOnlyFields(this.registry.get(entityName), data, contextDoc);
 
     const entity = this.registry.get(entityName);
     const tableFields = new Map(
@@ -761,6 +762,43 @@ export class PermissionChecker {
           })
         : new PermissionDeniedError("permission_denied_locked_field", { doctype: entityName, field: change.field });
     }
+  }
+
+  /**
+   * `data` without its `read_only` fields, for a writer whose role opens every field: a stripped
+   * top-level field keeps its stored value through the update's merge, and a Table row matched by
+   * `_row_id` keeps the stored values of its read_only cells, since a Table is stored whole.
+   */
+  private withoutReadOnlyFields(
+    entity: EntityDefinition,
+    data: Record<string, unknown>,
+    contextDoc?: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const readOnly = new Set(entity.fields.filter((f) => f.read_only).map((f) => f.fieldname));
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (readOnly.has(key)) continue;
+      const table = entity.fields.find((f) => f.fieldname === key && f.fieldtype === "Table");
+      const readOnlyCells = new Set((table?.child_fields ?? []).filter((c) => c.read_only).map((c) => c.fieldname));
+      if (!table || readOnlyCells.size === 0 || !Array.isArray(value)) {
+        out[key] = value;
+        continue;
+      }
+      const storedTable = contextDoc?.[key];
+      const storedRows = new Map(
+        (Array.isArray(storedTable) ? (storedTable as Array<Record<string, unknown>>) : []).map((r) => [r?.[ROW_ID_FIELD], r]),
+      );
+      out[key] = (value as unknown[]).map((row) => {
+        // A row that is no object stays as it is, for the schema to refuse.
+        if (!row || typeof row !== "object" || Array.isArray(row)) return row;
+        const stored = storedRows.get((row as Record<string, unknown>)[ROW_ID_FIELD]);
+        const kept: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(row)) if (!readOnlyCells.has(k)) kept[k] = v;
+        for (const cell of readOnlyCells) if (stored && cell in stored) kept[cell] = stored[cell];
+        return kept;
+      });
+    }
+    return out;
   }
 
   /**
