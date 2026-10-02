@@ -131,9 +131,7 @@ export function buildMongoFilter(
 
   // Text search
   if (query.search && searchFields?.length) {
-    const searchConditions = searchFields.map((field) => ({
-      [field]: { $regex: escapeRegex(query.search!), $options: "i" },
-    }));
+    const searchConditions = searchFields.map((field) => searchCondition(field, escapeRegex(query.search!)));
     conditions.push({ $or: searchConditions } as Filter<Document>);
   }
 
@@ -246,8 +244,16 @@ function likeToRegex(pattern: string): string {
   return escapeRegex(pattern).replace(/%/g, ".*").replace(/_/g, ".");
 }
 
-function escapeRegex(str: string): string {
+export function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** The condition that finds the escaped text in `field` as a result shows it: `_id` as its string,
+ *  since a `system`-named row stores it as an ObjectId, which `$regex` never matches. Serves the
+ *  list search, the global search and the link picker alike. */
+export function searchCondition(field: string, escaped: string): Record<string, unknown> {
+  if (field !== "_id") return { [field]: { $regex: escaped, $options: "i" } };
+  return { $expr: { $regexMatch: { input: { $toString: "$_id" }, regex: escaped, options: "i" } } };
 }
 
 const MAX_REGEX_LENGTH = 256;
