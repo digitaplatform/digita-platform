@@ -81,7 +81,7 @@ export function registerResourceRoutes(
 
     const listQuery = listQueryFrom(query);
 
-    const ctx = new ResponseContext();
+    const ctx = new ResponseContext(await localeOf(request));
     const result = await documentService.getList(doctype, listQuery, getUser(request), ctx, await localeOf(request));
 
     const rows = callerIsInternal(request.user)
@@ -119,7 +119,7 @@ export function registerResourceRoutes(
           ),
         );
     }
-    const ctx = new ResponseContext();
+    const ctx = new ResponseContext(await localeOf(request));
     const row = await documentService.getSingle(doctype, getUser(request), ctx, await localeOf(request));
     return reply.send(successResponse(projectRead(request, row), ctx.getMessages()));
   });
@@ -127,7 +127,7 @@ export function registerResourceRoutes(
   // ─── READ ──────────────────────────────────────────────
   app.get(`${basePath}/:doctype/:name`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { doctype, name } = request.params as { doctype: string; name: string };
-    const ctx = new ResponseContext();
+    const ctx = new ResponseContext(await localeOf(request));
     const doc = await documentService.getDoc(doctype, name, getUser(request), ctx, await localeOf(request));
     return reply.send(successResponse(projectRead(request, doc.toJSON()), ctx.getMessages()));
   });
@@ -138,7 +138,7 @@ export function registerResourceRoutes(
     `${basePath}/:doctype/:name/actions`,
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { doctype, name } = request.params as { doctype: string; name: string };
-      const ctx = new ResponseContext();
+      const ctx = new ResponseContext(await localeOf(request));
       const actions = await documentService.getAvailableActions(doctype, name, getUser(request));
       return reply.send(successResponse(actions, ctx.getMessages()));
     },
@@ -149,7 +149,7 @@ export function registerResourceRoutes(
   app.post(`${basePath}/:doctype/preview`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { doctype } = request.params as { doctype: string };
     const data = request.body as Record<string, unknown>;
-    const ctx = new ResponseContext();
+    const ctx = new ResponseContext(await localeOf(request));
 
     const doc = await documentService.preview(doctype, data, getUser(request), ctx);
     return reply.send(successResponse(projectRead(request, documentService.toReadableJSON(doctype, doc, getUser(request))), ctx.getMessages()));
@@ -160,7 +160,7 @@ export function registerResourceRoutes(
   app.post(`${basePath}/:doctype/:name/preview`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { doctype, name } = request.params as { doctype: string; name: string };
     const data = request.body as Record<string, unknown>;
-    const ctx = new ResponseContext();
+    const ctx = new ResponseContext(await localeOf(request));
 
     const doc = await documentService.preview(doctype, data, getUser(request), ctx, name);
     return reply.send(successResponse(projectRead(request, documentService.toReadableJSON(doctype, doc, getUser(request))), ctx.getMessages()));
@@ -170,7 +170,7 @@ export function registerResourceRoutes(
   app.post(`${basePath}/:doctype`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { doctype } = request.params as { doctype: string };
     const data = request.body as Record<string, unknown>;
-    const ctx = new ResponseContext();
+    const ctx = new ResponseContext(await localeOf(request));
 
     const doc = await documentService.insert(doctype, data, getUser(request), ctx);
     const json = documentService.toReadableJSON(doctype, doc, getUser(request));
@@ -183,7 +183,7 @@ export function registerResourceRoutes(
   app.put(`${basePath}/:doctype/:name`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { doctype, name } = request.params as { doctype: string; name: string };
     const data = request.body as Record<string, unknown>;
-    const ctx = new ResponseContext();
+    const ctx = new ResponseContext(await localeOf(request));
 
     // Optimistic concurrency: honor If-Match (the `modified` ISO the client last
     // saw). ETag-style quotes are tolerated. Absent → last-write-wins (back-compat).
@@ -203,7 +203,7 @@ export function registerResourceRoutes(
   // ─── DELETE ────────────────────────────────────────────
   app.delete(`${basePath}/:doctype/:name`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { doctype, name } = request.params as { doctype: string; name: string };
-    const ctx = new ResponseContext();
+    const ctx = new ResponseContext(await localeOf(request));
 
     await documentService.deleteDoc(doctype, name, getUser(request), ctx);
     emitChange("delete", doctype, name);
@@ -216,7 +216,7 @@ export function registerResourceRoutes(
     `${basePath}/:doctype/:name/submit`,
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { doctype, name } = request.params as { doctype: string; name: string };
-      const ctx = new ResponseContext();
+      const ctx = new ResponseContext(await localeOf(request));
 
       const doc = await documentService.submit(doctype, name, getUser(request), ctx);
       emitChange("update", doctype, name);
@@ -229,7 +229,7 @@ export function registerResourceRoutes(
     `${basePath}/:doctype/:name/cancel`,
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { doctype, name } = request.params as { doctype: string; name: string };
-      const ctx = new ResponseContext();
+      const ctx = new ResponseContext(await localeOf(request));
 
       const doc = await documentService.cancel(doctype, name, getUser(request), ctx);
       emitChange("update", doctype, name);
@@ -242,7 +242,7 @@ export function registerResourceRoutes(
     `${basePath}/:doctype/:name/amend`,
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { doctype, name } = request.params as { doctype: string; name: string };
-      const ctx = new ResponseContext();
+      const ctx = new ResponseContext(await localeOf(request));
 
       const doc = await documentService.amend(doctype, name, getUser(request), ctx);
       const json = documentService.toReadableJSON(doctype, doc, getUser(request));
@@ -256,7 +256,7 @@ export function registerResourceRoutes(
     `${basePath}/:doctype/:name/copy`,
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { doctype, name } = request.params as { doctype: string; name: string };
-      const ctx = new ResponseContext();
+      const ctx = new ResponseContext(await localeOf(request));
 
       const doc = await documentService.copyDoc(doctype, name, getUser(request), ctx);
       const json = documentService.toReadableJSON(doctype, doc, getUser(request));
@@ -282,7 +282,7 @@ export function registerResourceRoutes(
     `${basePath}/:doctype/:name/print`,
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { doctype, name } = request.params as { doctype: string; name: string };
-      const ctx = new ResponseContext();
+      const ctx = new ResponseContext(await localeOf(request));
       const doc = await documentService.getDoc(doctype, name, getUser(request), ctx, await localeOf(request));
       return reply.send(successResponse(projectRead(request, doc.toJSON()), ctx.getMessages()));
     },
@@ -313,7 +313,7 @@ export function registerResourceRoutes(
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { doctype, name } = request.params as { doctype: string; name: string };
       const { to } = request.body as { to: string; comment?: string };
-      const ctx = new ResponseContext();
+      const ctx = new ResponseContext(await localeOf(request));
 
       const doc = await documentService.transition(doctype, name, to, getUser(request), ctx);
       emitChange("update", doctype, name);
@@ -371,7 +371,7 @@ export function registerResourceRoutes(
       });
       for (const n of deleted) emitChange("delete", doctype, n);
 
-      const ctx = new ResponseContext();
+      const ctx = new ResponseContext(await localeOf(request));
       if (deleted.length > 0) {
         ctx.success("bulk_delete_completed", {
           deleted: String(deleted.length),
@@ -403,7 +403,7 @@ export function registerResourceRoutes(
       });
       for (const n of submitted) emitChange("update", doctype, n);
 
-      const ctx = new ResponseContext();
+      const ctx = new ResponseContext(await localeOf(request));
       if (submitted.length > 0) {
         ctx.success("bulk_submit_completed", {
           submitted: String(submitted.length),
@@ -434,7 +434,7 @@ export function registerResourceRoutes(
       });
       for (const n of cancelled) emitChange("update", doctype, n);
 
-      const ctx = new ResponseContext();
+      const ctx = new ResponseContext(await localeOf(request));
       if (cancelled.length > 0) {
         ctx.success("bulk_cancel_completed", {
           cancelled: String(cancelled.length),
@@ -469,7 +469,7 @@ export function registerResourceRoutes(
       };
       const dialogData = (request.body as Record<string, unknown>) ?? {};
       const user = getUser(request);
-      const ctx = new ResponseContext();
+      const ctx = new ResponseContext(await localeOf(request));
 
       const entity = registry.get(doctype);
       const action = entity.actions?.find((a) => a.action === action_name);

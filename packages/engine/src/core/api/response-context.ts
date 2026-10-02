@@ -13,6 +13,9 @@ export interface MessageOptions {
  */
 export class ResponseContext {
   private messages: ResponseMessage[] = [];
+
+  /** `locale`: the caller's language, in which a write answers its link titles, as a read does. */
+  constructor(readonly locale?: string) {}
   // Messages store the message KEY + interpolation params. The engine's
   // preSerialization i18n hook translates them with the request locale
   // (server-side i18n via the shared translator). addRaw() bypasses this for
