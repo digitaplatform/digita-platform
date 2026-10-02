@@ -5,6 +5,10 @@
   "label": "Rule",
   "label_plural": "Rules",
   "naming": { "strategy": "user_set" },
+  "hooks": {
+    "before_insert": "rule/rule.beforeSave",
+    "before_save": "rule/rule.beforeSave"
+  },
   "is_submittable": false,
   "track_changes": true,
   "title_field": "label",
