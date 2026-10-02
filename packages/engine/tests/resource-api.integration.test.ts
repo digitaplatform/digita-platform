@@ -784,6 +784,7 @@ describe("Resource API Integration", () => {
       ["an unknown fieldtype", base("MetaType", field({ fieldname: "body", fieldtype: "Txet", label: "Body" })), "Txet"],
       ["a regex that does not compile", base("MetaRegex", field({ fieldname: "code", fieldtype: "Data", label: "Code", regex: "(" })), "code"],
       ["a reserved entity name", base("app"), "reserved"],
+      ["a name in the app's underscore namespace", base("_jobs"), "reserved"],
       ["an inconsistent workflow", base("MetaFlow", { states: [{ value: "A", is_initial: true }], transitions: [{ from: "A", to: "B", action: "go" }] }), "workflow"],
       ["no naming", base("MetaNoNaming", { naming: undefined }), "naming"],
       ["a naming that is a text", base("MetaTextNaming", { naming: "user_set" }), "naming"],
