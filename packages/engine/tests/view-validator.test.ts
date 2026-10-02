@@ -65,6 +65,15 @@ describe("validateViewDefinition — kind-specific", () => {
     expect(validateViewDefinition(v).some((e) => e.message.includes("op invalid"))).toBe(true);
   });
 
+  it("rejects a list section limit of 0 or a fraction, and accepts 1", () => {
+    const withLimit = (limit: number) => ({
+      ...(VALID as Record<string, unknown>),
+      sections: [{ key: "x", kind: "list", entity: "customerAddress", limit }],
+    });
+    const refused = (limit: number) => validateViewDefinition(withLimit(limit)).some((e) => e.message.includes(".limit"));
+    expect([refused(0), refused(1.5), refused(1)]).toEqual([true, true, false]);
+  });
+
   it("rejects aggregate with forbidden operator $where", () => {
     const v = {
       ...(VALID as Record<string, unknown>),
