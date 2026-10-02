@@ -423,12 +423,16 @@ describe("A Table with min_rows", () => {
     await db.ensureCollection("MinRowsOrder", "app");
   });
 
-  it("PLANTED DEFECT: refuses an insert that leaves the Table out, as it refuses an empty one", async () => {
-    for (const payload of [{ title: "No key" }, { title: "Empty", lines: [] }]) {
+  it("PLANTED DEFECT: refuses an insert that leaves the Table out or sends null, as it refuses an empty one", async () => {
+    const texts = new Set<string>();
+    for (const payload of [{ title: "No key" }, { title: "Null", lines: null }, { title: "Empty", lines: [] }]) {
       const res = await post(payload);
       expect(res.statusCode).toBe(400);
       expect(res.json().error.field).toBe("lines");
+      texts.add(res.json().messages[0].text);
     }
+    // All three are refused for having too few rows, not for a value of the wrong type.
+    expect(texts.size).toBe(1);
   });
 
   it("PLANTED INNOCENT: keeps the stored rows on an update that leaves the Table out", async () => {
