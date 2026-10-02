@@ -7,12 +7,13 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { EntityDefinition, TreeConfig } from '@digitaplatform/shared';
 
+// Siblings sort by position: the tests' keyboard starts on Retail, the first root.
 const ROWS = [
-  { _id: 'G-1', label: 'Retail', parent: null },
-  { _id: 'G-2', label: 'Swiss', parent: 'G-1' },
-  { _id: 'G-3', label: 'Wholesale', parent: null },
-  { _id: 'G-4', label: 'Germany', parent: 'G-3' },
-  { _id: 'G-5', label: 'Online', parent: null },
+  { _id: 'G-1', label: 'Retail', parent: null, position: 1 },
+  { _id: 'G-2', label: 'Swiss', parent: 'G-1', position: 1 },
+  { _id: 'G-3', label: 'Wholesale', parent: null, position: 2 },
+  { _id: 'G-4', label: 'Germany', parent: 'G-3', position: 1 },
+  { _id: 'G-5', label: 'Online', parent: null, position: 3 },
 ];
 const listState = vi.hoisted(() => ({ rows: [] as Array<Record<string, unknown>> }));
 vi.mock('@/hooks/useList', () => ({
@@ -25,11 +26,15 @@ vi.mock('@/services/resource', () => ({
   updateDoc: vi.fn(async () => ({})),
   deleteDoc: vi.fn(async () => ({})),
 }));
+const dialogSeed = vi.hoisted(() => ({ current: undefined as Record<string, unknown> | undefined }));
 vi.mock('@/components/record/RecordDialog', () => ({
-  RecordDialog: () => null,
+  RecordDialog: (props: { seed?: Record<string, unknown> }) => {
+    dialogSeed.current = props.seed;
+    return null;
+  },
 }));
 
-import { TreeEditor } from '@/components/render/TreeEditor';
+import { EntityTreeEditor } from '@/components/render/EntityTreeEditor';
 import { DialogHostProvider } from '@/components/overlay/DialogHost';
 import { updateDoc } from '@/services/resource';
 import { useUiStore } from '@/stores/ui';
@@ -38,11 +43,11 @@ import { useSessionStore } from '@/stores/session';
 const META = { name: 'CustomerGroup', title_field: 'name', fields: [] } as unknown as EntityDefinition;
 const TREE: TreeConfig = {};
 
-function Editor({ qc }: { qc: QueryClient }) {
+function Editor({ qc, tree = TREE }: { qc: QueryClient; tree?: TreeConfig }) {
   return (
     <QueryClientProvider client={qc}>
       <DialogHostProvider>
-        <TreeEditor entity="CustomerGroup" meta={META} tree={TREE} />
+        <EntityTreeEditor entity="CustomerGroup" meta={META} tree={tree} />
       </DialogHostProvider>
     </QueryClientProvider>
   );
@@ -66,7 +71,7 @@ beforeEach(() => {
   vi.mocked(updateDoc).mockClear();
 });
 
-describe('TreeEditor open groups', () => {
+describe('EntityTreeEditor open groups', () => {
   it('starts with every group open and keeps the groups a person closed when the page opens again', () => {
     const first = renderEditor();
     expect(row('G-1')).toHaveAttribute('aria-expanded', 'true');
@@ -107,7 +112,7 @@ describe('TreeEditor open groups', () => {
   });
 });
 
-describe('TreeEditor moving a node', () => {
+describe('EntityTreeEditor moving a node', () => {
   it('opens a group on its name and moves the node through the Select button in its row', async () => {
     const user = userEvent.setup();
     renderEditor();
@@ -135,5 +140,24 @@ describe('TreeEditor moving a node', () => {
     await waitFor(() =>
       expect(updateDoc).toHaveBeenCalledWith('CustomerGroup', 'G-1', { parent: 'G-5' }, undefined),
     );
+  });
+});
+
+describe('EntityTreeEditor kinds', () => {
+  it('lists the kinds the rows carry, and opens the record of a new kind\'s first node with that kind', async () => {
+    listState.rows = [
+      { _id: 'G-1', label: 'Retail', parent: null, kind: 'Customers' },
+      { _id: 'S-1', label: 'Wholesalers', parent: null, kind: 'Suppliers' },
+    ];
+    dialogSeed.current = undefined;
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<Editor qc={qc} tree={{ kind: true }} />);
+    const user = userEvent.setup();
+    expect(screen.getByText('Retail')).toBeInTheDocument();
+    expect(screen.queryByText('Wholesalers')).toBeNull();
+    await user.click(screen.getByRole('button', { name: '+ ui.tree.newKind' }));
+    await user.type(screen.getByRole('textbox', { name: 'ui.tree.kindName' }), 'Partners');
+    await user.click(screen.getByRole('button', { name: 'ui.action.create' }));
+    expect(dialogSeed.current).toEqual({ kind: 'Partners' });
   });
 });
