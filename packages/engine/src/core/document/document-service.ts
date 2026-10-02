@@ -1891,6 +1891,9 @@ export class DocumentService {
         const before = storedTables[table];
         const after = doc.get(table);
         if (computedTargets.has(table) || JSON.stringify(before) === JSON.stringify(after ?? null)) continue;
+        // A row a hook dropped is judged as on update: one that holds a locked cell stays.
+        const tableField = entity.fields.find((f) => f.fieldname === table)!;
+        this.permissionChecker.assertNoLockedRowDropped(user, entity.name, tableField, after, before);
         changes.push({ field: table, old: before, new: after });
         const storedRows = new Map(
           (Array.isArray(before) ? (before as Array<Record<string, unknown>>) : []).map((r) => [r[ROW_ID_FIELD], r]),

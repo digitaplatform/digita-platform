@@ -840,11 +840,9 @@ export class PermissionChecker {
     const storedById = new Map(
       (storedRows as Array<Record<string, unknown>>).map((r) => [r["_row_id"], r] as const),
     );
-    const keptRowIds = new Set<unknown>();
     for (const row of (Array.isArray(rows) ? rows : []) as Array<Record<string, unknown>>) {
       const stored = row["_row_id"] === undefined ? undefined : storedById.get(row["_row_id"]);
       if (!stored) continue;
-      keptRowIds.add(row["_row_id"]);
       const resultingRow = { ...stored, ...row };
       for (const child of lockable) {
         if (JSON.stringify(row[child.fieldname] ?? null) === JSON.stringify(stored[child.fieldname] ?? null)) continue;
@@ -860,6 +858,25 @@ export class PermissionChecker {
         }
       }
     }
+    this.assertNoLockedRowDropped(user, entityName, tableField, rows, storedRows);
+  }
+
+  /**
+   * A stored row that `rows` no longer names by `_row_id` is deleted, by a write or by a hook on
+   * the patch path alike: it may not hold a cell whose condition holds on the stored row. The
+   * Administrator is exempt, as from every lock.
+   */
+  assertNoLockedRowDropped(
+    user: UserContext,
+    entityName: string,
+    tableField: FieldDefinition,
+    rows: unknown,
+    storedRows: unknown,
+  ): void {
+    if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return;
+    const lockable = tableField.child_fields?.filter((c) => c.read_only_depends_on) ?? [];
+    if (lockable.length === 0 || !Array.isArray(storedRows)) return;
+    const keptRowIds = new Set((Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : []).map((r) => r?.["_row_id"]));
     for (const stored of storedRows as Array<Record<string, unknown>>) {
       if (keptRowIds.has(stored["_row_id"])) continue;
       const locked = lockable.find((child) =>
