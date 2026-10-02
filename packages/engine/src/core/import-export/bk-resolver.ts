@@ -70,7 +70,9 @@ export function resolveLinksByBk(
     } else if (field.fieldtype === "Table" && Array.isArray(row[field.fieldname])) {
       const childFields = field.child_fields ?? [];
       for (const child of row[field.fieldname] as Record<string, unknown>[]) {
-        unresolved.push(...resolveLinksByBk(childFields, child, bkIndex));
+        for (const link of resolveLinksByBk(childFields, child, bkIndex)) {
+          unresolved.push({ ...link, field: `${field.fieldname}.${link.field}` });
+        }
       }
     }
   }
