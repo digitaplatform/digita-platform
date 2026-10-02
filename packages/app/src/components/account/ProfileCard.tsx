@@ -10,6 +10,9 @@ import type { UpdateProfileRequest } from '@/services/account';
  * AccountPage owns the useProfileUpdate hook and passes `saving`/`error`.
  * Languages come from /boot.available_languages (props, never fetched here).
  */
+/** The longest full name the IdP keeps; it refuses a longer one with a code and no text. */
+const FULL_NAME_MAX_LENGTH = 200;
+
 export interface ProfileCardProps {
   user: SessionUser;
   languages: BootLanguage[];
@@ -85,6 +88,7 @@ export function ProfileCard({ user, languages, onSave, saving, error }: ProfileC
               id={nameId}
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
+              maxLength={FULL_NAME_MAX_LENGTH}
               placeholder={tc('ui.account.profile.fullNamePlaceholder')}
               disabled={saving}
             />
