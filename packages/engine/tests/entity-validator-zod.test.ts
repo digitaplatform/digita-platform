@@ -12,7 +12,8 @@ vi.mock("../src/core/logging/logger.js", () => ({
   getRootLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
 }));
 
-import type { EntityDefinition } from "@digitaplatform/shared";
+import { createTranslator, type EntityDefinition } from "@digitaplatform/shared";
+import { readBundle } from "@digitaplatform/shared/i18n-node";
 import { validateEntityDataZod } from "../src/core/entity/entity-validator-zod.js";
 import { ZodSchemaBuilder } from "../src/core/entity/zod-schema-builder.js";
 import { getFieldTypeHandler } from "../src/core/entity/field-types.js";
@@ -763,6 +764,20 @@ describe("validateEntityDataZod — a failed rule answers the key it names", () 
         thrown = err;
       }
       expect(thrown).toMatchObject({ message_key: "field_invalid_date", params: { field: "Due" } });
+    }
+  });
+
+  it("renders every rule's key with the params it answers in every language, leaving no placeholder unfilled", () => {
+    const bundle = readBundle(process.env.TRANSLATIONS_DIR!);
+    const translator = createTranslator(bundle, "en");
+    for (const [rule, field, value, key] of cases) {
+      // A regex_message names the app's own key, which the app's texts fill.
+      if (key !== "field_invalid_regex" && "regex_message" in field) continue;
+      builder.invalidate("TestDoc");
+      const [error] = validateEntityDataZod(entity([{ fieldname: "f", label: "F", ...field }]), { f: value }, builder).errors;
+      for (const locale of Object.keys(bundle)) {
+        expect(translator.t(error!.message_key, error!.params, locale), `${rule} in ${locale}`).not.toMatch(/\{\w+\}/);
+      }
     }
   });
 
