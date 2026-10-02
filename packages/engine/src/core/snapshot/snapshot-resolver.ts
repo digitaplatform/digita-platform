@@ -9,6 +9,7 @@ import type {
 import { ROW_ID_FIELD } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
+import { EngineError } from "../errors/engine-error.js";
 import { parseSubRowLink } from "../document/row-id.js";
 import { toIdString } from "../document/id-codec.js";
 import { createLogger } from "../logging/logger.js";
@@ -20,21 +21,19 @@ const log = createLogger("snapshot-resolver");
  * doc cannot be located. Aborts submit/insert so we never legally seal an
  * empty/wrong snapshot. The transaction rolls back; the user sees a clear error.
  */
-export class SnapshotMissingTargetError extends Error {
-  public readonly entity: string;
-  public readonly fromField: string;
-  public readonly targetEntity: string;
-  public readonly targetId: string;
-  constructor(entity: string, fromField: string, targetEntity: string, targetId: string) {
+export class SnapshotMissingTargetError extends EngineError {
+  constructor(
+    public readonly entity: string,
+    public readonly fromField: string,
+    public readonly targetEntity: string,
+    public readonly targetId: string,
+  ) {
     super(
-      `Snapshot for ${entity}.${fromField} cannot resolve: ` +
-        `${targetEntity} ${targetId} not found`,
+      "snapshot_target_missing",
+      { doctype: entity, field: fromField, target: targetEntity, name: targetId },
+      409,
+      "SNAPSHOT_TARGET_MISSING",
     );
-    this.name = "SnapshotMissingTargetError";
-    this.entity = entity;
-    this.fromField = fromField;
-    this.targetEntity = targetEntity;
-    this.targetId = targetId;
   }
 }
 
