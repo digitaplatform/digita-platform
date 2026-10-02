@@ -40,6 +40,7 @@ export function LinksPanel({ entity, name, links }: { entity: string; name: stri
         // The route answers one entry per declared link, in declaration order.
         const answer = related.data?.[links.indexOf(link)];
         const count = answer?.entity === link.entity ? answer.count : undefined;
+        const refusal = answer?.entity === link.entity ? answer.error : undefined;
         const filter = JSON.stringify(objectFilterToTuples({ [link.link_field]: name, ...link.filters }));
         const Icon = resolveIcon(link.icon);
         return (
@@ -52,7 +53,7 @@ export function LinksPanel({ entity, name, links }: { entity: string; name: stri
             {link.label}{' '}
             {link.show_count && typeof count === 'number' && <Badge size="sm">{count}</Badge>}
             {link.show_count && typeof count !== 'number' && !related.isPending && (
-              <Badge size="sm" title={failure}>
+              <Badge size="sm" title={refusal ?? failure}>
                 —
               </Badge>
             )}
