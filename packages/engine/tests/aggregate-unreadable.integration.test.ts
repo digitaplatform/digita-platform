@@ -13,6 +13,17 @@ vi.mock("../src/core/logging/logger.js", () => ({
   createLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
   getRootLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
 }));
+// The field walker can be switched off, so a probe shows what the runner's own guards hold
+// for a shape the walker does not know.
+const walker = vi.hoisted(() => ({ off: false }));
+vi.mock("../src/core/view/section-runners/pipeline-field-walker.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/core/view/section-runners/pipeline-field-walker.js")>();
+  return {
+    ...original,
+    collectFieldReferences: (...args: Parameters<typeof original.collectFieldReferences>) =>
+      walker.off ? [] : original.collectFieldReferences(...args),
+  };
+});
 
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { env } from "../src/core/config/env.js";
@@ -120,7 +131,8 @@ afterAll(async () => {
 }, 30000);
 
 /** What a pipeline answers a reader: its rows, or that it was refused. */
-async function outcome(pipeline: unknown[], readable: Map<string, Set<string> | null>): Promise<unknown> {
+async function outcome(pipeline: unknown[], readable: Map<string, Set<string> | null>, walkerOff = false): Promise<unknown> {
+  walker.off = walkerOff;
   try {
     return await runAggregateSection(
       { key: "k", kind: "aggregate", entity: "Employee", pipeline } as AggregateSection,
@@ -142,6 +154,8 @@ async function outcome(pipeline: unknown[], readable: Map<string, Set<string> | 
   } catch (err) {
     if (err instanceof PermissionDeniedError) return "refused";
     throw err;
+  } finally {
+    walker.off = false;
   }
 }
 
@@ -182,22 +196,29 @@ const probes: Array<[string, unknown[]]> = [
   ["an inclusion of the payments", [{ $project: { payments: 1 } }]],
   ["a joined child cost", [join, { $addFields: { c: "$d.lines.cost" } }]],
   ["a group by a joined child cost", [join, { $unwind: "$d" }, { $unwind: "$d.lines" }, { $group: { _id: "$d.lines.cost", n: { $sum: 1 } } }, { $sort: { _id: 1 } }]],
+  // A $lookup inside a $lookup's sub-pipeline.
+  ["a $lookup nested in a sub-pipeline that reads budget after a reshape", [{ $lookup: { from: "Tag", as: "t", pipeline: [{ $lookup: { from: "Department", pipeline: [{ $project: { title: { x: 0 } } }, { $addFields: { b: "$budget" } }], as: "d" } }, { $project: { label: "$d.b" } }] } }]],
+  // A foreignField through an array index, and one on a Table whose rows hold a hidden child field.
+  ["a foreignField oracle through an array index", [{ $lookup: { from: "Tag", as: "t", pipeline: [{ $addFields: { guess: 72001 } }, { $lookup: { from: "Employee", localField: "guess", foreignField: "payments.0.amount", as: "hit" } }, { $project: { n: { $size: "$hit" }, who: "$hit.name" } }] } }]],
+  ["a foreignField oracle on a whole Table row", [{ $lookup: { from: "Tag", as: "t", pipeline: [{ $addFields: { guess: { _row_id: "E1-p", idx: 0, ref: "E1-ref", amount: 71001 } } }, { $lookup: { from: "Employee", localField: "guess", foreignField: "payments", as: "hit" } }, { $project: { n: { $size: "$hit" }, who: "$hit.name" } }] } }]],
 ];
 
 describe("an aggregate section never answers a reader a value of a field they may not read", () => {
   for (const [what, pipeline] of probes) {
-    it(`through ${what}: no protected value, and nothing that depends on one`, async () => {
-      const before = await outcome(pipeline, partial);
-      await storeValues(1);
-      try {
-        const after = await outcome(pipeline, partial);
-        const text = JSON.stringify(before);
-        for (const value of [...SALARIES, ...BUDGETS, ...AMOUNTS, ...COSTS]) expect(text).not.toContain(String(value));
-        expect(after).toEqual(before);
-      } finally {
-        await storeValues(0);
-      }
-    });
+    for (const walkerOff of [false, true]) {
+      it(`through ${what}${walkerOff ? ", with the field walker off" : ""}: no protected value, and nothing that depends on one`, async () => {
+        const before = await outcome(pipeline, partial, walkerOff);
+        await storeValues(1);
+        try {
+          const after = await outcome(pipeline, partial, walkerOff);
+          const text = JSON.stringify(before);
+          for (const value of [...SALARIES, ...BUDGETS, ...AMOUNTS, ...COSTS]) expect(text).not.toContain(String(value));
+          expect(after).toEqual(before);
+        } finally {
+          await storeValues(0);
+        }
+      });
+    }
   }
 
   it("PLANTED INNOCENT: a reader of every field gets the values, so the probes can see them", async () => {
@@ -215,6 +236,20 @@ describe("an aggregate section never answers a reader a value of a field they ma
       [{ _row_id: "E2-p", idx: 0, ref: "E2-ref" }],
       [{ _row_id: "E3-p", idx: 0, ref: "E3-ref" }],
     ]);
+  });
+
+  it("PLANTED INNOCENT: the joined rows keep the fields and child fields the reader may read", async () => {
+    for (const walkerOff of [false, true]) {
+      const rows = (await outcome([{ $project: { dept_id: 1 } }, join, { $sort: { _id: 1 } }], partial, walkerOff)) as Array<Record<string, unknown>>;
+      expect(rows[0]!["d"]).toEqual([{ _id: "D1", title: "Ops", lines: [{ _row_id: "D1-l", idx: 0, item: "D1-item" }] }]);
+    }
+  });
+
+  it("PLANTED INNOCENT: the oracle pipelines answer a reader of every field, so they can tell", async () => {
+    const hit = await outcome([{ $lookup: { from: "Tag", as: "t", pipeline: [{ $addFields: { guess: { _row_id: "E1-p", idx: 0, ref: "E1-ref", amount: 71001 } } }, { $lookup: { from: "Employee", localField: "guess", foreignField: "payments", as: "hit" } }, { $project: { who: "$hit.name" } }] } }, { $project: { t: 1 } }, { $limit: 1 }], everyField);
+    expect(JSON.stringify(hit)).toContain("Anna");
+    const indexed = await outcome([{ $lookup: { from: "Tag", as: "t", pipeline: [{ $addFields: { guess: 72001 } }, { $lookup: { from: "Employee", localField: "guess", foreignField: "payments.0.amount", as: "hit" } }, { $project: { who: "$hit.name" } }] } }, { $project: { t: 1 } }, { $limit: 1 }], everyField);
+    expect(JSON.stringify(indexed)).toContain("Ben");
   });
 
   it("refuses a $lookup whose from names no entity, such as { db, coll }", async () => {
