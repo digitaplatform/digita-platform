@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { PluginInventory } from "@digitaplatform/plugins";
 import {
+  LOOK_COOKIE_NAME,
   DESIGN_STORAGE_KEY,
   MODE_STORAGE_KEY,
   PAGE_IDENTITY_ELEMENT_ID,
@@ -59,6 +60,8 @@ beforeEach(() => {
   localStorage.clear();
   document.head.innerHTML = "";
   document.cookie = "digita_csrf_tenant1=; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+  // A visitor's stored choices also land in the look cookie, which would carry them into the next test.
+  document.cookie = `${LOOK_COOKIE_NAME}=; Path=/; Max-Age=0`;
   root().removeAttribute("data-design");
   root().removeAttribute("data-design-variant");
   root().removeAttribute("data-signature");
