@@ -86,7 +86,7 @@ describe('storeIdentityPreferences', () => {
   it("keeps the server's valid choices as this browser's own, and ignores the rest", () => {
     localStorage.clear();
     localStorage.setItem(MODE_STORAGE_KEY, 'light');
-    const stored = storeIdentityPreferences({ mode: 'dark', density: 'huge', design: 'material' });
+    const stored = storeIdentityPreferences({ mode: 'dark', density: 'huge', design: 'material' }, undefined);
     expect(stored).toEqual({ mode: 'dark', design: 'material' });
     expect(localStorage.getItem(MODE_STORAGE_KEY)).toBe('dark');
     expect(localStorage.getItem(DESIGN_STORAGE_KEY)).toBe('material');
