@@ -91,8 +91,8 @@ export function validateViewContent(view: unknown): ValidationFailure[] {
   const v = view as Record<string, unknown>;
 
   if (typeof v["name"] !== "string" || !v["name"]) fail("missing or empty `name`");
-  // A limit of 0 or below reads every row, since the database reads 0 as none and a negative one
-  // as its size; a max_limit of 0 caps nothing.
+  // A limit of 0 reads every row, since the database reads 0 as no limit, and a max_limit of 0 caps
+  // nothing; a negative or fractional limit is no number of rows a person means.
   for (const key of ["default_limit", "max_limit"]) {
     const limit = v[key];
     if (limit !== undefined && limit !== null && !(Number.isInteger(limit) && (limit as number) >= 1)) {
