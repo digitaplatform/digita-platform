@@ -1956,7 +1956,7 @@ export class DocumentService {
         .filter((f) => !computedTargets.has(f) && !tableNames.includes(f))
         .map((field) => ({ field, old: doc._original[field], new: doc.get(field) }));
       for (const table of tableNames) {
-        if (!computedTargets.has(table)) changes.push(...this.tableLockChanges(user, entity, table, storedTables[table], doc.get(table)));
+        if (!computedTargets.has(table)) changes.push(...this.tableLockChanges(user, entity, table, storedTables[table], doc.get(table), storedTables[table]));
       }
       this.permissionChecker.assertPatchKeepsLocks(user, entity.name, doc._data, changes);
 
@@ -2681,8 +2681,9 @@ export class DocumentService {
 
   /**
    * What a save changed in one Table since `before`, as the read_only_depends_on lock judges it:
-   * the Table as a whole, and each cell of a row `before` holds, on its row. A row dropped that
-   * holds a locked cell is refused here.
+   * the Table as a whole, and each cell of a row `before` holds, on its row. A row of `stored`
+   * that `after` drops and that holds a locked cell is refused here; a row that was never stored
+   * deletes nothing when it is dropped.
    */
   private tableLockChanges(
     user: UserContext,
@@ -2690,10 +2691,11 @@ export class DocumentService {
     table: string,
     before: unknown,
     after: unknown,
+    stored: unknown,
   ): PatchChange[] {
     if (JSON.stringify(before ?? null) === JSON.stringify(after ?? null)) return [];
     const tableField = entity.fields.find((f) => f.fieldname === table)!;
-    this.permissionChecker.assertNoLockedRowDropped(user, entity.name, tableField, after, before);
+    this.permissionChecker.assertNoLockedRowDropped(user, entity.name, tableField, after, stored);
     const changes: PatchChange[] = [{ field: table, old: before, new: after }];
     // Only a row with a `_row_id` has a stored row to be held to; a row the save adds gets its id
     // at the write, so rows without one are never paired with each other.
@@ -2735,7 +2737,7 @@ export class DocumentService {
       const name = field.fieldname;
       if (computedTargets.has(name)) continue;
       if (field.fieldtype === "Table") {
-        changes.push(...this.tableLockChanges(user, entity, name, afterInput[name], doc.get(name)));
+        changes.push(...this.tableLockChanges(user, entity, name, afterInput[name], doc.get(name), doc._original[name]));
       } else if (JSON.stringify(afterInput[name] ?? null) !== JSON.stringify(doc.get(name) ?? null)) {
         changes.push({ field: name, old: afterInput[name], new: doc.get(name) });
       }

@@ -1408,6 +1408,25 @@ describe("update — a before_save hook is held to a read_only_depends_on lock",
     expect(lines.map((line) => [line["delivered"], line["amount"]])).toEqual([[2, 1], [5, 1], [7, 1]]);
   });
 
+  it("saves a hook that drops a sealed row the update adds, which was never stored", async () => {
+    const id = await lockedDoc();
+    onBeforeSave((doc) => {
+      const lines = doc.get("lines") as Array<Record<string, unknown>>;
+      doc.set("lines", lines.filter((line) => line["_row_id"]));
+    });
+    const stored = (await db.findOne("HookLockDoc", id, "app"))?.["lines"] as Array<Record<string, unknown>>;
+    await docService.update("HookLockDoc", id, { lines: [...stored, { sealed: 1, delivered: 5 }] }, clerk);
+    const lines = (await db.findOne("HookLockDoc", id, "app"))?.["lines"] as Array<Record<string, unknown>>;
+    expect(lines.map((line) => line["delivered"])).toEqual([2]);
+  });
+
+  it("refuses a hook that drops a stored row holding a locked cell", async () => {
+    const id = await lockedDoc();
+    onBeforeSave((doc) => doc.set("lines", []));
+    await expect(docService.update("HookLockDoc", id, { title: "Renamed" }, clerk)).rejects.toBeInstanceOf(PermissionDeniedError);
+    expect((await db.findOne("HookLockDoc", id, "app"))?.["lines"]).toHaveLength(1);
+  });
+
   it("leaves a declared computed target out of the lock, so its hook keeps it current", async () => {
     registry.register({ ...hookLockEntity, hooks: { computed: { note: "computed/note.refresh" } } } as unknown as EntityDefinition);
     const id = await lockedDoc();
