@@ -10,11 +10,11 @@ import type { FieldControlState } from '@/controls/types';
 type ListParams = { filters?: [string, string, unknown][]; page_size?: number };
 const tree = vi.hoisted(() => ({
   rows: [
-    { _id: 'G-1', name: 'Business customers', parent: null },
-    { _id: 'G-2', name: 'Hotels', parent: 'G-1' },
-    { _id: 'G-3', name: 'Private customers', parent: null },
-    { _id: 'G-4', name: 'Hotels', parent: 'G-3' },
-    { _id: 'G-5', name: 'Spa hotels', parent: 'G-2' },
+    { _id: 'G-1', label: 'Business customers', parent: null },
+    { _id: 'G-2', label: 'Hotels', parent: 'G-1' },
+    { _id: 'G-3', label: 'Private customers', parent: null },
+    { _id: 'G-4', label: 'Hotels', parent: 'G-3' },
+    { _id: 'G-5', label: 'Spa hotels', parent: 'G-2' },
   ] as Array<Record<string, unknown>>,
   requests: [] as ListParams[],
   failure: null as Error | null,
@@ -38,7 +38,7 @@ vi.mock('@/hooks/useMeta', () => ({
     data: {
       name: 'CustomerGroup',
       title_field: 'name',
-      tree: { parent_field: 'parent', label_field: 'name' },
+      tree: {},
       fields: [{ fieldname: 'name', fieldtype: 'Data', label: 'Name' }],
     },
   }),
@@ -65,7 +65,7 @@ const STATE: FieldControlState = {
 
 /** Renders the field as a form does: the node's own title arrives with the document. */
 function renderField(value: string, readOnly = false) {
-  const title = tree.rows.find((r) => r._id === value)?.name as string;
+  const title = tree.rows.find((r) => r._id === value)?.label as string;
   return render(
     <LinkControl
       field={FIELD}

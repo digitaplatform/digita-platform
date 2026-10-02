@@ -8,11 +8,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { EntityDefinition, TreeConfig } from '@digitaplatform/shared';
 
 const ROWS = [
-  { _id: 'G-1', name: 'Retail', parent: null },
-  { _id: 'G-2', name: 'Swiss', parent: 'G-1' },
-  { _id: 'G-3', name: 'Wholesale', parent: null },
-  { _id: 'G-4', name: 'Germany', parent: 'G-3' },
-  { _id: 'G-5', name: 'Online', parent: null },
+  { _id: 'G-1', label: 'Retail', parent: null },
+  { _id: 'G-2', label: 'Swiss', parent: 'G-1' },
+  { _id: 'G-3', label: 'Wholesale', parent: null },
+  { _id: 'G-4', label: 'Germany', parent: 'G-3' },
+  { _id: 'G-5', label: 'Online', parent: null },
 ];
 const listState = vi.hoisted(() => ({ rows: [] as Array<Record<string, unknown>> }));
 vi.mock('@/hooks/useList', () => ({
@@ -36,7 +36,7 @@ import { useUiStore } from '@/stores/ui';
 import { useSessionStore } from '@/stores/session';
 
 const META = { name: 'CustomerGroup', title_field: 'name', fields: [] } as unknown as EntityDefinition;
-const TREE: TreeConfig = { parent_field: 'parent', label_field: 'name' };
+const TREE: TreeConfig = {};
 
 function Editor({ qc }: { qc: QueryClient }) {
   return (
@@ -88,8 +88,8 @@ describe('TreeEditor open groups', () => {
     fireEvent.keyDown(tree(), { key: 'ArrowLeft' });
     listState.rows = [
       ...ROWS,
-      { _id: 'G-6', name: 'Export', parent: null },
-      { _id: 'G-7', name: 'Asia', parent: 'G-6' },
+      { _id: 'G-6', label: 'Export', parent: null },
+      { _id: 'G-7', label: 'Asia', parent: 'G-6' },
     ];
     view.refresh();
     expect(row('G-6')).toHaveAttribute('aria-expanded', 'true');

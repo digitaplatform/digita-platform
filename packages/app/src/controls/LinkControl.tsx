@@ -1,3 +1,4 @@
+import { TREE_KIND_FIELD, TREE_LABEL_FIELD, TREE_PARENT_FIELD } from '@digitaplatform/shared';
 import { useEffect, useState } from 'react';
 import { Input, SearchDialog, BaseDialog, TreeView, Combobox, cn } from '@digitaplatform/components';
 import type { TreeViewNode, ComboboxOption } from '@digitaplatform/components';
@@ -104,10 +105,10 @@ export default function LinkControl({
   // when the picker opens only if the pointer or the focus reached the field before the open: a quick
   // tap on a touch screen sends the request as it opens the picker, which then shows its loading line
   // until the rows land. The load is scoped by the resolved filters AND auto-scoped by the tree's own
-  // partition (`tree.group_by`, e.g. `domain`): a self-referential parent field on a partitioned tree
+  // partition (the `kind` column of `tree.kind`): a self-referential parent field on a partitioned tree
   // must only offer nodes in the SAME partition (picking a "sales" group's parent shows only the sales
   // forest, not all four domains interleaved). Explicit target_filters win.
-  const treeGroupBy = treeCfg?.group_by;
+  const treeGroupBy = treeCfg?.kind ? TREE_KIND_FIELD : undefined;
   const partitionValue =
     treeGroupBy ? (doc as Record<string, unknown>)[treeGroupBy] : undefined;
   const treeFilters: Record<string, unknown> = { ...(resolvedFilters ?? {}) };
@@ -123,7 +124,7 @@ export default function LinkControl({
     filters: Object.entries(treeFilters).map(([k, v]) => [k, '=', v] as [string, string, unknown]),
     page_size: 2000,
   });
-  const treeLabelField = treeCfg?.label_field ?? targetMeta.data?.title_field ?? '_id';
+  const treeLabelField = TREE_LABEL_FIELD;
   // A tree node shows its path from the root: by its own name, groups of the same name under
   // different parents look alike.
   const treePath = useTreePath(field.target, treeCfg, treeLabelField, hasValue ? String(value) : '');
@@ -181,7 +182,7 @@ export default function LinkControl({
 
   // ---- tree mode: target entity declares a tree → pick from the hierarchy ----
   if (treeCfg) {
-    const parentField = treeCfg.parent_field;
+    const parentField = TREE_PARENT_FIELD;
     // Rows kept from the query of another partition are not this partition's nodes: offered, a
     // click would store a group of the previous partition on this record.
     const treeRows = treeList.isPlaceholderData ? [] : (treeList.data?.rows ?? []);

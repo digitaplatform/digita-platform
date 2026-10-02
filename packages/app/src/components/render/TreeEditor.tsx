@@ -1,3 +1,4 @@
+import { TREE_KIND_FIELD, TREE_LABEL_FIELD, TREE_PARENT_FIELD, TREE_POSITION_FIELD } from '@digitaplatform/shared';
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { EntityDefinition, TreeConfig } from '@digitaplatform/shared';
@@ -19,7 +20,7 @@ type Row = Record<string, unknown>;
 /**
  * Generic, metadata-driven tree editor for any self-referential tree entity
  * (declared via EntityDefinition.tree). Loads the whole (small) tree — one
- * `group_by` partition at a time when configured — and lets the operator add a
+ * kind at a time where the entity declares `tree.kind` — and lets the operator add a
  * child or top-level node, delete a leaf, re-parent (click-to-move, cycle-guarded)
  * and edit a node's record IN A MODAL (the tree stays in view — no navigating
  * away). Built on the generic TreeView + RecordDialog + the resource endpoints;
@@ -43,11 +44,13 @@ export function TreeEditor({
   const user = useSessionStore((s) => s.user);
   const canCreate = hasEntityPermission(meta, user, 'create');
 
-  const labelField = tree.label_field ?? meta.title_field ?? '_id';
-  const parentField = tree.parent_field;
-  const orderField = tree.order_field ?? labelField;
+  const labelField = TREE_LABEL_FIELD;
+  const parentField = TREE_PARENT_FIELD;
+  const orderField = TREE_POSITION_FIELD;
+  // An entity with `tree.kind` holds one tree per kind, shown one at a time.
+  const groupBy = tree.kind ? TREE_KIND_FIELD : undefined;
 
-  const groupField = tree.group_by ? meta.fields.find((f) => f.fieldname === tree.group_by) : undefined;
+  const groupField = groupBy ? meta.fields.find((f) => f.fieldname === groupBy) : undefined;
   const groupOptions = optionList(groupField?.options);
   const [group, setGroup] = useState(groupOptions[0] ?? '');
   const [movingId, setMovingId] = useState<string | null>(null);
@@ -70,7 +73,7 @@ export function TreeEditor({
   };
 
   const listQ = useList<Row>(entity, {
-    filters: tree.group_by && group ? [[tree.group_by, '=', group]] : [],
+    filters: groupBy && group ? [[groupBy, '=', group]] : [],
     page_size: 2000,
     order_by: `${orderField} asc`,
   });
@@ -154,7 +157,7 @@ export function TreeEditor({
       // A new child under a closed node would not show.
       setNodeExpanded(parentId, true);
     }
-    if (tree.group_by && group) seed[tree.group_by] = group;
+    if (groupBy && group) seed[groupBy] = group;
     setEditing({ seed, ancestry: pathTo(parentId) });
   };
 
@@ -212,7 +215,7 @@ export function TreeEditor({
         {groupOptions.length > 0 && (
           <div className="w-48">
             <Select
-              aria-label={groupField?.label ?? tree.group_by}
+              aria-label={groupField?.label ?? groupBy}
               value={group}
               onChange={setGroup}
               options={groupOptions.map((o) => ({ value: o, label: o }))}

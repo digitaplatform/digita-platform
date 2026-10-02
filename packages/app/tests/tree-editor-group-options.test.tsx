@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The tree editor's partition choice for a `tree.group_by` Select field. An app may write that
+// The tree editor's partition choice for a `kind` column, written as a Select field. An app may write that
 // field's options as one newline-separated string, which the record form's Select accepts: the
 // tree editor offers one group per line, as the Select does, and loads the first group's tree.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -29,13 +29,13 @@ vi.mock('@/components/record/RecordDialog', () => ({
 import { TreeEditor } from '@/components/render/TreeEditor';
 import { DialogHostProvider } from '@/components/overlay/DialogHost';
 
-const TREE: TreeConfig = { parent_field: 'parent', label_field: 'name', group_by: 'domain' };
+const TREE: TreeConfig = { kind: true };
 
 function renderEditor(options: string[] | string) {
   const meta = {
     name: 'AccountGroup',
     title_field: 'name',
-    fields: [{ fieldname: 'domain', fieldtype: 'Select', label: 'Domain', options }],
+    fields: [{ fieldname: 'kind', fieldtype: 'Select', label: 'Kind', options }],
   } as unknown as EntityDefinition;
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -48,7 +48,7 @@ function renderEditor(options: string[] | string) {
 }
 
 async function readOfferedGroups(): Promise<string[]> {
-  await userEvent.setup().click(screen.getByRole('combobox', { name: 'Domain' }));
+  await userEvent.setup().click(screen.getByRole('combobox', { name: 'Kind' }));
   return screen.getAllByRole('option').map((o) => o.textContent ?? '');
 }
 
@@ -59,13 +59,13 @@ beforeEach(() => {
 describe('TreeEditor group choice', () => {
   it('offers one group per line of options written as one string, and loads the first group', async () => {
     renderEditor('Sales\n Purchase \n\nStock');
-    expect(listCalls.at(-1)?.filters).toEqual([['domain', '=', 'Sales']]);
+    expect(listCalls.at(-1)?.filters).toEqual([['kind', '=', 'Sales']]);
     expect(await readOfferedGroups()).toEqual(['Sales', 'Purchase', 'Stock']);
   });
 
   it('offers the options written as a list, as before', async () => {
     renderEditor(['Sales', 'Purchase']);
-    expect(listCalls.at(-1)?.filters).toEqual([['domain', '=', 'Sales']]);
+    expect(listCalls.at(-1)?.filters).toEqual([['kind', '=', 'Sales']]);
     expect(await readOfferedGroups()).toEqual(['Sales', 'Purchase']);
   });
 });

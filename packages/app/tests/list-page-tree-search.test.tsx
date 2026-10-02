@@ -25,7 +25,7 @@ const META = vi.hoisted(
         { fieldname: 'name', fieldtype: 'Data', label: 'Name' },
         { fieldname: 'parent', fieldtype: 'Link', label: 'Parent', target: 'CustomerGroup' },
       ],
-      tree: { parent_field: 'parent', label_field: 'name' },
+      tree: {},
       permissions: [{ role: 'Clerk', level: 0, select: 1, read: 1 }],
     }) as unknown as EntityDefinition,
 );
@@ -33,9 +33,9 @@ vi.mock('@/hooks/useMeta', () => ({
   useMeta: () => ({ data: META, isLoading: false, isError: false }),
 }));
 const ROWS = [
-  { _id: 'G-1', name: 'Retail', parent: null },
-  { _id: 'G-2', name: 'Swiss', parent: 'G-1' },
-  { _id: 'G-3', name: 'Wholesale', parent: null },
+  { _id: 'G-1', label: 'Retail', parent: null },
+  { _id: 'G-2', label: 'Swiss', parent: 'G-1' },
+  { _id: 'G-3', label: 'Wholesale', parent: null },
 ];
 vi.mock('@/hooks/useList', () => ({
   useList: () => ({

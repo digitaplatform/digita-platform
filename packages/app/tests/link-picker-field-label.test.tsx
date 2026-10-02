@@ -24,7 +24,7 @@ vi.mock('@/hooks/useMeta', () => ({
       title_field: 'name',
       search_fields: ['name'],
       fields: [{ fieldname: 'name', fieldtype: 'Data', label: 'Name' }],
-      ...(target.isTree ? { tree: { parent_field: 'parent', label_field: 'name' } } : {}),
+      ...(target.isTree ? { tree: {} } : {}),
     },
   }),
 }));

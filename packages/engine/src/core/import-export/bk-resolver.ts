@@ -83,7 +83,7 @@ export function resolveLinksByBk(
  * The business-key ↔ `_id` resolver, extracted from the boot-only seed loader
  * (`seed-app-data.ts`) so the seed loader AND the master-data import pipeline
  * share ONE implementation. Every branch is metadata-driven (`business_key`,
- * `target`, `child_fields`, `tree.parent_field` is just a self-Link) — zero
+ * `target`, `child_fields`, a tree's `parent` is just a self-Link) — zero
  * entity-specific logic.
  */
 export class BkResolver {
