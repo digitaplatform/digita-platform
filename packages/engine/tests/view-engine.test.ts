@@ -183,7 +183,7 @@ describe("ViewEngine — link section", () => {
     const out = await new ViewEngine(deps as never).execute(linkView(), { query: { customer: "CUST-1" } }, user, ctx);
     expect(out.sections["customer"]).toEqual(row);
     expect(out.entities).toEqual({ customer: "customer" });
-    expect(deps.documentService.getDoc).toHaveBeenCalledWith("customer", "CUST-1", user, ctx);
+    expect(deps.documentService.getDoc).toHaveBeenCalledWith("customer", "CUST-1", user, ctx, ctx.locale);
   });
 
   it("keeps only the fields the section lists", async () => {
