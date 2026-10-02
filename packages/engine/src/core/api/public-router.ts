@@ -139,13 +139,16 @@ export function registerPublicRoutes(
   app.get(`${base}/:doctype`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { doctype } = request.params as { doctype: string };
     const query = request.query as Record<string, unknown>;
-    const listQuery = listQueryFrom(query);
+    // A public client's page size is clamped below, never refused, so it does not pass the
+    // authenticated list's whole-number check.
+    const { limit, page_size, ...strict } = query;
+    const listQuery = listQueryFrom(strict);
 
     // DoS guard: clamp any explicit page size into [1, MAX_PUBLIC_PAGE]. A
     // non-positive/non-finite value (0, negative, NaN) is forced to the ceiling —
     // Mongo would otherwise treat limit 0 as unbounded and dump the collection.
-    if (listQuery.page_size != null) listQuery.page_size = clampPublicPageSize(listQuery.page_size);
-    if (listQuery.limit != null) listQuery.limit = clampPublicPageSize(listQuery.limit);
+    if (page_size) listQuery.page_size = clampPublicPageSize(Number(page_size));
+    if (limit) listQuery.limit = clampPublicPageSize(Number(limit));
 
     const u = user(request);
     const ctx = new ResponseContext();
