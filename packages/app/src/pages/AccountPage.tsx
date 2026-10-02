@@ -38,7 +38,6 @@ function serverReason(error: unknown): string | undefined {
 }
 
 /** Self-service account page — owns the useAccount hooks; the cards are pure. */
-
 export default function AccountPage() {
   const tc = useChrome();
   const dialog = useDialogHost();

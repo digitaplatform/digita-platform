@@ -23,6 +23,15 @@ describe('toApiError', () => {
     expect(refused.message).toBe('Du hast keine Berechtigung, Item aufzulisten oder zu durchsuchen');
   });
 
+  it("PLANTED DEFECT: keeps the server's text for the person as the reason, and no reason where it sent none", () => {
+    expect(toApiError(404, refusal(404, 'NOT_FOUND', 'not_found', 'Item NOPE-1 nicht gefunden')).reason).toBe('Item NOPE-1 nicht gefunden');
+    expect(toApiError(500, { ...refusal(500, 'INTERNAL_ERROR', 'An unexpected error occurred', ''), messages: [] }).reason).toBeUndefined();
+    expect(toApiError(403, { error: 'demo_session_forbidden', message: 'Nicht in der Demo' }).reason).toBe('Nicht in der Demo');
+    // A service's translator answers a code it has no text for with the code itself.
+    expect(toApiError(400, { error: 'demo_session_required', message: 'demo_session_required' }).reason).toBeUndefined();
+    expect(toApiError(400, { error: 'demo_session_required' }).reason).toBeUndefined();
+  });
+
   it('falls back to the detail, then to the status, when the answer carries no error message', () => {
     expect(toApiError(500, { ...refusal(500, 'INTERNAL_ERROR', 'An unexpected error occurred', ''), messages: [] }).message).toBe(
       'An unexpected error occurred',
