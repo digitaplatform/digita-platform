@@ -328,9 +328,7 @@ export async function seedAppData(
   // A target no file of this call seeds is indexed from its stored rows, so a demo pass
   // links to the reference rows an earlier pass stored.
   for (const { entity } of collected) {
-    for (const [target, idx] of await bkResolver.indexLinkTargets(entity)) {
-      if (!bkIndex.has(target)) bkIndex.set(target, idx);
-    }
+    for (const [target, idx] of await bkResolver.indexLinkTargets(entity, { known: bkIndex })) bkIndex.set(target, idx);
   }
   const idsOf = (target: string) => new Set(bkIndex.get(target)?.values());
   const unresolvedLinks: UnresolvedSeedLink[] = [];
