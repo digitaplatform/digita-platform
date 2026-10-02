@@ -12,6 +12,7 @@ import { injectRowIds } from "../document/base-document.js";
 import { deepEqual } from "../document/change-tracker.js";
 import { toIdString } from "../document/id-codec.js";
 import { SEED_HASH_FIELD } from "../entity/field-types.js";
+import { decryptPassword, isEncryptedPassword, PasswordKeyNotListedError } from "../entity/password-cipher.js";
 import {
   BkResolver,
   businessKeyFields,
@@ -624,6 +625,7 @@ async function insertRows(
       // pinned on the stored `modified`, so a person's save that lands after the read above
       // keeps its values.
       const changes = serializeRowForStorage(entity, rowData);
+      keepEqualStoredPasswords(entity, rowData, changes, existing);
       carryRowIds(changes, existing);
       injectRowIds(changes);
       if (Object.entries(changes).every(([key, value]) => deepEqual(value, existing[key]))) {
@@ -644,6 +646,7 @@ async function insertRows(
     }
     if (existing) {
       const replacement = serializeRowForStorage(entity, rowData);
+      keepEqualStoredPasswords(entity, rowData, replacement, existing);
       carryRowIds(replacement, existing);
       injectRowIds(replacement);
       // The seed row is the whole truth of the document; only what the seed cannot
@@ -758,6 +761,32 @@ function carryRowIds(replacement: Record<string, unknown>, stored: Record<string
  * modification stamp is compared, so a boot with an unchanged seed writes nothing.
  * A document this loader wrote carries exactly the seed's fields plus the stamps.
  */
+/**
+ * Encrypting a Password value draws a new IV every time, so a seed's clear text never equals its
+ * stored ciphertext. Where the stored value decrypts to the seed's text, the stored one stands in
+ * `serialized`, so an unchanged row compares equal. A stored value under a key no longer listed
+ * cannot be compared, and is written anew under the active key.
+ */
+function keepEqualStoredPasswords(
+  entity: EntityDefinition,
+  row: Record<string, unknown>,
+  serialized: Record<string, unknown>,
+  existing: Record<string, unknown>,
+): void {
+  for (const field of entity.fields) {
+    if (field.fieldtype !== "Password") continue;
+    const stored = existing[field.fieldname];
+    if (typeof row[field.fieldname] !== "string" || !isEncryptedPassword(stored)) continue;
+    let isSameText = false;
+    try {
+      isSameText = decryptPassword(stored) === row[field.fieldname];
+    } catch (err) {
+      if (!(err instanceof PasswordKeyNotListedError)) throw err;
+    }
+    if (isSameText) serialized[field.fieldname] = stored;
+  }
+}
+
 function sameDocument(candidate: Record<string, unknown>, stored: Record<string, unknown>): boolean {
   const { modified: _modified, modified_by: _modifiedBy, ...rest } = stored;
   void _modified;
