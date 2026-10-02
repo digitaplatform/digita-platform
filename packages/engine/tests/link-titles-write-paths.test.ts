@@ -79,7 +79,10 @@ const invoiceEntity = {
   database: "app",
   naming: { strategy: "auto_increment", prefix: "LI-", pad_length: 4 },
   is_submittable: true,
-  fields: [{ fieldname: "customer", fieldtype: "Link", label: "Customer", target: "LtCustomer" }],
+  fields: [
+    { fieldname: "customer", fieldtype: "Link", label: "Customer", target: "LtCustomer" },
+    { fieldname: "remark", fieldtype: "Data", label: "Remark", allow_on_submit: true },
+  ],
   permissions: FULL_PERMS,
 } as unknown as EntityDefinition;
 
@@ -175,6 +178,14 @@ describe("_link_titles of a write in the caller's locale", () => {
     const created = await docService.insert("LtInvoice", { customer: "CUST-1" }, adminUser);
     expect(titleOf(await docService.submit("LtInvoice", created._id, adminUser, inEnglish()))).toBe("Acme Ltd");
     expect(titleOf(await docService.cancel("LtInvoice", created._id, adminUser, inEnglish()))).toBe("Acme Ltd");
+  });
+
+  it("answers a preview and a submitted patch in the caller's locale", async () => {
+    expect(titleOf(await docService.preview("LtOrder", { customer: "CUST-1" }, adminUser, inEnglish()))).toBe("Acme Ltd");
+    const created = await docService.insert("LtInvoice", { customer: "CUST-1" }, adminUser);
+    await docService.submit("LtInvoice", created._id, adminUser);
+    const patched = await docService.updateSubmitted("LtInvoice", created._id, { set: { remark: "paid" } }, adminUser, inEnglish());
+    expect(titleOf(patched)).toBe("Acme Ltd");
   });
 
   it("answers in the stored text without a locale, as a read does", async () => {
