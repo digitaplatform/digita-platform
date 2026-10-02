@@ -43,6 +43,31 @@ export interface ReseedSummary {
   rows_deleted: number;
 }
 
+/** A reset refused while one in the other mode runs; the caller starts it once that one has ended. */
+export class ReseedRunningError extends Error {
+  constructor(
+    readonly running: ReseedMode,
+    readonly requested: ReseedMode,
+  ) {
+    super(`a reseed in mode ${running} is running; start the reseed in mode ${requested} once it has ended`);
+    this.name = "ReseedRunningError";
+  }
+}
+
+/** A reset whose seed failed after the wipe on every attempt, naming the last error. */
+export class ReseedSeedFailedError extends Error {
+  constructor(
+    readonly attempts: number,
+    readonly reason: string,
+  ) {
+    super(
+      `the seed failed ${attempts} times after the app data was wiped; ` +
+        `the app holds only the rows seeded before the failure: ${reason}`,
+    );
+    this.name = "ReseedSeedFailedError";
+  }
+}
+
 /** The reseed this engine is running, which a second call joins. */
 let running: { mode: ReseedMode; done: Promise<ReseedSummary> } | null = null;
 
@@ -74,7 +99,7 @@ export async function reseedAppData(mode: ReseedMode, deps: ReseedDeps): Promise
   // second call waits for the running one and answers its result.
   // ponytail: an in-process lock, one engine per app; a second replica would need a lock in the database.
   if (running) {
-    if (running.mode !== mode) throw new Error(`a reseed in mode ${running.mode} is running; start the reseed in mode ${mode} once it has ended`);
+    if (running.mode !== mode) throw new ReseedRunningError(running.mode, mode);
     return running.done;
   }
   const done = reseedOnce(mode, deps).finally(() => {
@@ -134,8 +159,8 @@ async function reseedOnce(mode: ReseedMode, deps: ReseedDeps): Promise<ReseedSum
       ...domainDirs.map((d) => join(d.root, "seeds-demo")),
     );
   }
-  // The wipe has run, so a seed that fails leaves the app empty: it runs again, and a second
-  // failure fails the reset with the error, which the run record then shows.
+  // The wipe has run, so a seed that fails leaves the app with only the rows it seeded before
+  // the failure: it runs again, and a second failure fails the reset, naming the error.
   for (let attempt = 1; ; attempt++) {
     try {
       await seedAppData(db, registry, new NamingService(db), seedDirs);
@@ -144,7 +169,7 @@ async function reseedOnce(mode: ReseedMode, deps: ReseedDeps): Promise<ReseedSum
     } catch (e) {
       const message = (e as Error).message;
       if (attempt >= SEED_ATTEMPTS) {
-        throw new Error(`the seed failed ${attempt} times after the app data was wiped, so the app is empty: ${message}`);
+        throw new ReseedSeedFailedError(attempt, message);
       }
       log.warn({ attempt, err: message }, "seed after the wipe failed; running it again");
     }

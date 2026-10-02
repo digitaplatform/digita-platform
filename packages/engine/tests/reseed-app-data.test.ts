@@ -64,7 +64,7 @@ describe("the demo reset", () => {
   it("fails, saying the app is empty and why, when the seed fails again", async () => {
     seedAppData.mockRejectedValue(new Error("disk full"));
     await expect(reseedAppData("demo", deps)).rejects.toThrow(
-      "the seed failed 2 times after the app data was wiped, so the app is empty: disk full",
+      "the seed failed 2 times after the app data was wiped; the app holds only the rows seeded before the failure: disk full",
     );
     // The lock is released after a failure, so the next reset can repair the app.
     seedAppData.mockReset().mockResolvedValue(undefined);
