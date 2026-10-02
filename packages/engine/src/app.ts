@@ -26,7 +26,7 @@ import {
 import { RemoteAuthnAdapter } from "./core/auth/remote-authn-adapter.js";
 import { callerIsInternal } from "./core/auth/audience.js";
 import { TranslationService } from "./core/i18n/translation-service.js";
-import { loadEngineI18n, engineI18n } from "./i18n.js";
+import { loadEngineI18n, engineI18n, messageLocale } from "./i18n.js";
 import { LocaleResolver } from "./core/i18n/locale-resolver.js";
 import { PermissionChecker } from "./core/permissions/permission-checker.js";
 import { RoleRegistry, setRoleRegistry } from "./core/permissions/role-registry.js";
@@ -334,11 +334,7 @@ export async function createApp(
     const body = payload as { messages?: import("@digitaplatform/shared").ResponseMessage[] } | null;
     if (!body || !Array.isArray(body.messages) || body.messages.length === 0) return payload;
     const i18n = engineI18n();
-    const userLang = (request.user as { language?: string } | undefined)?.language;
-    const locale =
-      userLang && i18n.supported.includes(userLang)
-        ? userLang
-        : i18n.resolveLocale(request.headers["accept-language"]);
+    const locale = messageLocale((request.user as { language?: string } | undefined)?.language, request.headers["accept-language"]);
     for (const m of body.messages) {
       // A key the engine has no text for is an app's key, such as a hook's refusal: the app's
       // texts reach only the client, so the key travels on with its params for the client to fill.

@@ -55,7 +55,7 @@ export function registerSearchRoutes(
     // Link search takes its filters as one { field: value } object, as a Link field's filters declare them.
     const filters = jsonParam(query, "filters");
     if (filters !== undefined && (typeof filters !== "object" || filters === null || Array.isArray(filters))) {
-      throw new BadRequestError("filters must be one { field: value } object");
+      throw new BadRequestError("filters_not_one_object");
     }
 
     const results = await linkSearchService.search(

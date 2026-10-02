@@ -29,6 +29,13 @@ export function englishText(code: string, params?: Record<string, string>): stri
   return translator?.t(code, params, "en");
 }
 
+/** The language of the engine's texts for a request: the user's own where the engine has texts in
+ *  it, else the best match of the request's Accept-Language. */
+export function messageLocale(userLanguage: string | undefined, acceptLanguage: string | undefined): string {
+  const i18n = engineI18n();
+  return userLanguage && i18n.supported.includes(userLanguage) ? userLanguage : i18n.resolveLocale(acceptLanguage);
+}
+
 /** The boot-loaded translator; throws until loadEngineI18n() has run. */
 export function engineI18n(): Translator {
   if (!translator) throw new Error("engine i18n: loadEngineI18n() has not run");

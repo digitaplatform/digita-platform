@@ -163,7 +163,8 @@ describe("POST /admin/reload-definitions", () => {
     await writeBook(running.root, "Autor");
     const refused = await running.reload();
     expect(refused.statusCode).toBe(400);
-    expect(refused.json().error.detail).toContain(MISTYPED);
+    expect(refused.json().error.detail).toBe("definition_refused");
+    expect(refused.json().messages[0].text).toContain(MISTYPED);
     expect(await running.storedTarget()).toBe("Author");
   }, 120000);
 
@@ -190,7 +191,8 @@ describe("POST /admin/reload-definitions", () => {
     await writeBook(running.root, "Author", [{ fieldname: "owner", fieldtype: "Data", label: "Owner" }]);
     const refused = await running.reload();
     expect(refused.statusCode).toBe(400);
-    expect(refused.json().error.detail).toContain('Field "owner" of entity "Book" is named after a system field');
+    expect(refused.json().error.detail).toBe("definition_refused");
+    expect(refused.json().messages[0].text).toContain('Field "owner" of entity "Book" is named after a system field');
   }, 120000);
 });
 
@@ -206,7 +208,8 @@ describe("POST /admin/reload-definitions runs every check boot runs on the defin
     await writeBook(running.root, "Author", [{ fieldname: "pin", fieldtype: "Password", label: "PIN" }]);
     const refused = await running.reload();
     expect(refused.statusCode).toBe(400);
-    expect(refused.json().error.detail).toContain("PASSWORD_FIELD_KEYS");
+    expect(refused.json().error.detail).toBe("definition_refused");
+    expect(refused.json().messages[0].text).toContain("PASSWORD_FIELD_KEYS");
     expect(await running.servedTarget()).toBe("Author");
   }, 120000);
 
@@ -219,7 +222,8 @@ describe("POST /admin/reload-definitions runs every check boot runs on the defin
     });
     const refused = await running.reload();
     expect(refused.statusCode).toBe(400);
-    expect(refused.json().error.detail).toContain("REVALIDATE_URL");
+    expect(refused.json().error.detail).toBe("definition_refused");
+    expect(refused.json().messages[0].text).toContain("REVALIDATE_URL");
   }, 120000);
 
   it("reloads a file that links the demo reset on an engine that may reseed, as boot loads it", async () => {

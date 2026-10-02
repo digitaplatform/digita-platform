@@ -573,6 +573,29 @@ describe("An engine error reaches a person in their language (#24)", () => {
     expect(res.json().error).toMatchObject({ code: "ILLEGAL_TRANSITION", detail: "illegal_transition" });
   });
 
+  it("answers an empty import and a malformed list parameter in German", async () => {
+    const empty = await app.inject({ method: "POST", url: "/api/v1/import/Item", headers: german(adminTok), payload: { rows: [], mode: "insert" } });
+    expect(empty.statusCode).toBe(400);
+    expect(empty.json().messages[0].text).toBe("Der Import enthält keine Zeilen.");
+    expect(empty.json().error).toMatchObject({ code: "BAD_REQUEST", detail: "import_nothing" });
+
+    const list = await app.inject({ method: "GET", url: "/api/v1/resource/Item?limit=many", headers: german(adminTok) });
+    expect(list.statusCode).toBe(400);
+    expect(list.json().messages[0].text).toBe("limit muss eine ganze Zahl von mindestens 1 sein.");
+    expect(list.json().error).toMatchObject({ code: "BAD_REQUEST", detail: "param_not_whole_number" });
+  });
+
+  it("lists a row an import refuses with its text in German", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/api/v1/import/Item", headers: german(adminTok),
+      payload: { rows: [{ item_no: "IT_DE", name: "Broken link", group: "NOWHERE" }], mode: "insert" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.errors).toEqual([
+      expect.objectContaining({ row: 1, code: "link_not_found", message: "Group 'NOWHERE' existiert nicht" }),
+    ]);
+  });
+
   it("answers a role rename with 400 in German, not a 500", async () => {
     const created = await app.inject({ method: "POST", url: "/api/v1/resource/Role", headers: bearer(adminTok), payload: { name: "Courier", label: "Courier" } });
     expect(created.statusCode).toBe(201);

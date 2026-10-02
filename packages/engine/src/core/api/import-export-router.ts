@@ -15,6 +15,7 @@ import { env } from "../config/env.js";
 import { ResponseContext } from "./response-context.js";
 import { successResponse } from "./response-model.js";
 import { listQueryFrom } from "./list-query.js";
+import { engineI18n, messageLocale } from "../../i18n.js";
 
 const GUEST_USER: UserContext = { _id: "Guest", email: "Guest", roles: ["Guest"] };
 
@@ -42,12 +43,12 @@ export function registerImportExportRoutes(
     const hasRows = !!body && Array.isArray(body.rows);
     const hasCsv = !!body && typeof body.csv === "string";
     if (hasRows === hasCsv) {
-      throw new BadRequestError("request body must include exactly one of 'rows' (array) or 'csv' (string)");
+      throw new BadRequestError("import_body_rows_or_csv");
     }
 
     const mode: ImportMode = body?.mode === undefined ? "upsert" : (body.mode as ImportMode);
     if (!IMPORT_MODES.has(mode)) {
-      throw new BadRequestError(`'mode' must be one of insert | upsert | validate`);
+      throw new BadRequestError("param_not_one_of", { param: "mode", values: [...IMPORT_MODES].join(", ") });
     }
 
     // registry.get throws a clean entity_not_found for an unknown doctype.
@@ -63,7 +64,7 @@ export function registerImportExportRoutes(
           skip_empty_lines: true,
         }) as Record<string, string>[];
       } catch (e) {
-        throw new BadRequestError(`csv parse error: ${(e as Error).message}`);
+        throw new BadRequestError("import_csv_unreadable", { line: String((e as { lines?: number }).lines ?? "") });
       }
       rows = decodeCsvRows(entity, parsed);
     } else {
@@ -71,14 +72,12 @@ export function registerImportExportRoutes(
     }
 
     if (rows.length === 0) {
-      throw new BadRequestError("nothing to import: 0 rows");
+      throw new BadRequestError("import_nothing");
     }
     // Enforce the anti-DoS cap (previously enforced nowhere). Body size is
     // separately bounded by API_MAX_BODY_SIZE.
     if (rows.length > env.IMPORT_MAX_ROWS) {
-      throw new BadRequestError(
-        `too many rows (${rows.length}); the maximum is ${env.IMPORT_MAX_ROWS}`,
-      );
+      throw new BadRequestError("import_too_many_rows", { count: String(rows.length), max: String(env.IMPORT_MAX_ROWS) });
     }
 
     const user = request.user ?? GUEST_USER;
@@ -88,6 +87,9 @@ export function registerImportExportRoutes(
 
     const report = await importService.importData(doctype, rows, user, mode, ctx);
     if (!report.dry_run && report.inserted + report.updated > 0) revalidateNotifier.notify(doctype);
+    // The report lists a row's problem as a code; the person reads its text in their language.
+    const locale = messageLocale(user.language, request.headers["accept-language"]);
+    for (const e of report.errors) if (e.code) e.message = engineI18n().t(e.code, e.params, locale);
     return reply.send(successResponse(report, ctx.getMessages()));
   });
 
@@ -107,29 +109,27 @@ export function registerImportExportRoutes(
     // asks for more than EXPORT_MAX_ROWS; default to the cap when unspecified.
     const limit = parseInt(query["limit"] ?? String(env.EXPORT_MAX_ROWS), 10);
     if (!Number.isFinite(limit) || limit <= 0) {
-      throw new BadRequestError("query param 'limit' must be a positive integer");
+      throw new BadRequestError("param_not_whole_number", { param: "limit", min: "1" });
     }
     if (limit > env.EXPORT_MAX_ROWS) {
-      throw new BadRequestError(
-        `query param 'limit' exceeds the maximum of ${env.EXPORT_MAX_ROWS}`,
-      );
+      throw new BadRequestError("export_limit_too_high", { max: String(env.EXPORT_MAX_ROWS) });
     }
 
     // Round-trip / link-format params.
     const roundTrip = query["round_trip"] === "true";
     const rawLinkFormat = query["link_format"];
     if (rawLinkFormat !== undefined && rawLinkFormat !== "id" && rawLinkFormat !== "business_key") {
-      throw new BadRequestError("query param 'link_format' must be 'id' or 'business_key'");
+      throw new BadRequestError("param_not_one_of", { param: "link_format", values: "id, business_key" });
     }
     if (roundTrip && rawLinkFormat === "id") {
-      throw new BadRequestError("round_trip=true is incompatible with link_format=id");
+      throw new BadRequestError("export_round_trip_needs_business_key");
     }
     const linkFormat: "id" | "business_key" =
       roundTrip || rawLinkFormat === "business_key" ? "business_key" : "id";
 
     const format = query["format"] ?? "json";
     if (format !== "json" && format !== "csv") {
-      throw new BadRequestError("query param 'format' must be 'json' or 'csv'");
+      throw new BadRequestError("param_not_one_of", { param: "format", values: "json, csv" });
     }
 
     const user = request.user ?? GUEST_USER;

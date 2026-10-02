@@ -16,8 +16,8 @@ import type { DelegationScope } from "@digitaplatform/shared";
 import { createLogger } from "../logging/logger.js";
 import { EngineError } from "../errors/engine-error.js";
 
-/** A row a bulk operation could not process: an engine error's code with its params, or the
- *  message of any other error. */
+/** A row a bulk operation could not process: an engine error's code with its params, or
+ *  `internal_error` for any other error, which goes to the log. */
 interface BulkFailure {
   name: string;
   error: string;
@@ -274,7 +274,7 @@ export function registerResourceRoutes(
     const filters = jsonParam(query, "filters");
     const isPlainObject = (f: unknown) => typeof f === "object" && f !== null && !Array.isArray(f);
     if (filters !== undefined && !(Array.isArray(filters) && filters.every(isPlainObject))) {
-      throw new BadRequestError("filters must be a list of { field: value } objects");
+      throw new BadRequestError("filters_not_object_list");
     }
 
     // Pass the real caller so count enforces select + per-user scope (P-SEC) —
@@ -355,7 +355,8 @@ export function registerResourceRoutes(
           if (r.reason instanceof EngineError) {
             failed.push({ name, error: r.reason.code, params: r.reason.params });
           } else {
-            failed.push({ name, error: r.reason instanceof Error ? r.reason.message : String(r.reason) });
+            log.error({ err: r.reason, name }, "Bulk row failed");
+            failed.push({ name, error: "internal_error" });
           }
         }
       }

@@ -15,7 +15,8 @@ import type { LinkValidator } from "../link/link-validator.js";
 import type { UserContext } from "../permissions/types.js";
 import type { ResponseContext } from "../api/response-context.js";
 import { toIdString } from "../document/id-codec.js";
-import { isStoredFieldType, FieldValueError } from "../entity/field-types.js";
+import { isStoredFieldType } from "../entity/field-types.js";
+import { EngineError } from "../errors/engine-error.js";
 import { ZodSchemaBuilder } from "../entity/zod-schema-builder.js";
 import { validateEntityDataZod } from "../entity/entity-validator-zod.js";
 import { BadRequestError } from "../view/view-engine.js";
@@ -104,7 +105,7 @@ export class ImportService {
       }
     }
     if (unknown.size) {
-      throw new BadRequestError(`import_unknown_columns: ${[...unknown].join(", ")}`);
+      throw new BadRequestError("import_unknown_columns", { columns: [...unknown].join(", ") });
     }
 
     // Clone + strip system/underscore keys (never mutate caller input).
@@ -392,15 +393,10 @@ export class ImportService {
       const field = Object.keys(err.keyPattern ?? {})[0] ?? "unknown";
       return { row, field, message: `${field}: duplicate_key`, code: "duplicate_key", params: { field } };
     }
-    if (err instanceof FieldValueError) {
-      return {
-        row,
-        field: err.field,
-        message: err.code,
-        code: err.code,
-        params: err.params,
-      };
+    if (err instanceof EngineError) {
+      return { row, ...(err.field ? { field: err.field } : {}), message: err.code, code: err.code, params: err.params };
     }
-    return { row, message: (err as Error).message };
+    log.error({ err, row }, "Import row failed");
+    return { row, message: "internal_error", code: "internal_error" };
   }
 }

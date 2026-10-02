@@ -16,6 +16,7 @@ import { ResponseContext } from "./response-context.js";
 import { successResponse, errorResponse } from "./response-model.js";
 import { createLogger } from "../logging/logger.js";
 import { BadRequestError } from "../view/view-engine.js";
+import { EngineError } from "../errors/engine-error.js";
 import { parseBodyLimit } from "./http-options.js";
 
 const log = createLogger("public-router");
@@ -206,13 +207,13 @@ export function registerPublicRoutes(
       await permissionChecker.check(GUEST_USER, doctype, "create");
       const body = request.body;
       if (typeof body !== "object" || body === null || Array.isArray(body)) {
-        throw new BadRequestError("The body must be an object of field values");
+        throw new BadRequestError("public_body_not_object");
       }
       const values = body as Record<string, unknown>;
       const writable = permissionChecker.getWritableFields(GUEST_USER, doctype);
       const refused = guestRefusedKey(entity, writable, values);
       if (refused !== null) {
-        throw new BadRequestError(`"${refused}" is not a field a guest may set on ${doctype}`);
+        throw new BadRequestError("public_field_not_settable", { field: refused, doctype });
       }
       const data: Record<string, unknown> = { ...values };
       const scope = siteScope(doctype);
@@ -220,7 +221,7 @@ export function registerPublicRoutes(
         // The insert keeps only what Guest may write, so a site field Guest cannot write would
         // drop the stamp in silence; that is the entity's misconfiguration, not the visitor's.
         if (!writable?.has("site")) {
-          throw new Error(`${doctype} is site-scoped, but its Guest row cannot write "site", so the public create cannot stamp it`);
+          throw new EngineError("public_site_not_stampable", { doctype }, 500, "PUBLIC_SITE_NOT_STAMPABLE");
         }
         data["site"] = scope["site"];
       }

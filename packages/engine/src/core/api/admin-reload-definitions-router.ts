@@ -118,7 +118,7 @@ async function performReload(deps: AdminReloadDefinitionsDeps): Promise<ReloadSu
     if (isReseedAllowed()) staged.register(demoResetDefinition());
     await assertDefinitionsServable(staged, deps.revalidateSettings);
   } catch (err) {
-    throw new BadRequestError(err instanceof Error ? err.message : String(err));
+    throw new BadRequestError("definition_refused", { reason: err instanceof Error ? err.message : String(err) });
   }
 
   // 1b. Re-load entity definitions from disk into the live registry. `loadAll`
