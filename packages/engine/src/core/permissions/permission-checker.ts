@@ -65,6 +65,13 @@ export interface StateOverrideResolver {
   ): StatePermissionOverride | null;
 }
 
+/** A key of a Table row that no child field declares and every write keeps: its position and the engine's `_` keys. */
+const isRowKey = (key: string) => key === "idx" || key.startsWith("_");
+
+/** A Table row the filters can sort into cells. Any other value is passed on as it is, for the
+ *  schema to refuse, so a filter never turns it into an empty row. */
+const isPlainRow = (row: unknown): row is Record<string, unknown> => row !== null && typeof row === "object" && !Array.isArray(row);
+
 export class PermissionChecker {
   private workflowEngine?: StateOverrideResolver;
   // One-time warning per entity when a state-strip override is declared
@@ -665,7 +672,14 @@ export class PermissionChecker {
 
       if (tableFields.has(key) && Array.isArray(value)) {
         const allowedChildKeys = this.getWritableChildFields(user, entityName, key, contextDoc);
-        if (allowedChildKeys === null) {
+        const childFields = tableFields.get(key)?.child_fields;
+        if (allowedChildKeys === null && childFields) {
+          // No cell is gated: every declared cell is written, an undeclared one is not.
+          const declaredCells = new Set(childFields.map((c) => c.fieldname));
+          filtered[key] = (value as unknown[]).map((row) =>
+            isPlainRow(row) ? Object.fromEntries(Object.entries(row).filter(([k]) => declaredCells.has(k) || isRowKey(k))) : row,
+          );
+        } else if (allowedChildKeys === null) {
           filtered[key] = value;
         } else {
           const storedTable = contextDoc?.[key];
@@ -674,7 +688,8 @@ export class PermissionChecker {
             const rowId = stored?.[ROW_ID_FIELD];
             if (typeof rowId === "string" && rowId !== "") storedRows.set(rowId, stored);
           }
-          filtered[key] = (value as Array<Record<string, unknown>>).map((row) => {
+          filtered[key] = (value as unknown[]).map((row) => {
+            if (!isPlainRow(row)) return row;
             const filteredRow: Record<string, unknown> = {};
             const rowId = row[ROW_ID_FIELD];
             const stored = typeof rowId === "string" ? storedRows.get(rowId) : undefined;
@@ -786,18 +801,17 @@ export class PermissionChecker {
         continue;
       }
       const readOnlyCells = new Set(table.child_fields.filter((c) => c.read_only).map((c) => c.fieldname));
-      // A row's cells are filtered as the top level is: undeclared ones go, `_` keys pass.
+      // A row's cells are filtered as the top level is: undeclared ones go, `idx` and `_` keys pass.
       const writableCells = new Set(table.child_fields.filter((c) => !c.read_only).map((c) => c.fieldname));
       const storedTable = contextDoc?.[key];
       const storedRows = new Map(
         (Array.isArray(storedTable) ? (storedTable as Array<Record<string, unknown>>) : []).map((r) => [r?.[ROW_ID_FIELD], r]),
       );
       out[key] = (value as unknown[]).map((row) => {
-        // A row that is no object stays as it is, for the schema to refuse.
-        if (!row || typeof row !== "object" || Array.isArray(row)) return row;
-        const stored = storedRows.get((row as Record<string, unknown>)[ROW_ID_FIELD]);
+        if (!isPlainRow(row)) return row;
+        const stored = storedRows.get(row[ROW_ID_FIELD]);
         const kept: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(row)) if (writableCells.has(k) || k.startsWith("_")) kept[k] = v;
+        for (const [k, v] of Object.entries(row)) if (writableCells.has(k) || isRowKey(k)) kept[k] = v;
         for (const cell of readOnlyCells) if (stored && cell in stored) kept[cell] = stored[cell];
         return kept;
       });
