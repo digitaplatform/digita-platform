@@ -187,7 +187,7 @@ describe("EntityRegistry.auditAttachStoragePaths (boot lint)", () => {
   // overwrites every DB definition from its file on each boot (no runtime schema
   // editing exists to protect). See tests/seed-entity-definitions.integration.test.ts.
 
-  it("keeps the DB storage_path when it differs from the file, and reports it as drift", async () => {
+  it("keeps the DB storage_path when it differs from the file", async () => {
     const dir = await mkdtemp(join(tmpdir(), "digita-registry-"));
     try {
       const fileDef = {
@@ -208,10 +208,6 @@ describe("EntityRegistry.auditAttachStoragePaths (boot lint)", () => {
       await reg.loadFromDb({ find: async () => [dbRow] } as unknown as MongoDBService);
 
       expect(reg.get("DriftCustomer").storage_path).toBe("legacy_folder"); // DB wins
-      const drift = reg.getDriftSnapshots();
-      expect(drift).toHaveLength(1);
-      expect(drift[0]!.entity).toBe("DriftCustomer");
-      expect(drift[0]!.drift.join("; ")).toContain("storage_path differs");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

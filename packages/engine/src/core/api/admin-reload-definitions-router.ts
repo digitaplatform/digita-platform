@@ -60,7 +60,6 @@ interface ReloadSummary {
   views_inserted: number;
   translations_dropped: number;
   translations_inserted: number;
-  drift_after: number;
 }
 
 export function registerAdminReloadDefinitionsRoutes(
@@ -176,6 +175,5 @@ async function performReload(deps: AdminReloadDefinitionsDeps): Promise<ReloadSu
     views_inserted: viewsAfter,
     translations_dropped: translationsBefore,
     translations_inserted: translationsAfter,
-    drift_after: registry.getDriftSnapshots().length,
   };
 }

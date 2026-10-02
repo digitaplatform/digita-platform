@@ -70,29 +70,19 @@ function unknownDoctypeError(name: string, allNames: string[]): UnknownDoctypeEr
   return new UnknownDoctypeError(name, bestDist <= threshold ? best : null, false);
 }
 
-export interface SchemaDriftEntry {
-  entity: string;
-  drift: string[];
-}
-
 export class EntityRegistry {
   private entities: Map<string, EntityDefinition> = new Map();
   /**
    * Snapshot of the file-loaded entity definition kept separately from the
    * runtime `entities` map (which is overwritten by `loadFromDb`). Lets
-   * `detectDrift` and `reseedFromFile` compare against / fall back to the
-   * version on disk after the DB has been read in.
+   * `deleteStoredDefinition` and the upload router fall back to the version on
+   * disk after the DB has been read in.
    */
   private fileEntities: Map<string, EntityDefinition> = new Map();
   /** Absolute file path each entity name was last loaded from — so a redefinition
    *  from a DIFFERENT file can be surfaced (an app overriding a core entity is
    *  intentional; an accidental collision is not — both become visible). */
   private entitySources: Map<string, string> = new Map();
-  /**
-   * Snapshot of drift detected during the most recent `loadFromDb` call.
-   * Exposed via `getDriftSnapshots()` for the admin schema-drift viewer.
-   */
-  private driftSnapshots: Map<string, string[]> = new Map();
 
   /**
    * Load all .entity.json files from a directory tree.
@@ -737,30 +727,15 @@ export class EntityRegistry {
     this.registerSystemEntities();
     const docs = await db.find(DIGITA.COLLECTIONS.ENTITY, {}, DIGITA.DATABASES.CORE);
 
-    this.driftSnapshots.clear();
-    let driftCount = 0;
     for (const doc of docs) {
       const entity = doc as unknown as EntityDefinition;
       this.applyDefaults(entity);
       entity.fields.sort((a, b) => (a.idx ?? 0) - (b.idx ?? 0));
-      // Compare the DB-loaded entity against the file-loaded snapshot held
-      // in `fileEntities` (immutable since boot's loadAll). The runtime
-      // `entities` map has already been overwritten on prior iterations so
-      // it can't be used as the comparison baseline.
-      const fileVersion = this.fileEntities.get(entity.name);
-      if (fileVersion) {
-        const drift = this.detectDrift(fileVersion, entity);
-        if (drift.length) {
-          driftCount++;
-          this.driftSnapshots.set(entity.name, drift);
-          log.warn({ entity: entity.name, drift }, "Schema drift between file and DB definition");
-        }
-      }
       this.entities.set(entity.name, entity);
     }
 
     log.info(
-      { count: docs.length, drift: driftCount, duration_ms: Date.now() - startTime },
+      { count: docs.length, duration_ms: Date.now() - startTime },
       "Entity definitions loaded from database",
     );
   }
@@ -769,78 +744,6 @@ export class EntityRegistry {
    *  the entity has no file source (e.g. created at runtime via the meta API). */
   getFileEntity(name: string): EntityDefinition | undefined {
     return this.fileEntities.get(name);
-  }
-
-  /**
-   * Reseed the DB definition for one entity from its file-loaded snapshot.
-   * Overwrites any admin edits stored in the `entities` collection.
-   * After the write, refreshes the in-memory `entities` map and re-runs
-   * drift detection so the schema-drift viewer reflects the new state.
-   *
-   * Throws when the entity has no file source — runtime-only entities can't
-   * be "reseeded from file".
-   */
-  async reseedFromFile(db: MongoDBService, name: string): Promise<void> {
-    const file = this.fileEntities.get(name);
-    if (!file) {
-      throw new Error(`Cannot reseed "${name}": no file-loaded definition`);
-    }
-    // Overwrite the DB row. Use the entity name as `_id` to match the seed
-    // convention used by `seed-entity-definitions.ts`.
-    const dbDoc: Record<string, unknown> = JSON.parse(JSON.stringify(file));
-    dbDoc["_id"] = name;
-    await db.deleteOne(DIGITA.COLLECTIONS.ENTITY, name, DIGITA.DATABASES.CORE);
-    await db.insertOne(DIGITA.COLLECTIONS.ENTITY, dbDoc, DIGITA.DATABASES.CORE);
-    // Reload from DB to refresh the in-memory entity + re-evaluate drift.
-    await this.loadFromDb(db);
-  }
-
-  /**
-   * Return drift detected at the most recent `loadFromDb` call. Each entry
-   * lists the human-readable differences between the entity's file-loaded
-   * definition and the DB-loaded one. Empty when no drift was observed.
-   */
-  getDriftSnapshots(): SchemaDriftEntry[] {
-    return Array.from(this.driftSnapshots.entries()).map(([entity, drift]) => ({
-      entity,
-      drift,
-    }));
-  }
-
-  /**
-   * Return a human-readable list of field-level differences between the
-   * file-loaded (`file`) and the DB-loaded (`db`) entity definitions.
-   * Drift items are advisory — they don't throw.
-   */
-  private detectDrift(file: EntityDefinition, db: EntityDefinition): string[] {
-    const out: string[] = [];
-    // Top-level props that drive hard runtime behavior are diffed too —
-    // storage_path gates every upload (and the boot lint), so a DB row
-    // diverging from the file must surface in the drift viewer instead of
-    // producing unexplained 400s.
-    if ((file.storage_path ?? null) !== (db.storage_path ?? null)) {
-      out.push(
-        `storage_path differs: file=${file.storage_path ?? "(none)"} db=${db.storage_path ?? "(none)"}`,
-      );
-    }
-    const byName = <T extends { fieldname: string }>(arr: T[]) =>
-      new Map(arr.map((f) => [f.fieldname, f]));
-    const fileFields = byName(file.fields ?? []);
-    const dbFields = byName(db.fields ?? []);
-    for (const [name, ff] of fileFields) {
-      const df = dbFields.get(name);
-      if (!df) {
-        out.push(`field "${name}" missing in DB`);
-        continue;
-      }
-      if (df.fieldtype !== ff.fieldtype) {
-        out.push(`field "${name}" type differs: file=${ff.fieldtype} db=${df.fieldtype}`);
-      }
-    }
-    for (const name of dbFields.keys()) {
-      if (!fileFields.has(name)) out.push(`field "${name}" only in DB (not in file)`);
-    }
-    return out;
   }
 
   /**
