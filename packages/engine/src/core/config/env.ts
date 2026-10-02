@@ -179,7 +179,6 @@ const reservedDb = (role: string, override: string): string =>
 export const env = {
   // ─── APP ──────────────────────────────────────────────
   NODE_ENV: getEnv("NODE_ENV", "development"),
-  APP_VERSION: getEnv("APP_VERSION", "0.1.0"),
   SERVICE_NAME: getEnv("SERVICE_NAME", "digita-platform"),
   PORT: getEnvInt("PORT", 3000),
   HOST: getEnv("HOST", "0.0.0.0"),

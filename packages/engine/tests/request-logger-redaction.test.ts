@@ -9,7 +9,7 @@ vi.mock("../src/core/config/env.js", () => ({
     LOG_LEVEL: "debug", LOG_PRETTY: false, LOG_TO_FILE: false, LOG_FILE_PATH: "./logs",
     // Empty: the credential headers must be redacted without the deployment's list.
     LOG_REDACT_FIELDS: [],
-    SERVICE_NAME: "digita-test", APP_VERSION: "0.0.0", NODE_ENV: "test",
+    SERVICE_NAME: "digita-test", NODE_ENV: "test",
   },
 }));
 
