@@ -3,6 +3,8 @@ import type { GlobalSearchService } from "../search/global-search-service.js";
 import type { LinkSearchService } from "../link/link-search-service.js";
 import type { UserContext } from "../permissions/types.js";
 import { successResponse } from "./response-model.js";
+import { jsonParam, wholeNumberParam } from "./list-query.js";
+import { BadRequestError } from "../view/view-engine.js";
 
 const GUEST_USER: UserContext = { _id: "Guest", email: "Guest", roles: ["Guest"] };
 
@@ -23,7 +25,7 @@ export function registerSearchRoutes(
   app.get(`${prefix}/search`, async (request: FastifyRequest, reply: FastifyReply) => {
     const query = request.query as Record<string, string>;
     const q = query["q"] ?? "";
-    const limit = parseInt(query["limit"] ?? "20", 10);
+    const limit = wholeNumberParam(query, "limit", 1) ?? 20;
 
     if (!q || q.length < 2) {
       return reply.send(successResponse([]));
@@ -40,7 +42,7 @@ export function registerSearchRoutes(
     const { entity } = request.params as { entity: string };
     const query = request.query as Record<string, string>;
     const q = query["q"] ?? "";
-    const limit = parseInt(query["limit"] ?? "20", 10);
+    const limit = wholeNumberParam(query, "limit", 1) ?? 20;
     const targetPath = query["target_path"] || undefined;
     // Comma-separated field list → columns returned per row (search-dialog picker).
     const columns = query["fields"]
@@ -50,20 +52,17 @@ export function registerSearchRoutes(
           .filter(Boolean)
       : undefined;
 
-    let filters: Record<string, unknown> | undefined;
-    if (query["filters"]) {
-      try {
-        filters = JSON.parse(query["filters"]);
-      } catch {
-        // ignore invalid filters
-      }
+    // Link search takes its filters as one { field: value } object, as a Link field's filters declare them.
+    const filters = jsonParam(query, "filters");
+    if (filters !== undefined && (typeof filters !== "object" || filters === null || Array.isArray(filters))) {
+      throw new BadRequestError("filters must be one { field: value } object");
     }
 
     const results = await linkSearchService.search(
       entity,
       q,
       getUser(request),
-      filters,
+      filters as Record<string, unknown> | undefined,
       limit,
       targetPath,
       columns,
