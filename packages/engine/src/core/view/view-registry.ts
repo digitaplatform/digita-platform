@@ -2,6 +2,7 @@ import type { ViewDefinition } from "@digitaplatform/shared";
 import { DIGITA } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { createLogger } from "../logging/logger.js";
+import { validateViewDefinition } from "./view-validator.js";
 
 const log = createLogger("view-registry");
 
@@ -22,9 +23,22 @@ export class ViewRegistry {
     const docs = (await db.find(DIGITA.COLLECTIONS.VIEW, {}, DIGITA.DATABASES.CORE)) as Array<Record<string, unknown>>;
 
     let driftCount = 0;
+    let refusedCount = 0;
     for (const doc of docs) {
       const view = doc as unknown as ViewDefinition;
       const fileVersion = this.fileVersions.get(view._id);
+      // A stored row passes the checks a View file passes, or it is not served; its file
+      // version, where one loaded, stays in force.
+      const errors = validateViewDefinition(view);
+      if (errors.length) {
+        refusedCount++;
+        log.error(
+          { view: view._id, errors: errors.map((e) => e.message), file_version_served: !!fileVersion },
+          "stored view fails validation; not served",
+        );
+        if (fileVersion) this.views.set(view._id, fileVersion);
+        continue;
+      }
       if (fileVersion) {
         const drift = this.detectDrift(fileVersion, view);
         if (drift.length) {
@@ -35,7 +49,7 @@ export class ViewRegistry {
       this.views.set(view._id, view);
     }
     log.info(
-      { count: docs.length, drift: driftCount, duration_ms: Date.now() - startTime },
+      { count: docs.length, drift: driftCount, refused: refusedCount, duration_ms: Date.now() - startTime },
       "Views loaded from database",
     );
   }
