@@ -460,6 +460,17 @@ export function identifiersOf(node: ExprNode): Set<string> {
   return names;
 }
 
+/** What a rule expression may read: the document, a Table row, an iterated item and its index, the
+ *  user and the time. The engine refuses a rule that reads anything else when it loads the bundle. */
+export const RULE_ROOTS = ["doc", "row", "item", "item_index", "user", "now"] as const;
+
+/** The identifiers of a rule expression outside `RULE_ROOTS`, which the engine refuses; empty where
+ *  it reads only those. Throws `ExpressionError` on text the grammar does not read. */
+export function foreignRuleRoots(expression: string): string[] {
+  const roots: ReadonlySet<string> = new Set(RULE_ROOTS);
+  return [...identifiersOf(parseExpression(expression))].filter((name) => !roots.has(name));
+}
+
 /**
  * The fields of `root` an expression reads directly, as in `doc.status`; `undefined` when it
  * reads the root as a whole, so the caller cannot name them.
