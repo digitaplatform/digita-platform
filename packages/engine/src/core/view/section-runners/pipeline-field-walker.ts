@@ -279,6 +279,12 @@ function walkStage(
         walkExpr(lookup["let"], state, out);
         if (typeof as === "string" && !state.produced.has(as) && !state.reshaped) recordOutput(state.entity, as, out);
         if (typeof from !== "string") return;
+        // A dotted `as` nests the joined rows where the runner's mask, which looks for the key
+        // `as` itself, does not reach them: it reads every field of `from`.
+        if (typeof as === "string" && as.includes(".")) {
+          recordSource(from, WHOLE_DOCUMENT, out);
+          return;
+        }
         const sub = freshState(from);
         if (Array.isArray(subPipeline)) walkPipeline(subPipeline, sub, registry, out);
         // Rows of a further entity the sub-pipeline joined travel nested inside these rows.
@@ -452,8 +458,10 @@ function reshape(state: WalkState): void {
 /**
  * An exclusion-only `$project` (every value 0 or false) keeps every other field, so it replaces
  * nothing and produces nothing. An inclusion `$project` replaces the documents with the named
- * paths: a kept root field is an output name, a kept path through joined rows reads that field,
- * and joined rows kept whole stay joined under their name, where the runner masks them.
+ * paths: a kept root field (any number but 0, or true, as MongoDB reads it) is an output name, a
+ * kept path through joined rows reads that field, and joined rows kept whole stay joined under
+ * their name, where the runner masks them. Any other value, an object included, counts as
+ * computed; what it keeps of a field the reader may not read the runner has already dropped.
  */
 function walkProject(body: Record<string, unknown>, state: WalkState, out: FieldReference[]): void {
   const entries = Object.entries(body);
@@ -464,7 +472,7 @@ function walkProject(body: Record<string, unknown>, state: WalkState, out: Field
   }
   const kept = new Map<string, Joined>();
   for (const [k, v] of entries) {
-    const isKept = v === 1 || v === true;
+    const isKept = v === true || (typeof v === "number" && v !== 0);
     const [leading, next] = k.split(".");
     const joined = state.joined.get(leading!);
     if (isKept && joined) {
