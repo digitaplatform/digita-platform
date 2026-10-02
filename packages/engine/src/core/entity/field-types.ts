@@ -349,11 +349,15 @@ export function isStoredFieldType(fieldtype: FieldType): boolean {
  * `fromStorage`, which is what hides a Password value. Every path that returns a
  * stored row to a caller goes through here. Table rows are not descended into.
  */
+/** The hash the seed loader stamps on a row it writes (seed-app-data.ts); a read never shows it. */
+export const SEED_HASH_FIELD = "_seed_hash";
+
 export function readStoredRow(
   entity: EntityDefinition,
   row: Record<string, unknown>,
 ): Record<string, unknown> {
-  const read = { ...row };
+  const { [SEED_HASH_FIELD]: _seedHash, ...read } = row;
+  void _seedHash;
   for (const field of entity.fields) {
     const value = row[field.fieldname];
     if (!isStoredFieldType(field.fieldtype) || value === undefined || value === null) continue;
