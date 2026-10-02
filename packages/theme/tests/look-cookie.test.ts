@@ -158,11 +158,12 @@ describe('writing the look cookie', () => {
   });
 
   it('reads the cookie of its own name, not one whose name only ends in it', () => {
-    const jar = recordingJar(
-      'https:',
-      `my-${LOOK_COOKIE_NAME}=${encodeURIComponent('design=ios')}; ${LOOK_COOKIE_NAME}=${encodeURIComponent('design=fluent')}`,
-    );
-    expect(readLookCookie(jar)).toEqual({ design: 'fluent' });
+    // Both orders: a tie of two uncounted entries goes to the later one, so one order alone would
+    // not tell the names apart.
+    const foreign = `my-${LOOK_COOKIE_NAME}=${encodeURIComponent('design=ios')}`;
+    const own = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=fluent')}`;
+    expect(readLookCookie(recordingJar('https:', `${foreign}; ${own}`))).toEqual({ design: 'fluent' });
+    expect(readLookCookie(recordingJar('https:', `${own}; ${foreign}`))).toEqual({ design: 'fluent' });
   });
 
   it('writes nothing while there is no choice to carry', () => {
