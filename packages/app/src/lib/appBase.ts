@@ -1,3 +1,5 @@
+import { brandingImageKind } from '@digitaplatform/shared';
+
 /**
  * The path this app is served under on the tenant's one host (e.g. `/erp`). The ingress strips it
  * before nginx and the engine, so they keep serving their root; only the browser has to put the
@@ -21,4 +23,16 @@ export const APP_BASE_PATH: string = (injected ?? '').replace(/\/+$/, '');
  */
 export function appUrl(path: string): string {
   return path.startsWith('/') && !path.startsWith('//') ? `${APP_BASE_PATH}${path}` : path;
+}
+
+/**
+ * A tenant's branding image (logo, background, favicon) as an address this page may load: a path
+ * of the app's own under its base path, an inline image as it is, and none for any other address,
+ * which every visitor's page would request from another host.
+ */
+export function brandingImageUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const kind = brandingImageKind(value);
+  if (kind === 'path') return appUrl(value);
+  return kind === 'inline' ? value : undefined;
 }

@@ -5,7 +5,7 @@ import { BrandMark, cn, railButtonClass } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
 import { useThemeStore } from '@/stores/theme';
 import { useChrome } from '@/lib/chrome-i18n';
-import { appUrl } from '@/lib/appBase';
+import { brandingImageUrl } from '@/lib/appBase';
 
 interface BrandChromeProps {
   /** Where the host region docks — drives vertical (rail) vs horizontal (bar) chrome. */
@@ -37,8 +37,8 @@ export function BrandChrome({ side, collapsed, collapsible, onToggleCollapse, on
   const brand = (fill: boolean) => (
     <BrandMark
       name={appName}
-      logoUrl={branding?.logo ? appUrl(branding.logo) : undefined}
-      logoDarkUrl={branding?.logo_dark ? appUrl(branding.logo_dark) : undefined}
+      logoUrl={brandingImageUrl(branding?.logo)}
+      logoDarkUrl={brandingImageUrl(branding?.logo_dark)}
       nameIsCustom={Boolean(branding?.app_name)}
       signature={getSignature(signatureId)}
       fill={fill}
