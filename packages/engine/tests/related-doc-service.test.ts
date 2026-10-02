@@ -15,6 +15,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
 
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { RelatedDocService } from "../src/core/related/related-doc-service.js";
+import { GatedListTooBroadError } from "../src/core/document/document-service.js";
 import { PermissionChecker } from "../src/core/permissions/permission-checker.js";
 import type { UserContext } from "../src/core/permissions/types.js";
 
@@ -116,5 +117,36 @@ describe("RelatedDocService.getRelatedDocs — answers in the order the links ar
     const svc = new RelatedDocService(documentService as never, new PermissionChecker(registry));
     const out = await svc.getRelatedDocs(twoLinks, "PROD-1", adminUser);
     expect(out.map((r) => r.count)).toEqual([3, 1]);
+  });
+});
+
+describe("RelatedDocService.getRelatedDocs — a link the caller may not count", () => {
+  const twoLinks = {
+    ...parentEntity,
+    links: [
+      { entity: "SalesInvoice", link_field: "lines.product", label: "Invoices", show_count: true },
+      { entity: "SalesInvoice", link_field: "return_of", label: "Returns", show_count: true },
+    ],
+  } as unknown as EntityDefinition;
+
+  it("answers its refusal while every other link still answers its count", async () => {
+    const tooBroad = new GatedListTooBroadError("SalesInvoice", 5000);
+    const documentService = {
+      count: vi.fn(async (_entity: string, _filters: unknown, _user: unknown, options: { scope: Record<string, unknown> }) => {
+        if ("lines.product" in options.scope) throw tooBroad;
+        return 2;
+      }),
+    };
+    const svc = new RelatedDocService(documentService as never, new PermissionChecker(registry));
+    const out = await svc.getRelatedDocs(twoLinks, "PROD-1", adminUser);
+    expect(out[0]).toMatchObject({ label: "Invoices", count: undefined, error: tooBroad.message });
+    expect(out[1]).toMatchObject({ label: "Returns", count: 2 });
+    expect(out[1]!.error).toBeUndefined();
+  });
+
+  it("still fails the answer on an error that is no refusal", async () => {
+    const documentService = { count: vi.fn().mockRejectedValue(new Error("connection lost")) };
+    const svc = new RelatedDocService(documentService as never, new PermissionChecker(registry));
+    await expect(svc.getRelatedDocs(twoLinks, "PROD-1", adminUser)).rejects.toThrow("connection lost");
   });
 });
