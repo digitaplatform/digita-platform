@@ -34,7 +34,12 @@ interface Collected {
   entity: EntityDefinition;
   rows: CollectedRow[];
   file: string;
+  /** 0 for the reference tier, 1 for the demo tier; only a later tier layers over an earlier one. */
+  tier: number;
 }
+
+/** The demo tier's seed directory name, as the boot and the reseed join it to an app or domain dir. */
+const DEMO_SEED_DIR = "seeds-demo";
 
 /** A seed row's Link value that names no business key of its target, and is stored as it stands. */
 export interface UnresolvedSeedLink {
@@ -74,8 +79,8 @@ export interface SeedResult {
  * Two modes:
  *  - `insert` (default): skip rows whose `_id` already exists. The reference and demo
  *    tiers use it, so a runtime edit survives every boot. Nothing is deleted. One
- *    exception layers the tiers: a row whose `_id` an earlier seed dir of the same call
- *    also carries (the demo company's values for the reference tier's neutral settings)
+ *    exception layers the tiers: a row of the demo tier whose `_id` the reference tier of the
+ *    same call also carries (the demo company's values for the reference tier's neutral settings)
  *    sets its fields on the stored row while the seed still owns it (`owner` and
  *    `modified_by` are `system`); a row a person changed stays. Both tiers must load in
  *    one call for this, the earlier first.
@@ -265,7 +270,7 @@ export async function seedAppData(
         }
       }
 
-      collected.push({ entity, rows, file: join(dir, file) });
+      collected.push({ entity, rows, file: join(dir, file), tier: basename(dir) === DEMO_SEED_DIR ? 1 : 0 });
     }
   }
 
@@ -388,14 +393,19 @@ export async function seedAppData(
   }
 
   // ── Pass 4: insert (non-destructive, chunked); upsert-delete replaces existing rows ──
-  // The ids of every entity that the files already written carry: a later file's row of
-  // such an id layers its fields on the stored row in insert mode.
-  const carriedByEarlierFiles = new Map<string, Set<string>>();
-  for (const { entity, rows } of collected) {
-    const carried = carriedByEarlierFiles.get(entity.name) ?? new Set<string>();
-    await insertRows(db, entity, rows, mode === "insert" ? "insert" : "upsert", carried);
-    for (const row of rows) carried.add(toIdString(row.__seedId ?? String(row["_id"])));
-    carriedByEarlierFiles.set(entity.name, carried);
+  // The ids, per entity, that the files already written carry, with the highest tier that carries
+  // each: a row of a later tier layers its fields on such a stored row in insert mode, and a row
+  // of a tier that already carries the id finds it present, so the first directory of a tier wins.
+  const carriedTiers = new Map<string, Map<string, number>>();
+  for (const { entity, rows, tier } of collected) {
+    const carried = carriedTiers.get(entity.name) ?? new Map<string, number>();
+    const carriedByEarlierTiers = new Set([...carried].filter(([, carriedTier]) => carriedTier < tier).map(([id]) => id));
+    await insertRows(db, entity, rows, mode === "insert" ? "insert" : "upsert", carriedByEarlierTiers);
+    for (const row of rows) {
+      const id = toIdString(row.__seedId ?? String(row["_id"]));
+      carried.set(id, Math.max(carried.get(id) ?? tier, tier));
+    }
+    carriedTiers.set(entity.name, carried);
   }
 
   // ── Pass 4b: retry the deletes a stored row blocked, now that the seed rewrote its rows ──
@@ -568,7 +578,7 @@ async function insertRows(
   entity: EntityDefinition,
   rows: CollectedRow[],
   mode: "insert" | "upsert",
-  carriedByEarlierFiles: Set<string>,
+  carriedByEarlierTiers: Set<string>,
 ): Promise<void> {
   const target = entity.database;
   let inserted = 0;
@@ -611,8 +621,8 @@ async function insertRows(
     // there.
     const existing = await db.findOne(entity.name, idString, target);
     if (existing && mode === "insert") {
-      if (!carriedByEarlierFiles.has(idString) || !seedWrote(existing)) {
-        if (carriedByEarlierFiles.has(idString)) {
+      if (!carriedByEarlierTiers.has(idString) || !seedWrote(existing)) {
+        if (carriedByEarlierTiers.has(idString)) {
           log.warn(
             { entity: entity.name, db: target, id: idString },
             "seed-app-data: a later tier leaves a row the seed no longer owns: a person changed it, or it was seeded before the seed stamped its rows",
