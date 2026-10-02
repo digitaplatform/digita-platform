@@ -5,7 +5,7 @@ import { ROW_ID_FIELD, type EntityDefinition } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import { DeleteBlockedError, NotFoundError, type DocumentService } from "../document/document-service.js";
-import type { NamingService } from "../document/naming-service.js";
+import { expressionSequenceOf, type NamingService } from "../document/naming-service.js";
 import { SYSTEM_ROLES, type UserContext } from "../permissions/types.js";
 import { injectRowIds } from "../document/base-document.js";
 import { deepEqual } from "../document/change-tracker.js";
@@ -484,6 +484,8 @@ async function insertRows(
   let unchanged = 0;
   let skipped = 0;
   let maxNamingSeq = 0;
+  // An expression naming counts per entity or per series; each counter moves past its seeded ids.
+  const maxExpressionSeqs = new Map<string, number>();
   const namingPrefix = entity.naming?.prefix ?? "";
   const now = new Date();
   const batch: Record<string, unknown>[] = [];
@@ -585,7 +587,13 @@ async function insertRows(
       modified: now,
     });
 
-    if (typeof id === "string" && namingPrefix && id.startsWith(namingPrefix)) {
+    const expression = entity.naming?.strategy === "expression" ? entity.naming.expression : undefined;
+    if (expression && typeof id === "string") {
+      const seeded = expressionSequenceOf(entity.name, expression, id);
+      if (seeded && seeded.value > (maxExpressionSeqs.get(seeded.sequence) ?? 0)) {
+        maxExpressionSeqs.set(seeded.sequence, seeded.value);
+      }
+    } else if (typeof id === "string" && namingPrefix && id.startsWith(namingPrefix)) {
       const numPart = parseInt(id.slice(namingPrefix.length), 10);
       if (!Number.isNaN(numPart) && numPart > maxNamingSeq) maxNamingSeq = numPart;
     }
@@ -619,6 +627,9 @@ async function insertRows(
   // that runtime inserts already pushed higher (else it re-hands used ids).
   if (maxNamingSeq > 0) {
     await db.setSequenceFloor(entity.name, "naming_seq", maxNamingSeq, target);
+  }
+  for (const [sequence, value] of maxExpressionSeqs) {
+    await db.setSequenceFloor(sequence, "naming_seq", value, target);
   }
 
   log.info({ entity: entity.name, mode, inserted, updated, unchanged, skipped }, "seed-app-data");
