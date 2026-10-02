@@ -189,6 +189,13 @@ describe("Public read scope (generic Guest)", () => {
     expect(res.json().meta.page_size).toBeLessThanOrEqual(200);
   });
 
+  it.each(["page_size", "limit"])("passes a valid %s on: 1 answers one row", async (key) => {
+    const res = await app.inject({ method: "GET", url: `${PUB}?${key}=1` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toHaveLength(1);
+    expect(res.json().meta.page_size).toBe(1);
+  });
+
   it("clamps limit=0 to a bounded value", async () => {
     const res = await app.inject({ method: "GET", url: `${PUB}?limit=0` });
     expect(res.statusCode).toBe(200);
