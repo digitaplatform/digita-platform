@@ -52,11 +52,13 @@ export function getSingle<T = Doc>(entity: string): Promise<ApiResponse<T>> {
 
 /** One `links` entry of a document's entity, as the related route answers it. `count` is 0
  *  where the link has no `show_count` or the caller may not select the linked entity, and absent
- *  where the link filters on a field the caller may not filter on. */
+ *  where the link filters on a field the caller may not filter on or `error` says why counting
+ *  was refused. */
 export interface RelatedDocResult {
   label: string;
   entity: string;
   count?: number;
+  error?: string;
   icon?: string;
 }
 
