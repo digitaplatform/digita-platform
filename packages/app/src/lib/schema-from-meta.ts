@@ -2,6 +2,7 @@ import { z, type ZodTypeAny } from 'zod';
 import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
 import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from '@digitaplatform/shared';
 import { isEvalDefault } from '@/lib/default-tokens';
+import { fieldLabel } from '@/lib/localize-meta';
 
 /**
  * Build a Zod schema from an EntityDefinition for react-hook-form validation.
@@ -222,7 +223,7 @@ export function fieldErrorMessage(error: unknown): { message: string; cell?: str
 
 /** The limit a message key names, read from the field that carries it: react-hook-form keeps only
  *  the key, and the engine's texts name the limit as `{min}` or `{max}`. */
-export function fieldMessageParams(field: FieldDefinition | undefined, message: string): { min?: number; max?: number } {
+function fieldMessageParams(field: FieldDefinition | undefined, message: string): { min?: number; max?: number } {
   switch (message) {
     case 'field_max_length':
       return { max: field?.max_length };
@@ -239,6 +240,32 @@ export function fieldMessageParams(field: FieldDefinition | undefined, message: 
     default:
       return {};
   }
+}
+
+/**
+ * The text each field of a form shows for its error, by field. An engine message names its field
+ * through {field}, a Table's cell as "Lines: SKU", and its limit through {min} or {max}, read from
+ * the cell where the error is a cell's.
+ */
+export function fieldErrorTexts(
+  errors: Record<string, unknown>,
+  fields: FieldDefinition[],
+  t: (key: string, params?: Record<string, string | number>) => string,
+  fieldName: (fieldname: string, fallback?: string) => string,
+): Record<string, string> {
+  const texts: Record<string, string> = {};
+  for (const fieldname of Object.keys(errors)) {
+    const error = fieldErrorMessage(errors[fieldname]);
+    if (!error) continue;
+    const field = fields.find((f) => f.fieldname === fieldname);
+    const cell = error.cell ? field?.child_fields?.find((c) => c.fieldname === error.cell) : undefined;
+    const name = fieldName(fieldname, field?.label);
+    texts[fieldname] = t(error.message, {
+      field: cell ? `${name}: ${fieldLabel(cell)}` : name,
+      ...fieldMessageParams(cell ?? field, error.message),
+    });
+  }
+  return texts;
 }
 
 /**
