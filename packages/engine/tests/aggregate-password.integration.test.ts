@@ -18,6 +18,7 @@ import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { env } from "../src/core/config/env.js";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { runAggregateSection } from "../src/core/view/section-runners/aggregate-section.js";
+import { PermissionDeniedError } from "../src/core/permissions/permission-checker.js";
 
 // A $lookup without a sub-pipeline joins the foreign rows whole, in their stored
 // shape. Read after the fact under the `as` key alone, the value survived every
@@ -71,11 +72,16 @@ describe("a $lookup without a sub-pipeline from an entity with a Password field"
     ["$project moving the joined rows", [lookup, { $project: { moved: "$vault" } }]],
     ["$unwind and $group pushing them", [lookup, { $unwind: "$vault" }, { $group: { _id: null, all: { $push: "$vault" } } }]],
     ["a $facet branch", [{ $facet: { a: [lookup] } }]],
-    ["$project of the field under the joined path", [lookup, { $project: { pw: "$vault.secret" } }]],
   ])("never carries the value through %s", async (_name, pipeline) => {
     const rows = await run(pipeline);
     expect(rows.length).toBeGreaterThan(0);
     expect(JSON.stringify(rows)).not.toContain("hunter2");
+  });
+
+  // A path through the joined rows names the joined entity's field, and a pipeline that names a
+  // Password field is refused for every reader, as on the section's own entity.
+  it("refuses a $project of the field under the joined path, for an Administrator too", async () => {
+    await expect(run([lookup, { $project: { pw: "$vault.secret" } }])).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 
   it("still joins the rows, without the value", async () => {
