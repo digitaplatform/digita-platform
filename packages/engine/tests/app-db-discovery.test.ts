@@ -91,7 +91,7 @@ describe("MongoDBService.registerAppDatabase", () => {
   it("throws on conflicting re-register", () => {
     const db = new MongoDBService();
     db.registerAppDatabase({ name: "master", physical: "x_master" });
-    expect(() => db.registerAppDatabase({ name: "master", physical: "y_master" })).toThrow(/already registered/);
+    expect(() => db.registerAppDatabase({ name: "master", physical: "y_master" })).toThrow(expect.objectContaining({ code: "database_target_remapped", params: { target: "master", physical: "x_master", requested: "y_master" } }));
   });
 
   it("idempotent re-register with same physical name", () => {
@@ -139,19 +139,19 @@ describe("registerAppDatabases", () => {
     it("stops the boot for a domain the grant lacks, naming it", async () => {
       Object.assign(env, { MONGODB_DATABASE_NAMES: { accounting: granted.accounting, master: granted.master } });
       try {
-        await expect(registerAppDatabases(new MongoDBService(), [appDir])).rejects.toThrow(/no database for "sales"/);
+        await expect(registerAppDatabases(new MongoDBService(), [appDir])).rejects.toMatchObject({ code: "database_not_granted", params: { suffix: "sales" } });
       } finally {
         Object.assign(env, { MONGODB_DATABASE_NAMES: granted });
       }
     });
 
     it("refuses several app dirs, whose domains would share the grant's names", async () => {
-      await expect(registerAppDatabases(new MongoDBService(), [appDir, appDir])).rejects.toThrow(/lists 2/);
+      await expect(registerAppDatabases(new MongoDBService(), [appDir, appDir])).rejects.toMatchObject({ code: "database_names_one_app", params: { count: "2" } });
     });
 
     it("composes no name for a target outside the grant", () => {
       const db = new MongoDBService();
-      expect(() => db.registerAppDatabase({ name: "erp_unknown" })).toThrow(/not among the databases/);
+      expect(() => db.registerAppDatabase({ name: "erp_unknown" })).toThrow(expect.objectContaining({ code: "database_target_not_granted", params: { target: "erp_unknown" } }));
     });
   });
 });

@@ -2,6 +2,7 @@ import { REVALIDATE_SECRET_HEADER, entityCacheTag, type EntityDefinition } from 
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import { createLogger } from "../logging/logger.js";
 import { GUEST_USER } from "./public-router.js";
+import { ConfigurationError } from "../errors/engine-error.js";
 
 const log = createLogger("revalidate-notifier");
 
@@ -34,7 +35,7 @@ export class RevalidateNotifier {
     if (!first) return;
     for (const key of ["REVALIDATE_URL", "REVALIDATE_SECRET"] as const) {
       if (!this.settings[key]) {
-        throw new Error(`Missing required environment variable: ${key} (${first} grants Guest read)`);
+        throw new ConfigurationError("setting_missing_for_guest_read", { setting: key, doctype: first });
       }
     }
   }

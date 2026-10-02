@@ -208,7 +208,7 @@ describe("POST /admin/reload-definitions runs every check boot runs on the defin
     await writeBook(running.root, "Author", [{ fieldname: "pin", fieldtype: "Password", label: "PIN" }]);
     const refused = await running.reload();
     expect(refused.statusCode).toBe(400);
-    expect(refused.json().error.detail).toBe("definition_refused");
+    expect(refused.json().error.detail).toBe("password_keys_missing_for_field");
     expect(refused.json().messages[0].text).toContain("PASSWORD_FIELD_KEYS");
     expect(await running.servedTarget()).toBe("Author");
   }, 120000);
@@ -222,7 +222,7 @@ describe("POST /admin/reload-definitions runs every check boot runs on the defin
     });
     const refused = await running.reload();
     expect(refused.statusCode).toBe(400);
-    expect(refused.json().error.detail).toBe("definition_refused");
+    expect(refused.json().error.detail).toBe("setting_missing_for_guest_read");
     expect(refused.json().messages[0].text).toContain("REVALIDATE_URL");
   }, 120000);
 

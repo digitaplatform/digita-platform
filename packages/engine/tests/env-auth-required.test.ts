@@ -16,7 +16,7 @@ describe("the identity provider settings", () => {
     process.env["MONGODB_URI"] ??= "mongodb://127.0.0.1:1";
     delete process.env[key];
     vi.resetModules();
-    await expect(loadEnv()).rejects.toThrow(`Missing required environment variable: ${key}`);
+    await expect(loadEnv()).rejects.toMatchObject({ code: "setting_missing", params: { setting: key } });
   });
 
   it("PLANTED INNOCENT: start with all three and keep their values", async () => {

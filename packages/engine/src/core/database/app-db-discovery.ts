@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import { grantedDatabaseName } from "../config/db-names.js";
 import { createLogger } from "../logging/logger.js";
 import type { AppDatabaseDefinition, MongoDBService } from "./mongodb-service.js";
+import { ConfigurationError } from "../errors/engine-error.js";
 
 const log = createLogger("app-db-discovery");
 
@@ -93,9 +94,7 @@ export async function registerAppDatabases(
 ): Promise<DomainDirectory[]> {
   const granted = env.MONGODB_DATABASE_NAMES;
   if (granted && appDirs.length > 1) {
-    throw new Error(
-      `MONGODB_DATABASE_NAMES grants the databases of one app, but APP_DIRS lists ${appDirs.length}; their domains would share names`,
-    );
+    throw new ConfigurationError("database_names_one_app", { count: String(appDirs.length) });
   }
   const all: DomainDirectory[] = [];
   for (const appDir of appDirs) {

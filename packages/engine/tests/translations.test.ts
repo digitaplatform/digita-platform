@@ -12,7 +12,7 @@ import { PermissionDeniedError } from "../src/core/permissions/permission-checke
  * The calls whose first literal argument is a key: a text the code translates, and the code an
  * engine error carries, which an EngineError subclass passes to `super` or a throw site to the class.
  */
-const KEY_CALLS = ["t", "super", "PermissionDeniedError", "EngineError", "DocStatusError", "FieldValueError", "BadRequestError", "MalformedFilterValueError"];
+const KEY_CALLS = ["t", "super", "PermissionDeniedError", "EngineError", "DocStatusError", "FieldValueError", "BadRequestError", "MalformedFilterValueError", "ConfigurationError"];
 
 // The logger reads the real env; a test below imports that env itself, on purpose.
 vi.mock("../src/core/logging/logger.js", () => ({
@@ -82,8 +82,9 @@ describe("the engine's settings", () => {
   it("refuse to load without TRANSLATIONS_DIR, naming it", async () => {
     vi.stubEnv("MONGODB_URI", "mongodb://localhost:27017/test");
     vi.stubEnv("TRANSLATIONS_DIR", "");
-    await expect(import("../src/core/config/env.js")).rejects.toThrow(
-      "Missing required environment variable: TRANSLATIONS_DIR",
-    );
+    await expect(import("../src/core/config/env.js")).rejects.toMatchObject({
+      code: "setting_missing",
+      params: { setting: "TRANSLATIONS_DIR" },
+    });
   });
 });

@@ -1,5 +1,6 @@
 import type { FastifyServerOptions } from "fastify";
 import type { RateLimitPluginOptions } from "@fastify/rate-limit";
+import { ConfigurationError } from "../errors/engine-error.js";
 
 /**
  * The server options that decide who a request comes from. `trustProxy` is the number of proxies
@@ -54,7 +55,7 @@ export function engineRateLimitOptions(settings: { max: number; timeWindow: stri
 export function parseBodyLimit(value: string, setting: string): number {
   const match = value.match(/^(\d+)\s*(kb|mb|gb)?$/i);
   if (!match) {
-    throw new Error(`Environment variable ${setting} must be a size like 16kb or 10mb, got: ${value}`);
+    throw new ConfigurationError("setting_not_size", { setting, value });
   }
   const num = parseInt(match[1]!, 10);
   switch (match[2]?.toLowerCase()) {

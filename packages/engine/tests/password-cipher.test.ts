@@ -35,20 +35,20 @@ describe("the Password key set at start-up", () => {
 
   it("is required by a Password field, and the error names the setting and the field", () => {
     expect(startUp([plain, withPassword], "", ""))
-      .toThrow("Missing required environment variable: PASSWORD_FIELD_KEYS (Vault.secret is a Password field)");
+      .toThrow(expect.objectContaining({ code: "password_keys_missing_for_field", params: { setting: "PASSWORD_FIELD_KEYS", field: "Vault.secret" } }));
   });
 
   it("is required by a Password field inside a Table row", () => {
     expect(startUp([withTablePassword], "", ""))
-      .toThrow("PASSWORD_FIELD_KEYS (Mailer.accounts.password is a Password field)");
+      .toThrow(expect.objectContaining({ params: { setting: "PASSWORD_FIELD_KEYS", field: "Mailer.accounts.password" } }));
   });
 
   it("refuses a key that is not 32 bytes, a malformed pair, a duplicate id and an unlisted active id", () => {
-    expect(startUp([withPassword], "k1=c2hvcnQ=", "k1")).toThrow('PASSWORD_FIELD_KEYS: key "k1" is not 32 bytes of base64');
-    expect(startUp([withPassword], "k1", "k1")).toThrow("PASSWORD_FIELD_KEYS: expected <id>=<base64 key> pairs");
-    expect(startUp([withPassword], `k1=${k1},k1=${k2}`, "k1")).toThrow('PASSWORD_FIELD_KEYS: key id "k1" is listed twice');
-    expect(startUp([withPassword], `k1=${k1}`, "")).toThrow("Missing required environment variable: PASSWORD_FIELD_ACTIVE_KEY_ID");
-    expect(startUp([withPassword], `k1=${k1}`, "k9")).toThrow('PASSWORD_FIELD_ACTIVE_KEY_ID: "k9" is not a key id of PASSWORD_FIELD_KEYS');
+    expect(startUp([withPassword], "k1=c2hvcnQ=", "k1")).toThrow(expect.objectContaining({ code: "password_key_wrong_length", params: { key: "k1", bytes: "32" } }));
+    expect(startUp([withPassword], "k1", "k1")).toThrow(expect.objectContaining({ code: "password_key_pair_malformed", params: { position: "1" } }));
+    expect(startUp([withPassword], `k1=${k1},k1=${k2}`, "k1")).toThrow(expect.objectContaining({ code: "password_key_listed_twice", params: { key: "k1" } }));
+    expect(startUp([withPassword], `k1=${k1}`, "")).toThrow(expect.objectContaining({ code: "setting_missing", params: { setting: "PASSWORD_FIELD_ACTIVE_KEY_ID" } }));
+    expect(startUp([withPassword], `k1=${k1}`, "k9")).toThrow(expect.objectContaining({ code: "password_active_key_not_listed", params: { key: "k9" } }));
   });
 });
 
@@ -72,14 +72,14 @@ describe("encryptPassword and decryptPassword", () => {
     expect(decryptPassword(old)).toBe("hunter2");
     configurePasswordFieldKeys({ PASSWORD_FIELD_KEYS: `k2=${k2}`, PASSWORD_FIELD_ACTIVE_KEY_ID: "k2" });
     expect(() => decryptPassword(old)).toThrow(PasswordKeyNotListedError);
-    expect(() => decryptPassword(old)).toThrow('uses key "k1", which PASSWORD_FIELD_KEYS no longer lists');
+    expect(() => decryptPassword(old)).toThrow(expect.objectContaining({ code: "password_key_not_listed", params: { key: "k1" } }));
   });
 
   it("refuse a tampered value and a value that is no encrypted Password value", () => {
     configurePasswordFieldKeys(settings);
     const stored = encryptPassword("hunter2");
     expect(() => decryptPassword({ ...stored, data: stored.data.replace(/^./, (c) => (c === "A" ? "B" : "A")) })).toThrow();
-    expect(() => decryptPassword("hunter2")).toThrow("not an encrypted Password value");
+    expect(() => decryptPassword("hunter2")).toThrow(expect.objectContaining({ code: "password_value_not_encrypted" }));
   });
 
   it("refuse a value whose authentication tag was cut to 12 bytes", () => {

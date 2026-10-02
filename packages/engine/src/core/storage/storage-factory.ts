@@ -3,6 +3,7 @@ import { createLogger } from "../logging/logger.js";
 import { LocalStoragePort } from "./local-storage.js";
 import { S3StoragePort } from "./s3-storage.js";
 import type { StoragePort } from "./storage-port.js";
+import { ConfigurationError } from "../errors/engine-error.js";
 
 const log = createLogger("storage");
 
@@ -54,10 +55,8 @@ export function createStoragePort(): StoragePort {
 
     if (missing.length > 0) {
       if (env.NODE_ENV === "production") {
-        throw new Error(
-          `UPLOAD_STORAGE=${env.UPLOAD_STORAGE} but object-storage configuration is incomplete — missing: ${missing.join(", ")}. ` +
-            "Refusing to boot with a silent local-disk fallback in production.",
-        );
+        // Production refuses to boot with a silent local-disk fallback.
+        throw new ConfigurationError("storage_config_incomplete", { backend: env.UPLOAD_STORAGE, missing: missing.join(", ") });
       }
       log.warn(
         { missing, backend: env.UPLOAD_STORAGE },

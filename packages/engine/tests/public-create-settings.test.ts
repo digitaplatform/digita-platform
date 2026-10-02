@@ -17,7 +17,7 @@ describe("the public create's settings", () => {
     for (const bad of ["0", "-1", "1.5", "abc", " 5"]) {
       vi.resetModules();
       vi.stubEnv("API_PUBLIC_CREATE_RATE_LIMIT_MAX", bad);
-      await expect(load()).rejects.toThrow(/API_PUBLIC_CREATE_RATE_LIMIT_MAX/);
+      await expect(load()).rejects.toMatchObject({ code: "setting_not_whole_number", params: { setting: "API_PUBLIC_CREATE_RATE_LIMIT_MAX", min: "1" } });
     }
   });
 
@@ -26,7 +26,7 @@ describe("the public create's settings", () => {
     for (const bad of ["abc", "60", "0m", "1 minute", "-1m"]) {
       vi.resetModules();
       vi.stubEnv("API_PUBLIC_CREATE_RATE_LIMIT_WINDOW", bad);
-      await expect(load()).rejects.toThrow(/API_PUBLIC_CREATE_RATE_LIMIT_WINDOW/);
+      await expect(load()).rejects.toMatchObject({ code: "setting_not_duration", params: { setting: "API_PUBLIC_CREATE_RATE_LIMIT_WINDOW" } });
     }
   });
 
@@ -50,7 +50,7 @@ describe("parseBodyLimit", () => {
     expect(parseBodyLimit("10mb", "X")).toBe(10 * 1024 * 1024);
     expect(parseBodyLimit("512", "X")).toBe(512);
     for (const bad of ["", "16 kilobytes", "-1kb", "1.5mb"]) {
-      expect(() => parseBodyLimit(bad, "API_PUBLIC_CREATE_MAX_BODY_SIZE")).toThrow(/API_PUBLIC_CREATE_MAX_BODY_SIZE/);
+      expect(() => parseBodyLimit(bad, "API_PUBLIC_CREATE_MAX_BODY_SIZE")).toThrow(expect.objectContaining({ code: "setting_not_size", params: { setting: "API_PUBLIC_CREATE_MAX_BODY_SIZE", value: bad } }));
     }
   });
 });

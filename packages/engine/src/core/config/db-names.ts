@@ -1,3 +1,5 @@
+import { ConfigurationError } from "../errors/engine-error.js";
+
 /**
  * Physical Mongo database-name resolution (pure). Composes the platform
  * prefix, an optional tenant GUID, an optional app name, and the logical
@@ -40,23 +42,21 @@ export function parseDatabaseNames(json: string): DatabaseNames {
   try {
     parsed = JSON.parse(json);
   } catch {
-    throw new Error("MONGODB_DATABASE_NAMES is not valid JSON");
+    throw new ConfigurationError("setting_not_json", { setting: "MONGODB_DATABASE_NAMES" });
   }
   const isNameMap =
     typeof parsed === "object" &&
     parsed !== null &&
     !Array.isArray(parsed) &&
     Object.values(parsed).every((name) => typeof name === "string" && name !== "");
-  if (!isNameMap) throw new Error("MONGODB_DATABASE_NAMES must map each suffix to a database name");
+  if (!isNameMap) throw new ConfigurationError("database_names_not_map");
   return parsed as DatabaseNames;
 }
 
 export function grantedDatabaseName(names: DatabaseNames, suffix: string): string {
   const name = names[suffix];
   if (!name) {
-    throw new Error(
-      `MONGODB_DATABASE_NAMES grants no database for "${suffix}"; it grants: ${Object.keys(names).join(", ")}`,
-    );
+    throw new ConfigurationError("database_not_granted", { suffix, granted: Object.keys(names).join(", ") });
   }
   return name;
 }

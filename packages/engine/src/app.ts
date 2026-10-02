@@ -100,6 +100,7 @@ import { ViewRegistry } from "./core/view/view-registry.js";
 import { ViewEngine } from "./core/view/view-engine.js";
 import { seedViewsFromFiles } from "./core/view/view-loader.js";
 import { registerViewRoutes } from "./core/api/view-router.js";
+import { ConfigurationError } from "./core/errors/engine-error.js";
 
 const log = createLogger("app");
 
@@ -502,9 +503,11 @@ export async function createApp(
         const token = cookieTok ?? bearer ?? queryTok;
         let user;
         try {
-          if (!token) throw new Error("no token");
-          user = (await authn.verifyAccessToken(token)).user;
+          user = token ? (await authn.verifyAccessToken(token)).user : undefined;
         } catch {
+          user = undefined;
+        }
+        if (!user) {
           socket.close(1008, "unauthorized");
           return;
         }
@@ -726,11 +729,7 @@ export async function createApp(
         { count: storagePathOffenders.length, offenders: storagePathOffenders },
         "Attach storage-path lint FAILED — refusing to boot",
       );
-      throw new Error(
-        `Attach storage-path lint failed for ${storagePathOffenders.length} ` +
-          `entity definition(s) — every entity with Attach/AttachImage fields must ` +
-          `declare a valid top-level "storage_path":\n${detail}`,
-      );
+      throw new ConfigurationError("attach_storage_path_invalid", { count: String(storagePathOffenders.length), doctypes: detail });
     }
     log.info(
       "Attach storage-path lint passed — every Attach/AttachImage entity declares a valid storage_path",
