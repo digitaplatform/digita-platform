@@ -4,7 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import type { EntityDefinition } from '@digitaplatform/shared';
 import { BaseDialog, Button, FormSkeleton } from '@digitaplatform/components';
 import { useDocument, useCreate, useUpdate } from '@/hooks/useDocument';
-import { buildZodSchema, fieldErrorMessage } from '@/lib/schema-from-meta';
+import { buildZodSchema, fieldErrorMessage, fieldMessageParams } from '@/lib/schema-from-meta';
+import { fieldLabel } from '@/lib/localize-meta';
 import { buildDefaults, tenantTimeZoneOf } from '@/lib/default-tokens';
 import {
   sweepFieldStates,
@@ -182,9 +183,17 @@ function RecordDialogForm({
     const out: Record<string, string> = {};
     const rhf = form.formState.errors as Record<string, unknown>;
     for (const k of Object.keys(rhf)) {
-      const m = fieldErrorMessage(rhf[k]);
-      // An engine message such as field_required names its field through {field}.
-      if (m) out[k] = t(m, { field: tField(entity, k, meta.fields.find((f) => f.fieldname === k)?.label) });
+      const error = fieldErrorMessage(rhf[k]);
+      if (!error) continue;
+      // An engine message names its field through {field}, a Table's cell as "Lines: SKU", and
+      // its limit through {min} or {max}.
+      const field = meta.fields.find((f) => f.fieldname === k);
+      const cell = error.cell ? field?.child_fields?.find((c) => c.fieldname === error.cell) : undefined;
+      const name = tField(entity, k, field?.label);
+      out[k] = t(error.message, {
+        field: cell ? `${name}: ${fieldLabel(cell)}` : name,
+        ...fieldMessageParams(cell ?? field, error.message),
+      });
     }
     return out;
   }, [form.formState.errors, t, tField, entity, meta]);

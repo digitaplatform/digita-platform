@@ -202,22 +202,43 @@ function filledOnInsertSchema(field: FieldDefinition): ZodTypeAny {
 }
 
 /**
- * The message a field shows at its control, from the form's error for that field. A Table's
- * errors arrive per row and cell, and the grid draws no message per cell, so the Table shows
- * the first one.
+ * The message key a field shows at its control, from the form's error for that field, and the
+ * cell it comes from when it is a Table's. A Table's errors arrive per row and cell, and the grid
+ * draws no message per cell, so the Table shows the first one and names its cell.
  */
-export function fieldErrorMessage(error: unknown): string | undefined {
+export function fieldErrorMessage(error: unknown): { message: string; cell?: string } | undefined {
   const own = (error as { message?: unknown } | undefined)?.message;
-  if (typeof own === 'string') return own;
+  if (typeof own === 'string') return { message: own };
   if (!Array.isArray(error)) return undefined;
   for (const row of error) {
     if (!row || typeof row !== 'object') continue;
-    for (const cell of Object.values(row)) {
-      const message = (cell as { message?: unknown } | undefined)?.message;
-      if (typeof message === 'string') return message;
+    for (const [cell, value] of Object.entries(row)) {
+      const message = (value as { message?: unknown } | undefined)?.message;
+      if (typeof message === 'string') return { message, cell };
     }
   }
   return undefined;
+}
+
+/** The limit a message key names, read from the field that carries it: react-hook-form keeps only
+ *  the key, and the engine's texts name the limit as `{min}` or `{max}`. */
+export function fieldMessageParams(field: FieldDefinition | undefined, message: string): { min?: number; max?: number } {
+  switch (message) {
+    case 'field_max_length':
+      return { max: field?.max_length };
+    case 'field_min_length':
+      return { min: field?.min_length };
+    case 'field_min_value':
+      return { min: field?.min_value };
+    case 'field_max_value':
+      return { max: field?.max_value };
+    case 'table_min_rows':
+      return { min: field?.min_rows };
+    case 'table_max_rows':
+      return { max: field?.max_rows };
+    default:
+      return {};
+  }
 }
 
 /**

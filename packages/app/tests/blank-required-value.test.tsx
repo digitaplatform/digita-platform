@@ -55,7 +55,9 @@ vi.mock('@/stores/session', () => ({
 vi.mock('@/stores/i18n', () => ({
   useI18nStore: (sel: (s: Record<string, unknown>) => unknown) =>
     sel({
-      t: (k: string, p?: Record<string, string>) => (p?.field ? `${k}: ${p.field}` : k),
+      // Each parameter a message names is shown, so a test reads what the form filled in.
+      t: (k: string, p?: Record<string, unknown>) =>
+        [k, p?.field, p?.min, p?.max].filter((v) => v !== undefined).join(': '),
       tEntity: (e: string, fb?: string) => fb ?? e,
       tField: (_e: string, f: string, fb?: string) => fb ?? f,
     }),
@@ -72,10 +74,13 @@ const meta = {
   permissions: [],
   fields: [
     { fieldname: 'customer', fieldtype: 'Data', label: 'Customer', required: true },
+    { fieldname: 'code', fieldtype: 'Data', label: 'Code', max_length: 3 },
+    { fieldname: 'qty', fieldtype: 'Int', label: 'Qty', min_value: 1 },
     {
       fieldname: 'lines',
       fieldtype: 'Table',
       label: 'Lines',
+      max_rows: 2,
       child_fields: [
         { fieldname: 'sku', fieldtype: 'Data', label: 'SKU', required: true },
         { fieldname: 'note', fieldtype: 'Data', label: 'Note' },
@@ -116,12 +121,25 @@ describe('RecordPage refuses a blank required value before it sends the record',
 
   it('refuses a blank and a whitespace-only required Table cell at the Table', async () => {
     await saveWith({ customer: 'Ann', lines: [{ _row_id: 'r1', sku: 'A-1' }, { _row_id: 'r2', sku: '' }] });
-    await waitFor(() => expect(state.errors['lines']).toBe('field_required: Lines'));
+    await waitFor(() => expect(state.errors['lines']).toBe('field_required: Lines: SKU'));
     expect(state.create).not.toHaveBeenCalled();
     cleanup();
 
     await saveWith({ customer: 'Ann', lines: [{ _row_id: 'r1', sku: '  ' }] });
-    await waitFor(() => expect(state.errors['lines']).toBe('field_required: Lines'));
+    await waitFor(() => expect(state.errors['lines']).toBe('field_required: Lines: SKU'));
+    expect(state.create).not.toHaveBeenCalled();
+  });
+
+  it('fills the limit a message names: the length, the value and the row count', async () => {
+    await saveWith({
+      customer: 'Ann',
+      code: 'Anna',
+      qty: 0,
+      lines: [{ _row_id: 'r1', sku: 'A' }, { _row_id: 'r2', sku: 'B' }, { _row_id: 'r3', sku: 'C' }],
+    });
+    await waitFor(() => expect(state.errors['code']).toBe('field_max_length: Code: 3'));
+    expect(state.errors['qty']).toBe('field_min_value: Qty: 1');
+    expect(state.errors['lines']).toBe('table_max_rows: Lines: 2');
     expect(state.create).not.toHaveBeenCalled();
   });
 
@@ -142,7 +160,7 @@ describe('RecordDialog refuses a blank required Table cell before it sends the r
     });
     fireEvent.click(screen.getByRole('button', { name: 'ui.action.create' }));
 
-    await waitFor(() => expect(state.errors['lines']).toBe('field_required: Lines'));
+    await waitFor(() => expect(state.errors['lines']).toBe('field_required: Lines: SKU'));
     expect(state.create).not.toHaveBeenCalled();
   });
 });
