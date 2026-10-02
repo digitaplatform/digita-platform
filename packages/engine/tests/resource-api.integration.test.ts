@@ -145,6 +145,22 @@ describe("Resource API Integration", () => {
       expect(body.data.file_name).toBe("test.pdf");
     });
 
+    it("answers an action the entity does not declare with an error body", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/v1/resource/File/${createdName}/action/no_such_action`,
+        headers: authHeaders(),
+        payload: {},
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toMatchObject({
+        success: false,
+        status_code: 404,
+        messages: [{ type: "error", text: expect.stringContaining("no_such_action") }],
+      });
+    });
+
     it("updates the document", async () => {
       const res = await app.inject({
         method: "PUT",
