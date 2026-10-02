@@ -155,6 +155,15 @@ export function evaluateExpressionValueIn(
 }
 
 /**
+ * Assert that a field expression, a transition condition, an action's `show_if` or a permission
+ * condition parses, `eval:` prefix and all, and reads only `doc` and `user`, as `evaluateExpression`
+ * does at run time, where a broken one falls back to its safe default without a word.
+ */
+export function assertFieldExpressionParsable(expression: string): void {
+  assertExpressionParsableIn(stripEvalPrefix(expression), ALLOWED_IDENTIFIERS);
+}
+
+/**
  * Assert (no runtime context) that `expression` parses and every node is on the
  * allowlist, with identifiers restricted to `allowedRoots`. Throws with the
  * offending token in the message. Used at rule-seed time so an unparsable /
