@@ -33,9 +33,9 @@ const siteConfig = (contactEnabled: boolean): PublicSiteConfig => ({
 });
 
 const family: NavItem[] = [
-  { label: "example", href: "https://example.org", order: 0 },
-  { label: "sister", href: "https://sister.example.net", order: 1 },
-  { label: "cloud", order: 2 },
+  { label: "example", href: "https://example.org" },
+  { label: "sister", href: "https://sister.example.net" },
+  { label: "cloud" },
 ];
 
 let root: Root | null = null;
@@ -88,16 +88,10 @@ describe("the family switcher", () => {
 });
 
 const site: WebSite = { _id: "example", site_name: "example", domain: "example.org", contact_email: "hello@example.org" };
-const nav = {
-  _id: "header",
-  site: "example",
-  locale: "en",
-  location: "header" as const,
-  items: [
-    { label: "About", href: "/about", order: 0 },
-    { label: "Book a call", href: "#contact", order: 1 },
-  ],
-};
+const nav: NavItem[] = [
+  { label: "About", href: "/about" },
+  { label: "Book a call", href: "#contact" },
+];
 
 const renderHeader = (contactEnabled: boolean, publishedSlugs: Record<string, string[]> = { en: [""], de: [""] }) =>
   renderToStaticMarkup(
@@ -107,7 +101,7 @@ const renderHeader = (contactEnabled: boolean, publishedSlugs: Record<string, st
         defaultLocale="en"
         site={site}
         nav={nav}
-        family={null}
+        family={[]}
         apps={[]}
         brand={{ name: "example" }}
         publishedSlugs={publishedSlugs}

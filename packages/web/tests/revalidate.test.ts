@@ -68,10 +68,25 @@ describe("a read of the engine", () => {
   it("is cached under the tag of its entity, which the engine posts", async () => {
     const fetch = vi.fn(async (_url: string, _init: { next?: { tags?: string[] } }) => Response.json({ data: [] }));
     vi.stubGlobal("fetch", fetch);
-    const { getPage, getNav, getSite } = await load(() => import("../src/lib/engine-client"));
+    const { getPage, listNav, getSite } = await load(() => import("../src/lib/engine-client"));
     await getPage("en", "about");
-    await getNav("en", "header");
+    await listNav("en", "header");
     await getSite();
-    expect(fetch.mock.calls.map(([, init]) => init.next?.tags)).toEqual([["entity:WebPage"], ["entity:WebNavMenu"], ["entity:WebSite"]]);
+    expect(fetch.mock.calls.map(([, init]) => init.next?.tags)).toEqual([
+      ["entity:WebPage"],
+      ["entity:WebNavMenu"],
+      ["entity:WebPage"],
+      ["entity:WebSite"],
+    ]);
+  });
+
+  it("asks for a menu's labels in the visitor's language", async () => {
+    const fetch = vi.fn(async (_url: string, _init: { headers?: Record<string, string> }) => Response.json({ data: [] }));
+    vi.stubGlobal("fetch", fetch);
+    const { listNav } = await load(() => import("../src/lib/engine-client"));
+    await listNav("de", "footer");
+    const menuRead = fetch.mock.calls.find(([url]) => url.includes("/WebNavMenu?"));
+    expect(menuRead?.[1].headers).toEqual({ "accept-language": "de" });
+    expect(new URL(menuRead![0]).searchParams.get("filters")).toBe(JSON.stringify([["site", "=", "example"], ["location", "=", "footer"], ["active", "=", 1]]));
   });
 });

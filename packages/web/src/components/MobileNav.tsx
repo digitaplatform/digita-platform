@@ -6,10 +6,13 @@ import { Menu, X } from "lucide-react";
 import { BrandMark, Drawer, NavList, navLeafClass, railButtonClass, topBarButtonClass, type BrandMarkProps } from "@digitaplatform/components";
 import { useSiteConfig } from "@/config/ConfigProvider";
 import type { NavItem } from "@/lib/types";
-import { isContactItem } from "@/lib/nav";
+import { isContactItem, menuEntries } from "@/lib/nav";
 import { useActiveItem } from "./NavLinks";
 import { NavItemLink } from "./NavItemLink";
 import { isCurrentSite } from "./FamilySwitcher";
+
+/** A heading of the drawer's lists: the label of a menu node over the entries under it. */
+const HEADING = "px-3 pb-1 pt-3 text-xs font-medium text-textMuted";
 
 /**
  * Mobile navigation — the phone counterpart to the desktop header, whose text links and family
@@ -51,7 +54,7 @@ export function MobileNav({
   const isActive = useActiveItem(locale);
   // Without the contact sheet the family's item for it would lead nowhere, so it is left out, as the footer leaves it out.
   const { contactEnabled } = useSiteConfig();
-  const familyItems = family.filter((item) => contactEnabled || !isContactItem(item));
+  const familyEntries = menuEntries(family).filter((entry) => !("item" in entry) || contactEnabled || !isContactItem(entry.item));
 
   // Close when the route changes (a link inside the drawer was followed).
   useEffect(() => {
@@ -74,7 +77,15 @@ export function MobileNav({
           </div>
           <nav aria-label={navLabel} className="min-h-0 flex-1 overflow-y-auto p-2">
             <NavList>
-              {items.map((item, i) => {
+              {menuEntries(items).map((entry, i) => {
+                if ("heading" in entry) {
+                  return (
+                    <li key={`${entry.heading}-${i}`} className={HEADING}>
+                      {entry.heading}
+                    </li>
+                  );
+                }
+                const { item } = entry;
                 const active = isActive(item);
                 return (
                   <li key={`${item.label}-${i}`}>
@@ -98,27 +109,33 @@ export function MobileNav({
                 </li>
               ))}
             </NavList>
-            {familyItems.length > 0 && <div aria-hidden="true" className="my-2 h-px bg-border" />}
-            {familyItems.length > 0 && (
+            {familyEntries.length > 0 && <div aria-hidden="true" className="my-2 h-px bg-border" />}
+            {familyEntries.length > 0 && (
               <NavList>
-                {familyItems.map((item, i) => (
-                  <li key={`${item.label}-${i}`}>
-                    {isCurrentSite(item, domain) ? (
-                      <span aria-current="true" className={navLeafClass(true)}>
-                        {item.label}
-                      </span>
-                    ) : (
-                      <NavItemLink
-                        locale={locale}
-                        item={item}
-                        comingLabel={comingLabel}
-                        onSelect={() => setOpen(false)}
-                        data-ui="nav-leaf"
-                        className={navLeafClass(false)}
-                      />
-                    )}
-                  </li>
-                ))}
+                {familyEntries.map((entry, i) =>
+                  "heading" in entry ? (
+                    <li key={`${entry.heading}-${i}`} className={HEADING}>
+                      {entry.heading}
+                    </li>
+                  ) : (
+                    <li key={`${entry.item.label}-${i}`}>
+                      {isCurrentSite(entry.item, domain) ? (
+                        <span aria-current="true" className={navLeafClass(true)}>
+                          {entry.item.label}
+                        </span>
+                      ) : (
+                        <NavItemLink
+                          locale={locale}
+                          item={entry.item}
+                          comingLabel={comingLabel}
+                          onSelect={() => setOpen(false)}
+                          data-ui="nav-leaf"
+                          className={navLeafClass(false)}
+                        />
+                      )}
+                    </li>
+                  ),
+                )}
               </NavList>
             )}
           </nav>

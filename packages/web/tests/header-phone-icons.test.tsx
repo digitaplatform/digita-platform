@@ -71,8 +71,8 @@ function drawHeader(items: NavItem[], config = siteConfig) {
         locale="en"
         defaultLocale="en"
         site={site}
-        nav={{ _id: "header", site: "example", locale: "en", location: "header", items }}
-        family={null}
+        nav={items}
+        family={[]}
         apps={[]}
         brand={{ name: "example" }}
         publishedSlugs={{ en: [""], de: [""] }}
@@ -116,8 +116,8 @@ describe("the rule of what a viewport shows", () => {
 });
 
 const ITEMS: NavItem[] = [
-  { label: "About", href: "/about", order: 0, icon: "info" },
-  { label: "Events", href: "/events", order: 1, icon: "calendar-days" },
+  { label: "About", href: "/about", icon: "info" },
+  { label: "Events", href: "/events", icon: "calendar-days" },
 ];
 
 describe("the top bar on phones and tablets", () => {
@@ -164,13 +164,13 @@ describe("the top bar on phones and tablets", () => {
   }
 
   it("keeps a link whose data names no icon as text on a tablet", () => {
-    drawHeader([{ label: "Imprint", href: "/imprint", order: 0 }]);
+    drawHeader([{ label: "Imprint", href: "/imprint" }]);
     expect(shown('a[href="/imprint"]', 768).map((link) => link.textContent)).toEqual(["Imprint"]);
   });
 
   it("reports an icon lucide does not have and shows the link as text on a tablet", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    drawHeader([{ label: "About", href: "/about", order: 0, icon: "no-such-icon" }]);
+    drawHeader([{ label: "About", href: "/about", icon: "no-such-icon" }]);
     expect(error).toHaveBeenCalledWith(expect.stringContaining('"no-such-icon"'));
     expect(shown('a[href="/about"]', 768).map((link) => link.textContent)).toEqual(["About"]);
   });
@@ -209,12 +209,12 @@ function overflowingWidths(widths: number[]): number[] {
 const PHONE_WIDTHS = Array.from({ length: 768 - 320 }, (_, i) => 320 + i);
 
 const FIVE_ICONS: NavItem[] = [
-  { label: "About", href: "/about", order: 0, icon: "info" },
-  { label: "Events", href: "/events", order: 1, icon: "calendar-days" },
-  { label: "Shop", href: "/shop", order: 2, icon: "shopping-cart" },
-  { label: "Blog", href: "/blog", order: 3, icon: "newspaper" },
-  { label: "Team", href: "/team", order: 4, icon: "users" },
-  { label: "Contact", href: "#contact", order: 5 },
+  { label: "About", href: "/about", icon: "info" },
+  { label: "Events", href: "/events", icon: "calendar-days" },
+  { label: "Shop", href: "/shop", icon: "shopping-cart" },
+  { label: "Blog", href: "/blog", icon: "newspaper" },
+  { label: "Team", href: "/team", icon: "users" },
+  { label: "Contact", href: "#contact" },
 ];
 
 describe("the top bar's icon links on a phone", () => {
@@ -248,7 +248,7 @@ describe("the top bar's icon links on a phone", () => {
   });
 
   it("show an icon link past the bar's room as text on a tablet, so no width loses it", () => {
-    const six: NavItem[] = [...FIVE_ICONS, { label: "Jobs", href: "/jobs", order: 6, icon: "briefcase" }];
+    const six: NavItem[] = [...FIVE_ICONS, { label: "Jobs", href: "/jobs", icon: "briefcase" }];
     drawHeader(six);
     expect(shown('a[href="/jobs"]', 640)).toHaveLength(0);
     expect(shown('a[href="/jobs"]', 768).map((link) => link.textContent)).toEqual(["Jobs"]);
@@ -280,8 +280,8 @@ describe("the phone's mode button", () => {
             locale="en"
             defaultLocale="en"
             site={site}
-            nav={{ _id: "header", site: "example", locale: "en", location: "header", items: ITEMS }}
-            family={null}
+            nav={ITEMS}
+            family={[]}
             apps={[]}
             brand={{ name: "example" }}
             publishedSlugs={{ en: [""], de: [""] }}
