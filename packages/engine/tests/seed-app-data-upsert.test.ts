@@ -35,6 +35,7 @@ import { DeleteBlockedError, NotFoundError } from "../src/core/document/document
 import { seedAppData, seedHash } from "../src/core/setup/seed-app-data.js";
 import { readStoredRow } from "../src/core/entity/field-types.js";
 import { registerAdminReseedRoutes } from "../src/core/api/admin-reseed-router.js";
+import { configurePasswordFieldKeys } from "../src/core/entity/password-cipher.js";
 
 const page: EntityDefinition = {
   name: "WebPage",
@@ -649,5 +650,66 @@ describe("the seed's stamp", () => {
 
   it("never shows the stamp to a read", () => {
     expect(readStoredRow(page, { _id: "p", title: "t", _seed_hash: "abc" })).not.toHaveProperty("_seed_hash");
+  });
+});
+
+describe("a seeded Password value that decrypts to the same text is left alone", () => {
+  // Encrypting draws a new IV each time, so the stored text never equals a fresh encryption.
+  const gateway = {
+    name: "PayGateway", module: "test", database: "app", naming: { strategy: "user_set" },
+    fields: [
+      { fieldname: "site", fieldtype: "Data", label: "Site" },
+      { fieldname: "label", fieldtype: "Data", label: "Label" },
+      { fieldname: "secret", fieldtype: "Password", label: "Secret" },
+    ],
+    permissions: [],
+  } as unknown as EntityDefinition;
+  let app: string;
+  const withGateway = () => {
+    const reg = registry();
+    reg.register(gateway);
+    return reg;
+  };
+
+  beforeEach(async () => {
+    configurePasswordFieldKeys({ PASSWORD_FIELD_KEYS: "k1=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=", PASSWORD_FIELD_ACTIVE_KEY_ID: "k1" });
+    app = await mkdtemp(join(tmpdir(), "seed-password-"));
+    await mkdir(join(app, "seeds"));
+    await mkdir(join(app, "seeds-demo"));
+    await writeFile(join(app, "seeds", "PayGateway.seed.json"), JSON.stringify([{ _id: "gw", site: "site", label: "Gateway" }]));
+    await writeFile(join(app, "seeds-demo", "PayGateway.seed.json"), JSON.stringify([{ _id: "gw", secret: "demo-pass" }]));
+  });
+  afterEach(async () => {
+    await rm(app, { recursive: true, force: true });
+  });
+
+  it("writes nothing on the second load of both tiers", async () => {
+    const { db, stored } = mockDb([]);
+    const tiers = [join(app, "seeds"), join(app, "seeds-demo")];
+    await seedAppData(db, withGateway(), {} as NamingService, tiers);
+    const first = { ...stored.get("gw")! };
+    vi.clearAllMocks();
+
+    await seedAppData(db, withGateway(), {} as NamingService, tiers);
+
+    expect(db.updateOne).not.toHaveBeenCalled();
+    expect(stored.get("gw")).toEqual(first);
+  });
+
+  it("writes nothing on the second upsert of a site", async () => {
+    await writeFile(join(app, "seeds", "PayGateway.seed.json"), JSON.stringify([{ _id: "gw", site: "site", label: "Gateway", secret: "site-pass" }]));
+    const { db, stored } = mockDb([]);
+    const upsert = () =>
+      seedAppData(db, withGateway(), {} as NamingService, [join(app, "seeds")], {
+        mode: "upsert-delete", site: "site", documentService: mockDocumentService(stored),
+      });
+    await upsert();
+    const first = { ...stored.get("gw")! };
+    vi.clearAllMocks();
+
+    await upsert();
+
+    expect(db.upsertOne).not.toHaveBeenCalled();
+    expect(stored.get("gw")).toEqual(first);
   });
 });
