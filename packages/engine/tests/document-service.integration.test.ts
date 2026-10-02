@@ -1949,3 +1949,47 @@ describe("An amendment points back to the cancelled original, whoever amends it"
     }
   });
 });
+
+describe("A save that may not write the workflow field moves no state and sets no side effect", () => {
+  const librarian: UserContext = { _id: "lib-1", email: "lib@test.local", roles: ["Librarian"], full_name: "Librarian" };
+
+  beforeAll(async () => {
+    registry.register(
+      makeEntity({
+        name: "WfLoan",
+        workflow_field: "status",
+        fields: [
+          { fieldname: "title", fieldtype: "Data", label: "Title", required: true },
+          { fieldname: "status", fieldtype: "Select", label: "Status", options: ["draft", "on_loan"], default: "draft", read_only: true },
+          { fieldname: "approved_note", fieldtype: "Data", label: "Note" },
+        ],
+        states: [{ value: "draft", is_initial: true }, { value: "on_loan" }],
+        transitions: [
+          { from: "draft", to: "on_loan", action: "lend", allowed_roles: ["Librarian"], side_effects: { set: { approved_note: "lent" } } },
+        ],
+        permissions: [
+          { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
+          { role: "Librarian", level: 0, select: 1, read: 1, write: 1, create: 1 },
+        ],
+      } as unknown as Partial<EntityDefinition>),
+    );
+    await db.ensureCollection("WfLoan", "app");
+  });
+
+  it("drops the workflow field of an ordinary save and writes no side effect", async () => {
+    const doc = await docService.insert("WfLoan", { title: "Dune" }, librarian);
+    await docService.update("WfLoan", doc._id, { status: "on_loan", title: "Dune (2nd)" }, librarian);
+    const raw = (await db.findOne("WfLoan", doc._id, "app")) as Record<string, unknown>;
+    expect(raw["status"]).toBe("draft");
+    expect(raw["approved_note"] ?? null).toBeNull();
+    expect(raw["title"]).toBe("Dune (2nd)");
+  });
+
+  it("still moves the state, with its side effect, through the transition", async () => {
+    const doc = await docService.insert("WfLoan", { title: "Emma" }, librarian);
+    await docService.transition("WfLoan", doc._id, "on_loan", librarian);
+    const raw = (await db.findOne("WfLoan", doc._id, "app")) as Record<string, unknown>;
+    expect(raw["status"]).toBe("on_loan");
+    expect(raw["approved_note"]).toBe("lent");
+  });
+});
