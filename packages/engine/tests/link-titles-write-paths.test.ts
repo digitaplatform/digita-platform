@@ -29,7 +29,8 @@ import { TranslationService } from "../src/core/i18n/translation-service.js";
 import { DocumentService } from "../src/core/document/document-service.js";
 import { DocumentShareService } from "../src/core/permissions/document-share-service.js";
 import type { EntityDefinition } from "@digitaplatform/shared";
-import { SYSTEM_ROLES } from "@digitaplatform/shared";
+import { DIGITA, SYSTEM_ROLES } from "@digitaplatform/shared";
+import { ResponseContext } from "../src/core/api/response-context.js";
 import type { UserContext } from "../src/core/permissions/types.js";
 import { env } from "../src/core/config/env.js";
 
@@ -55,7 +56,7 @@ const customerEntity = {
   database: "app",
   naming: { strategy: "user_set" },
   title_field: "company_name",
-  fields: [{ fieldname: "company_name", fieldtype: "Data", label: "Company", required: true }],
+  fields: [{ fieldname: "company_name", fieldtype: "Data", label: "Company", required: true, translatable: true }],
   permissions: FULL_PERMS,
 } as unknown as EntityDefinition;
 
@@ -68,6 +69,17 @@ const orderEntity = {
     { fieldname: "customer", fieldtype: "Link", label: "Customer", target: "LtCustomer" },
     { fieldname: "note", fieldtype: "Data", label: "Note" },
   ],
+  permissions: FULL_PERMS,
+} as unknown as EntityDefinition;
+
+// The write paths answer link titles in the caller's locale, as a read does.
+const invoiceEntity = {
+  name: "LtInvoice",
+  module: "test",
+  database: "app",
+  naming: { strategy: "auto_increment", prefix: "LI-", pad_length: 4 },
+  is_submittable: true,
+  fields: [{ fieldname: "customer", fieldtype: "Link", label: "Customer", target: "LtCustomer" }],
   permissions: FULL_PERMS,
 } as unknown as EntityDefinition;
 
@@ -104,9 +116,22 @@ beforeAll(async () => {
 
   registry.register(customerEntity);
   registry.register(orderEntity);
+  registry.register(invoiceEntity);
   await db.ensureCollection("LtCustomer", "app");
   await db.ensureCollection("LtOrder", "app");
+  await db.ensureCollection("LtInvoice", "app");
+  await db.ensureCollection(DIGITA.COLLECTIONS.TRANSLATION, DIGITA.DATABASES.CORE);
   await docService.insert("LtCustomer", { _id: "CUST-1", company_name: "Acme GmbH" }, adminUser);
+  const now = new Date();
+  await db.insertOne(
+    DIGITA.COLLECTIONS.TRANSLATION,
+    {
+      _id: "data:en:LtCustomer.CUST-1.company_name", namespace: "data", locale: "en", key: "LtCustomer.CUST-1.company_name",
+      value: "Acme Ltd", entity: "LtCustomer", document_name: "CUST-1", fieldname: "company_name", source: "file",
+      overridden: false, owner: "system", modified_by: "system", creation: now, modified: now,
+    },
+    DIGITA.DATABASES.CORE,
+  );
 }, 120000);
 
 afterAll(async () => {
@@ -132,5 +157,27 @@ describe("_link_titles on write paths", () => {
     const doc = await docService.preview("LtOrder", { customer: "CUST-1" }, adminUser);
     const json = doc.toJSON() as Record<string, unknown>;
     expect((json["_link_titles"] as Record<string, string>)?.customer).toBe("Acme GmbH");
+  });
+});
+
+describe("_link_titles of a write in the caller's locale", () => {
+  const titleOf = (doc: { toJSON(): unknown }) => ((doc.toJSON() as Record<string, unknown>)["_link_titles"] as Record<string, string>)?.customer;
+  const inEnglish = () => new ResponseContext("en");
+
+  it("answers a create and an update in the caller's locale", async () => {
+    const created = await docService.insert("LtOrder", { customer: "CUST-1" }, adminUser, inEnglish());
+    expect(titleOf(created)).toBe("Acme Ltd");
+    const updated = await docService.update("LtOrder", created._id, { note: "changed" }, adminUser, inEnglish());
+    expect(titleOf(updated)).toBe("Acme Ltd");
+  });
+
+  it("answers a submit and a cancel in the caller's locale", async () => {
+    const created = await docService.insert("LtInvoice", { customer: "CUST-1" }, adminUser);
+    expect(titleOf(await docService.submit("LtInvoice", created._id, adminUser, inEnglish()))).toBe("Acme Ltd");
+    expect(titleOf(await docService.cancel("LtInvoice", created._id, adminUser, inEnglish()))).toBe("Acme Ltd");
+  });
+
+  it("answers in the stored text without a locale, as a read does", async () => {
+    expect(titleOf(await docService.insert("LtOrder", { customer: "CUST-1" }, adminUser))).toBe("Acme GmbH");
   });
 });

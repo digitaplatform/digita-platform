@@ -952,7 +952,7 @@ export class DocumentService {
 
     // Live-preview merges replace parts of the form doc — they need the same
     // link titles as the read paths or a recompute wipes the visible labels.
-    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user);
+    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user, ctx?.locale);
 
     return doc;
   }
@@ -1176,7 +1176,7 @@ export class DocumentService {
     // The response is what the form resets to — without titles every Link
     // field would regress to its raw id until a full reload (getDoc/getList
     // resolve them; the write paths must too).
-    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user);
+    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user, ctx?.locale);
     doc._data = readStoredRow(entity, doc._data);
 
     return doc;
@@ -1478,7 +1478,7 @@ export class DocumentService {
 
     // Same contract as insert: the save response carries the link titles the
     // form needs to keep displaying labels instead of raw ids.
-    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user);
+    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user, options.locale ?? ctx?.locale);
     doc._data = readStoredRow(entity, doc._data);
     // The form resets to this response, so it shows the values a read in the caller's locale shows.
     await this.applyDataTranslations(entity, name, doc._data, options.locale);
@@ -1975,7 +1975,7 @@ export class DocumentService {
       { doctype, name, user: user.email, post_submit: true, cause: options.cause },
       "Submitted document patched",
     );
-    resultDoc._link_titles = await this.linkTitleResolver.resolve(entity, resultDoc._data, user);
+    resultDoc._link_titles = await this.linkTitleResolver.resolve(entity, resultDoc._data, user, ctx?.locale);
     return resultDoc;
   }
 
@@ -2411,6 +2411,8 @@ export class DocumentService {
 
     log.info({ doctype, name, user: user.email }, "Document submitted");
 
+    // As every write answers: the link titles in the caller's locale.
+    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user, ctx?.locale);
     return doc;
   }
 
@@ -2567,6 +2569,8 @@ export class DocumentService {
 
     log.info({ doctype, name, user: user.email }, "Document cancelled");
 
+    // As every write answers: the link titles in the caller's locale.
+    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user, ctx?.locale);
     return doc;
   }
 
