@@ -2238,15 +2238,25 @@ describe("A Link names only a row its writer may select", () => {
     } as unknown as Partial<EntityDefinition>));
     registry.register(makeEntity({
       name: "SelOrder",
+      is_submittable: true,
       fields: [
         { fieldname: "title", fieldtype: "Data", label: "Title" },
         { fieldname: "product", fieldtype: "Link", label: "Product", target: "SelProduct" },
         { fieldname: "product_no", fieldtype: "Data", label: "Product No", read_only: true, fetch_from: "product.product_no" },
         { fieldname: "secret", fieldtype: "Data", label: "Secret", read_only: true, fetch_from: "product.secret" },
+        {
+          fieldname: "lines",
+          fieldtype: "Table",
+          label: "Lines",
+          child_fields: [
+            { fieldname: "product", fieldtype: "Link", label: "Product", target: "SelProduct" },
+            { fieldname: "qty", fieldtype: "Int", label: "Qty" },
+          ],
+        },
       ],
       permissions: [
-        { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
-        { role: "Seller", level: 0, select: 1, read: 1, write: 1, create: 1 },
+        { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+        { role: "Seller", level: 0, select: 1, read: 1, write: 1, create: 1, amend: 1 },
       ],
     } as unknown as Partial<EntityDefinition>));
     await db.ensureCollection("SelProduct", "app");
@@ -2282,6 +2292,33 @@ describe("A Link names only a row its writer may select", () => {
     const shop = await docService.insert("SelOrder", { title: "y", product: "SHOP-1" }, seller);
     const moved = await refusal(docService.update("SelOrder", shop._id, { product: "INT-1" }, seller));
     expect(moved).toEqual([expect.objectContaining({ field: "product", message_key: "link_not_found" })]);
+  });
+
+  it("copies and amends an order whose Links an Administrator set, as the Links were stored", async () => {
+    const order = await docService.insert("SelOrder", { title: "x", product: "INT-1", lines: [{ product: "INT-1", qty: 1 }] }, adminUser);
+    const copy = await docService.copyDoc("SelOrder", order._id, seller);
+    expect([copy._data["product"], (copy._data["lines"] as Array<{ product: string }>)[0]!.product]).toEqual(["INT-1", "INT-1"]);
+    await docService.submit("SelOrder", order._id, adminUser);
+    await docService.cancel("SelOrder", order._id, adminUser);
+    const amendment = await docService.amend("SelOrder", order._id, seller);
+    expect([amendment._data["product"], (amendment._data["lines"] as Array<{ product: string }>)[0]!.product]).toEqual(["INT-1", "INT-1"]);
+  });
+
+  it("judges a Link in a Table row as a header Link: new or moved refused, kept as stored", async () => {
+    const rowRefusal = [expect.objectContaining({ field: expect.stringContaining("lines"), message_key: "link_not_found" })];
+    expect(await refusal(docService.insert("SelOrder", { title: "x", lines: [{ product: "INT-1", qty: 1 }] }, seller))).toEqual(rowRefusal);
+
+    const order = await docService.insert("SelOrder", { title: "x", lines: [{ product: "INT-1", qty: 1 }, { product: "SHOP-1", qty: 1 }] }, adminUser);
+    const [internal, shop] = order._data["lines"] as Array<{ _row_id: string; product: string; qty: number }>;
+    // The Administrator linked an internal product in a row; the Seller may change its quantity.
+    await docService.update("SelOrder", order._id, { lines: [{ ...internal, qty: 3 }, shop] }, seller);
+    const raw = (await db.findOne("SelOrder", order._id, "app")) as { lines: Array<{ product: string; qty: number }> };
+    expect(raw.lines.map((l) => [l.product, l.qty])).toEqual([["INT-1", 3], ["SHOP-1", 1]]);
+
+    const moved = await refusal(docService.update("SelOrder", order._id, { lines: [{ ...internal, qty: 3 }, { ...shop, product: "INT-1" }] }, seller));
+    expect(moved).toEqual(rowRefusal);
+    const added = await refusal(docService.update("SelOrder", order._id, { lines: [{ ...internal, qty: 3 }, shop, { product: "INT-1", qty: 1 }] }, seller));
+    expect(added).toEqual(rowRefusal);
   });
 
   it("refuses the preview of such a Link before it reads the row", async () => {
