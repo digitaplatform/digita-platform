@@ -1420,6 +1420,20 @@ describe("update — a before_save hook is held to a read_only_depends_on lock",
     expect(lines.map((line) => line["delivered"])).toEqual([2]);
   });
 
+  it.each([
+    ["splices it out", (lines: Array<Record<string, unknown>>) => lines.splice(0, 1)],
+    ["pops it", (lines: Array<Record<string, unknown>>) => lines.pop()],
+  ])("refuses a hook that drops a stored locked row from the list in place: it %s", async (_how, drop) => {
+    const id = await lockedDoc();
+    onBeforeSave((doc) => {
+      const lines = doc.get("lines") as Array<Record<string, unknown>>;
+      drop(lines);
+      doc.set("lines", lines);
+    });
+    await expect(docService.update("HookLockDoc", id, { title: "Renamed" }, clerk)).rejects.toBeInstanceOf(PermissionDeniedError);
+    expect((await db.findOne("HookLockDoc", id, "app"))?.["lines"]).toHaveLength(1);
+  });
+
   it("refuses a hook that drops a stored row holding a locked cell", async () => {
     const id = await lockedDoc();
     onBeforeSave((doc) => doc.set("lines", []));
