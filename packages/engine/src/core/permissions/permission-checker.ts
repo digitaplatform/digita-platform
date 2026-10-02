@@ -1,6 +1,7 @@
 import type { EntityDefinition, EntityPermission, FieldDefinition, StatePermissionOverride } from "@digitaplatform/shared";
 import { EngineError } from "../errors/engine-error.js";
-import { PermissionAction, ROW_ID_FIELD, SYSTEM_ROLES, canGrantActionTo } from "@digitaplatform/shared";
+import { PermissionAction, ROW_ID_FIELD, SYSTEM_ROLES, canGrantActionTo, opensField, opensOperatorFields } from "@digitaplatform/shared";
+import type { ReadRow } from "@digitaplatform/shared";
 import { UnknownDoctypeError, type EntityRegistry } from "../entity/entity-registry.js";
 import { docFieldsOf, evaluateExpression } from "../expression/expression-evaluator.js";
 import { permissionRowsFor, scopeValueMatches } from "./scope-filter.js";
@@ -890,20 +891,6 @@ function entityHasStateStripOverrides(entity: EntityDefinition): boolean {
 const IDENTITY_FIELDS = ["_id", "doctype", "docstatus", "creation", "modified"] as const;
 /** The stored fields that name the people who wrote a row. A read row with `fields` hides them. */
 const OPERATOR_FIELDS = ["owner", "modified_by"] as const;
-
-/** The part of a read row that decides which fields it opens. */
-type ReadRow = Pick<EntityPermission, "level" | "fields">;
-
-/** Whether `row` opens the field `fieldname` of `level`, or a child of `level` of the Table
- *  `fieldname`: the row's level, and its `fields`, when it has them, name the field. */
-function opensField(row: ReadRow, fieldname: string, level: number): boolean {
-  return row.level === level && (!row.fields || row.fields.includes(fieldname));
-}
-
-/** Whether `rows` open `owner` and `modified_by`: unless every one of them carries `fields`. */
-function opensOperatorFields(rows: readonly ReadRow[]): boolean {
-  return rows.length === 0 || rows.some((row) => !row.fields);
-}
 
 /** Whether a list reads what `opens` picks on every row it answers through `rows`, the user's
  *  rows that grant it: a row that holds on every row opens it, or else each level-0 row must,
