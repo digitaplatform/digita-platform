@@ -291,8 +291,11 @@ export function buildZodSchema(
   return base.superRefine((data, ctx) => {
     for (const f of entity.fields) {
       // A statically required field is refused by its own schema already.
-      if (!isStored(f.fieldtype) || f.fieldtype === 'Table' || f.required || isFilledOnInsert(f)) continue;
-      if (requiredResolver(f.fieldname) && isEmptyValue(f, (data as Record<string, unknown>)[f.fieldname])) {
+      if (!isStored(f.fieldtype) || f.fieldtype === 'Table' || f.required) continue;
+      const value = (data as Record<string, unknown>)[f.fieldname];
+      // A value the engine replaces with its default is the engine's to refuse; one it keeps is refused here.
+      if (isFilledOnInsert(f) && takesDefault(value)) continue;
+      if (requiredResolver(f.fieldname) && isEmptyValue(f, value)) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: [f.fieldname], message: 'field_required' });
       }
     }
