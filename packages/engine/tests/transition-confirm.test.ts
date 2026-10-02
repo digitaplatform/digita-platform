@@ -35,7 +35,7 @@ describe("the confirm of a transition", () => {
           naming: { strategy: "user_set" },
           fields: [{ fieldname: "status", fieldtype: "Select", label: "Status", options: ["in_progress", "ready"] }],
           permissions: [],
-          states: [{ name: "in_progress", is_initial: true }, { name: "ready" }],
+          states: [{ value: "in_progress", is_initial: true }, { value: "ready" }],
           transitions: [
             { from: "in_progress", to: "ready", allowed_roles: [], confirm: true },
             { from: "ready", to: "in_progress", allowed_roles: [] },
