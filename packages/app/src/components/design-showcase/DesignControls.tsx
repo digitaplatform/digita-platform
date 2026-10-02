@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { MODE_CYCLE, SegmentedControl, Select } from '@digitaplatform/components';
 import { getRuntimeSignatures, subscribeRuntimeSignatures, type Density, type ThemeMode } from '@digitaplatform/theme';
-import { useThemeStore } from '@/stores/theme';
+import { isModeLocked, useThemeStore } from '@/stores/theme';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useDesignList } from '@/components/layout/DesignMenu';
 import { DENSITY_OPTIONS } from '@/components/layout/DensityMenu';
@@ -21,6 +21,8 @@ const LOCKED_DESIGN_IDS = [...Object.keys(pluginsLock.free), ...Object.keys(plug
 export function DesignControls() {
   const tc = useChrome();
   const { design, mode, density, signature, setDesign, setMode, setDensity, previewSignature } = useThemeStore();
+  // A tenant that allows no light/dark choice gets no mode control: setMode would refuse every click.
+  const modeLocked = useThemeStore((s) => isModeLocked(s.branding));
   const designs = useDesignList();
   const signatures = useSyncExternalStore(subscribeRuntimeSignatures, getRuntimeSignatures, getRuntimeSignatures);
   // The tenant's look comes back when the showcase closes, so a preview never follows the reviewer.
@@ -53,12 +55,14 @@ export function DesignControls() {
           options={designOptions}
         />
       </div>
-      <SegmentedControl
-        aria-label={tc('ui.theme.toggle')}
-        value={mode}
-        onChange={(value) => setMode(value as ThemeMode)}
-        options={MODE_CYCLE.map((m) => ({ value: m, label: m }))}
-      />
+      {!modeLocked && (
+        <SegmentedControl
+          aria-label={tc('ui.theme.toggle')}
+          value={mode}
+          onChange={(value) => setMode(value as ThemeMode)}
+          options={MODE_CYCLE.map((m) => ({ value: m, label: m }))}
+        />
+      )}
       <SegmentedControl
         aria-label={tc('ui.density.label')}
         value={density}
