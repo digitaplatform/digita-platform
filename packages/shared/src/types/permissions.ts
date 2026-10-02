@@ -75,6 +75,47 @@ export function opensOperatorFields(rows: readonly ReadRow[]): boolean {
   return rows.length === 0 || rows.some((row) => !row.fields);
 }
 
+/** The stored fields every readable row shows: what the row is and when it changed. */
+export const IDENTITY_FIELDS: readonly string[] = ["_id", "doctype", "docstatus", "creation", "modified"];
+/** The stored fields that name the people who wrote a row. A read row with `fields` hides them. */
+export const OPERATOR_FIELDS: readonly string[] = ["owner", "modified_by"];
+
+/** The part of a field definition that decides who reads it, a Table's child fields included. */
+export interface ReadField {
+  fieldname: string;
+  perm_level?: number;
+  child_fields?: readonly { fieldname: string; perm_level?: number }[];
+}
+
+/**
+ * The fields a read answers to a reader whose read rows are `rows`: the identity fields, every
+ * field one of the rows opens, and the operator fields where the rows open them. A key that starts
+ * with `_` is not a field and passes on its own. The engine answers its reads by this rule, and so
+ * does whatever else answers stored rows, such as the report service.
+ */
+export function readableFields(fields: readonly ReadField[], rows: readonly ReadRow[]): Set<string> {
+  const readable = new Set<string>(IDENTITY_FIELDS);
+  for (const field of fields) {
+    if (rows.some((row) => opensField(row, field.fieldname, field.perm_level ?? 0))) readable.add(field.fieldname);
+  }
+  if (opensOperatorFields(rows)) for (const field of OPERATOR_FIELDS) readable.add(field);
+  return readable;
+}
+
+/**
+ * The child fields of the Table `table` that `rows` open, with the row keys `_row_id` and `idx`.
+ * `null` when no child field is gated: then the Table field itself decides, as any field does.
+ */
+export function readableChildFields(table: ReadField, rows: readonly ReadRow[]): Set<string> | null {
+  const children = table.child_fields ?? [];
+  if (!children.some((child) => (child.perm_level ?? 0) > 0)) return null;
+  const readable = new Set<string>(["_row_id", "idx"]);
+  for (const child of children) {
+    if (rows.some((row) => opensField(row, table.fieldname, child.perm_level ?? 0))) readable.add(child.fieldname);
+  }
+  return readable;
+}
+
 export const SYSTEM_ROLES = {
   ADMINISTRATOR: "Administrator",
   SYSTEM_USER: "System User",
