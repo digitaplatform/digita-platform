@@ -112,9 +112,9 @@ export class PermissionChecker {
     action: string,
     doc?: Record<string, unknown>,
   ): Promise<PermissionCheckResult> {
-    // A personal entity's row is its owner's alone, for every role. A create carries no owner yet;
-    // the engine stamps the caller.
-    if (doc && action !== "create" && doc["owner"] !== user.email && doc["owner"] !== user._id && this.isPersonal(entityName)) {
+    // A personal entity's row is its owner's alone, for every role. The owner is the email the engine
+    // stamps on a create, the same identity the list filter matches. A create carries no owner yet.
+    if (doc && action !== "create" && doc["owner"] !== user.email && this.isPersonal(entityName)) {
       return { allowed: false, reason: "The row belongs to another person" };
     }
 
