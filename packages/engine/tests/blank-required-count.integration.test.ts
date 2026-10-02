@@ -15,6 +15,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
 }));
 
 import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { DIGITA } from "@digitaplatform/shared";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { env } from "../src/core/config/env.js";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
@@ -123,6 +124,13 @@ describe("blank means what the save refuses", () => {
     ]);
   });
 
+  it("counts past a document that holds no Table at all", async () => {
+    await db.insertOne("BlankCase", { _id: "B-5", text: "ok", rating: 3, tags: ["d"], check: true } as never, "app");
+    const counts = await countBlankRequired(db, [cases]);
+    expect(counts.find((c) => c.field === "lines.item")?.documents).toBe(1);
+    await db.deleteOne("BlankCase", "B-5", "app");
+  });
+
   it("skips a virtual entity", async () => {
     const virtual = { ...cases, name: "BlankCase", is_virtual: true } as EntityDefinition;
     expect(await countBlankRequired(db, [virtual])).toEqual([]);
@@ -147,6 +155,18 @@ describe("the count of the app the engine runs", () => {
   });
   afterAll(async () => {
     await rm(root, { recursive: true, force: true });
+  });
+
+  it("counts an entity /meta created at run time, which only the database holds", async () => {
+    await db.insertOne(
+      DIGITA.COLLECTIONS.ENTITY,
+      {
+        _id: "RunTimeThing", name: "RunTimeThing", module: "test", database: "app", naming: { strategy: "user_set" },
+        fields: [{ fieldname: "title", fieldtype: "Data", label: "Title", required: true }], permissions: [],
+      },
+      DIGITA.DATABASES.CORE,
+    );
+    expect(await countBlankRequiredInApp(db)).toContainEqual({ database: "app", entity: "RunTimeThing", field: "title", documents: 0 });
   });
 
   it("counts the entities of the app's files and of its domains, as the boot loads them", async () => {
