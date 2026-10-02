@@ -71,9 +71,10 @@ export default async function LocaleLayout({
     home: t("notFoundHome", locale as Locale),
   });
   // A website carries its own name: the site's `site_name` wins over the tenant's `app_name`,
-  // which names the tenant's apps, not its public site.
+  // which names the tenant's apps, not its public site. Without either, as when the engine answers
+  // no readable row for SITE_ID, the site wears its look's name, as the app does.
   const brand = {
-    name: site?.site_name ?? branding?.app_name ?? "Digita",
+    name: site?.site_name || branding?.app_name || signature.name,
     logoUrl: brandingImageUrl(branding?.logo),
     nameIsCustom: Boolean(site?.site_name ?? branding?.app_name),
     signature,

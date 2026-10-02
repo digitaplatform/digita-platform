@@ -24,11 +24,13 @@ vi.mock("next/headers", () => ({
 }));
 
 let site: WebSite;
+/** The engine answers no readable row for SITE_ID. */
+let siteMissing = false;
 let publishedSlugs: Record<string, string[]> = { en: [""], de: [""] };
 let websiteLook: string | undefined;
 let branding: Record<string, unknown> | null = null;
 vi.mock("../src/lib/engine-client", () => ({
-  getSite: async () => site,
+  getSite: async () => (siteMissing ? null : site),
   getNav: async () => null,
   getBranding: async () => branding,
   findWebsiteSignature: async () => websiteLook,
@@ -65,6 +67,7 @@ async function render(): Promise<string> {
 
 beforeEach(() => {
   site = { _id: "example", site_name: "example", domain: "example.org" };
+  siteMissing = false;
   publishedSlugs = { en: [""], de: [""] };
   requestHeaders = { "x-nonce": "bm9uY2U=" };
   localeCookie = undefined;
@@ -152,6 +155,21 @@ describe("the locale layout", () => {
     for (const declaration of inline) {
       const [name, value] = [declaration.slice(0, declaration.indexOf(":")), declaration.slice(declaration.indexOf(":") + 1)];
       expect(band![1]).toContain(`${name}: ${value} !important;`);
+    }
+  });
+
+  it("PLANTED DEFECT: names a site with no readable row and no app name by its look, never a fixed Digita", async () => {
+    siteMissing = true;
+    websiteLook = "simetrix";
+    try {
+      const html = await render();
+      // PLANTED INNOCENT: the look is drawn, so a missing name means the brand was looked for.
+      expect(html).toContain('data-signature="simetrix"');
+      expect(html).toContain("simetrix");
+      expect(html).not.toMatch(/>Digita</);
+      expect(html).not.toContain('aria-label="Digita"');
+    } finally {
+      websiteLook = undefined;
     }
   });
 
