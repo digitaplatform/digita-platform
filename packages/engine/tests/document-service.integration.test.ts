@@ -2184,6 +2184,17 @@ describe("An update re-derives the fetched header fields of a Link it changed", 
         { fieldname: "product", fieldtype: "Link", label: "Product", target: "HeadProduct" },
         { fieldname: "product_code", fieldtype: "Data", label: "Code", read_only: true, fetch_from: "product.product_no" },
         { fieldname: "uom", fieldtype: "Data", label: "UOM", fetch_from: "product.sales_uom", fetch_if_empty: true },
+        { fieldname: "packer", fieldtype: "Link", label: "Packer", target: "HeadProduct" },
+        { fieldname: "packer_code", fieldtype: "Data", label: "Packer Code", read_only: true, fetch_from: "packer.product_no" },
+        {
+          fieldname: "lines",
+          fieldtype: "Table",
+          label: "Lines",
+          child_fields: [
+            { fieldname: "product", fieldtype: "Link", label: "Product", target: "HeadProduct" },
+            { fieldname: "code", fieldtype: "Data", label: "Code", read_only: true, fetch_from: "product.product_no" },
+          ],
+        },
       ],
     } as unknown as Partial<EntityDefinition>));
     await db.ensureCollection("HeadProduct", "app");
@@ -2215,6 +2226,23 @@ describe("An update re-derives the fetched header fields of a Link it changed", 
     const order = await docService.insert("HeadOrder", { title: "O", product: "HP-FULL" }, adminUser);
     await docService.update("HeadOrder", order._id, { product: "HP-BARE", uom: "BOX" }, adminUser);
     expect((await stored(order._id))["uom"]).toBe("BOX");
+  });
+
+  it("re-derives only the fields of the changed Link, and leaves the rows to resolveChangedRows", async () => {
+    await docService.insert("HeadProduct", { _id: "HP-MOVING", product_no: "M-1" }, adminUser);
+    const order = await docService.insert(
+      "HeadOrder",
+      { title: "O", product: "HP-FULL", packer: "HP-MOVING", lines: [{ product: "HP-MOVING" }] },
+      adminUser,
+    );
+    // The packer's source changes after the order fetched it; the order keeps what it fetched.
+    await db.updateOne("HeadProduct", "HP-MOVING", { product_no: "M-2" }, "app");
+    const before = await stored(order._id);
+    await docService.update("HeadOrder", order._id, { product: "HP-BARE", lines: before["lines"] }, adminUser);
+
+    const after = await stored(order._id);
+    expect(after["packer_code"]).toBe("M-1");
+    expect((after["lines"] as Array<Record<string, unknown>>)[0]!["code"]).toBe("M-1");
   });
 });
 
