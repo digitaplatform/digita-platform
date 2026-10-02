@@ -167,6 +167,18 @@ describe('Attach', () => {
   });
 });
 
+describe('a required upload field', () => {
+  it.each(['Attach', 'AttachImage'])('%s tells a screen reader that its chooser is required', async (fieldtype) => {
+    drawField(buildField(fieldtype), undefined, { required: true });
+    expect(await screen.findByRole('button', { name: 'ui.attach.choose', description: /ui\.field\.required/ })).toBeInTheDocument();
+  });
+
+  it.each(['Attach', 'AttachImage'])('%s says nothing of required on an optional chooser', async (fieldtype) => {
+    drawField(buildField(fieldtype));
+    expect(await screen.findByRole('button', { name: 'ui.attach.choose' })).not.toHaveAccessibleDescription(/ui\.field\.required/);
+  });
+});
+
 describe('AttachImage', () => {
   const stored = 'https://files.example/photos/bike.png';
 

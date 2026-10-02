@@ -98,9 +98,17 @@ export default function AttachControl({
           disabled={uploading}
           leftIcon={<Upload className="h-4 w-4" aria-hidden="true" />}
           onClick={() => inputRef.current?.click()}
+          // The required star is for the eye only, and a button takes no aria-required: the
+          // chooser says it in its description.
+          aria-describedby={state.required ? `${controlId}-required` : undefined}
         >
           {tc('ui.attach.choose')}
         </Button>
+        {state.required && (
+          <span id={`${controlId}-required`} className="sr-only">
+            {tc('ui.field.required')}
+          </span>
+        )}
         {url && !uploading && (
           <button
             type="button"
