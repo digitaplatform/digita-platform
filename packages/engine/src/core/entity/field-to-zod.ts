@@ -6,6 +6,10 @@ import { evaluateExpression } from "../expression/expression-evaluator.js";
 import { isBlank } from "./field-types.js";
 
 const encryptedPasswordSchema = z.object({ key_id: z.string(), iv: z.string(), tag: z.string(), data: z.string() });
+const geoPointSchema = z.object({
+  type: z.literal("Point"),
+  coordinates: z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]),
+});
 
 /**
  * Build a Zod schema from an `EntityDefinition` for runtime data
@@ -119,7 +123,7 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
       return z.union([z.string(), encryptedPasswordSchema]);
     case "Color":
       // Single source of truth for the hex rule: validators/color.ts
-      return z.string().refine(isValidColor, "field_invalid_color");
+      return z.string("field_invalid_color").refine(isValidColor, "field_invalid_color");
     case "Int":
       return z.coerce.number().int("field_invalid_int");
     case "Float":
@@ -135,7 +139,8 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
       // A calendar day — canonical storage form is "YYYY-MM-DD". Enforce it so a
       // stray non-canonical string can't later mis-compare in a date filter (a Date
       // object is accepted for hook writers and canonicalized at the storage layer).
-      return z.union([z.string(), z.date()]).refine(
+      // Any other type reaches the check too, so a number answers the date's key.
+      return z.unknown().refine(
         (v) => {
           if (v instanceof Date) return !isNaN(v.getTime());
           if (typeof v !== "string") return false;
@@ -145,7 +150,7 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
       );
     case "Datetime":
       // A timestamp — stored as a BSON Date; any parseable date string / Date is fine.
-      return z.union([z.string(), z.date()]).refine(
+      return z.unknown().refine(
         (v) => {
           if (v instanceof Date) return !isNaN(v.getTime());
           if (typeof v !== "string" || !v) return v === "";
@@ -157,7 +162,7 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
       // Time is a wall-clock value (HH:mm[:ss]), NOT a Date — `new Date("14:30")`
       // is Invalid Date, so it must have its own branch or every canonical time
       // is rejected on the happy path.
-      return z.string().refine((v) => /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(v), {
+      return z.string("field_invalid_time").refine((v) => /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(v), {
         message: "field_invalid_time",
       });
     case "Duration":
@@ -177,10 +182,8 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
     case "JSON":
       return z.any();
     case "Geolocation":
-      return z.object({
-        type: z.literal("Point"),
-        coordinates: z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]),
-      });
+      // One key on the field's own path, not a type error on geo.coordinates[0].
+      return z.unknown().refine((v) => geoPointSchema.safeParse(v).success, "field_invalid_geolocation");
     case "Table":
       return tableSchema(field);
     case "ReadOnly":
