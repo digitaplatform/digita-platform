@@ -13,6 +13,7 @@ import {
   evaluateExpression,
   evaluateMapping,
   type RuleExprContext,
+  assertConditionParsable,
 } from "../src/core/rules/rule-expression.js";
 
 describe("rule-expression sandbox (C2)", () => {
@@ -132,5 +133,15 @@ describe("stocktake rule mappings evaluate (C3)", () => {
   it("still evaluates the rule condition row.delta != 0", () => {
     expect(evaluateExpression("row.delta != 0", ctx)).toBe(true);
     expect(evaluateExpression("row.delta != 0", { row: { delta: 0 } })).toBe(false);
+  });
+});
+
+describe("the in operator in a rule", () => {
+  it("passes the start check of a rule file and answers at run time", () => {
+    const condition = "'Staff' in user.roles";
+    // The check the start runs on every condition of a rule file.
+    expect(() => assertConditionParsable(condition)).not.toThrow();
+    expect(evaluateExpression(condition, { user: { roles: ["Staff"] } })).toBe(true);
+    expect(evaluateExpression(condition, { user: { roles: ["Customer"] } })).toBe(false);
   });
 });
