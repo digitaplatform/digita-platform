@@ -6,6 +6,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { WebSite } from "../src/lib/types";
 
 vi.mock("server-only", () => ({}));
+// Next imports an svg as a static image; the test stands in for it with the address.
+vi.mock("@digitaplatform/theme/favicon.svg", () => ({ default: { src: "/platform-favicon.svg" } }));
 vi.mock("../src/i18n/messages", () => ({ t: (key: string) => key }));
 const redirect = vi.fn((url: string): never => {
   throw new Error(`redirect ${url}`);
@@ -56,7 +58,8 @@ Object.assign(process.env, {
   TENANT_APPS: "crm",
 });
 
-const { default: LocaleLayout } = await import("../src/app/[locale]/layout");
+const { default: LocaleLayout, generateMetadata } = await import("../src/app/[locale]/layout");
+const { registerSignature } = await import("@digitaplatform/theme");
 
 async function render(): Promise<string> {
   const page = await LocaleLayout({ children: null, params: Promise.resolve({ locale: "en" }) });
@@ -184,5 +187,27 @@ describe("the locale layout", () => {
   it("PLANTED DEFECT: refuses a request the middleware did not give a nonce, instead of writing a script the policy blocks", async () => {
     requestHeaders = {};
     await expect(render()).rejects.toThrow("x-nonce");
+  });
+});
+
+describe("the tab icon of a site", () => {
+  const tabIcon = async () => {
+    const icons = (await generateMetadata()).icons as { icon: { url: string; type: string } };
+    return icons.icon;
+  };
+
+  it("shows the icon of the signature the site names", async () => {
+    registerSignature({ id: "tab-icon-test", name: "Tab icon test", accent: "#112233", icon: '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>' });
+    site = { ...site, theme: "tab-icon-test" };
+    expect(await tabIcon()).toEqual({
+      url: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>')}`,
+      type: "image/svg+xml",
+    });
+  });
+
+  it("PLANTED INNOCENT: shows the platform's icon where the signature names none", async () => {
+    registerSignature({ id: "tab-icon-none", name: "No tab icon", accent: "#112233" });
+    site = { ...site, theme: "tab-icon-none" };
+    expect(await tabIcon()).toEqual({ url: "/platform-favicon.svg", type: "image/svg+xml" });
   });
 });
