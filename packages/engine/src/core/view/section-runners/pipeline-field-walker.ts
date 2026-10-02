@@ -279,12 +279,6 @@ function walkStage(
         walkExpr(lookup["let"], state, out);
         if (typeof as === "string" && !state.produced.has(as) && !state.reshaped) recordOutput(state.entity, as, out);
         if (typeof from !== "string") return;
-        // A dotted `as` nests the joined rows where the runner's mask, which looks for the key
-        // `as` itself, does not reach them: it reads every field of `from`.
-        if (typeof as === "string" && as.includes(".")) {
-          recordSource(from, WHOLE_DOCUMENT, out);
-          return;
-        }
         const sub = freshState(from);
         if (Array.isArray(subPipeline)) walkPipeline(subPipeline, sub, registry, out);
         // Rows of a further entity the sub-pipeline joined travel nested inside these rows.

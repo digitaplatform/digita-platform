@@ -471,6 +471,9 @@ describe("runAggregateSection — every way a stage hands a protected field on",
     ["a $lookup.let bound to salary", [{ $lookup: { from: "Department", let: { s: "$salary" }, pipeline: [{ $match: { $expr: { $gt: ["$$s", 0] } } }, { $project: { name: 1 } }], as: "d" } }]],
     ["$getField by a plain name", [{ $addFields: { x: { $getField: "salary" } } }]],
     ["$getField with a computed name", [{ $addFields: { x: { $getField: { field: { $literal: "salary" } } } } }]],
+    ["an inclusion of budget written as a number other than 1", [join, { $project: { "d.budget": 2 } }]],
+    ["a $lookup whose from is not an entity name", [{ $lookup: { from: { db: "local", coll: "oplog.rs" }, pipeline: [], as: "o" } }]],
+    ["a $lookup matched on salary", [{ $lookup: { from: "Employee", localField: "dept", foreignField: "salary", as: "hit" } }]],
   ];
   for (const [what, pipeline] of refused) {
     it(`refuses ${what}`, async () => {

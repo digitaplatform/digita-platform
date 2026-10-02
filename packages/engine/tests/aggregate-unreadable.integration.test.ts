@@ -20,9 +20,11 @@ import { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { runAggregateSection } from "../src/core/view/section-runners/aggregate-section.js";
 import { PermissionDeniedError } from "../src/core/permissions/permission-checker.js";
 
-// A reader of Employee `name`, `dept` and `dept_id`, not `salary`, and of Department `name`, not
-// `budget`. Whatever a pipeline's syntax, the rows it answers this reader carry no salary and no
-// budget, and nothing in them depends on one: swapping the values among the rows changes nothing.
+// A reader of Employee `name`, `dept`, `dept_id` and the `payments` rows without their `amount`,
+// not `salary`, and of Department `title` and the `lines` rows without their `cost`, not
+// `budget`, and of every field of Tag. Whatever a pipeline's syntax, the rows it answers this
+// reader carry no salary, budget, amount or cost, and nothing in them depends on one: swapping
+// the values among the rows changes nothing.
 const entities: Record<string, unknown> = {
   Employee: {
     name: "Employee", database: "app", permissions: [],
@@ -31,40 +33,71 @@ const entities: Record<string, unknown> = {
       { fieldname: "dept", fieldtype: "Data" },
       { fieldname: "dept_id", fieldtype: "Link", target: "Department" },
       { fieldname: "salary", fieldtype: "Currency", perm_level: 2 },
+      {
+        fieldname: "payments", fieldtype: "Table",
+        child_fields: [{ fieldname: "ref", fieldtype: "Data" }, { fieldname: "amount", fieldtype: "Currency", perm_level: 1 }],
+      },
     ],
   },
   Department: {
     name: "Department", database: "app", permissions: [],
     fields: [
-      { fieldname: "name", fieldtype: "Data" },
+      { fieldname: "title", fieldtype: "Data" },
       { fieldname: "budget", fieldtype: "Currency", perm_level: 1 },
+      {
+        fieldname: "lines", fieldtype: "Table",
+        child_fields: [{ fieldname: "item", fieldtype: "Data" }, { fieldname: "cost", fieldtype: "Currency", perm_level: 1 }],
+      },
     ],
   },
+  Tag: { name: "Tag", database: "app", permissions: [], fields: [{ fieldname: "label", fieldtype: "Data" }] },
 };
 const registry = { has: (n: string) => n in entities, get: (n: string) => entities[n] } as never;
 const user = { _id: "u1", email: "u@example.com", roles: ["Clerk"] } as never;
 const rctx = { root: null, user, params: {}, now: new Date(), warnings: [] };
 const partial = new Map<string, Set<string> | null>([
-  ["Employee", new Set(["name", "dept", "dept_id"])],
-  ["Department", new Set(["name"])],
+  ["Employee", new Set(["name", "dept", "dept_id", "payments"])],
+  ["Department", new Set(["title", "lines"])],
+  ["Tag", null],
+]);
+const partialChildren = new Map<string, Set<string>>([
+  ["Employee.payments", new Set(["_row_id", "idx", "ref"])],
+  ["Department.lines", new Set(["_row_id", "idx", "item"])],
 ]);
 const everyField = new Map<string, Set<string> | null>([
   ["Employee", null],
   ["Department", null],
+  ["Tag", null],
 ]);
 
 const SALARIES = [91001, 42002, 77003];
 const BUDGETS = [555001, 555002];
+const AMOUNTS = [71001, 72001, 73001];
+const COSTS = [81001, 82001];
 const join = { $lookup: { from: "Department", localField: "dept_id", foreignField: "_id", as: "d" } };
 
 let replSet: MongoMemoryReplSet;
 let db: MongoDBService;
 
-async function storeValues(salaries: number[], budgets: number[]): Promise<void> {
+/** Store the protected values; `turn` rotates them among the rows. */
+async function storeValues(turn: number): Promise<void> {
+  const at = <T>(list: T[], i: number): T => list[(i + turn) % list.length]!;
   for (const [i, id] of ["E1", "E2", "E3"].entries()) {
-    await db.updateOne("Employee", id, { salary: salaries[i] }, "app");
+    await db.updateOne(
+      "Employee",
+      id,
+      { salary: at(SALARIES, i), payments: [{ _row_id: `${id}-p`, idx: 0, ref: `${id}-ref`, amount: at(AMOUNTS, i) }] },
+      "app",
+    );
   }
-  for (const [i, id] of ["D1", "D2"].entries()) await db.updateOne("Department", id, { budget: budgets[i] }, "app");
+  for (const [i, id] of ["D1", "D2"].entries()) {
+    await db.updateOne(
+      "Department",
+      id,
+      { budget: at(BUDGETS, i), lines: [{ _row_id: `${id}-l`, idx: 0, item: `${id}-item`, cost: at(COSTS, i) }] },
+      "app",
+    );
+  }
 }
 
 beforeAll(async () => {
@@ -72,12 +105,13 @@ beforeAll(async () => {
   (env as unknown as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
   db = new MongoDBService();
   await db.connect();
-  await db.insertOne("Department", { _id: "D1", name: "Ops" }, "app");
-  await db.insertOne("Department", { _id: "D2", name: "Dev" }, "app");
+  await db.insertOne("Department", { _id: "D1", title: "Ops" }, "app");
+  await db.insertOne("Department", { _id: "D2", title: "Dev" }, "app");
+  await db.insertOne("Tag", { _id: "T1", label: "any" }, "app");
   await db.insertOne("Employee", { _id: "E1", name: "Anna", dept: "CH", dept_id: "D1" }, "app");
   await db.insertOne("Employee", { _id: "E2", name: "Ben", dept: "DE", dept_id: "D2" }, "app");
   await db.insertOne("Employee", { _id: "E3", name: "Cleo", dept: "DE", dept_id: "D2" }, "app");
-  await storeValues(SALARIES, BUDGETS);
+  await storeValues(0);
 }, 60000);
 
 afterAll(async () => {
@@ -98,6 +132,9 @@ async function outcome(pipeline: unknown[], readable: Map<string, Set<string> | 
         permissionChecker: {
           check: vi.fn().mockResolvedValue(undefined),
           getReadableFieldsOnEveryRow: vi.fn((_u: unknown, entity: string) => readable.get(entity) ?? null),
+          getReadableChildFieldsOnEveryRow: vi.fn((_u: unknown, entity: string, table: string) =>
+            readable === partial ? (partialChildren.get(`${entity}.${table}`) ?? null) : null,
+          ),
           hasConditionalRowRead: vi.fn(() => false),
         },
       } as never,
@@ -110,13 +147,13 @@ async function outcome(pipeline: unknown[], readable: Map<string, Set<string> | 
 
 const probes: Array<[string, unknown[]]> = [
   ["an exclusion $project, then a read of salary", [{ $project: { name: 0 } }, { $addFields: { x: "$salary" } }]],
-  ["an exclusion of _id, then a sum of salary", [{ $project: { _id: 0 } }, { $group: { _id: "$dept", total: { $sum: "$salary" } } }]],
+  ["an exclusion of _id, then a sum of salary", [{ $project: { _id: 0 } }, { $group: { _id: "$dept", total: { $sum: "$salary" } } }, { $sort: { _id: 1 } }]],
   ["an exclusion $project, then a sort by salary", [{ $project: { name: 0 } }, { $sort: { salary: -1 } }]],
   ["an exclusion $project, then a match on salary", [{ $project: { name: 0 } }, { $match: { salary: { $gt: 50000 } } }]],
   ["a path through a $lookup's as to budget", [join, { $addFields: { leak: { $first: "$d.budget" } } }]],
-  ["a $lookup, an $unwind and a group by budget", [join, { $unwind: "$d" }, { $group: { _id: "$d.budget", n: { $sum: 1 } } }]],
+  ["a $lookup, an $unwind and a group by budget", [join, { $unwind: "$d" }, { $group: { _id: "$d.budget", n: { $sum: 1 } } }, { $sort: { _id: 1 } }]],
   ["a $facet branch that hands the documents on whole", [{ $facet: { all: [{ $match: { dept: "DE" } }] } }]],
-  ["a $lookup.let bound to salary", [{ $lookup: { from: "Department", let: { s: "$salary" }, pipeline: [{ $match: { $expr: { $gt: ["$$s", 50000] } } }, { $project: { name: 1 } }], as: "d" } }]],
+  ["a $lookup.let bound to salary", [{ $lookup: { from: "Department", let: { s: "$salary" }, pipeline: [{ $match: { $expr: { $gt: ["$$s", 50000] } } }, { $project: { title: 1 } }], as: "d" } }]],
   ["$getField by a plain name", [{ $addFields: { x: { $getField: "salary" } } }]],
   ["a nested exclusion object, then a read of salary", [{ $project: { name: { x: 0 } } }, { $addFields: { leak: "$salary" } }]],
   ["a nested exclusion object, then a sort by salary", [{ $project: { name: { x: 0 } } }, { $sort: { salary: -1 } }]],
@@ -129,20 +166,36 @@ const probes: Array<[string, unknown[]]> = [
   ["an inclusion of the joined rows by 2", [join, { $project: { name: 1, d: 2 } }, { $addFields: { leak: { $first: "$d.budget" } } }]],
   ["a dotted as, then a read of budget", [{ $lookup: { from: "Department", localField: "dept_id", foreignField: "_id", as: "x.y" } }, { $addFields: { leak: { $first: "$x.y.budget" } } }]],
   ["a dotted as alone", [{ $lookup: { from: "Department", localField: "dept_id", foreignField: "_id", as: "x.y" } }]],
+  // A nested $lookup.pipeline and a $facet branch that the field check lets through: the $unset
+  // at the head of the sub-pipeline is what keeps the budget out.
+  ["a nested pipeline that reads budget after a reshape", [{ $lookup: { from: "Department", localField: "dept_id", foreignField: "_id", as: "d", pipeline: [{ $project: { title: { x: 0 } } }, { $addFields: { b: "$budget" } }] } }]],
+  ["a $facet branch with such a nested pipeline", [{ $facet: { a: [{ $project: { name: 1, dept_id: 1 } }, { $lookup: { from: "Department", localField: "dept_id", foreignField: "_id", as: "d", pipeline: [{ $project: { title: { x: 0 } } }, { $addFields: { b: "$budget" } }] } }] } }]],
+  // A $lookup's foreignField is matched on the stored rows: on a hidden field it tells who holds a guess.
+  ["a foreignField oracle on salary under a dotted as", [{ $lookup: { from: "Tag", as: "x.y", pipeline: [{ $addFields: { guess: 91001 } }, { $lookup: { from: "Employee", localField: "guess", foreignField: "salary", as: "hit" } }, { $project: { n: { $size: "$hit" }, who: "$hit.name" } }] } }]],
+  ["a foreignField oracle on a child amount", [{ $lookup: { from: "Tag", as: "t", pipeline: [{ $addFields: { guess: 71001 } }, { $lookup: { from: "Employee", localField: "guess", foreignField: "payments.amount", as: "hit" } }, { $project: { n: { $size: "$hit" }, who: "$hit.name" } }] } }]],
+  // A child field of a readable Table that the reader may not read.
+  ["the bare rows with their payments", [{ $match: {} }]],
+  ["a sort by a child amount", [{ $sort: { "payments.amount": -1 } }, { $project: { name: 1 } }]],
+  ["a match on a child amount", [{ $match: { "payments.amount": { $gt: 72000 } } }, { $project: { name: 1 } }]],
+  ["an $unwind of payments and their amounts", [{ $unwind: "$payments" }, { $project: { amt: "$payments.amount" } }]],
+  ["a sum of the child amounts per person", [{ $unwind: "$payments" }, { $group: { _id: "$name", total: { $sum: "$payments.amount" } } }, { $sort: { _id: 1 } }]],
+  ["an inclusion of the payments", [{ $project: { payments: 1 } }]],
+  ["a joined child cost", [join, { $addFields: { c: "$d.lines.cost" } }]],
+  ["a group by a joined child cost", [join, { $unwind: "$d" }, { $unwind: "$d.lines" }, { $group: { _id: "$d.lines.cost", n: { $sum: 1 } } }, { $sort: { _id: 1 } }]],
 ];
 
 describe("an aggregate section never answers a reader a value of a field they may not read", () => {
   for (const [what, pipeline] of probes) {
     it(`through ${what}: no protected value, and nothing that depends on one`, async () => {
       const before = await outcome(pipeline, partial);
-      await storeValues([SALARIES[1]!, SALARIES[2]!, SALARIES[0]!], [BUDGETS[1]!, BUDGETS[0]!]);
+      await storeValues(1);
       try {
         const after = await outcome(pipeline, partial);
         const text = JSON.stringify(before);
-        for (const value of [...SALARIES, ...BUDGETS]) expect(text).not.toContain(String(value));
+        for (const value of [...SALARIES, ...BUDGETS, ...AMOUNTS, ...COSTS]) expect(text).not.toContain(String(value));
         expect(after).toEqual(before);
       } finally {
-        await storeValues(SALARIES, BUDGETS);
+        await storeValues(0);
       }
     });
   }
@@ -152,5 +205,21 @@ describe("an aggregate section never answers a reader a value of a field they ma
     expect(JSON.stringify(rows)).toContain("91001");
     const joined = await outcome([join, { $addFields: { leak: { $first: "$d.budget" } } }], everyField);
     expect(JSON.stringify(joined)).toContain("555001");
+    expect(JSON.stringify(await outcome([{ $match: {} }], everyField))).toContain("71001");
+  });
+
+  it("PLANTED INNOCENT: the partial reader keeps the readable child fields of a Table", async () => {
+    const rows = (await outcome([{ $project: { payments: 1 } }, { $sort: { _id: 1 } }], partial)) as Array<Record<string, unknown>>;
+    expect(rows.map((r) => r["payments"])).toEqual([
+      [{ _row_id: "E1-p", idx: 0, ref: "E1-ref" }],
+      [{ _row_id: "E2-p", idx: 0, ref: "E2-ref" }],
+      [{ _row_id: "E3-p", idx: 0, ref: "E3-ref" }],
+    ]);
+  });
+
+  it("refuses a $lookup whose from names no entity, such as { db, coll }", async () => {
+    await expect(
+      outcome([{ $lookup: { from: { db: "local", coll: "oplog.rs" }, pipeline: [], as: "o" } }], partial),
+    ).resolves.toBe("refused");
   });
 });

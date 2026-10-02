@@ -365,6 +365,35 @@ export class PermissionChecker {
     doc?: Record<string, unknown>,
     sharedForRead = false,
   ): Set<string> | null {
+    return this.getReadableChildFieldsWhere(
+      user,
+      entityName,
+      tableFieldname,
+      (perm) => this.permMatchesDoc(perm, user, doc),
+      sharedForRead,
+    );
+  }
+
+  /**
+   * The child fields of a Table the user reads on every row of the entity, for a read over many
+   * rows such as a view aggregate, as getReadableFieldsOnEveryRow decides for the fields.
+   */
+  getReadableChildFieldsOnEveryRow(user: UserContext, entityName: string, tableFieldname: string): Set<string> | null {
+    return this.getReadableChildFieldsWhere(
+      user,
+      entityName,
+      tableFieldname,
+      (perm) => !perm.if_owner && !perm.condition && !perm.scope,
+    );
+  }
+
+  private getReadableChildFieldsWhere(
+    user: UserContext,
+    entityName: string,
+    tableFieldname: string,
+    admits: (perm: EntityDefinition["permissions"][number]) => boolean,
+    readsLevel0 = false,
+  ): Set<string> | null {
     if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return null;
     const entity = this.registry.get(entityName);
     const tableField = entity.fields.find((f) => f.fieldname === tableFieldname);
@@ -373,9 +402,9 @@ export class PermissionChecker {
     if (!anyGated) return null;
 
     const rows: ReadRow[] = permissionRowsFor(entity, user).filter(
-      (perm) => user.roles.includes(perm.role) && !!perm.read && this.permMatchesDoc(perm, user, doc),
+      (perm) => user.roles.includes(perm.role) && !!perm.read && admits(perm),
     );
-    if (sharedForRead) rows.push({ level: 0 });
+    if (readsLevel0) rows.push({ level: 0 });
     const out = new Set<string>(["_row_id", "idx"]);
     for (const child of tableField.child_fields) {
       if (rows.some((row) => opensField(row, tableFieldname, child.perm_level ?? 0))) out.add(child.fieldname);

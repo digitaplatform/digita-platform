@@ -173,16 +173,21 @@ export async function runAggregateSection(
   });
 
   // A value the reader may not see never enters the pipeline: a Password field for every reader,
-  // and each field the reader may not read on every row. They are dropped right after the
-  // security $match, and at the head of every $lookup sub-pipeline, so no later stage reads,
-  // sorts by or outputs them, whatever its syntax; the field check above only gives the shapes it
-  // knows a clear refusal. A $lookup without a sub-pipeline gets one of the $unset alone,
-  // because it joins whole rows that any later stage may copy or move.
-  const hiddenOf = (name: string): Document[] =>
-    deps.registry.has(name) ? unsetHidden(deps.registry.get(name), readableByEntity.get(name)) : [];
+  // and each field the reader may not read on every row, a child field of a Table included, as
+  // `table.child`. They are dropped right after the security $match, and at the head of every
+  // $lookup sub-pipeline, so no later stage reads, sorts by or outputs them, whatever its syntax;
+  // the field check above only gives the shapes it knows a clear refusal. A $lookup without a
+  // sub-pipeline gets one of the $unset alone, because it joins whole rows that any later stage
+  // may copy or move.
+  const hiddenOf = (name: string): string[] =>
+    deps.registry.has(name)
+      ? hiddenPaths(deps.registry.get(name), readableByEntity.get(name), (table) =>
+          deps.permissionChecker.getReadableChildFieldsOnEveryRow(user, name, table),
+        )
+      : [];
   const finalPipeline = [
     ...securityMatch,
-    ...unsetHidden(entity, readableByEntity.get(section.entity)),
+    ...unsetStage(hiddenOf(section.entity)),
     ...coercedUserPipeline.map((stage) => unsetHiddenInLookups(stage, hiddenOf)),
   ];
 
@@ -230,33 +235,59 @@ function passwordFields(def: EntityDefinition): string[] {
 }
 
 /**
- * The stage that drops what a reader may not see of an entity: its Password fields for every
- * reader, and, for a reader who may not read every field (`readable` not null), each field
- * outside `readable`. Nothing when there is nothing to drop.
+ * The paths a reader may not see of an entity: its Password fields for every reader, and, for a
+ * reader who may not read every field (`readable` not null), each field outside `readable` and,
+ * of a Table the reader reads, each child field outside `childReadable(table)` as `table.child`.
+ * A Table the reader may not read goes whole, never with its children, which MongoDB would refuse
+ * as a path collision.
  */
-function unsetHidden(def: EntityDefinition, readable: Set<string> | null | undefined): Document[] {
+function hiddenPaths(
+  def: EntityDefinition,
+  readable: Set<string> | null | undefined,
+  childReadable: (table: string) => Set<string> | null,
+): string[] {
   const hidden = new Set(passwordFields(def));
   if (readable) {
     for (const f of def.fields ?? []) {
-      if (!META_FIELDS.has(f.fieldname) && !f.fieldname.startsWith("_") && !readable.has(f.fieldname)) hidden.add(f.fieldname);
+      if (META_FIELDS.has(f.fieldname) || f.fieldname.startsWith("_") || hidden.has(f.fieldname)) continue;
+      if (!readable.has(f.fieldname)) {
+        hidden.add(f.fieldname);
+        continue;
+      }
+      if (f.fieldtype !== "Table" || !f.child_fields?.length) continue;
+      const children = childReadable(f.fieldname);
+      if (!children) continue;
+      for (const c of f.child_fields) if (!children.has(c.fieldname)) hidden.add(`${f.fieldname}.${c.fieldname}`);
     }
   }
-  return hidden.size ? [{ $unset: [...hidden] }] : [];
+  return [...hidden];
 }
 
-/** The stage with the hidden fields of every joined entity dropped at the head
- *  of its `$lookup` sub-pipeline, `$facet` branches included. A `$lookup` with
- *  `localField`/`foreignField` and no sub-pipeline gets one of the $unset alone
- *  (MongoDB 5.0 and later take both together). */
-function unsetHiddenInLookups(stage: Document, hiddenOf: (entity: string) => Document[]): Document {
+/** The stage that drops `paths`, or nothing when there is nothing to drop. */
+function unsetStage(paths: string[]): Document[] {
+  return paths.length ? [{ $unset: paths }] : [];
+}
+
+/**
+ * The stage with the hidden paths of every joined entity dropped at the head of its `$lookup`
+ * sub-pipeline, `$facet` branches included. A `$lookup` with `localField`/`foreignField` and no
+ * sub-pipeline gets one of the $unset alone (MongoDB 5.0 and later take both together). A
+ * `foreignField` on a hidden path is refused: MongoDB matches it on the stored rows, before the
+ * sub-pipeline drops anything, so the join would tell who holds a guessed value.
+ */
+function unsetHiddenInLookups(stage: Document, hiddenOf: (entity: string) => string[]): Document {
   const lookup = stage["$lookup"];
   if (lookup && typeof lookup === "object" && typeof lookup["from"] === "string") {
-    const unset = hiddenOf(lookup["from"]);
+    const hidden = hiddenOf(lookup["from"]);
+    const foreignField = lookup["foreignField"];
+    if (typeof foreignField === "string" && hidden.some((h) => sharesPath(h, foreignField))) {
+      throw new PermissionDeniedError("aggregation_references_protected_field", { doctype: lookup["from"] });
+    }
     const pipeline = Array.isArray(lookup["pipeline"])
       ? (lookup["pipeline"] as Document[]).map((s) => unsetHiddenInLookups(s, hiddenOf))
       : undefined;
-    if (!pipeline && unset.length === 0) return stage;
-    return { ...stage, $lookup: { ...lookup, pipeline: [...unset, ...(pipeline ?? [])] } };
+    if (!pipeline && hidden.length === 0) return stage;
+    return { ...stage, $lookup: { ...lookup, pipeline: [...unsetStage(hidden), ...(pipeline ?? [])] } };
   }
   const facet = stage["$facet"];
   if (facet && typeof facet === "object") {
@@ -267,6 +298,11 @@ function unsetHiddenInLookups(stage: Document, hiddenOf: (entity: string) => Doc
     return { ...stage, $facet: Object.fromEntries(branches) };
   }
   return stage;
+}
+
+/** Whether two dotted paths are the same, or one lies inside the other. */
+function sharesPath(a: string, b: string): boolean {
+  return a === b || a.startsWith(`${b}.`) || b.startsWith(`${a}.`);
 }
 
 /** Collect every $lookup `{ as, from }` in the pipeline (depth-first, incl.
@@ -357,7 +393,9 @@ function collectLookupTargets(pipeline: unknown, out: Set<string> = new Set()): 
     const lookup = (stage as Record<string, unknown>)["$lookup"];
     if (lookup && typeof lookup === "object") {
       const from = (lookup as Record<string, unknown>)["from"];
-      if (typeof from === "string") out.add(from);
+      // A `from` that names no entity, such as { db, coll }, would skip every check below.
+      if (typeof from !== "string") throw PermissionDeniedError.forAction(JSON.stringify(from), "select");
+      out.add(from);
       const subPipeline = (lookup as Record<string, unknown>)["pipeline"];
       collectLookupTargets(subPipeline, out);
     }
