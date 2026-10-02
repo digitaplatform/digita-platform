@@ -28,9 +28,9 @@ interface BrandChromeProps {
 export function BrandChrome({ side, collapsed, collapsible, onToggleCollapse, onClose }: BrandChromeProps) {
   const tc = useChrome();
   const branding = useSessionStore((s) => s.branding);
-  const platformName = useSessionStore((s) => s.settings?.platform_name);
-  const appName = branding?.app_name ?? platformName ?? 'Digita';
   const signatureId = useThemeStore((s) => s.signature);
+  // The tenant's brand is its BrandingSetting.app_name alone; without it, the look's own name.
+  const appName = branding?.app_name ?? getSignature(signatureId).name;
   // One precedence for every frontend (the kit's BrandMark): the signature's
   // wordmark when the tenant set neither a logo nor a name; otherwise the tenant's
   // logo, else the signature's monogram, else the initial — each with the name.

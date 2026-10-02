@@ -22,7 +22,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   useThemeStore.setState({ signature: 'digita' });
-  useSessionStore.setState({ branding: null });
+  useSessionStore.setState({ branding: null, settings: null });
 });
 
 describe('BrandChrome — signature wordmark', () => {
@@ -69,5 +69,13 @@ describe('BrandChrome — signature wordmark', () => {
     const { container } = render(<BrandChrome side="top" />);
     expect(container.innerHTML).not.toContain('evil.example');
     expect(screen.getByText('Acme')).toBeInTheDocument();
+  });
+
+  it('PLANTED DEFECT: never takes the platform name for the tenant brand, only its app_name', () => {
+    useThemeStore.setState({ signature: 'digita' });
+    useSessionStore.setState({ branding: {} as BootBranding, settings: { platform_name: 'Acme ERP' } as never });
+    const { container } = render(<BrandChrome side="top" />);
+    expect(container.innerHTML).not.toContain('Acme ERP');
+    expect(screen.getByTestId('brand-lockup')).toHaveAttribute('aria-label', 'Digita');
   });
 });

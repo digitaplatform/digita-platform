@@ -14,9 +14,9 @@ import { brandingImageUrl } from '@/lib/appBase';
  *  operator can choose their language before signing in. */
 export function AuthShell({ children }: { children: ReactNode }) {
   const branding = useSessionStore((s) => s.branding);
-  const platformName = useSessionStore((s) => s.settings?.platform_name);
-  const appName = branding?.app_name ?? platformName ?? 'Digita';
   const signatureId = useThemeStore((s) => s.signature);
+  // The tenant's brand is its BrandingSetting.app_name alone; without it, the look's own name.
+  const appName = branding?.app_name ?? getSignature(signatureId).name;
   const background = brandingImageUrl(branding?.login_background);
 
   return (
