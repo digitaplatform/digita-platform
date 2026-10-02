@@ -733,7 +733,6 @@ export class EntityRegistry {
 
   private applyDefaults(entity: EntityDefinition): void {
     entity.is_submittable = entity.is_submittable ?? false;
-    entity.is_child = entity.is_child ?? false;
     entity.is_single = entity.is_single ?? false;
     entity.is_virtual = entity.is_virtual ?? false;
     entity.is_log = entity.is_log ?? false;
