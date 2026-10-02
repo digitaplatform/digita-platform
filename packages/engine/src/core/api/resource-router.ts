@@ -477,9 +477,13 @@ export function registerResourceRoutes(
         return reply
           .code(404)
           .send(
-            successResponse(null, [
-              { text: "action_not_found", type: "error", show: true, params: { action: action_name } },
-            ]),
+            errorResponse(
+              404,
+              "NOT_FOUND",
+              `Entity "${doctype}" declares no action "${action_name}"`,
+              [{ text: "action_not_found", type: "error", show: true, params: { action: action_name } }],
+              request.traceId ?? "",
+            ),
           );
       }
 
