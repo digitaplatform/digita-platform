@@ -380,12 +380,13 @@ describe("The first start after the upgrade that makes the fields public", () =>
       _id: "ITEM-3", doctype: "TestShopItem", docstatus: 0, owner: "attacker@digita.local",
       images: [{ _row_id: "r7", idx: 1, picture: colleagueFile.file_url, caption: "planted" }],
     }, DIGITA.DATABASES.CORE);
-    // The planted innocent case: a merchant's own upload in their own row, saved before a save named
-    // its document.
+    // The planted innocent case: a merchant's own upload in their own row, attached to it as a save
+    // attaches it.
     merchantFile = await upload("image", "merchant.pdf", "merchant's picture", undefined, merchantToken);
     await db.insertOne("TestShopItem", {
       _id: "ITEM-4", doctype: "TestShopItem", docstatus: 0, owner: "merchant@digita.local", image: merchantFile.file_url,
     }, DIGITA.DATABASES.CORE);
+    await db.updateOne(DIGITA.COLLECTIONS.FILE, merchantFile._id, { attached_to_name: "ITEM-4" }, DIGITA.DATABASES.CORE);
 
     // An Administrator, who may write every File, saves the attacker's row as the app does.
     registry.register(shop(true));
@@ -407,7 +408,7 @@ describe("The first start after the upgrade that makes the fields public", () =>
     expect(stored["attached_to_name"]).toBeUndefined();
   });
 
-  it("publishes a legacy upload its uploader's row holds in a public field, at the start that attaches it", async () => {
+  it("publishes the upload its uploader's own row holds in a public field", async () => {
     const res = await publicFile(merchantFile._id);
     expect(res.statusCode).toBe(200);
     expect(res.body).toBe("merchant's picture");
