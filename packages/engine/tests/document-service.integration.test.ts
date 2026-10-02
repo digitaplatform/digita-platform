@@ -2067,3 +2067,74 @@ describe("Every Table row the engine writes carries a _row_id", () => {
     expect(second[0]!["_row_id"]).toBe(first[0]!["_row_id"]);
   });
 });
+
+describe("amend, copyDoc and runAction join the caller's session", () => {
+  type Svc = { session?: import("mongodb").ClientSession };
+  type Ds = {
+    amend(d: string, n: string, u: UserContext, c?: unknown, s?: unknown): Promise<{ _id: string }>;
+    copyDoc(d: string, n: string, u: UserContext, c?: unknown, s?: unknown): Promise<{ _id: string }>;
+  };
+  type Runner = { registerAction(d: string, a: string, fn: unknown): void; getServices(): unknown; setServices(s: unknown): void };
+  const hookRunner = () => (docService as unknown as { hookRunner: Runner }).hookRunner;
+  let servicesBefore: unknown;
+
+  afterAll(() => hookRunner().setServices(servicesBefore));
+
+  beforeAll(async () => {
+    // A handler gets the caller's session through its services, as the engine wires them.
+    servicesBefore = hookRunner().getServices();
+    hookRunner().setServices({ db, registry });
+    registry.register(
+      makeEntity({
+        name: "SessDoc",
+        is_submittable: true,
+        actions: [{ action: "amend_then_fail", label: "A" }, { action: "copy_then_fail", label: "C" }, { action: "copy_inside", label: "I" }],
+      } as unknown as Partial<EntityDefinition>),
+    );
+    await db.ensureCollection("SessDoc", "app");
+    const ds = docService as unknown as Ds;
+    hookRunner().registerAction("SessDoc", "amend_then_fail", async (doc: { _id: string }, _ctx: unknown, services: Svc) => {
+      await ds.amend("SessDoc", doc._id, adminUser, undefined, services.session);
+      throw new Error("the action fails after the amend");
+    });
+    hookRunner().registerAction("SessDoc", "copy_then_fail", async (doc: { _id: string }, _ctx: unknown, services: Svc) => {
+      await ds.copyDoc("SessDoc", doc._id, adminUser, undefined, services.session);
+      throw new Error("the action fails after the copy");
+    });
+  });
+
+  const count = async () => (await db.find("SessDoc", {}, "app")).length;
+
+  it("rolls back an amendment when the action that made it fails afterwards", async () => {
+    const original = await docService.insert("SessDoc", { title: "Original" }, adminUser);
+    await docService.submit("SessDoc", original._id, adminUser);
+    await docService.cancel("SessDoc", original._id, adminUser);
+    const before = await count();
+    await expect(docService.runAction("SessDoc", original._id, "amend_then_fail", adminUser)).rejects.toThrow("after the amend");
+    expect(await count()).toBe(before);
+  });
+
+  it("rolls back a copy when the action that made it fails afterwards", async () => {
+    const source = await docService.insert("SessDoc", { title: "Source" }, adminUser);
+    const before = await count();
+    await expect(docService.runAction("SessDoc", source._id, "copy_then_fail", adminUser)).rejects.toThrow("after the copy");
+    expect(await count()).toBe(before);
+  });
+
+  it("runs an action inside the caller's transaction, which rolls back with it", async () => {
+    const source = await docService.insert("SessDoc", { title: "Outer" }, adminUser);
+    const before = await count();
+    hookRunner().registerAction("SessDoc", "copy_inside", async (doc: { _id: string }, _ctx: unknown, services: Svc) =>
+      (docService as unknown as Ds).copyDoc("SessDoc", doc._id, adminUser, undefined, services.session),
+    );
+    await expect(
+      db.withTransaction(async (session) => {
+        await (docService as unknown as { runAction(...a: unknown[]): Promise<unknown> }).runAction(
+          "SessDoc", source._id, "copy_inside", adminUser, undefined, undefined, undefined, session,
+        );
+        throw new Error("the caller fails after the action");
+      }),
+    ).rejects.toThrow("after the action");
+    expect(await count()).toBe(before);
+  });
+});
