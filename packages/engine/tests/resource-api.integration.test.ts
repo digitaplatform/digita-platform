@@ -50,6 +50,10 @@ import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import type { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import type { EntityDefinition } from "@digitaplatform/shared";
+import { DIGITA } from "@digitaplatform/shared";
+import { mkdtemp, writeFile, rm } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
 
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
@@ -714,21 +718,39 @@ describe("Resource API Integration", () => {
       expect(second.statusCode).toBe(400);
     });
 
-    it("refuses an entity only the app bundle defines, and keeps serving it", async () => {
-      registry.register({
-        name: "BundleOnly",
+    it("puts a bundle entity's file definition back, then refuses a second delete, and PUT stores the row again", async () => {
+      // The state boot leaves: the entity file is loaded, and its definition is stored as well.
+      const dir = await mkdtemp(join(tmpdir(), "meta-delete-file-"));
+      const definition = {
+        name: "FileBorn",
+        label: "File born",
         module: "test",
         database: "app",
         naming: { strategy: "user_set" },
         fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
-        permissions: [{ role: "Administrator", level: 0, select: 1, read: 1 }],
-      } as unknown as Parameters<EntityRegistry["register"]>[0]);
+        permissions: [{ role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1 }],
+      };
+      await writeFile(join(dir, "FileBorn.entity.json"), JSON.stringify(definition));
+      await registry.loadAll(dir);
+      await db.insertOne(DIGITA.COLLECTIONS.ENTITY, { _id: "FileBorn", ...definition, label: "Stored label" }, DIGITA.DATABASES.CORE);
+      registry.register({ ...definition, label: "Stored label" } as unknown as EntityDefinition);
+      const stored = () => db.findOne(DIGITA.COLLECTIONS.ENTITY, "FileBorn", DIGITA.DATABASES.CORE);
 
-      const refused = await app.inject({ method: "DELETE", url: "/api/v1/meta/BundleOnly", headers: authHeaders() });
-      expect(refused.statusCode).toBe(409);
-      expect(refused.json()).toMatchObject({ success: false, error: { code: "DEFINED_BY_BUNDLE" } });
-      const meta = await app.inject({ method: "GET", url: "/api/v1/meta/BundleOnly", headers: authHeaders() });
-      expect(meta.statusCode).toBe(200);
+      const first = await app.inject({ method: "DELETE", url: "/api/v1/meta/FileBorn", headers: authHeaders() });
+      expect(first.statusCode).toBe(200);
+      expect(first.json().data).toMatchObject({ deleted: true, restored_from_file: true });
+      expect(first.json().messages[0].text).toContain("now follows the app bundle");
+      expect(await stored()).toBeNull();
+      expect(registry.get("FileBorn").label).toBe("File born");
+
+      const second = await app.inject({ method: "DELETE", url: "/api/v1/meta/FileBorn", headers: authHeaders() });
+      expect(second.statusCode).toBe(409);
+      expect(second.json()).toMatchObject({ success: false, error: { code: "DEFINED_BY_BUNDLE" } });
+
+      const put = await app.inject({ method: "PUT", url: "/api/v1/meta/FileBorn", headers: authHeaders(), payload: { label: "Changed" } });
+      expect(put.statusCode).toBe(200);
+      expect(await stored()).toMatchObject({ label: "Changed" });
+      await rm(dir, { recursive: true, force: true });
     });
   });
 
