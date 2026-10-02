@@ -10,9 +10,9 @@ import type { TreeConfig } from '@digitaplatform/shared';
 type ListParams = { filters?: [string, string, unknown][]; page_size?: number };
 const engine = vi.hoisted(() => ({
   rows: [
-    { _id: 'G-1', name: 'Business customers', parent: null },
-    { _id: 'G-2', name: 'Hotels', parent: 'G-1' },
-    { _id: 'G-5', name: 'Spa hotels', parent: 'G-2' },
+    { _id: 'G-1', label: 'Business customers', parent: null },
+    { _id: 'G-2', label: 'Hotels', parent: 'G-1' },
+    { _id: 'G-5', label: 'Spa hotels', parent: 'G-2' },
   ] as Array<Record<string, unknown>>,
   requests: [] as ListParams[],
 }));
@@ -28,7 +28,7 @@ vi.mock('@/services/resource', () => ({
 
 import { useTreePath } from '@/hooks/useTreePath';
 
-const TREE: TreeConfig = { parent_field: 'parent', label_field: 'name' } as TreeConfig;
+const TREE: TreeConfig = {} as TreeConfig;
 
 function wrapper({ children }: { children: ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -41,13 +41,13 @@ beforeEach(() => {
 
 describe('useTreePath', () => {
   it('returns the labels from the root to the node', async () => {
-    const { result } = renderHook(() => useTreePath('CustomerGroup', TREE, 'name', 'G-5'), { wrapper });
+    const { result } = renderHook(() => useTreePath('CustomerGroup', TREE, 'label', 'G-5'), { wrapper });
     await waitFor(() => expect(result.current.labels).toEqual(['Business customers', 'Hotels', 'Spa hotels']));
     expect(result.current.error).toBeNull();
   });
 
   it('asks for every id found so far, one level more each time', async () => {
-    const { result } = renderHook(() => useTreePath('CustomerGroup', TREE, 'name', 'G-5'), { wrapper });
+    const { result } = renderHook(() => useTreePath('CustomerGroup', TREE, 'label', 'G-5'), { wrapper });
     await waitFor(() => expect(result.current.labels).toBeDefined());
     const askedIds = engine.requests.map((r) => r.filters?.[0]?.[2]);
     expect(askedIds).toEqual([['G-5'], ['G-5', 'G-2'], ['G-5', 'G-2', 'G-1']]);

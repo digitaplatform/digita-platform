@@ -8,11 +8,11 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const ROWS = [
-  { _id: 'G-1', name: 'Retail', parent: null },
-  { _id: 'G-2', name: 'Swiss', parent: 'G-1' },
-  { _id: 'G-3', name: 'Wholesale', parent: null },
-  { _id: 'G-4', name: 'Germany', parent: 'G-3' },
-  { _id: 'G-5', name: 'Online', parent: null },
+  { _id: 'G-1', label: 'Retail', parent: null },
+  { _id: 'G-2', label: 'Swiss', parent: 'G-1' },
+  { _id: 'G-3', label: 'Wholesale', parent: null },
+  { _id: 'G-4', label: 'Germany', parent: 'G-3' },
+  { _id: 'G-5', label: 'Online', parent: null },
 ];
 const listState = vi.hoisted(() => ({ rows: [] as Array<Record<string, unknown>> }));
 vi.mock('@/hooks/useList', () => ({
@@ -22,7 +22,7 @@ const CUSTOMER_GROUP = vi.hoisted(() => ({
   name: 'CustomerGroup',
   title_field: 'name',
   fields: [],
-  tree: { parent_field: 'parent', label_field: 'name' },
+  tree: {},
 }));
 vi.mock('@/hooks/useTreeEntities', () => ({
   useTreeEntities: () => ({

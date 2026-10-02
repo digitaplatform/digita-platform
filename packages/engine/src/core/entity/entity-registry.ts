@@ -3,6 +3,13 @@ import { join, extname } from "path";
 import type { EntityDefinition, FieldDefinition, FieldType, FreezeSpec, NamingStrategy } from "@digitaplatform/shared";
 import { DIGITA } from "@digitaplatform/shared";
 import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD, STORED_FIELD_TYPES, UPLOAD_FIELD_TYPES } from "@digitaplatform/shared";
+import {
+  TREE_BLOCK_SHAPE_KEYS,
+  TREE_LABEL_FIELD,
+  TREE_MENU_ROLES_FIELD,
+  treeBlockFields,
+  treeBlockIndexes,
+} from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { createLogger } from "../logging/logger.js";
 import { isValidStoragePath, STORAGE_PATH_RULE } from "../storage/storage-path.js";
@@ -239,6 +246,7 @@ export class EntityRegistry {
       );
     }
     this.applyDefaults(entity);
+    this.applyTreeBlock(entity);
     this.expandFlattenDirectives(entity);
     entity.fields.sort((a, b) => (a.idx ?? 0) - (b.idx ?? 0));
     this.validateFieldNames(entity);
@@ -833,6 +841,54 @@ export class EntityRegistry {
     }
   }
 
+  /**
+   * Give an entity that declares `tree` the tree block: its fields, the fields of its menu's
+   * renderer, its indexes, `title_field: "label"` where it names none, and for an app menu the
+   * `role_visibility_field`. Safe to run on a definition that already carries the block, as a
+   * stored one does. Throws naming the entity when one of its own fields takes a block field's
+   * name with another shape, or when another entity of this app is drawn by the same menu.
+   */
+  private applyTreeBlock(entity: EntityDefinition): void {
+    const tree = entity.tree;
+    if (!tree) return;
+    const shapeOf = (field: FieldDefinition) =>
+      TREE_BLOCK_SHAPE_KEYS.map((key) => JSON.stringify(field[key] === false ? null : (field[key] ?? null)));
+    for (const block of treeBlockFields(entity)) {
+      const own = entity.fields.find((f) => f.fieldname === block.fieldname);
+      if (!own) {
+        entity.fields.push({ ...block });
+        continue;
+      }
+      const ownShape = shapeOf(own);
+      const differs = TREE_BLOCK_SHAPE_KEYS.filter((_key, i) => ownShape[i] !== shapeOf(block)[i]);
+      if (differs.length > 0) {
+        throw new Error(
+          `entity "${entity.name}": the field "${own.fieldname}" takes the name of a field the tree block brings, ` +
+            `with another ${differs.join(" and ")}; rename the field`,
+        );
+      }
+    }
+    entity.title_field = entity.title_field ?? TREE_LABEL_FIELD;
+    if (tree.menu === "app") {
+      if (entity.role_visibility_field && entity.role_visibility_field !== TREE_MENU_ROLES_FIELD) {
+        throw new Error(
+          `entity "${entity.name}": an app menu shows its nodes by the field "${TREE_MENU_ROLES_FIELD}", ` +
+            `but the entity names "${entity.role_visibility_field}" as its role_visibility_field`,
+        );
+      }
+      entity.role_visibility_field = TREE_MENU_ROLES_FIELD;
+    }
+    const indexes = entity.indexes ?? [];
+    for (const index of treeBlockIndexes(tree)) if (!indexes.some((i) => i.name === index.name)) indexes.push(index);
+    entity.indexes = indexes;
+    const sameMenu = tree.menu ? this.getAll().find((e) => e.name !== entity.name && e.tree?.menu === tree.menu) : undefined;
+    if (sameMenu) {
+      throw new Error(
+        `entities "${sameMenu.name}" and "${entity.name}" are both drawn by the ${tree.menu} menu; an app has one ${tree.menu} menu`,
+      );
+    }
+  }
+
   private applyDefaults(entity: EntityDefinition): void {
     entity.is_submittable = entity.is_submittable ?? false;
     entity.is_single = entity.is_single ?? false;
@@ -865,6 +921,14 @@ export class EntityRegistry {
 
     for (const doc of docs) {
       const entity = doc as unknown as EntityDefinition;
+      // A stored definition takes the block as this release brings it, so it never keeps the block
+      // of the day it was stored; one the block refuses is left out, and the start goes on.
+      try {
+        this.applyTreeBlock(entity);
+      } catch (err) {
+        log.error({ entity: entity.name }, `stored entity definition skipped: ${(err as Error).message}`);
+        continue;
+      }
       this.applyDefaults(entity);
       entity.fields.sort((a, b) => (a.idx ?? 0) - (b.idx ?? 0));
       this.entities.set(entity.name, entity);

@@ -77,7 +77,7 @@ const Account: EntityDefinition = {
 
 const Group: EntityDefinition = {
   name: "Group", module: "test", database: "app", naming: { strategy: "system" },
-  business_key: "code", tree: { parent_field: "parent" },
+  business_key: "code", tree: {},
   is_submittable: false, is_log: false, track_changes: false, track_views: false,
   fields: [
     { fieldname: "code", fieldtype: "Data", label: "Code" },

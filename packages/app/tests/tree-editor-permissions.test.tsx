@@ -40,7 +40,7 @@ const META = {
     { role: 'Owner', level: 0, select: 1, read: 1, write: 1, delete: 1, if_owner: true },
   ],
 } as unknown as EntityDefinition;
-const TREE: TreeConfig = { parent_field: 'parent', label_field: 'name' };
+const TREE: TreeConfig = {};
 
 function renderAs(roles: string[]) {
   useSessionStore.setState({ user: { _id: 'u', email: 'u@demo.test', roles } });
@@ -58,7 +58,7 @@ const ENTRIES = ['ui.tree.addRoot', 'ui.tree.addChild', 'ui.tree.move', 'ui.acti
 
 beforeEach(() => {
   useSessionStore.setState({ user: null });
-  list.rows = [{ _id: 'G-1', name: 'Retail', parent: null }];
+  list.rows = [{ _id: 'G-1', label: 'Retail', parent: null }];
 });
 
 describe('the actions of the tree view', () => {
@@ -90,8 +90,8 @@ describe('the actions of the tree view', () => {
   // engine refuses the rest, so the tree offers them per node.
   it('offers a move and a delete on the own node only, to a role whose rows are if_owner', () => {
     list.rows = [
-      { _id: 'G-1', name: 'Mine', parent: null, owner: 'u@demo.test' },
-      { _id: 'G-2', name: 'Theirs', parent: null, owner: 'other@demo.test' },
+      { _id: 'G-1', label: 'Mine', parent: null, owner: 'u@demo.test' },
+      { _id: 'G-2', label: 'Theirs', parent: null, owner: 'other@demo.test' },
     ];
     renderAs(['Owner']);
     const entriesOf = (label: string) => {

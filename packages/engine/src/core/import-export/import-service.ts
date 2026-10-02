@@ -261,7 +261,7 @@ export class ImportService {
   /**
    * Order rows so a self-link parent precedes its children (tree files uploaded
    * child-before-parent still import). Only top-level self-Link fields are edges
-   * (a tree `parent_field` is one). Cycles are returned as a set — their members
+   * (a tree's `parent` is one). Cycles are returned as a set — their members
    * fail with `import_circular_reference`; the rest still process.
    */
   private topoOrder(
