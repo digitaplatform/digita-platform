@@ -49,6 +49,21 @@ describe("EntityRegistry load errors + duplicates (A13)", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
+  it.each([
+    ["null", "null", "the file holds null, not an entity object"],
+    ["a list", "[]", "the file holds a list, not an entity object"],
+    ["a number", "5", "the file holds a number, not an entity object"],
+    ["an object without a name", "{}", "the entity has no name"],
+    ["a definition without fields", JSON.stringify({ name: "Book", module: "test" }), 'entity "Book" has no fields list'],
+  ])("refuses a file that holds %s, naming the file and the reason", async (_what, content, reason) => {
+    const dir = await mkdtemp(join(tmpdir(), "reg-shape-"));
+    const file = join(dir, "book.entity.json");
+    await writeFile(file, content);
+    const err = await new EntityRegistry().loadAll(dir).then(() => undefined, (e: Error) => e);
+    expect(err?.message).toBe(`Refused entity definition ${file}: ${reason}`);
+    await rm(dir, { recursive: true, force: true });
+  });
+
   it("WARNS when a name is redefined from a different file (later wins, override still works)", async () => {
     const dir = await mkdtemp(join(tmpdir(), "reg-dup-"));
     await writeFile(join(dir, "a.entity.json"), JSON.stringify({ ...okEntity("Dup"), module: "core" }));

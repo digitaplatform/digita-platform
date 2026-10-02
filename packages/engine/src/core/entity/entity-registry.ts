@@ -33,6 +33,17 @@ const RESERVED_ENTITY_NAMES = ["account", "app", "login"];
 /** Hook keys no engine code runs: an entity that declares one restricts and changes nothing. */
 const NEVER_RUN_HOOKS = ["has_permission", "on_list_load"];
 
+/** Why a parsed file is no entity definition, or undefined when it is an object with a name and fields. */
+function entityShapeProblem(value: unknown): string | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return `the file holds ${value === null ? "null" : Array.isArray(value) ? "a list" : `a ${typeof value}`}, not an entity object`;
+  }
+  const definition = value as Record<string, unknown>;
+  if (typeof definition["name"] !== "string" || definition["name"] === "") return "the entity has no name";
+  if (!Array.isArray(definition["fields"])) return `entity "${definition["name"]}" has no fields list`;
+  return undefined;
+}
+
 const KNOWN_FIELD_TYPES: ReadonlySet<string> = new Set<string>([...STORED_FIELD_TYPES, ...LAYOUT_FIELD_TYPES]);
 
 /**
@@ -191,15 +202,23 @@ export class EntityRegistry {
     // reader of the message knows whether to look for broken JSON or for the key the message names.
     // Both fail the boot, or the reload that checks the files first, instead of dropping the entity.
     const content = await readFile(filePath, "utf-8");
-    let entity: EntityDefinition;
+    let parsed: unknown;
     try {
-      entity = JSON.parse(content);
+      parsed = JSON.parse(content);
     } catch (err) {
       log.error({ file: filePath, err }, "Entity definition is not valid JSON");
       throw err instanceof Error
         ? new Error(`Malformed entity definition ${filePath}: ${err.message}`, { cause: err })
         : err;
     }
+    // Every check below reads the definition's keys, so a file that holds no entity object is
+    // refused first, with its reason, instead of with the TypeError of the first key read.
+    const shapeProblem = entityShapeProblem(parsed);
+    if (shapeProblem) {
+      log.error({ file: filePath, reason: shapeProblem }, "Entity definition refused");
+      throw new Error(`Refused entity definition ${filePath}: ${shapeProblem}`);
+    }
+    const entity = parsed as EntityDefinition;
     try {
       // The app matches its own pages case-sensitively, so an entity with exactly one of
       // these names would lose its list page to them; `Account` and its kin stay free.
