@@ -1,4 +1,4 @@
-import type { EntityDefinition, ActionDefinition, TransitionDefinition, SubmittedPatch, DeclaredClientError } from "@digitaplatform/shared";
+import type { EntityDefinition, ActionDefinition, TransitionDefinition, SubmittedPatch } from "@digitaplatform/shared";
 import { EngineError } from "../errors/engine-error.js";
 import { LAYOUT_FIELD_TYPES, DIGITA, DocStatus, ROW_ID_FIELD } from "@digitaplatform/shared";
 import { calculateChanges, deepEqual, type FieldChange } from "./change-tracker.js";
@@ -48,13 +48,12 @@ const log = createLogger("document-service");
 
 /** A list whose rows a read condition gates matches more rows than it may re-check
  *  one by one (env LIST_GATED_MAX_ROWS); the caller narrows the filter. */
-export class GatedListTooBroadError extends Error {
+export class GatedListTooBroadError extends EngineError {
   constructor(
     public readonly doctype: string,
     public readonly max: number,
   ) {
-    super(`The list of ${doctype} matches more than ${max} rows whose read condition is checked one by one; narrow the filter`);
-    this.name = "GatedListTooBroadError";
+    super("list_too_broad", { doctype, max: String(max) }, 400, "LIST_TOO_BROAD");
   }
 }
 
@@ -70,46 +69,41 @@ export class NotFoundError extends EngineError {
 /**
  * Raised when a meta-declared action has no registered handler. Prevents a
  * long_running (jobs) action from reporting silent success while doing nothing.
+ * The app's author must add the handler, so it answers 500, not a refusal of the request.
  */
-export class ActionHandlerMissingError extends Error {
+export class ActionHandlerMissingError extends EngineError {
   constructor(
     public doctype: string,
     public actionName: string,
   ) {
-    super(`No handler registered for action "${actionName}" on ${doctype}`);
-    this.name = "ActionHandlerMissingError";
+    super("action_handler_missing", { doctype, action: actionName }, 500, "ACTION_HANDLER_MISSING");
   }
 }
 
 /**
  * Raised when an action's `show_if` is false for the document and the user: the
- * record page does not offer it, so the route refuses it too. It declares its
- * 409 and message key the way a hook's business-rule error does.
+ * record page does not offer it, so the route refuses it too.
  */
-export class ActionNotAvailableError extends Error implements DeclaredClientError {
-  readonly statusCode = 409;
-  readonly code = "ACTION_NOT_AVAILABLE";
-  readonly messageKey = "action_not_available";
-  readonly params: Record<string, string>;
-
-  constructor(doctype: string, documentName: string, action: ActionDefinition) {
-    super(`Action "${action.action}" is not available on ${doctype} ${documentName}: its show_if is false`);
-    this.name = "ActionNotAvailableError";
-    this.params = { action: action.label };
+export class ActionNotAvailableError extends EngineError {
+  constructor(action: ActionDefinition) {
+    super("action_not_available", { action: action.label }, 409, "ACTION_NOT_AVAILABLE");
   }
 }
 
-export class ValidationFailedError extends Error {
+/** One value a save refuses: the field, the code of its text and the code's params. */
+export interface FieldProblem {
+  field: string;
+  code: string;
+  params?: Record<string, string>;
+}
+
+/** A save that refuses one or more values; the error handler answers with one message per value. */
+export class ValidationFailedError extends EngineError {
   constructor(
     public doctype: string,
-    public errors: Array<{
-      field: string;
-      message_key: string;
-      params?: Record<string, string>;
-    }>,
+    public errors: FieldProblem[],
   ) {
-    super(`Validation failed for ${doctype}: ${errors.length} error(s)`);
-    this.name = "ValidationFailedError";
+    super("validation_failed", { doctype, count: String(errors.length) }, 400, "VALIDATION_ERROR");
   }
 }
 
@@ -119,52 +113,50 @@ export class ValidationFailedError extends Error {
  * has advanced since — i.e. someone else wrote it in between. Opt-in: callers
  * that omit the expected version keep last-write-wins semantics.
  */
-export class ConcurrentModificationError extends Error {
+export class ConcurrentModificationError extends EngineError {
   constructor(
     public doctype: string,
     public documentName: string,
     public expected: string,
     public actual: string,
   ) {
-    super(
-      `${doctype} ${documentName} was modified concurrently (expected ${expected}, found ${actual})`,
-    );
-    this.name = "ConcurrentModificationError";
+    super("document_modified", { doctype, name: documentName, expected, actual }, 409, "CONCURRENT_MODIFICATION");
   }
 }
 
-export class TimeSeriesImmutableError extends Error {
+export class TimeSeriesImmutableError extends EngineError {
   constructor(
     public doctype: string,
     public attempted_fields: string[],
     public meta_field: string | undefined,
   ) {
-    const allowed = meta_field
-      ? `Only the meta_field "${meta_field}" can be patched.`
-      : `No field updates are allowed (no meta_field declared).`;
     super(
-      `Cannot update time-series ${doctype}: tried to change ${attempted_fields.join(", ")}. ${allowed}`,
+      "time_series_immutable",
+      { doctype, fields: attempted_fields.join(", "), meta_field: meta_field ?? "" },
+      400,
+      "TIME_SERIES_IMMUTABLE",
     );
-    this.name = "TimeSeriesImmutableError";
   }
 }
 
-export class DeleteBlockedError extends Error {
-  public doctype: string;
-  public documentName: string;
-  public blockers: Array<{ entity: string; count: number }>;
+/** The records of other entities that point to a document, which keep it from being deleted or cancelled. */
+export interface Blocker {
+  entity: string;
+  count: number;
+}
 
+const blockerParams = (blockers: Blocker[]) => ({
+  count: String(blockers.reduce((sum, b) => sum + b.count, 0)),
+  entity: blockers.map((b) => b.entity).join(", "),
+});
+
+export class DeleteBlockedError extends EngineError {
   constructor(
-    doctype: string,
-    documentName: string,
-    blockers: Array<{ entity: string; count: number }>,
+    public doctype: string,
+    public documentName: string,
+    public blockers: Blocker[],
   ) {
-    const details = blockers.map((b) => `${b.count} ${b.entity}`).join(", ");
-    super(`Cannot delete ${doctype} ${documentName}: referenced by ${details}`);
-    this.name = "DeleteBlockedError";
-    this.doctype = doctype;
-    this.documentName = documentName;
-    this.blockers = blockers;
+    super("link_delete_blocked", blockerParams(blockers), 409, "DELETE_BLOCKED");
   }
 }
 
@@ -173,24 +165,13 @@ export class DeleteBlockedError extends Error {
  * into a downstream submitted document. Forward immutability — the upstream
  * is locked until the downstream is cancelled first.
  */
-export class CancelBlockedError extends Error {
-  public doctype: string;
-  public documentName: string;
-  public blockers: Array<{ entity: string; count: number }>;
-
+export class CancelBlockedError extends EngineError {
   constructor(
-    doctype: string,
-    documentName: string,
-    blockers: Array<{ entity: string; count: number }>,
+    public doctype: string,
+    public documentName: string,
+    public blockers: Blocker[],
   ) {
-    const details = blockers.map((b) => `${b.count} ${b.entity}`).join(", ");
-    super(
-      `Cannot cancel ${doctype} ${documentName}: forwarded into submitted ${details}`,
-    );
-    this.name = "CancelBlockedError";
-    this.doctype = doctype;
-    this.documentName = documentName;
-    this.blockers = blockers;
+    super("cancel_blocked_forwarded", blockerParams(blockers), 409, "CANCEL_BLOCKED");
   }
 }
 
@@ -201,17 +182,14 @@ export class CancelBlockedError extends Error {
  * conflicting guard write retries with a fresh snapshot and this re-read catches the
  * cancelled target — refusing rather than forwarding into a dead upstream.
  */
-export class LinkTargetCancelledError extends Error {
+export class LinkTargetCancelledError extends EngineError {
   constructor(
     public doctype: string,
     public fieldname: string,
     public targetEntity: string,
     public targetName: string,
   ) {
-    super(
-      `Cannot submit ${doctype}: its ${fieldname} → ${targetEntity} "${targetName}" has been cancelled`,
-    );
-    this.name = "LinkTargetCancelledError";
+    super("link_target_cancelled", { fieldname, target: targetEntity, name: targetName }, 409, "LINK_TARGET_CANCELLED");
   }
 }
 
@@ -963,10 +941,10 @@ export class DocumentService {
   ): Promise<void> {
     const linkErrors = await this.linkValidator.validate(entity, data, undefined, { user, stored });
     if (linkErrors.length === 0) return;
-    for (const err of linkErrors) ctx?.error(err.message_key, err.params);
+    for (const err of linkErrors) ctx?.error(err.code, err.params);
     throw new ValidationFailedError(
       entity.name,
-      linkErrors.map((e) => ({ field: e.field, message_key: e.message_key, params: e.params })),
+      linkErrors.map((e) => ({ field: e.field, code: e.code, params: e.params })),
     );
   }
 
@@ -1151,7 +1129,7 @@ export class DocumentService {
       const validation = validateEntityDataZod(entity, doc._data, this.zodSchemaBuilder, true);
       if (!validation.valid) {
         for (const err of validation.errors) {
-          ctx?.error(err.message_key, err.params);
+          ctx?.error(err.code, err.params);
         }
         throw new ValidationFailedError(doctype, validation.errors);
       }
@@ -1160,13 +1138,13 @@ export class DocumentService {
       const linkErrors = await this.linkValidator.validate(entity, doc._data, session, { user, stored: carriedOver });
       if (linkErrors.length > 0) {
         for (const err of linkErrors) {
-          ctx?.error(err.message_key, err.params);
+          ctx?.error(err.code, err.params);
         }
         throw new ValidationFailedError(
           doctype,
           linkErrors.map((e) => ({
             field: e.field,
-            message_key: e.message_key,
+            code: e.code,
             params: e.params,
           })),
         );
@@ -1387,7 +1365,7 @@ export class DocumentService {
           throw new ValidationFailedError(doctype, [
             {
               field: field.fieldname,
-              message_key: "field_set_only_once",
+              code: "field_set_only_once",
               params: { field: field.label },
             },
           ]);
@@ -1446,7 +1424,7 @@ export class DocumentService {
       const validation = validateEntityDataZod(entity, withStoredPasswords(entity, doc._data, doc._original), this.zodSchemaBuilder, false);
       if (!validation.valid) {
         for (const err of validation.errors) {
-          ctx?.error(err.message_key, err.params);
+          ctx?.error(err.code, err.params);
         }
         throw new ValidationFailedError(doctype, validation.errors);
       }
@@ -1455,13 +1433,13 @@ export class DocumentService {
       const linkErrors = await this.linkValidator.validate(entity, doc._data, session, { user, stored: doc._original });
       if (linkErrors.length > 0) {
         for (const err of linkErrors) {
-          ctx?.error(err.message_key, err.params);
+          ctx?.error(err.code, err.params);
         }
         throw new ValidationFailedError(
           doctype,
           linkErrors.map((e) => ({
             field: e.field,
-            message_key: e.message_key,
+            code: e.code,
             params: e.params,
           })),
         );
@@ -1878,7 +1856,7 @@ export class DocumentService {
       // Zod (same code path as insert/update).
       const validation = validateEntityDataZod(entity, withStoredPasswords(entity, doc._data, doc._original), this.zodSchemaBuilder, false);
       if (!validation.valid) {
-        for (const err of validation.errors) ctx?.error(err.message_key, err.params);
+        for (const err of validation.errors) ctx?.error(err.code, err.params);
         throw new ValidationFailedError(doctype, validation.errors);
       }
 
@@ -1902,10 +1880,10 @@ export class DocumentService {
       if (anyLinkTouched) {
         const linkErrors = await this.linkValidator.validate(entity, doc._data, session, { user, stored: doc._original });
         if (linkErrors.length > 0) {
-          for (const err of linkErrors) ctx?.error(err.message_key, err.params);
+          for (const err of linkErrors) ctx?.error(err.code, err.params);
           throw new ValidationFailedError(
             doctype,
-            linkErrors.map((e) => ({ field: e.field, message_key: e.message_key, params: e.params })),
+            linkErrors.map((e) => ({ field: e.field, code: e.code, params: e.params })),
           );
         }
       }
@@ -2096,11 +2074,6 @@ export class DocumentService {
     // Delete protection — check for references
     const blockers = await this.deleteProtection.check(doctype, name, sessionOverride);
     if (blockers.length > 0) {
-      const totalRefs = blockers.reduce((sum, b) => sum + b.count, 0);
-      ctx?.error("link_delete_blocked", {
-        count: String(totalRefs),
-        entity: blockers.map((b) => b.entity).join(", "),
-      });
       throw new DeleteBlockedError(doctype, name, blockers);
     }
 
@@ -2208,7 +2181,7 @@ export class DocumentService {
       this.inTransaction(sessionOverride, async (session) => {
         const doc2 = await this.loadDocInternal(doctype, name, session);
         if (!this.actionRunner.isShown(action, doc2, user)) {
-          throw new ActionNotAvailableError(doctype, name, action);
+          throw new ActionNotAvailableError(action);
         }
         return this.hookRunner.runAction(doctype, actionName, doc2, ctx, session, user, params, extraServices);
       });
@@ -2550,11 +2523,6 @@ export class DocumentService {
     // first before the upstream can be cancelled.
     const cancelBlockers = await this.cancelProtection.check(doctype, name);
     if (cancelBlockers.length > 0) {
-      const totalRefs = cancelBlockers.reduce((sum, b) => sum + b.count, 0);
-      ctx?.error("cancel_blocked_forwarded", {
-        count: String(totalRefs),
-        entity: cancelBlockers.map((b) => b.entity).join(", "),
-      });
       throw new CancelBlockedError(doctype, name, cancelBlockers);
     }
 
@@ -2589,11 +2557,6 @@ export class DocumentService {
       if (!sessionOverride) {
         const inTxBlockers = await this.cancelProtection.check(doctype, name, session);
         if (inTxBlockers.length > 0) {
-          const totalRefs = inTxBlockers.reduce((sum, b) => sum + b.count, 0);
-          ctx?.error("cancel_blocked_forwarded", {
-            count: String(totalRefs),
-            entity: inTxBlockers.map((b) => b.entity).join(", "),
-          });
           throw new CancelBlockedError(doctype, name, inTxBlockers);
         }
       }
@@ -3033,7 +2996,7 @@ export class DocumentService {
     const path = foreignPasswordValue(entity, input, stored);
     if (path) {
       throw new ValidationFailedError(entity.name, [
-        { field: path, message_key: "field_password_not_as_stored", params: { field: path } },
+        { field: path, code: "field_password_not_as_stored", params: { field: path } },
       ]);
     }
   }
@@ -3056,7 +3019,7 @@ export class DocumentService {
       } catch (err) {
         if (err instanceof FieldValueError) {
           throw new ValidationFailedError(entity.name, [
-            { field: err.field, message_key: err.message_key, params: err.params },
+            { field: err.field, code: err.code, params: err.params },
           ]);
         }
         throw err;

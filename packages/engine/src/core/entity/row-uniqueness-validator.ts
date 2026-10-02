@@ -68,13 +68,13 @@ function findRepeatedRows(
         byRowId
           ? {
               field: `${field.fieldname}[${i}]`,
-              message_key: "table_row_repeated",
+              code: "table_row_repeated",
               message: `${field.label} rows ${prior + 1} and ${i + 1} are the same row twice`,
               params: { field: field.label, rows: rowNumbers },
             }
           : {
               field: `${field.fieldname}[${i}]`,
-              message_key: "table_row_unique_violation",
+              code: "table_row_unique_violation",
               message: `${field.label} rows ${prior + 1} and ${i + 1} have the same (${keys.join(", ")})`,
               params: { field: field.label, rows: rowNumbers, keys: keys.join(", ") },
             },

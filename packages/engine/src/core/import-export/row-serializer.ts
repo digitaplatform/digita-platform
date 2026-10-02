@@ -19,7 +19,7 @@ export function serializeRowForStorage(
 ): Record<string, unknown> {
   // A seed or import row carries a Password value as text, never in the stored form.
   const foreign = foreignPasswordValue(entity, row);
-  if (foreign) throw new FieldValueError(foreign, "field_password_not_as_stored", { field: foreign });
+  if (foreign) throw new FieldValueError("field_password_not_as_stored", foreign, { field: foreign });
   const result: Record<string, unknown> = {};
   for (const field of entity.fields) {
     if (!isStoredFieldType(field.fieldtype)) continue;

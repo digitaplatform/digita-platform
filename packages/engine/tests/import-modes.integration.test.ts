@@ -193,7 +193,7 @@ describe("Import modes — insert / upsert / validate", () => {
     const report = res.json().data;
     expect(report.inserted).toBe(1);
     expect(report.failed).toBe(1);
-    expect(report.errors[0].message_key).toBe("link_not_found");
+    expect(report.errors[0].code).toBe("link_not_found");
     expect(await findOne("Item", { item_no: "IT_BAD" })).toBeUndefined();
     expect(await findOne("Item", { item_no: "IT_OK" })).toBeDefined();
   });
@@ -235,7 +235,7 @@ describe("Import modes — insert / upsert / validate", () => {
     const res = await imp("Item", adminTok, { rows: [{ name: "no key", group: "G1" }], mode: "upsert" });
     const report = res.json().data;
     expect(report.failed).toBe(1);
-    expect(report.errors[0].message_key).toBe("import_missing_business_key");
+    expect(report.errors[0].code).toBe("import_missing_business_key");
   });
 
   it("enforces IMPORT_MAX_ROWS (101 rows → 400)", async () => {
@@ -275,7 +275,7 @@ describe("Import modes — insert / upsert / validate", () => {
     const report = res.json().data;
     expect(report.inserted).toBe(0);
     expect(report.failed).toBe(2);
-    expect(report.errors.every((e: { message_key?: string }) => e.message_key === "import_circular_reference")).toBe(true);
+    expect(report.errors.every((e: { code?: string }) => e.code === "import_circular_reference")).toBe(true);
   });
 
   it("CSV body: fieldtypes decode (Check 'false' → false, Int/Float/Date, Table JSON cell)", async () => {
@@ -354,7 +354,7 @@ describe("An import row that repeats a unique value", () => {
     expect(res.statusCode).toBe(200);
     const report = res.json().data;
     expect([report.inserted, report.failed]).toEqual([1, 1]);
-    expect(report.errors[0]).toMatchObject({ row: 1, field: "code", message_key: "duplicate_key", params: { field: "code" } });
+    expect(report.errors[0]).toMatchObject({ row: 1, field: "code", code: "duplicate_key", params: { field: "code" } });
     expect(res.body).not.toMatch(/E11000|dup key|idx_uniq/);
   });
 });
@@ -486,6 +486,29 @@ describe("An engine error reaches a person in their language (#24)", () => {
     expect(res.json().messages[0].text).toBe("A parcel weighs more than nothing");
     expect(res.json().error).toMatchObject({ code: "RULE_REFUSED", detail: "rule_refused" });
     expect(await db.count("RuleParcel", [], "app")).toBe(0);
+  });
+
+  it("answers a delete that other records block with 409 in German, with the blockers", async () => {
+    const group = (await findOne("Group", { code: "G1" }))!;
+    const res = await app.inject({ method: "DELETE", url: `/api/v1/resource/Group/${String(group._id)}`, headers: german(adminTok) });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().messages[0].text).toMatch(/^Löschen nicht möglich: [1-9]\d* Item verweisen auf dieses Dokument$/);
+    expect(res.json().error).toMatchObject({ code: "DELETE_BLOCKED", detail: "link_delete_blocked" });
+  });
+
+  it("answers a record whose numbering field is empty with 400 in German, bound to the field, not a 500", async () => {
+    const Ticket = {
+      name: "NamedTicket", module: "test", database: "app", naming: { strategy: "by_field", field: "code" },
+      is_submittable: false, is_log: false, track_changes: false, track_views: false,
+      fields: [{ fieldname: "code", fieldtype: "Data", label: "Code" }, { fieldname: "note", fieldtype: "Data", label: "Note" }],
+      permissions: [ADMIN_PERM],
+    } as unknown as EntityDefinition;
+    registry.register(Ticket);
+    await db.ensureCollection("NamedTicket", "app");
+    const res = await app.inject({ method: "POST", url: "/api/v1/resource/NamedTicket", headers: german(adminTok), payload: { note: "no code" } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().messages[0]).toMatchObject({ text: 'Feld "code" wird für die Nummerierung benötigt.', path: "code" });
+    expect(res.json().error).toMatchObject({ code: "NAMING_FIELD_REQUIRED", detail: "naming_field_required", field: "code" });
   });
 
   it("answers a role rename with 400 in German, not a 500", async () => {

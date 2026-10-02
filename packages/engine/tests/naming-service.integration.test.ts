@@ -144,7 +144,7 @@ describe("NamingService Integration", () => {
       });
 
       await expect(namingService.generateId(entity, { slug: "test" }))
-        .rejects.toThrow(/requires "field"/);
+        .rejects.toMatchObject({ code: "naming_config_invalid", status: 500 });
     });
 
     it("throws when field value is empty in data", async () => {
@@ -154,7 +154,7 @@ describe("NamingService Integration", () => {
       });
 
       await expect(namingService.generateId(entity, {}))
-        .rejects.toThrow(/is required for naming/);
+        .rejects.toMatchObject({ code: "naming_field_required", status: 400 });
     });
   });
 
@@ -190,7 +190,7 @@ describe("NamingService Integration", () => {
       });
 
       await expect(namingService.generateId(entity, {}))
-        .rejects.toThrow(/requires "expression"/);
+        .rejects.toMatchObject({ code: "naming_config_invalid", status: 500 });
     });
   });
 
@@ -214,7 +214,7 @@ describe("NamingService Integration", () => {
       });
 
       await expect(namingService.generateId(entity, {}))
-        .rejects.toThrow(/Name \(_id\) is required/);
+        .rejects.toMatchObject({ code: "naming_name_required", status: 400, field: "_id" });
     });
   });
 

@@ -181,7 +181,7 @@ describe("updateSubmitted — scalar band", () => {
     const id = await insertSubmitted("SettleDoc", { title: "Inv", grand_total: 1000, amount_due: 1000 });
     await expect(
       docService.updateSubmitted("SettleDoc", id, { set: { grand_total: 5 } }, admin),
-    ).rejects.toMatchObject({ messageKey: "field_not_allowed_on_submit" });
+    ).rejects.toMatchObject({ code: "field_not_allowed_on_submit" });
     const raw = await db.findOne("SettleDoc", id, "app");
     expect(raw?.["grand_total"]).toBe(1000);
   });
@@ -190,13 +190,13 @@ describe("updateSubmitted — scalar band", () => {
     const draft = await docService.insert("SettleDoc", { title: "Draft", amount_due: 10 }, admin);
     await expect(
       docService.updateSubmitted("SettleDoc", draft._id, { set: { amount_paid: 1 } }, admin),
-    ).rejects.toMatchObject({ messageKey: "not_submitted" });
+    ).rejects.toMatchObject({ code: "not_submitted" });
 
     const id = await insertSubmitted("SettleDoc", { title: "Cx", amount_due: 10 });
     await docService.cancel("SettleDoc", id, admin);
     await expect(
       docService.updateSubmitted("SettleDoc", id, { set: { amount_paid: 1 } }, admin),
-    ).rejects.toMatchObject({ messageKey: "not_submitted" });
+    ).rejects.toMatchObject({ code: "not_submitted" });
   });
 
   it("T9: stale expectedModified throws ConcurrentModificationError", async () => {
@@ -240,7 +240,7 @@ describe("updateSubmitted — scalar band", () => {
     // doc — NOT write an arbitrary status via updateSubmitted.
     const id = await insertSubmitted("SettleDoc", { title: "Inv", amount_due: 10 });
     await expect(docService.transition("SettleDoc", id, "hacked", admin)).rejects.toMatchObject({
-      messageKey: "cannot_edit_submitted",
+      code: "cannot_edit_submitted",
     });
     const raw = await db.findOne("SettleDoc", id, "app");
     expect(raw?.["status"]).not.toBe("hacked");
@@ -296,7 +296,7 @@ describe("update() — hard-blocked on a non-draft submittable doc (UI read-only
     // the generic update() PUT path must still refuse it.
     await expect(
       docService.update("EditGate", id, { title: "hacked", amount_paid: 400 }, admin),
-    ).rejects.toMatchObject({ messageKey: "cannot_edit_submitted" });
+    ).rejects.toMatchObject({ code: "cannot_edit_submitted" });
     await expect(
       docService.update("EditGate", id, { title: "hacked" }, admin),
     ).rejects.toBeInstanceOf(DocStatusError);
@@ -310,7 +310,7 @@ describe("update() — hard-blocked on a non-draft submittable doc (UI read-only
     await docService.cancel("EditGate", id, admin);
     await expect(
       docService.update("EditGate", id, { title: "hacked" }, admin),
-    ).rejects.toMatchObject({ messageKey: "cannot_edit_cancelled" });
+    ).rejects.toMatchObject({ code: "cannot_edit_cancelled" });
   });
 
   it("still allows update() on a DRAFT (docstatus 0) — parity: the UI keeps Save on a draft", async () => {
@@ -342,7 +342,7 @@ describe("updateSubmitted — hooks", () => {
 
     await expect(
       docService.updateSubmitted("HookDoc", id, { increment: { amount_paid: 1 } }, admin),
-    ).rejects.toMatchObject({ messageKey: "field_not_allowed_on_submit" });
+    ).rejects.toMatchObject({ code: "field_not_allowed_on_submit" });
 
     // Nothing persisted — neither the hook write nor the patch.
     const raw = await db.findOne("HookDoc", id, "app");
@@ -482,13 +482,13 @@ describe("updateSubmitted — children[]", () => {
     const { id, rowIds } = await seedThreeLines();
     await expect(
       docService.updateSubmitted("LineDoc", id, { children: [{ table: "lines", row_id: "ghost", increment: { delivered: 1 } }] }, admin),
-    ).rejects.toMatchObject({ messageKey: "missing_child_row" });
+    ).rejects.toMatchObject({ code: "missing_child_row" });
     await expect(
       docService.updateSubmitted("LineDoc", id, { children: [{ table: "lines", row_id: rowIds[0]!, set: { qty: 99 } }] }, admin),
-    ).rejects.toMatchObject({ messageKey: "field_not_allowed_on_submit" });
+    ).rejects.toMatchObject({ code: "field_not_allowed_on_submit" });
     await expect(
       docService.updateSubmitted("LineDoc", id, { children: [{ table: "lines", row_id: rowIds[0]!, set: { _row_id: "x" } }] }, admin),
-    ).rejects.toMatchObject({ messageKey: "field_not_allowed_on_submit" });
+    ).rejects.toMatchObject({ code: "field_not_allowed_on_submit" });
   });
 
   it("T12: records a per-row version entry and a post_submit activity row with cause", async () => {
@@ -881,7 +881,7 @@ describe("updateSubmitted — computed refresh (D5)", () => {
 
     await expect(
       docService.updateSubmitted("DriftDoc", doc._id, { increment: { counter: 1 } }, admin),
-    ).rejects.toMatchObject({ messageKey: "field_not_allowed_on_submit" });
+    ).rejects.toMatchObject({ code: "field_not_allowed_on_submit" });
 
     // Nothing persisted — neither the drifted write nor the band patch.
     const raw = await db.findOne("DriftDoc", doc._id, "app");
@@ -941,7 +941,7 @@ describe("updateSubmitted — computed refresh (D5)", () => {
     const { id } = await seedSubmittedRollup();
     await expect(
       docService.updateSubmitted("RollupDoc", id, { set: { total_released: 999 } }, admin),
-    ).rejects.toMatchObject({ messageKey: "field_not_allowed_on_submit" });
+    ).rejects.toMatchObject({ code: "field_not_allowed_on_submit" });
     const raw = await db.findOne("RollupDoc", id, "app");
     expect(raw?.["total_released"]).toBe(0);
   });

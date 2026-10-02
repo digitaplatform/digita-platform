@@ -1,6 +1,7 @@
 import type { EntityDefinition, FieldType, FieldDefinition } from "@digitaplatform/shared";
 import { LAYOUT_FIELD_TYPES } from "@digitaplatform/shared";
 import { encryptPassword, isEncryptedPassword } from "./password-cipher.js";
+import { EngineError } from "../errors/engine-error.js";
 
 /**
  * Field-type handlers cover (de)serialization for MongoDB storage. Validation
@@ -20,18 +21,15 @@ export interface FieldTypeHandler {
 /**
  * Thrown by a field-type handler when a raw input value cannot be serialized
  * for storage (e.g. a malformed JSON string on a JSON field). Carries the
- * offending fieldname + an i18n message key + params so `serializeFields` can
+ * offending fieldname + the code of its text + params so `serializeFields` can
  * rewrap it into a `ValidationFailedError` (→ HTTP 400) instead of letting a
  * raw parse error escape as an unhandled 500.
  */
-export class FieldValueError extends Error {
-  constructor(
-    public field: string,
-    public message_key: string,
-    public params?: Record<string, string>,
-  ) {
-    super(message_key);
-    this.name = "FieldValueError";
+export class FieldValueError extends EngineError {
+  declare readonly field: string;
+
+  constructor(code: string, field: string, params?: Record<string, string>) {
+    super(code, { field, ...params }, 400, "FIELD_VALUE_INVALID", field);
   }
 }
 
@@ -80,7 +78,7 @@ const intHandler: FieldTypeHandler = {
     // number is refused instead. A boolean or a list is no number either (Number(true) is 1).
     const num = typeof value === "number" || (typeof value === "string" && WHOLE_NUMBER_TEXT.test(value.trim())) ? Number(value) : NaN;
     if (!Number.isInteger(num)) {
-      throw new FieldValueError(field.fieldname, "field_invalid_int", { field: field.label || field.fieldname });
+      throw new FieldValueError("field_invalid_int", field.fieldname, { field: field.label || field.fieldname });
     }
     return num;
   },
@@ -98,7 +96,7 @@ const durationHandler: FieldTypeHandler = {
     // silently truncating (parseInt("1.5") → 1), storing NaN (parseInt("abc")) or
     // reading a boolean or a list as a number (Number(true) is 1, Number([]) is 0).
     if (!Number.isFinite(num) || !Number.isInteger(num) || num < 0) {
-      throw new FieldValueError(field.fieldname, "field_invalid_duration", {
+      throw new FieldValueError("field_invalid_duration", field.fieldname, {
         field: field.label || field.fieldname,
       });
     }
@@ -153,13 +151,13 @@ const dateHandler: FieldTypeHandler = {
     // write instead of silently mis-comparing against Date filters later.
     if (value instanceof Date) {
       if (isNaN(value.getTime())) {
-        throw new FieldValueError(field.fieldname, "field_invalid_date", { field: field.label || field.fieldname, value: String(value) });
+        throw new FieldValueError("field_invalid_date", field.fieldname, { field: field.label || field.fieldname, value: String(value) });
       }
       return value.toISOString().slice(0, 10);
     }
     const s = String(value);
     if (!isCalendarDay(s)) {
-      throw new FieldValueError(field.fieldname, "field_invalid_date", { field: field.label || field.fieldname, value: s });
+      throw new FieldValueError("field_invalid_date", field.fieldname, { field: field.label || field.fieldname, value: s });
     }
     return s;
   },
@@ -175,7 +173,7 @@ const datetimeHandler: FieldTypeHandler = {
     // new Date(5) and new Date(true) are moments of 1970, and new Date("5") one of 2001: only an
     // ISO string or a Date names a moment.
     if (!(value instanceof Date ? !isNaN(value.getTime()) : typeof value === "string" && isIsoMoment(value))) {
-      throw new FieldValueError(field.fieldname, "field_invalid_date", {
+      throw new FieldValueError("field_invalid_date", field.fieldname, {
         field: field.label || field.fieldname,
         value: String(value),
       });
@@ -194,7 +192,7 @@ const timeHandler: FieldTypeHandler = {
     if (value === null || value === undefined) return null;
     // A wall-clock text: a list or a number is no time, as a Table cell already answers.
     if (typeof value !== "string") {
-      throw new FieldValueError(field.fieldname, "field_invalid_time", { field: field.label || field.fieldname });
+      throw new FieldValueError("field_invalid_time", field.fieldname, { field: field.label || field.fieldname });
     }
     return value.trim();
   },
@@ -221,7 +219,7 @@ const jsonHandler: FieldTypeHandler = {
       try {
         return JSON.parse(value);
       } catch {
-        throw new FieldValueError(field.fieldname, "field_invalid_json", {
+        throw new FieldValueError("field_invalid_json", field.fieldname, {
           field: field.label || field.fieldname,
         });
       }
@@ -322,7 +320,7 @@ const tableHandler: FieldTypeHandler = {
           stored[cell.fieldname] = getFieldTypeHandler(cell.fieldtype).toStorage(stored[cell.fieldname], cell);
         } catch (err) {
           if (!(err instanceof FieldValueError)) throw err;
-          throw new FieldValueError(`${field.fieldname}.${index}.${cell.fieldname}`, err.message_key, err.params);
+          throw new FieldValueError(err.code, `${field.fieldname}.${index}.${cell.fieldname}`, err.params);
         }
       }
       return stored;

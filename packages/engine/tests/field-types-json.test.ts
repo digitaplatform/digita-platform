@@ -26,7 +26,7 @@ describe("JSON field toStorage — malformed input is a typed field error, not a
     }
     expect(thrown).toBeInstanceOf(FieldValueError);
     expect((thrown as FieldValueError).field).toBe("payload");
-    expect((thrown as FieldValueError).message_key).toBe("field_invalid_json");
+    expect((thrown as FieldValueError).code).toBe("field_invalid_json");
   });
 
   it("still parses valid JSON strings and passes objects through unchanged", () => {

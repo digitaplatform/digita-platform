@@ -21,8 +21,8 @@ export interface ImportRowError {
   field?: string;
   /** Human-readable message (already resolved server-side). */
   message: string;
-  /** i18n key for clients that re-translate. */
-  message_key?: string;
+  /** The code of the message's text in the engine's catalog, for a client that translates it. */
+  code?: string;
   params?: Record<string, string>;
 }
 
