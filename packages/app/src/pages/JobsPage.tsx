@@ -622,13 +622,13 @@ function JobConfigDialog({
         {isSchedule && (
           <label className="block space-y-1">
             <span className="text-caption text-textMuted">{tc('ui.jobs.name')}</span>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={task.label} />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={task.label} required />
           </label>
         )}
         {!task.isSingle && (
           <label className="block space-y-1">
             <span className="text-caption text-textMuted">{tc('ui.jobs.doc')}</span>
-            <Input value={doc} onChange={(e) => setDoc(e.target.value)} />
+            <Input value={doc} onChange={(e) => setDoc(e.target.value)} required />
             <span className="text-micro text-textMuted">{tc('ui.jobs.docHint')}</span>
           </label>
         )}
