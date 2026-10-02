@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { readdir, readFile } from "fs/promises";
 import { basename, join } from "path";
 import { ObjectId } from "mongodb";
@@ -10,6 +11,7 @@ import { SYSTEM_ROLES, type UserContext } from "../permissions/types.js";
 import { injectRowIds } from "../document/base-document.js";
 import { deepEqual } from "../document/change-tracker.js";
 import { toIdString } from "../document/id-codec.js";
+import { SEED_HASH_FIELD } from "../entity/field-types.js";
 import {
   BkResolver,
   businessKeyFields,
@@ -88,8 +90,33 @@ export type SeedOptions =
 const SEED_IDENTITY = "system";
 const SEED_USER: UserContext = { _id: SEED_IDENTITY, email: SEED_IDENTITY, roles: [SYSTEM_ROLES.ADMINISTRATOR] };
 /** True when this loader wrote the row and no person changed it since. */
-const seedWrote = (doc: Record<string, unknown>) =>
-  doc.owner === SEED_IDENTITY && doc.modified_by === SEED_IDENTITY;
+/** JSON with sorted object keys, so a stored row that keeps its values keeps its hash. */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value instanceof Date) return JSON.stringify(value.toISOString());
+  if (value && typeof value === "object" && !(value instanceof ObjectId)) {
+    const entries = Object.keys(value as Record<string, unknown>)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value instanceof ObjectId ? value.toHexString() : (value ?? null));
+}
+
+/** The hash of the declared values of a stored row, which the seed stamps on every row it writes. */
+export function seedHash(entity: EntityDefinition, doc: Record<string, unknown>): string {
+  const values = Object.fromEntries(entity.fields.map((f) => [f.fieldname, doc[f.fieldname] ?? null]));
+  return createHash("sha256").update(canonicalJson({ values, docstatus: doc["docstatus"] ?? 0 })).digest("hex");
+}
+
+/**
+ * A row is the seed's while its declared values still hash to what the seed stamped: a person's
+ * change breaks the hash, and a write that changes no value, such as a rule's, keeps it. Its last
+ * writer proves nothing, since a rule without a user also writes as "system". A row without a hash
+ * was seeded before the stamp, or by nobody, and is not the seed's.
+ */
+const seedWrote = (entity: EntityDefinition, doc: Record<string, unknown>) =>
+  typeof doc[SEED_HASH_FIELD] === "string" && doc[SEED_HASH_FIELD] === seedHash(entity, doc);
 
 /**
  * The first workspace row that is the default for a role its role list hides it from. The role
@@ -327,7 +354,7 @@ export async function seedAppData(
       const retry: string[] = [];
       for (const id of ids) {
         const row = await db.findOne(entity.name, id, entity.database);
-        if (row != null && !seedWrote(row)) {
+        if (row != null && !seedWrote(entity, row)) {
           log.warn(
             { entity: entity.name, db: entity.database, site: options.site, id },
             "seed-app-data: a row the seed does not carry stays, a person changed it since the sweep",
@@ -419,20 +446,16 @@ async function findSiteRowsTheSeedWroteAndDoesNotCarry(
   seeded: Set<string>,
   site: string,
 ): Promise<string[]> {
-  const stored = await db.find(
-    entity.name,
-    { filters: [{ site }], fields: ["_id", "owner", "modified_by"] },
-    entity.database,
-  );
+  const stored = await db.find(entity.name, { filters: [{ site }] }, entity.database);
   const unseeded = stored.filter((doc) => !seeded.has(toIdString(String(doc._id))));
-  const kept = unseeded.filter((doc) => !seedWrote(doc)).map((doc) => toIdString(String(doc._id)));
+  const kept = unseeded.filter((doc) => !seedWrote(entity, doc)).map((doc) => toIdString(String(doc._id)));
   if (kept.length > 0) {
     log.warn(
       { entity: entity.name, db: entity.database, site, kept: kept.length, ids: kept },
       "seed-app-data: rows the seed does not carry stay, a person created or changed them",
     );
   }
-  return unseeded.filter(seedWrote).map((doc) => toIdString(String(doc._id)));
+  return unseeded.filter((doc) => seedWrote(entity, doc)).map((doc) => toIdString(String(doc._id)));
 }
 
 /** Deletes through the document service; returns the rows another row still links, with the link. */
@@ -519,12 +542,18 @@ async function insertRows(
     // there.
     const existing = await db.findOne(entity.name, idString, target);
     if (existing && mode === "insert") {
-      if (!carriedByEarlierFiles.has(idString) || !seedWrote(existing)) {
+      if (!carriedByEarlierFiles.has(idString) || !seedWrote(entity, existing)) {
+        if (carriedByEarlierFiles.has(idString)) {
+          log.warn(
+            { entity: entity.name, db: target, id: idString },
+            "seed-app-data: a later tier leaves a row the seed no longer owns: a person changed it, or it was seeded before the seed stamped its rows",
+          );
+        }
         skipped++;
         continue;
       }
       // A later tier's row sets its fields on the row the seed still owns. The write is
-      // pinned on the seed identity, so a person's save that lands after the read above
+      // pinned on the stored `modified`, so a person's save that lands after the read above
       // keeps its values.
       const changes = serializeRowForStorage(entity, rowData);
       carryRowIds(changes, existing);
@@ -536,10 +565,10 @@ async function insertRows(
       const written = await db.updateOne(
         entity.name,
         idString,
-        { ...changes, modified_by: SEED_IDENTITY, modified: now },
+        { ...changes, [SEED_HASH_FIELD]: seedHash(entity, { ...existing, ...changes }), modified_by: SEED_IDENTITY, modified: now },
         target,
         undefined,
-        { owner: SEED_IDENTITY, modified_by: SEED_IDENTITY },
+        { modified: existing.modified },
       );
       if (written) updated++;
       else skipped++;
@@ -561,6 +590,7 @@ async function insertRows(
         owner: existing.owner ?? SEED_IDENTITY,
         creation: existing.creation ?? now,
       };
+      candidate[SEED_HASH_FIELD] = seedHash(entity, candidate);
       if (sameDocument(candidate, existing)) {
         unchanged++;
         continue;
@@ -581,6 +611,7 @@ async function insertRows(
       _id: id,
       doctype: entity.name,
       docstatus,
+      [SEED_HASH_FIELD]: seedHash(entity, { ...serialized, docstatus }),
       owner: SEED_IDENTITY,
       modified_by: SEED_IDENTITY,
       creation: now,
