@@ -470,7 +470,7 @@ export class DocumentService {
   }
 
   /** Whether only a share admits the user to the row, which then shows its level-0 fields. */
-  private async isSharedForReadOnly(user: UserContext, doctype: string, data: Record<string, unknown>): Promise<boolean> {
+  async isSharedForReadOnly(user: UserContext, doctype: string, data: Record<string, unknown>): Promise<boolean> {
     return !(await this.permissionChecker.hasPermission(user, doctype, "read", data)).allowed;
   }
 

@@ -60,6 +60,7 @@ let adminTok: string;
 let clerkTok: string;
 let adminDocId: string;
 let clerkDocId: string;
+let signToken: Awaited<ReturnType<typeof buildTestAuth>>["sign"];
 
 /** A change-tracked entity whose level-1 field a Clerk reads only on the documents it owns. */
 const PAY: EntityDefinition = {
@@ -113,6 +114,7 @@ beforeAll(async () => {
   await app.ready();
   (result.registry as unknown as { register: (e: EntityDefinition) => void }).register(PAY);
 
+  signToken = ta.sign;
   adminTok = await ta.sign({ sub: "admin@d", email: "admin@d", roles: ["Administrator", "System User"] });
   clerkTok = await ta.sign({ sub: "clerk@d", email: "clerk@d", roles: ["Clerk"] });
 
@@ -134,5 +136,22 @@ describe("GET /resource/:doctype/:name/versions masks changes by the grants that
 
   it("shows the level-1 change on a document the Clerk owns", async () => {
     expect(await changedFields(clerkTok, clerkDocId)).toContain("salary");
+  });
+});
+
+describe("GET /resource/:doctype/:name/versions for a reader whom only a share admits", () => {
+  it("shows the level-0 change and hides the level-1 change, as the record read does", async () => {
+    const renamed = await app.inject({ method: "PUT", url: `/api/v1/resource/VersionMaskPay/${adminDocId}`, headers: bearer(adminTok), payload: { title: "Renewed contract" } });
+    expect(renamed.statusCode).toBe(200);
+    const share = await app.inject({
+      method: "POST",
+      url: "/api/v1/resource/DocShare",
+      headers: bearer(adminTok),
+      payload: { entity: "VersionMaskPay", document_name: adminDocId, shared_with: "guest@d", can_read: true, notify: false },
+    });
+    expect(share.statusCode).toBe(201);
+    const guestTok = await signToken({ sub: "guest@d", email: "guest@d", roles: ["System User"] });
+    const fields = await changedFields(guestTok, adminDocId);
+    expect([fields.includes("title"), fields.includes("salary")]).toEqual([true, false]);
   });
 });
