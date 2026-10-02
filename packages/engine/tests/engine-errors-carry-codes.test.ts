@@ -11,12 +11,24 @@ const src = fileURLToPath(new URL("../src", import.meta.url));
  * `EngineError` adds its files; once every file of `src` holds, this list becomes all of it.
  */
 const CHECKED_FILES = [
+  "core/api/admin-reload-definitions-router.ts",
+  "core/api/import-export-router.ts",
+  "core/api/list-query.ts",
+  "core/api/public-router.ts",
+  "core/api/resource-router.ts",
+  "core/api/search-router.ts",
   "core/document/document-service.ts",
   "core/document/docstatus-engine.ts",
   "core/document/naming-service.ts",
   "core/entity/field-types.ts",
+  "core/import-export/bk-resolver.ts",
+  "core/import-export/csv-codec.ts",
+  "core/import-export/import-service.ts",
   "core/period/period-close-validator.ts",
   "core/snapshot/snapshot-resolver.ts",
+  "core/view/param-resolver.ts",
+  "core/view/view-engine.ts",
+  "core/view/view-registry.ts",
   "core/workflow/workflow-engine.ts",
 ];
 
@@ -29,8 +41,9 @@ function findEnglishErrors(path: string, name = path): string[] {
   const shapes: Array<[RegExp, string]> = [
     [/\bnew Error\(/g, "new Error"],
     [/\bclass \w+ extends Error\b/g, "extends Error"],
-    // A code is one word, so a template or a literal with a space is a sentence, also on the next line.
-    [/\bsuper\(\s*(`|"[^"]*\s[^"]*"|'[^']*\s[^']*')/g, "super with a sentence"],
+    // A code is one word, so a first argument with a space is a sentence, also on the next line.
+    [/\bsuper\(\s*(`[^`]*\s[^`]*`|"[^"]*\s[^"]*"|'[^']*\s[^']*')/g, "super with a sentence"],
+    [/\bnew \w+Error\(\s*(`[^`]*\s[^`]*`|"[^"]*\s[^"]*"|'[^']*\s[^']*')/g, "new error with a sentence"],
   ];
   return shapes
     .flatMap(([shape, what]) =>
@@ -59,6 +72,8 @@ describe("the engine's errors", () => {
           'class WideError extends EngineError { constructor() { super("the list is too wide", {}, 400, "WIDE"); } }',
           "class SplitError extends EngineError { constructor(name: string) { super(",
           "  `${name} was split`, {}, 409, \"SPLIT\"); } }",
+          "throw new BadRequestError(`${param} must be a number`);",
+          "throw new SnapshotMissingTargetError(`${entity}.${field}`, target);",
           'class KeptError extends EngineError { constructor(name: string) { super("kept", { name }, 409, "KEPT"); } }',
         ].join("\n"),
       );
@@ -68,6 +83,7 @@ describe("the engine's errors", () => {
         "planted.ts:3 super with a sentence",
         "planted.ts:4 super with a sentence",
         "planted.ts:5 super with a sentence",
+        "planted.ts:7 new error with a sentence",
       ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });

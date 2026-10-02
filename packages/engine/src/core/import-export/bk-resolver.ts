@@ -2,6 +2,7 @@ import type { EntityDefinition, FieldDefinition } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import { toIdString } from "../document/id-codec.js";
+import { EngineError } from "../errors/engine-error.js";
 
 /** entityName -> (businessKeyValue -> idString) */
 export type BkIndex = Map<string, Map<string, string>>;
@@ -158,10 +159,11 @@ export class BkResolver {
     // into a single export cell needs a defined component-escaping scheme, which
     // is out of MVP scope. Fail loud rather than write an unusable NUL-laced cell.
     if (bkFields.length > 1) {
-      throw new Error(
-        `export link_format=business_key is not yet supported for '${entity.name}' — ` +
-          `it has a COMPOSITE business key (${bkFields.join(", ")}); a composite key ` +
-          `needs a defined cell-escaping scheme first`,
+      throw new EngineError(
+        "export_composite_business_key",
+        { doctype: entity.name, fields: bkFields.join(", ") },
+        400,
+        "BAD_REQUEST",
       );
     }
     const docs = await this.db.find(

@@ -8,7 +8,6 @@ import {
   MongoWriteConcernError,
 } from "mongodb";
 import { ValidationFailedError } from "../../document/document-service.js";
-import { ViewNotFoundError, BadRequestError } from "../../view/view-engine.js";
 import { UnknownDoctypeError } from "../../entity/entity-registry.js";
 import { FilterFieldNotAllowedError, MalformedFieldsError, MalformedFilterValueError } from "../../database/filter-builder.js";
 import { PasswordKeyNotListedError } from "../../entity/password-cipher.js";
@@ -83,30 +82,6 @@ export function globalErrorHandler(
       error: { code: error.responseCode, detail: error.code, trace_id: traceId, ...(error.field ? { field: error.field } : {}) },
     };
     reply.code(error.status).send(response);
-    return;
-  }
-
-  if (error instanceof ViewNotFoundError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 404,
-      data: null,
-      messages: [{ text: error.message, type: "error", show: true }],
-      error: { code: "VIEW_NOT_FOUND", detail: error.message, trace_id: traceId },
-    };
-    reply.code(404).send(response);
-    return;
-  }
-
-  if (error instanceof BadRequestError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 400,
-      data: null,
-      messages: [{ text: error.message, type: "error", show: true }],
-      error: { code: "BAD_REQUEST", detail: error.detail, trace_id: traceId },
-    };
-    reply.code(400).send(response);
     return;
   }
 

@@ -673,7 +673,7 @@ describe("Resource API Integration", () => {
 
     it("refuses link search filters given as a list by their shape", async () => {
       const res = await app.inject({ method: "GET", url: `/api/v1/search/File?q=in&filters=${q([["file_name", "=", "x"]])}`, headers: authHeaders() });
-      expect(res.json().error).toMatchObject({ code: "BAD_REQUEST", detail: "filters must be one { field: value } object" });
+      expect(res.json().error).toMatchObject({ code: "BAD_REQUEST", detail: "filters_not_one_object" });
     });
 
     it("still answers a well-formed list with its limit", async () => {
