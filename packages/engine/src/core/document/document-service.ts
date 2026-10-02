@@ -28,6 +28,7 @@ import type { StoragePort } from "../storage/storage-port.js";
 import { collectAttachFileIds, cleanupDocumentAttachments, parseFileId, FILE_FIELD_TYPES } from "../storage/file-cleanup.js";
 import { assertAttachFilesReadable, mayReadFile } from "../storage/file-access.js";
 import { usePublicUrlsOfPublicFiles } from "../storage/public-field-files.js";
+import { assertSetupAllowsCreate, listPendingSetupRecords, type PendingSetupRecord } from "../setup/setup-state.js";
 import {
   buildMongoFilter,
   assertFieldAllowed,
@@ -292,6 +293,15 @@ export class DocumentService {
     this.namingService = new NamingService(deps.db);
     this.docStatusEngine = new DocStatusEngine();
     this.actionRunner = new ActionRunner(deps.permissionChecker);
+  }
+
+  private setupStateDeps() {
+    return { db: this.db, registry: this.registry, zodSchemaBuilder: this.zodSchemaBuilder };
+  }
+
+  /** The settings records that keep this engine's apps from being set up. */
+  listPendingSetupRecords(): Promise<PendingSetupRecord[]> {
+    return listPendingSetupRecords(this.setupStateDeps());
   }
 
   private defaultContext(user: UserContext): DefaultContext {
@@ -998,6 +1008,10 @@ export class DocumentService {
 
     // Permission check — rule-created docs still obey the triggering user's perms.
     await this.permissionChecker.check(user, doctype, "create");
+
+    // An app that is not set up takes no new record, whoever creates it: a person, an import,
+    // a hook or a rule all arrive here. Seeds do not: they write their rows themselves.
+    await assertSetupAllowsCreate(entity, this.setupStateDeps());
 
     // Write-field-level permissions: strip fields the user may not write
     // (perm_level / read_only) from the raw input BEFORE defaults / fetch_from /

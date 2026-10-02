@@ -7,7 +7,10 @@ import {
   type AudienceMap,
 } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
+import type { DocumentService } from "../document/document-service.js";
 import type { LocaleResolver } from "../i18n/locale-resolver.js";
+import type { PermissionChecker } from "../permissions/permission-checker.js";
+import type { UserContext } from "../permissions/types.js";
 import { env } from "../config/env.js";
 import { successResponse } from "./response-model.js";
 import { createLogger } from "../logging/logger.js";
@@ -63,6 +66,25 @@ async function resolveDefaultWorkspace(
 }
 
 /**
+ * Whether the engine's apps are set up, as `user` may know it. Every signed-in caller learns
+ * whether the setup is complete. A pending settings record and its open fields go only to a
+ * caller who may write that record, so nobody reads here a schema their audience does not get.
+ */
+async function resolveSetup(
+  user: UserContext,
+  documentService: DocumentService,
+  permissionChecker: PermissionChecker,
+): Promise<{ complete: boolean; records: Array<{ entity: string; fields: string[]; missing_record: boolean }> }> {
+  const pending = await documentService.listPendingSetupRecords();
+  const records = [];
+  for (const { entity, row, fields } of pending) {
+    if (!(await permissionChecker.hasPermission(user, entity.name, "write", row)).allowed) continue;
+    records.push({ entity: entity.name, fields, missing_record: row === undefined });
+  }
+  return { complete: pending.length === 0, records };
+}
+
+/**
  * Register the boot endpoint — called once when frontend loads. Returns identity,
  * locale, languages, system settings, and the resolved branding (from the
  * BrandingSetting singleton). The engine knows nothing about UI navigation — a
@@ -73,6 +95,8 @@ export function registerBootRoutes(
   prefix: string,
   db: MongoDBService,
   localeResolver: LocaleResolver,
+  documentService: DocumentService,
+  permissionChecker: PermissionChecker,
   /** Lazy getter for the per-app audience map (ADR-A3); relayed verbatim so the
    *  shell can compose per tier and the anonymous branch can find a public entry.
    *  A getter (not a value) because plugin config loads AFTER routes register. */
@@ -159,10 +183,11 @@ export function registerBootRoutes(
           // the frontend renders as an em-dash and warns about (never a wrong symbol).
           default_currency: settingsData["default_currency"] ?? null,
           allow_user_language: settingsData["allow_user_language"] ?? true,
-          is_first_run: settingsData["is_first_run"] ?? false,
           // The tenant's day, which the form's __today__ names, as the engine's default does.
           timezone: (settingsData["timezone"] as string) || "UTC",
         },
+        // An anonymous caller gets no setup state: it could fill nothing.
+        setup: user ? await resolveSetup(user, documentService, permissionChecker) : null,
         // Resolved branding (BrandingSetting singleton); undefined fields are
         // omitted → the frontend applies its defaults. app_name falls back to the
         // platform name. The design-system runtime (applyBranding) consumes these.

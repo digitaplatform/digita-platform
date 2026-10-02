@@ -6,6 +6,7 @@ import type {
   BootLocale,
   BootLanguage,
   BootBranding,
+  BootSetup,
   BootSystemSettings,
   BootRealtime,
 } from '@/types';
@@ -118,6 +119,8 @@ interface SessionState {
   allowUserLanguage: boolean;
   branding: BootBranding | null;
   settings: BootSystemSettings | null;
+  /** Whether the app is set up (from /boot); null until resolved and for an anonymous caller. */
+  setup: BootSetup | null;
   /** Resolved default Workspace id (from /boot), or null → DashboardPage picks a fallback. */
   default_workspace: string | null;
   /** Live-sync (WebSocket) config from /boot; null until resolved, or when the
@@ -144,9 +147,9 @@ interface SessionState {
   setLocaleFormat: (formatLocale: string | null, timezone: string | null) => Promise<void>;
   /** Revoke the session at the IdP, then leave for the IdP login. */
   logout: () => Promise<void>;
-  /** Narrow re-apply of /boot-derived state (branding + default_workspace) after a
+  /** Narrow re-apply of /boot-derived state (branding, default_workspace and setup) after a
    *  settings write — NOT a full bootstrap (keeps user/locale/status/in-flight). */
-  refreshBranding: () => Promise<void>;
+  refreshBootState: () => Promise<void>;
 }
 
 export const useSessionStore = create<SessionState>((set, get) => ({
@@ -158,6 +161,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   allowUserLanguage: false,
   branding: null,
   settings: null,
+  setup: null,
   default_workspace: null,
   realtime: null,
 
@@ -179,6 +183,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         allowUserLanguage: data.system_settings?.allow_user_language ?? false,
         branding: data.branding ?? null,
         settings: data.system_settings,
+        setup: data.setup ?? null,
         default_workspace: data.default_workspace ?? null,
         realtime: data.realtime ?? null,
         status: data.user ? 'authenticated' : 'anonymous',
@@ -288,11 +293,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     redirectToIdpLogin(`${window.location.origin}${appUrl('/')}`);
   },
 
-  refreshBranding: async () => {
+  refreshBootState: async () => {
     const res = await getBoot().catch(() => null);
     const data = res?.success ? res.data : null;
     if (!data) return;
-    set({ branding: data.branding ?? null, default_workspace: data.default_workspace ?? null });
+    set({
+      branding: data.branding ?? null,
+      default_workspace: data.default_workspace ?? null,
+      setup: data.setup ?? null,
+    });
     if (data.branding) useThemeStore.getState().setBranding(data.branding);
   },
 }));

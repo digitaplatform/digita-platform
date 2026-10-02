@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useForm, type Resolver } from 'react-hook-form';
 import { Copy, Lock } from 'lucide-react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { EntityDefinition, FieldDefinition } from '@digitaplatform/shared';
+import type { EntityDefinition, FieldDefinition, FormLayoutConfig } from '@digitaplatform/shared';
 import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from '@digitaplatform/shared';
 import { Badge, Button, PageHeader, findScrollContainer } from '@digitaplatform/components';
 import { useMeta } from '@/hooks/useMeta';
@@ -16,6 +16,7 @@ import { buildZodSchema, fieldErrorMessage } from '@/lib/schema-from-meta';
 import { buildDefaults, seedsDefault, tenantTimeZoneOf } from '@/lib/default-tokens';
 import { mergePreviewRows, RECOMPUTE_OVERRIDES_KEY } from '@/lib/merge-preview-rows';
 import { resolveFetchFromTargets } from '@/lib/resolve-fetch-from';
+import { setupFormFields } from '@/lib/setup-fields';
 import {
   sweepFieldStates,
   deriveComputedSet,
@@ -164,6 +165,9 @@ export default function RecordPage() {
   );
 }
 
+/** The setup form is short by its nature, so it never takes the tabs of the form it comes from. */
+const SETUP_FORM_LAYOUT: FormLayoutConfig = { layout: 'flat' };
+
 const DISPLAY_ONLY_KEYS = new Set([
   '_link_titles',
   '_status_indicator',
@@ -235,13 +239,14 @@ export function stripForSave(meta: EntityDefinition, values: Doc, original?: Doc
   return out;
 }
 
-function RecordForm({
+export function RecordForm({
   entity,
   meta,
   initial,
   isNew,
   isSingle,
   name,
+  setupFields,
 }: {
   entity: string;
   meta: EntityDefinition;
@@ -249,6 +254,9 @@ function RecordForm({
   isNew: boolean;
   isSingle: boolean;
   name?: string;
+  /** The setup page's use of a settings record: only these fields on one page, without the
+   *  record's own header, actions, links and history. Everything else is the record's form. */
+  setupFields?: readonly string[];
 }) {
   const navigate = useNavigate();
   const dialog = useDialogHost();
@@ -409,6 +417,15 @@ function RecordForm({
     return out;
   }, [form.formState.errors, t, tField, entity, meta]);
 
+  const { dirtyFields } = form.formState;
+  const shownFields = useMemo(() => {
+    if (!setupFields) return formFields;
+    // A field the engine did not name can still fail the save, such as one that another field's
+    // new value makes required: it joins the setup form with its error, and stays once edited.
+    const open = new Set([...setupFields, ...Object.keys(errors), ...Object.keys(dirtyFields)]);
+    return setupFormFields(formFields, open);
+  }, [setupFields, formFields, errors, dirtyFields]);
+
   // Dirty-guard: block in-app navigation away from unsaved edits (data router).
   // `bypassGuardRef` lets a programmatic post-save/-delete navigation skip the guard.
   // It's essential (not merely a shortcut): form.reset() flips the dirty flag on RHF's
@@ -439,6 +456,12 @@ function RecordForm({
   // A single is the page itself, with no list to go back to, so leaving the page would neither ask
   // nor discard: Cancel asks here and puts the stored values back in place.
   const onCancel = async () => {
+    // The setup page is where the app lands, so there is no page to go back to: Cancel leaves
+    // for the start page, and the dirty guard asks about unsaved edits on the way.
+    if (setupFields) {
+      navigate('/');
+      return;
+    }
     if (!isSingle || !form.formState.isDirty) {
       navigate(-1);
       return;
@@ -695,34 +718,36 @@ function RecordForm({
     >
       {/* Pulled out by the header's own inset so its title lines up with the form. A single
           has no list to go back to. */}
-      <PageHeader
-        className="-mx-4"
-        back={
-          isSingle ? undefined : { label: meta.label_plural ?? meta.label ?? entity, onClick: () => navigate(`/${entity}`) }
-        }
-        eyebrow={tEntity(entity, meta.label ?? entity)}
-        title={title}
-        media={recordImageUrl(meta, watched) ? <RecordImage meta={meta} row={watched} className="h-16 w-16" /> : undefined}
-        status={
-          stateBadge || docLocked ? (
-            <>
-              {stateBadge && (
-                <Badge variant="pill" size="lg" color={stateBadge.color}>
-                  {stateBadge.label}
-                </Badge>
-              )}
-              {docLocked && (
-                <Badge variant="outline" size="lg" leftIcon={<Lock className="h-3 w-3" aria-hidden="true" />} {...tid.component('docstatus-badge')}>
-                  {docstatus === 2 ? tc('ui.record.readonlyCancelled') : tc('ui.record.readonlySubmitted')}
-                </Badge>
-              )}
-            </>
-          ) : undefined
-        }
-      />
+      {!setupFields && (
+        <PageHeader
+          className="-mx-4"
+          back={
+            isSingle ? undefined : { label: meta.label_plural ?? meta.label ?? entity, onClick: () => navigate(`/${entity}`) }
+          }
+          eyebrow={tEntity(entity, meta.label ?? entity)}
+          title={title}
+          media={recordImageUrl(meta, watched) ? <RecordImage meta={meta} row={watched} className="h-16 w-16" /> : undefined}
+          status={
+            stateBadge || docLocked ? (
+              <>
+                {stateBadge && (
+                  <Badge variant="pill" size="lg" color={stateBadge.color}>
+                    {stateBadge.label}
+                  </Badge>
+                )}
+                {docLocked && (
+                  <Badge variant="outline" size="lg" leftIcon={<Lock className="h-3 w-3" aria-hidden="true" />} {...tid.component('docstatus-badge')}>
+                    {docstatus === 2 ? tc('ui.record.readonlyCancelled') : tc('ui.record.readonlySubmitted')}
+                  </Badge>
+                )}
+              </>
+            ) : undefined
+          }
+        />
+      )}
       {/* The record's actions are text buttons that wrap on a phone; in the header's bar the
           wrap would grow the band that stays pinned, so they stand under the title. */}
-      {!isNew && (
+      {!isNew && !setupFields && (
         <div className="flex flex-wrap items-center justify-end gap-2">
           <PrintMenu meta={meta} doc={watched} />
           <ActionBar entity={entity} name={name!} disabled={form.formState.isDirty || saving} />
@@ -749,8 +774,8 @@ function RecordForm({
           )}
         </div>
       )}
-      {!isNew && <RecordKpis entity={entity} meta={meta} doc={watched as Record<string, unknown>} />}
-      {!isNew && !!meta.links?.length && <LinksPanel entity={entity} name={name!} links={meta.links} />}
+      {!isNew && !setupFields && <RecordKpis entity={entity} meta={meta} doc={watched as Record<string, unknown>} />}
+      {!isNew && !setupFields && !!meta.links?.length && <LinksPanel entity={entity} name={name!} links={meta.links} />}
 
       {conflict && (
         <div
@@ -778,8 +803,8 @@ function RecordForm({
       >
         <FormRenderer
           entity={entity}
-          fields={formFields}
-          form={meta.form}
+          fields={shownFields}
+          form={setupFields ? SETUP_FORM_LAYOUT : meta.form}
           doc={watched}
           fieldState={renderState}
           errors={errors}
@@ -792,7 +817,7 @@ function RecordForm({
         {hasContext && <ContextPanel entity={entity} meta={meta} doc={watched} />}
       </div>
 
-      {canReadHistory && <HistoryPanel entity={entity} name={name!} meta={meta} />}
+      {canReadHistory && !setupFields && <HistoryPanel entity={entity} name={name!} meta={meta} />}
 
       <RecordActions
         saving={saving}

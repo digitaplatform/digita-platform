@@ -6,6 +6,7 @@ import type { LayoutConfig, RegionDefinition, RegionSide, TemplateDefinition } f
 import { useUiStore } from '@/stores/ui';
 import { Topbar } from '@/components/layout/Topbar';
 import { BrandChrome } from '@/components/layout/BrandChrome';
+import { SetupNotice } from '@/components/layout/SetupNotice';
 import { Region } from '@/plugins/registry';
 import { useChrome } from '@/lib/chrome-i18n';
 import { tid } from '@/lib/testid';
@@ -199,6 +200,7 @@ export function ShellRenderer() {
             <Topbar showMenuButton={Boolean(drawerRail)} />
             {/* Fluid content: grows with the viewport; p-* provides the top/left/right margins. */}
             <div className="w-full p-4 md:p-8">
+              <SetupNotice />
               <Outlet />
             </div>
           </main>

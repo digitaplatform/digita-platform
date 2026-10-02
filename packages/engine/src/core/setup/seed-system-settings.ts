@@ -1,4 +1,5 @@
 import type { MongoDBService } from "../database/mongodb-service.js";
+import { runForwardMigrationOnce } from "../database/forward-migration.js";
 import { DIGITA } from "@digitaplatform/shared";
 import { env } from "../config/env.js";
 import { createLogger } from "../logging/logger.js";
@@ -21,7 +22,6 @@ export async function seedSystemSettings(db: MongoDBService): Promise<void> {
         allow_user_language: true,
         platform_name: "Digita Platform",
         timezone: "UTC",
-        is_first_run: true,
         owner: "system",
         modified_by: "system",
         creation: new Date(),
@@ -31,4 +31,19 @@ export async function seedSystemSettings(db: MongoDBService): Promise<void> {
     );
     log.info("Settings seeded");
   }
+}
+
+/**
+ * The settings row carried `is_first_run`, a flag for a setup wizard that no code ever read.
+ * Whether an app is set up is now read from its settings records, so the field is gone and its
+ * stored value is removed, once per database.
+ */
+export async function removeFirstRunFlagOnce(db: MongoDBService): Promise<void> {
+  await runForwardMigrationOnce(db, "remove-setting-first-run-flag", async () => ({
+    removed: (
+      await db
+        .collection(DIGITA.COLLECTIONS.SETTING, DIGITA.DATABASES.CORE)
+        .updateOne({ _id: "settings" as never }, { $unset: { is_first_run: "" } })
+    ).modifiedCount,
+  }));
 }

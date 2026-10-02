@@ -54,7 +54,6 @@ export interface BootSystemSettings {
   /** Optional — the platform bakes in no currency; null when unset. */
   default_currency: string | null;
   allow_user_language: boolean;
-  is_first_run: boolean;
   /** The tenant's time zone (Setting.timezone, IANA), whose day `__today__` names. */
   timezone: string;
 }
@@ -82,11 +81,29 @@ export interface BootRealtime {
   path: string;
 }
 
+/** A settings record of the app that its own save would refuse as stored, which this user may write. */
+export interface BootSetupRecord {
+  entity: string;
+  /** The fields the save would refuse. */
+  fields: string[];
+  /** No row is stored: only the app's reference data brings one, so there is nothing to fill in. */
+  missing_record: boolean;
+}
+
+/** Whether the app is set up. While it is not, the engine refuses every new record. */
+export interface BootSetup {
+  complete: boolean;
+  /** What keeps the setup open, as far as this user may write it; empty for everyone else. */
+  records: BootSetupRecord[];
+}
+
 export interface BootData {
   user: SessionUser | null;
   locale: BootLocale;
   available_languages: BootLanguage[];
   system_settings: BootSystemSettings;
+  /** null for an anonymous caller; absent from an engine older than this app. */
+  setup?: BootSetup | null;
   // Populated by the /boot extension (optional until then):
   branding?: BootBranding;
   default_workspace?: string | null;

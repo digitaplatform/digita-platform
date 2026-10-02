@@ -83,6 +83,7 @@ import { attachLegacyLooseFilesOnce } from "./core/storage/legacy-file-attachmen
 import { removeSignaturePreferencesOnce } from "./core/database/signature-preferences.js";
 import { dropGlobalSearchTextIndexOnce } from "./core/database/global-search-text-index.js";
 import { clearSeededDensityOnce } from "./core/setup/seed-branding-settings.js";
+import { removeFirstRunFlagOnce } from "./core/setup/seed-system-settings.js";
 import { publishFilesOfPublicFields } from "./core/storage/public-field-files.js";
 import { registerSidebarRoutes } from "./core/api/sidebar-router.js";
 import { RelatedDocService } from "./core/related/related-doc-service.js";
@@ -370,7 +371,15 @@ export async function createApp(
     scope.addHook("onRequest", optionalAuth);
     // getAudiences is a GETTER (not the value): pluginRuntime is reassigned
     // wholesale in startup() AFTER this registers, so the closure must read it lazily.
-    registerBootRoutes(scope, env.API_PREFIX, db, localeResolver, () => pluginRuntime.audiences);
+    registerBootRoutes(
+      scope,
+      env.API_PREFIX,
+      db,
+      localeResolver,
+      documentService,
+      permissionChecker,
+      () => pluginRuntime.audiences,
+    );
   });
 
   // ─── Public read (optional auth → Guest) ──────────────
@@ -699,14 +708,15 @@ export async function createApp(
     //     The files of a public attach field move forward to public after it: a file moves only
     //     from the document it is attached to, which the attachment names for a legacy upload.
     //     A person's former signature pick, the UserPreference ui.signature, goes once too,
-    //     and so does the branding density the seed wrote without anybody choosing it, and the
-    //     text index a field's in_global_search built.
+    //     and so does the branding density the seed wrote without anybody choosing it, the
+    //     text index a field's in_global_search built, and the first-run flag nothing read.
     if (env.AUTO_MIGRATE) {
       await attachLegacyLooseFilesOnce(db, registry.getAll());
       await publishFilesOfPublicFields(db, registry.getAll());
       await removeSignaturePreferencesOnce(db);
       await clearSeededDensityOnce(db);
       await dropGlobalSearchTextIndexOnce(db, registry.getAll());
+      await removeFirstRunFlagOnce(db);
     }
 
     // 5b. Snapshot coverage audit — every Link on a submittable entity
