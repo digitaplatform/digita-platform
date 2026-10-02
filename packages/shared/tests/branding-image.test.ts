@@ -28,6 +28,11 @@ describe("brandingImageKind", () => {
       "/../crm/api/v1/public/file/F-1",
       "/a/%2E%2e/b",
       "/a/..?v=1",
+      "/%2e%2e%2fcrm/api/v1/public/file/F-1",
+      "/a/..%2F..%2fcrm",
+      "/%2E%2E%5Ccrm",
+      '/x"y',
+      "/x'y",
     ]) {
       expect(brandingImageKind(value), value).toBeNull();
     }

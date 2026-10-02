@@ -15,12 +15,12 @@ const INLINE_IMAGE = /^data:image\/(?:png|jpeg|gif|webp|svg\+xml);base64,[A-Za-z
 export const INLINE_IMAGE_MAX_LENGTH = 256 * 1024;
 
 /** Whether a path climbs out of where it is put: a ".." segment, also percent-encoded, which a
- *  browser resolves. Under a tenant's one host it would reach another app's path. */
+ *  browser resolves, or an encoded "/" or "\", which a proxy may decode into a separator before it
+ *  routes. Under a tenant's one host either would reach another app's path. */
 function climbs(path: string): boolean {
-  return path
-    .split("?")[0]!
-    .split("/")
-    .some((segment) => segment.toLowerCase().replaceAll("%2e", ".") === "..");
+  const route = path.split("?")[0]!;
+  if (/%2f|%5c/i.test(route)) return true;
+  return route.split("/").some((segment) => segment.toLowerCase().replaceAll("%2e", ".") === "..");
 }
 
 /** How a branding image address loads: as a path of the app's own, inline, or not at all (null). */
