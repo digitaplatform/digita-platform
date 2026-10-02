@@ -1291,3 +1291,31 @@ describe("updateSubmitted — a read_only_depends_on lock holds for a hook, a ru
     expect(lines.map((l) => l["delivered"] ?? 0)).toEqual([2, 0]);
   });
 });
+
+describe("updateSubmitted — a required Password the record keeps", () => {
+  const stored = { key_id: "k1", iv: "aXY=", tag: "dGFn", data: "ZGF0YQ==" };
+  beforeEach(async () => {
+    const entity = settleEntity("SecretDoc");
+    entity.fields.push({ fieldname: "secret", fieldtype: "Password", label: "Secret", required: true } as never);
+    registry.register(entity);
+    await db.ensureCollection("SecretDoc", "app");
+  });
+  const plant = (id: string, secret?: unknown) =>
+    db.insertOne(
+      "SecretDoc",
+      { _id: id, doctype: "SecretDoc", docstatus: 1, owner: admin.email, modified_by: admin.email, creation: new Date(), modified: new Date(), title: "Inv", ...(secret ? { secret } : {}) },
+      "app",
+    );
+
+  it("PLANTED DEFECT: patches a submitted record without the password, and keeps the stored one", async () => {
+    await plant("SEC-1", stored);
+    await docService.updateSubmitted("SecretDoc", "SEC-1", { set: { note: "paid" } }, admin);
+    const raw = await db.findOne("SecretDoc", "SEC-1", "app");
+    expect([raw?.["note"], raw?.["secret"]]).toEqual(["paid", stored]);
+  });
+
+  it("PLANTED INNOCENT: refuses the patch when no password is stored", async () => {
+    await plant("SEC-2");
+    await expect(docService.updateSubmitted("SecretDoc", "SEC-2", { set: { note: "paid" } }, admin)).rejects.toBeInstanceOf(ValidationFailedError);
+  });
+});
