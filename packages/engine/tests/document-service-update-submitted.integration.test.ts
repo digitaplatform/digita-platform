@@ -1116,14 +1116,20 @@ describe("updateSubmitted — a read_only_depends_on lock holds for a hook, a ru
     expect([raw?.["note"], raw?.["counter"]]).toEqual(["kept", 0]);
   });
 
-  it("passes a patch that releases the lock in the same save, and the Administrator", async () => {
+  it("passes a patch that releases the lock in the same save", async () => {
     const { id } = await lockedDoc();
     await docService.updateSubmitted("LockDoc", id, { set: { locked: 0, note: "released" } }, viewer, undefined, asHook);
     expect((await db.findOne("LockDoc", id, "app"))?.["note"]).toBe("released");
+  });
 
-    const other = await lockedDoc();
-    await docService.updateSubmitted("LockDoc", other.id, { set: { note: "by admin" } }, admin);
-    expect((await db.findOne("LockDoc", other.id, "app"))?.["note"]).toBe("by admin");
+  it("holds the Administrator's patch of a locked field too, until his patch releases the lock", async () => {
+    const { id } = await lockedDoc();
+    await expect(docService.updateSubmitted("LockDoc", id, { set: { note: "by admin" } }, admin)).rejects.toBeInstanceOf(
+      PermissionDeniedError,
+    );
+    expect((await db.findOne("LockDoc", id, "app"))?.["note"]).toBe("kept");
+    await docService.updateSubmitted("LockDoc", id, { set: { locked: 0, note: "by admin" } }, admin);
+    expect((await db.findOne("LockDoc", id, "app"))?.["note"]).toBe("by admin");
   });
 
   it("passes a row patch that releases its own cell lock, judged on the row it produces", async () => {

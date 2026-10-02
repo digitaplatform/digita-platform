@@ -822,6 +822,12 @@ describe("PermissionChecker", () => {
       );
       expect(out["discount"]).toBe(90);
     });
+
+    it("binds the Administrator too, who lifts the lock by changing the state that sets it", () => {
+      expect(() => checker.filterFieldsForWrite(adminUser(), "TestDoc", { discount: 90 }, stored)).toThrow(PermissionDeniedError);
+      const out = checker.filterFieldsForWrite(adminUser(), "TestDoc", { status: "draft", discount: 90 }, stored);
+      expect(out).toEqual({ status: "draft", discount: 90 });
+    });
   });
 
   describe("a Table cell's read_only_depends_on, evaluated with the row as doc", () => {
@@ -859,6 +865,14 @@ describe("PermissionChecker", () => {
         { lines: [{ _row_id: "r1", state: "out", note: "fixed" }] },
         stored,
       );
+      expect((out["lines"] as Record<string, unknown>[])[0]!["note"]).toBe("fixed");
+    });
+
+    it("binds the Administrator too: a locked cell holds until the row's state changes", () => {
+      expect(() =>
+        checker.filterFieldsForWrite(adminUser(), "TestDoc", { lines: [{ _row_id: "r1", state: "returned", note: "fixed", grade: "B" }] }, stored),
+      ).toThrow(PermissionDeniedError);
+      const out = checker.filterFieldsForWrite(adminUser(), "TestDoc", { lines: [{ _row_id: "r1", state: "out", note: "fixed", grade: "B" }] }, stored);
       expect((out["lines"] as Record<string, unknown>[])[0]!["note"]).toBe("fixed");
     });
 
