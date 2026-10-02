@@ -70,7 +70,6 @@ import { readdirSync } from "node:fs";
 import { registerPluginAssetRoutes } from "./core/api/plugin-assets-router.js";
 import { registerTranslationRoutes } from "./core/api/translation-router.js";
 import { registerSearchRoutes } from "./core/api/search-router.js";
-import { registerSchemaDriftRoutes } from "./core/api/schema-drift-router.js";
 import { registerAdminReseedRoutes } from "./core/api/admin-reseed-router.js";
 import { registerAdminReloadDefinitionsRoutes } from "./core/api/admin-reload-definitions-router.js";
 import type { DomainDirectory } from "./core/database/app-db-discovery.js";
@@ -445,7 +444,6 @@ export async function createApp(
     registerResourceRoutes(scope, env.API_PREFIX, registry, documentService, localeResolver, realtimeService, revalidateNotifier);
     registerTranslationRoutes(scope, env.API_PREFIX, translationService, documentService);
     registerSearchRoutes(scope, env.API_PREFIX, globalSearchService, linkSearchService);
-    registerSchemaDriftRoutes(scope, env.API_PREFIX, registry, db);
     registerAdminReseedRoutes(scope, env.API_PREFIX, reseedDeps);
     registerAdminReloadDefinitionsRoutes(scope, env.API_PREFIX, {
       db,
