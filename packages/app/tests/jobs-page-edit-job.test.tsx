@@ -159,4 +159,19 @@ describe('editing a saved job on the Jobs page', () => {
     await waitFor(() => expect(saves).toHaveLength(1));
     expect(saves[0]).toMatchObject({ method: 'POST', path: '/api/v1/jobs', body: { doc: 'c3', schedule: { cron: '0 5 * * *' } } });
   });
+
+  it('names the cron required on a new job, and empty for a manual run only on a saved one', async () => {
+    renderJobs();
+    fireEvent.click(await screen.findByTestId('action:task-schedule-sendDunning'));
+    const created = await screen.findByRole('dialog');
+    expect(within(created).getByText('Cron (required)')).toBeInTheDocument();
+    expect(within(created).queryByText('Cron (empty = manual only)')).toBeNull();
+    expect(within(created).getByLabelText(/^Cron/)).toBeRequired();
+    fireEvent.click(within(created).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    const edited = await editJob(manual.name);
+    expect(within(edited).getByText('Cron (empty = manual only)')).toBeInTheDocument();
+    expect(within(edited).getByLabelText(/^Cron/)).not.toBeRequired();
+  });
 });
