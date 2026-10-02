@@ -42,7 +42,8 @@ export function treeBlockFields(entity: Pick<EntityDefinition, "name" | "tree">)
       field({ fieldname: "site", fieldtype: "Link", label: "Site", target: "WebSite", required: true }),
       field({ fieldname: "location", fieldtype: "Select", label: "Location", options: ["header", "footer", "family"], required: true }),
       field({ fieldname: "page", fieldtype: "Link", label: "Page", target: "WebPage" }),
-      field({ fieldname: "href", fieldtype: "Data", label: "Link" }),
+      // A web link can differ by language, as a site's German demo does, so its translations carry it.
+      field({ fieldname: "href", fieldtype: "Data", label: "Link", translatable: true }),
     );
   }
   return fields;

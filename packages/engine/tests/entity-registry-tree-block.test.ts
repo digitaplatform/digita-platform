@@ -94,6 +94,13 @@ describe("the tree block", () => {
     ]);
   });
 
+  it("translates a website menu node's label and its web link, which can differ by language", async () => {
+    const { registry } = await load(group({ name: "WebMenu", tree: { menu: "website" } }));
+    // PLANTED INNOCENT: the label is found, so a missing href means the scan looked.
+    expect(registry.getTranslatableFields("WebMenu")).toEqual(expect.arrayContaining(["label", "href"]));
+    expect(registry.getTranslatableFields("WebMenu")).not.toContain("page");
+  });
+
   it("keeps a block field the entity writes with the block's shape, under its own label", async () => {
     const own = { fieldname: "label", fieldtype: "Data", label: "Group name", required: true };
     const entity = (await load(group({ fields: [own] }))).registry.get("CustomerGroup");
