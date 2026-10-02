@@ -30,6 +30,7 @@ import { FilterFieldNotAllowedError, MalformedFieldsError, MalformedFilterValueE
 import { FieldValueError } from "../../entity/field-types.js";
 import { PasswordKeyNotListedError } from "../../entity/password-cipher.js";
 import { EngineError } from "../../errors/engine-error.js";
+import { ReseedRunningError, ReseedSeedFailedError } from "../../setup/reseed-app-data.js";
 import { englishText } from "../../../i18n.js";
 import { createLogger } from "../../logging/logger.js";
 import { urlPath } from "../../logging/url-path.js";
@@ -226,6 +227,37 @@ export function globalErrorHandler(
       error: { code: "CONCURRENT_MODIFICATION", detail: error.message, trace_id: traceId },
     };
     reply.code(409).send(response);
+    return;
+  }
+
+  // A refused or failed reset: the text a person reads, and in `detail` the English sentence,
+  // which digita-jobs writes into the run record of the demo reset.
+  if (error instanceof ReseedRunningError) {
+    const response: ApiResponse<null> = {
+      success: false,
+      status_code: 409,
+      data: null,
+      messages: [
+        { text: "reseed_running", type: "error", show: true, params: { running: error.running, requested: error.requested } },
+      ],
+      error: { code: "RESEED_RUNNING", detail: error.message, trace_id: traceId },
+    };
+    reply.code(409).send(response);
+    return;
+  }
+
+  if (error instanceof ReseedSeedFailedError) {
+    log.error({ trace_id: traceId, err: error }, "Reseed failed after the wipe");
+    const response: ApiResponse<null> = {
+      success: false,
+      status_code: 500,
+      data: null,
+      messages: [
+        { text: "reseed_seed_failed", type: "error", show: true, params: { attempts: String(error.attempts), error: error.reason } },
+      ],
+      error: { code: "RESEED_FAILED", detail: error.message, trace_id: traceId },
+    };
+    reply.code(500).send(response);
     return;
   }
 
