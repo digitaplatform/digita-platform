@@ -29,7 +29,11 @@ const entities: Record<string, unknown> = {
   },
   Registration: {
     name: "Registration", database: "app", permissions: [],
-    fields: [{ fieldname: "guest", fieldtype: "Data" }, { fieldname: "event", fieldtype: "Link", target: "Event" }],
+    fields: [
+      { fieldname: "guest", fieldtype: "Data" },
+      { fieldname: "event", fieldtype: "Link", target: "Event" },
+      { fieldname: "also_events", fieldtype: "JSON" },
+    ],
   },
 };
 const registry = { has: (n: string) => n in entities, get: (n: string) => entities[n] } as never;
@@ -46,7 +50,7 @@ beforeAll(async () => {
   db = new MongoDBService();
   await db.connect();
   await db.insertOne("Event", { _id: EVENT_ID as never, title: "Spring fair" }, "app");
-  await db.insertOne("Registration", { _id: "R-1", guest: "Ada", event: EVENT_ID.toHexString() }, "app");
+  await db.insertOne("Registration", { _id: "R-1", guest: "Ada", event: EVENT_ID.toHexString(), also_events: ["no-such-event", EVENT_ID.toHexString()] }, "app");
   await db.insertOne("Registration", { _id: "R-2", guest: "Bob", event: EVENT_ID.toHexString() }, "app");
 }, 60000);
 
@@ -82,5 +86,27 @@ describe("a view $lookup between a system _id and a Link to it", () => {
       { $lookup: { from: "Event", localField: "event", foreignField: "_id", as: "event_doc" } },
     ]);
     expect((rows[0]!["event_doc"] as Array<{ title: string }>).map((e) => e.title)).toEqual(["Spring fair"]);
+  });
+
+  it("joins each element of a list-valued local field", async () => {
+    const rows = await run("Registration", [
+      { $match: { _id: "R-1" } },
+      { $lookup: { from: "Event", localField: "also_events", foreignField: "_id", as: "events" } },
+    ]);
+    expect((rows[0]!["events"] as Array<{ title: string }>).map((e) => e.title)).toEqual(["Spring fair"]);
+  });
+
+  it("joins inside the sub-pipeline of another $lookup and of a $unionWith", async () => {
+    const nested = await run("Event", [
+      { $lookup: { from: "Registration", as: "regs", pipeline: [{ $lookup: { from: "Event", localField: "event", foreignField: "_id", as: "back" } }] } },
+    ]);
+    const regs = nested[0]!["regs"] as Array<{ back: Array<{ title: string }> }>;
+    expect(regs.every((r) => r.back.map((e) => e.title).join() === "Spring fair")).toBe(true);
+    const unioned = await run("Event", [
+      { $unionWith: { coll: "Registration", pipeline: [{ $lookup: { from: "Event", localField: "event", foreignField: "_id", as: "back" } }] } },
+    ]);
+    const fromUnion = unioned.filter((r) => "back" in r) as Array<{ back: Array<{ title: string }> }>;
+    expect(fromUnion.length).toBe(2);
+    expect(fromUnion.every((r) => r.back.map((e) => e.title).join() === "Spring fair")).toBe(true);
   });
 });
