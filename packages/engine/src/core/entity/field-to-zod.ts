@@ -252,9 +252,9 @@ function applyStringConstraints(schema: ZodTypeAny, field: FieldDefinition): Zod
     try {
       s = s.regex(new RegExp(field.regex), field.regex_message ?? "field_invalid_regex");
     } catch {
-      // A file's regex is refused at load (EntityRegistry.validateFieldDefinitions). A definition
-      // written through POST or PUT /meta is not checked there, so its bad pattern is skipped here
-      // rather than failing every parse of the entity.
+      // A file's regex, and one POST or PUT /meta writes, is refused before it is served
+      // (EntityRegistry.prepareDefinition). A definition /meta stored before that check is read
+      // back unchecked, so its bad pattern is skipped here rather than failing every parse.
     }
   }
   return s;

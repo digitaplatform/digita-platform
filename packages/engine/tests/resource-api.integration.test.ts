@@ -767,6 +767,47 @@ describe("Resource API Integration", () => {
     });
   });
 
+  describe("/meta runs the checks every entity file passes", () => {
+    const base = (name: string, extra: Record<string, unknown> = {}) => ({
+      name,
+      module: "test",
+      database: "app",
+      naming: { strategy: "user_set" },
+      fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
+      permissions: [{ role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1 }],
+      ...extra,
+    });
+    const field = (f: Record<string, unknown>) => ({ fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }, f] });
+    const refused: Array<[string, Record<string, unknown>, string]> = [
+      ["a has_permission hook", base("MetaHook", { hooks: { has_permission: "x.y" } }), "has_permission"],
+      ["a field named after a system field", base("MetaOwner", field({ fieldname: "owner", fieldtype: "Data", label: "Owner" })), "owner"],
+      ["an unknown fieldtype", base("MetaType", field({ fieldname: "body", fieldtype: "Txet", label: "Body" })), "Txet"],
+      ["a regex that does not compile", base("MetaRegex", field({ fieldname: "code", fieldtype: "Data", label: "Code", regex: "(" })), "code"],
+      ["a reserved entity name", base("app"), "reserved"],
+      ["an inconsistent workflow", base("MetaFlow", { states: [{ value: "A", is_initial: true }], transitions: [{ from: "A", to: "B", action: "go" }] }), "workflow"],
+    ];
+
+    it.each(refused)("refuses %s with 400, naming the entity and the key, and stores nothing", async (_case, definition, named) => {
+      const res = await app.inject({ method: "POST", url: "/api/v1/meta", headers: authHeaders(), payload: definition });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.detail).toContain(`entity "${definition["name"]}"`);
+      expect(res.json().error.detail).toContain(named);
+      expect(registry.has(definition["name"] as string)).toBe(false);
+    });
+
+    it("refuses a PUT that adds such a field, and keeps the definition it had", async () => {
+      expect((await app.inject({ method: "POST", url: "/api/v1/meta", headers: authHeaders(), payload: base("MetaPut") })).statusCode).toBe(201);
+      const res = await app.inject({
+        method: "PUT",
+        url: "/api/v1/meta/MetaPut",
+        headers: authHeaders(),
+        payload: field({ fieldname: "owner", fieldtype: "Data", label: "Owner" }),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(registry.get("MetaPut").fields.map((f) => f.fieldname)).toEqual(["title"]);
+    });
+  });
+
   it("serves no schema drift routes", async () => {
     const list = await app.inject({ method: "GET", url: "/api/v1/admin/schema-drift", headers: authHeaders() });
     const reseed = await app.inject({ method: "POST", url: "/api/v1/admin/schema-drift/File/reseed", headers: authHeaders() });

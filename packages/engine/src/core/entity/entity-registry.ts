@@ -188,6 +188,40 @@ export class EntityRegistry {
     }
   }
 
+  /**
+   * Complete a definition and check it as the engine loads every entity: its defaults, its
+   * flattened freeze fields and its field order are set on `entity` in place, and a definition the
+   * engine cannot serve throws with the reason. The entity files and POST and PUT /meta all pass
+   * through it, so /meta stores no definition a file could not hold.
+   */
+  prepareDefinition(entity: EntityDefinition): void {
+    const shapeProblem = entityShapeProblem(entity);
+    if (shapeProblem) throw new Error(shapeProblem);
+    // The app matches its own pages case-sensitively, so an entity with exactly one of
+    // these names would lose its list page to them; `Account` and its kin stay free.
+    if (RESERVED_ENTITY_NAMES.includes(entity.name)) {
+      throw new Error(
+        `Entity name "${entity.name}" is reserved for the app's own pages (${RESERVED_ENTITY_NAMES.join(", ")}); ` +
+          "rename the entity, for example with a capital letter",
+      );
+    }
+    this.applyDefaults(entity);
+    this.expandFlattenDirectives(entity);
+    entity.fields.sort((a, b) => (a.idx ?? 0) - (b.idx ?? 0));
+    this.validateFieldNames(entity);
+    this.validateFieldDefinitions(entity);
+    this.validateHooks(entity);
+    this.validateSnapshotManifest(entity);
+    this.validateTimeSeriesConfig(entity);
+    this.validatePeriodCheckConfig(entity);
+    this.validateAllowOnSubmit(entity);
+    this.validateDialogDefaults(entity);
+    const workflowProblems = workflowDefinitionProblems(entity);
+    if (workflowProblems.length > 0) {
+      throw new Error(`The workflow of entity "${entity.name}" is inconsistent: ${workflowProblems.join("; ")}`);
+    }
+  }
+
   private async loadEntityFile(filePath: string, defaultDatabase?: string): Promise<void> {
     // A file that does not parse is malformed; a well-formed one a check refuses is refused, so the
     // reader of the message knows whether to look for broken JSON or for the key the message names.
@@ -211,15 +245,6 @@ export class EntityRegistry {
     }
     const entity = parsed as EntityDefinition;
     try {
-      // The app matches its own pages case-sensitively, so an entity with exactly one of
-      // these names would lose its list page to them; `Account` and its kin stay free.
-      if (RESERVED_ENTITY_NAMES.includes(entity.name)) {
-        throw new Error(
-          `Entity name "${entity.name}" is reserved for the app's own pages (${RESERVED_ENTITY_NAMES.join(", ")}); ` +
-            "rename the entity, for example with a capital letter",
-        );
-      }
-
       if (defaultDatabase) {
         if (entity.database && entity.database !== defaultDatabase) {
           log.warn(
@@ -235,21 +260,7 @@ export class EntityRegistry {
         entity.database = defaultDatabase;
       }
 
-      this.applyDefaults(entity);
-      this.expandFlattenDirectives(entity);
-      entity.fields.sort((a, b) => (a.idx ?? 0) - (b.idx ?? 0));
-      this.validateFieldNames(entity);
-      this.validateFieldDefinitions(entity);
-      this.validateHooks(entity);
-      this.validateSnapshotManifest(entity);
-      this.validateTimeSeriesConfig(entity);
-      this.validatePeriodCheckConfig(entity);
-      this.validateAllowOnSubmit(entity);
-      this.validateDialogDefaults(entity);
-      const workflowProblems = workflowDefinitionProblems(entity);
-      if (workflowProblems.length > 0) {
-        throw new Error(`The workflow of entity "${entity.name}" is inconsistent: ${workflowProblems.join("; ")}`);
-      }
+      this.prepareDefinition(entity);
 
       // Surface a name redefined from a DIFFERENT file (silent last-write-wins
       // before). Intentional app-over-core overrides are a documented feature, so
