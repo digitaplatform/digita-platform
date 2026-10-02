@@ -105,9 +105,12 @@ describe('booting from the look cookie', () => {
     expect(document.documentElement.getAttribute('data-density')).toBe('spacious');
   });
 
-  it("keeps this browser's own stored choice over the cookie", () => {
-    document.cookie = `${LOOK_COOKIE_NAME}=${encodeURIComponent('mode=dark&density=spacious')}; Path=/`;
+  it("takes the cookie's choice over a copy this browser stored before", () => {
+    // Every writer writes both, so a page on another host whose storage still holds an older pick
+    // shows the change the person made in the app.
+    document.cookie = `${LOOK_COOKIE_NAME}=${encodeURIComponent('mode=dark')}; Path=/`;
     localStorage.setItem('digita-app:theme-mode', 'light');
-    expect(bootIdentity()).toMatchObject({ mode: 'light', density: 'spacious' });
+    localStorage.setItem('digita-app:density', 'compact');
+    expect(bootIdentity()).toMatchObject({ mode: 'dark', density: 'compact' });
   });
 });
