@@ -142,6 +142,7 @@ export {
   allowedBarcodeSymbologies,
 } from "./css-values.js";
 export { countWrappedLines, type FontWidthTable } from "./text-metrics.js";
+export { INLINE_IMAGE_MAX_LENGTH, brandingImageKind } from "./branding-image.js";
 
 export { calendarDay, isTimeZone } from "./calendar-day.js";
 export type { ActionChunkResult, ActionChunkProgress } from "./types/jobs.js";
