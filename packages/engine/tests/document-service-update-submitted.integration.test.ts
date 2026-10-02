@@ -1319,3 +1319,107 @@ describe("updateSubmitted — a required Password the record keeps", () => {
     await expect(docService.updateSubmitted("SecretDoc", "SEC-2", { set: { note: "paid" } }, admin)).rejects.toBeInstanceOf(ValidationFailedError);
   });
 });
+
+describe("update — a before_save hook is held to a read_only_depends_on lock", () => {
+  // `note` locks while `locked` is set; a line's `delivered` locks while its row is sealed.
+  const clerk: UserContext = { _id: "clerk-001", email: "clerk@test.local", roles: ["Clerk"], full_name: "Clerk" };
+  const hookLockEntity = {
+    name: "HookLockDoc",
+    module: "test",
+    database: "app" as const,
+    naming: { strategy: "auto_increment", prefix: "HL-", pad_length: 4 },
+    is_submittable: false,
+    track_changes: false,
+    fields: [
+      { fieldname: "title", fieldtype: "Data", label: "Title", required: true },
+      { fieldname: "locked", fieldtype: "Check", label: "Locked", default: 0 },
+      { fieldname: "note", fieldtype: "Data", label: "Note", read_only_depends_on: "eval:doc.locked==1" },
+      {
+        fieldname: "lines",
+        fieldtype: "Table",
+        label: "Lines",
+        child_fields: [
+          { fieldname: "sealed", fieldtype: "Check", label: "Sealed" },
+          { fieldname: "delivered", fieldtype: "Float", label: "Delivered", default: 0, read_only_depends_on: "eval:doc.sealed==1" },
+          { fieldname: "amount", fieldtype: "Float", label: "Amount" },
+        ],
+      },
+    ],
+    permissions: [fullPerms, { role: "Clerk", level: 0, select: 1, read: 1, write: 1, create: 1 }],
+  } as unknown as EntityDefinition;
+  const hooks = () => (hookRunner as unknown as { hooks: Map<string, Map<string, unknown>> }).hooks;
+  /** Plants a before_save hook on the entity, as an app would declare one. */
+  const onBeforeSave = (hook: (doc: BaseDocument) => void) =>
+    hooks().set("HookLockDoc", new Map([["before_save", async (doc: BaseDocument) => hook(doc)]]));
+
+  beforeEach(async () => {
+    registry.register(hookLockEntity);
+    await db.ensureCollection("HookLockDoc", "app");
+  });
+  afterEach(() => {
+    hooks().delete("HookLockDoc");
+  });
+
+  const lockedDoc = async () =>
+    (await docService.insert("HookLockDoc", { title: "Locked", locked: 1, note: "kept", lines: [{ sealed: 1, delivered: 2 }] }, admin))._id;
+
+  it.each([
+    ["a clerk", () => clerk],
+    ["an Administrator", () => admin],
+  ])("PLANTED DEFECT: refuses the save when its hook changes a locked field, for %s", async (_who, user) => {
+    const id = await lockedDoc();
+    onBeforeSave((doc) => doc.set("note", "set by a hook"));
+    await expect(docService.update("HookLockDoc", id, { title: "Renamed" }, user())).rejects.toBeInstanceOf(PermissionDeniedError);
+    const raw = await db.findOne("HookLockDoc", id, "app");
+    expect([raw?.["title"], raw?.["note"]]).toEqual(["Locked", "kept"]);
+  });
+
+  it("refuses the save when its hook changes a locked cell of a stored row", async () => {
+    const id = await lockedDoc();
+    onBeforeSave((doc) => {
+      const lines = doc.get("lines") as Array<Record<string, unknown>>;
+      doc.set("lines", lines.map((line) => ({ ...line, delivered: 9 })));
+    });
+    await expect(docService.update("HookLockDoc", id, { title: "Renamed" }, clerk)).rejects.toBeInstanceOf(PermissionDeniedError);
+    expect(((await db.findOne("HookLockDoc", id, "app"))?.["lines"] as Array<Record<string, unknown>>)[0]?.["delivered"]).toBe(2);
+  });
+
+  it("PLANTED INNOCENT: saves a hook that changes no locked field", async () => {
+    const id = await lockedDoc();
+    onBeforeSave((doc) => doc.set("title", `${String(doc.get("title"))}!`));
+    await docService.update("HookLockDoc", id, { title: "Renamed" }, clerk);
+    expect((await db.findOne("HookLockDoc", id, "app"))?.["title"]).toBe("Renamed!");
+  });
+
+  it("saves a hook that sets an open cell of rows the update adds, sealed ones among them", async () => {
+    const id = await lockedDoc();
+    onBeforeSave((doc) => {
+      const lines = doc.get("lines") as Array<Record<string, unknown>>;
+      doc.set("lines", lines.map((line) => ({ ...line, amount: 1 })));
+    });
+    const stored = (await db.findOne("HookLockDoc", id, "app"))?.["lines"] as Array<Record<string, unknown>>;
+    await docService.update(
+      "HookLockDoc",
+      id,
+      { lines: [...stored, { sealed: 1, delivered: 5 }, { sealed: 1, delivered: 7 }] },
+      clerk,
+    );
+    const lines = (await db.findOne("HookLockDoc", id, "app"))?.["lines"] as Array<Record<string, unknown>>;
+    expect(lines.map((line) => [line["delivered"], line["amount"]])).toEqual([[2, 1], [5, 1], [7, 1]]);
+  });
+
+  it("leaves a declared computed target out of the lock, so its hook keeps it current", async () => {
+    registry.register({ ...hookLockEntity, hooks: { computed: { note: "computed/note.refresh" } } } as unknown as EntityDefinition);
+    const id = await lockedDoc();
+    hooks().set("HookLockDoc", new Map([["computed:note", async (doc: BaseDocument) => doc.set("note", "computed")]]));
+    await docService.update("HookLockDoc", id, { title: "Renamed" }, clerk);
+    expect((await db.findOne("HookLockDoc", id, "app"))?.["note"]).toBe("computed");
+  });
+
+  it("saves a hook's change of a field the same save releases", async () => {
+    const id = await lockedDoc();
+    onBeforeSave((doc) => doc.set("note", "set by a hook"));
+    await docService.update("HookLockDoc", id, { locked: 0 }, clerk);
+    expect((await db.findOne("HookLockDoc", id, "app"))?.["note"]).toBe("set by a hook");
+  });
+});
