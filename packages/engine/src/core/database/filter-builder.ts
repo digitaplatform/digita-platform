@@ -1,5 +1,6 @@
 import type { Filter, Document } from "mongodb";
 import { isSubDocument } from "../document/project-fields.js";
+import { EngineError } from "../errors/engine-error.js";
 
 export type FilterTuple = [string, string, unknown];
 
@@ -10,29 +11,26 @@ export type FilterTuple = [string, string, unknown];
  * it to 400. Blocks anonymous/external NoSQL operator injection (`$where`/`$expr`/
  * `$function`) reachable via the public + resource list endpoints (P-SEC/R7).
  */
-export class FilterFieldNotAllowedError extends Error {
-  constructor(public readonly field: string) {
-    super(`Filter field not allowed: ${field}`);
-    this.name = "FilterFieldNotAllowedError";
+export class FilterFieldNotAllowedError extends EngineError {
+  constructor(field: string) {
+    super("filter_field_not_allowed", { field }, 400, "FILTER_FIELD_NOT_ALLOWED");
   }
 }
 
 /** A filter value its operator does not take: a list where the operator compares one value,
  *  or an object, which MongoDB would read as operators of its own. Refused before any query
  *  runs, so a value never filters on a field other than the one the allow-list checked. */
-export class MalformedFilterValueError extends Error {
-  constructor(public readonly operator: string, value: unknown, reason?: string) {
-    super(`Malformed filter value for "${operator}": ${JSON.stringify(value)}${reason ? ` (${reason})` : ""}`);
-    this.name = "MalformedFilterValueError";
+export class MalformedFilterValueError extends EngineError {
+  constructor(code: string, params: Record<string, string> = {}) {
+    super(code, params, 400, "MALFORMED_FILTER_VALUE");
   }
 }
 
 /** A list's `fields` the engine cannot project: not a list of field paths, a path
  *  with an operator or an empty segment, or a path together with one inside it. */
-export class MalformedFieldsError extends Error {
-  constructor(public readonly fields: unknown) {
-    super(`Malformed fields: ${JSON.stringify(fields)} — expected a list of field paths, none inside another`);
-    this.name = "MalformedFieldsError";
+export class MalformedFieldsError extends EngineError {
+  constructor() {
+    super("fields_malformed", {}, 400, "MALFORMED_FIELDS");
   }
 }
 
@@ -43,7 +41,7 @@ export class MalformedFieldsError extends Error {
 export function assertListFields(fields: unknown): asserts fields is string[] | undefined {
   if (fields === undefined) return;
   const malformed = (): never => {
-    throw new MalformedFieldsError(fields);
+    throw new MalformedFieldsError();
   };
   if (!Array.isArray(fields)) malformed();
   const paths = fields as unknown[];
@@ -82,7 +80,7 @@ export function assertFieldAllowed(field: string, allowedFields?: Set<string>): 
 export function assertObjectFilterAllowed(filter: Record<string, unknown>, allowedFields: Set<string>): void {
   for (const [field, value] of Object.entries(filter)) {
     assertFieldAllowed(field, allowedFields);
-    if (Array.isArray(value) || isSubDocument(value)) throw new MalformedFilterValueError("=", value);
+    if (Array.isArray(value) || isSubDocument(value)) throw new MalformedFilterValueError("filter_value_malformed", { operator: "=" });
   }
 }
 
@@ -198,7 +196,7 @@ export function mapOperatorToMongo(operator: string, value: unknown): unknown {
   // `=`, `is` and an unknown operator pass the value on as the whole condition, so an object would
   // act as operators and a list would match as a value no operator asked for.
   if (Array.isArray(value) ? !LIST_OPERATORS.has(operator) : isSubDocument(value)) {
-    throw new MalformedFilterValueError(operator, value);
+    throw new MalformedFilterValueError("filter_value_malformed", { operator });
   }
   switch (operator) {
     case "=":
@@ -264,12 +262,13 @@ const MAX_REGEX_LENGTH = 256;
  * backtracking shape like `(a+)+`, `(a*)*`, `(.*)*`.
  */
 export function safeUserRegex(value: unknown): string {
-  if (typeof value !== "string") throw new MalformedFilterValueError("regex", value, "a regex is a string");
+  if (typeof value !== "string") throw new MalformedFilterValueError("filter_regex_not_text");
   if (value.length > MAX_REGEX_LENGTH) {
-    throw new MalformedFilterValueError("regex", value, `longer than ${MAX_REGEX_LENGTH} characters`);
+    throw new MalformedFilterValueError("filter_regex_too_long", { max: String(MAX_REGEX_LENGTH) });
   }
   if (/\([^)]*[+*][^)]*\)\s*[+*]/.test(value)) {
-    throw new MalformedFilterValueError("regex", value, "nested quantifiers can take exponential time");
+    // Nested quantifiers can take exponential time.
+    throw new MalformedFilterValueError("filter_regex_too_slow");
   }
   return value;
 }

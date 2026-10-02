@@ -585,6 +585,22 @@ describe("An engine error reaches a person in their language (#24)", () => {
     expect(list.json().error).toMatchObject({ code: "BAD_REQUEST", detail: "param_not_whole_number" });
   });
 
+  it("answers a malformed filter value and a malformed fields list in German", async () => {
+    const value = await app.inject({
+      method: "GET", url: `/api/v1/resource/Item?filters=${encodeURIComponent(JSON.stringify([["qty", "=", [1, 2]]]))}`, headers: german(adminTok),
+    });
+    expect(value.statusCode).toBe(400);
+    expect(value.json().messages[0].text).toBe("Ein Filter mit dem Operator = nimmt einen einfachen Wert, keine Liste und kein Objekt.");
+    expect(value.json().error).toMatchObject({ code: "MALFORMED_FILTER_VALUE", detail: "filter_value_malformed" });
+
+    const fields = await app.inject({
+      method: "GET", url: `/api/v1/resource/Item?fields=${encodeURIComponent(JSON.stringify(["lines", "lines.amount"]))}`, headers: german(adminTok),
+    });
+    expect(fields.statusCode).toBe(400);
+    expect(fields.json().messages[0].text).toBe("Die Feldliste muss Feldpfade nennen, keiner innerhalb eines anderen.");
+    expect(fields.json().error).toMatchObject({ code: "MALFORMED_FIELDS", detail: "fields_malformed" });
+  });
+
   it("lists a row an import refuses with its text in German", async () => {
     const res = await app.inject({
       method: "POST", url: "/api/v1/import/Item", headers: german(adminTok),

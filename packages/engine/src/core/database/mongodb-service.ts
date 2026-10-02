@@ -19,6 +19,7 @@ import { dbName } from "../config/db-names.js";
 import { createLogger } from "../logging/logger.js";
 import { mapOperatorToMongo } from "./filter-builder.js";
 import { toIdString, toIdStorage, normalizeIdFilterValue } from "../document/id-codec.js";
+import { EngineError } from "../errors/engine-error.js";
 
 const log = createLogger("mongodb-service");
 
@@ -53,12 +54,10 @@ export interface QueryOptions {
   offset?: number;
 }
 
-export class MalformedFilterError extends Error {
-  constructor(received: unknown) {
-    super(
-      `Malformed filter entry — expected { field: value } object or [field, op, value] tuple, got: ${JSON.stringify(received)}`,
-    );
-    this.name = "MalformedFilterError";
+/** A filter entry that is neither a `{ field: value }` object nor a `[field, op, value]` tuple. */
+export class MalformedFilterError extends EngineError {
+  constructor() {
+    super("filter_malformed", {}, 400, "MALFORMED_FILTER");
   }
 }
 
@@ -737,7 +736,7 @@ export class MongoDBService {
       // Form 1: top-level tuple [field, operator, value]
       if (Array.isArray(filter)) {
         if (filter.length !== 3 || typeof filter[0] !== "string" || typeof filter[1] !== "string") {
-          throw new MalformedFilterError(filter);
+          throw new MalformedFilterError();
         }
         const [field, operator, value] = filter;
         conditions.push({ [field]: mapOperatorToMongo(operator, value) });
@@ -748,7 +747,7 @@ export class MongoDBService {
       // stays a value of its key: read as a filter on the field it names, it would pass the
       // allow-list its key was checked against. Reject plain primitives and nulls.
       if (filter === null || typeof filter !== "object") {
-        throw new MalformedFilterError(filter);
+        throw new MalformedFilterError();
       }
       if (Object.keys(filter).length > 0) conditions.push({ ...filter });
     }
