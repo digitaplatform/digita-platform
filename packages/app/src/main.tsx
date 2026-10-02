@@ -11,6 +11,7 @@ import { polyfillCountryFlagEmojis } from 'country-flag-emoji-polyfill';
 // Glyphs: Twemoji, CC-BY 4.0 (c) Twitter — flags only, 76KB.
 import flagFontUrl from './assets/TwemojiCountryFlags.woff2?url';
 import faviconUrl from '@digitaplatform/theme/favicon.svg?no-inline';
+import { showTabIcon } from '@digitaplatform/theme';
 import './index.css';
 // Side-effect import: registers the BUILT-IN first-party plugins (usermenu, …)
 // with the plugin registry at module load — before the shell renders, so the
@@ -23,8 +24,8 @@ import '@/plugins/builtins';
 // that already render flags; the theme's sans stack lists the family first.
 polyfillCountryFlagEmojis('Twemoji Country Flags', flagFontUrl);
 
-// The platform favicon ships with the theme, so the app and the website serve one file.
-document.head.append(Object.assign(document.createElement('link'), { rel: 'icon', type: 'image/svg+xml', href: faviconUrl }));
+// The platform's icon until the look arrives; it ships with the theme, so the app and the website serve one file.
+showTabIcon(faviconUrl);
 
 // Shared-singleton self-test. Host + runtime-loaded plugins MUST share one React
 // (resolved via the import-map). A second React instance is the classic prod-only

@@ -86,6 +86,8 @@ export interface SignaturePlugin {
   monogram?: string;
   /** Inline SVG wide wordmark lockup (self-contained). */
   wordmark?: string;
+  /** Inline SVG of the browser tab's icon (self-contained, own colours). */
+  icon?: string;
   /** Brand COLOUR WORLD: semantic token (bg, surface, textMain, …) → {light,dark}. */
   colors?: Record<string, SignatureValue>;
   /** Decorative BACKGROUND layers the host paints (grid, glow, card, panel) → {light,dark}. */

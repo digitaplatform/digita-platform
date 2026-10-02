@@ -49,6 +49,7 @@ export interface PluginInventoryEntry {
   family?: string;
   monogram?: string;
   wordmark?: string;
+  icon?: string;
   colors?: Record<string, SignatureValue>;
   graphics?: Record<string, SignatureValue>;
 }
@@ -91,6 +92,7 @@ export interface PluginSource {
   family?: string;
   monogram?: string;
   wordmark?: string;
+  icon?: string;
   colors?: Record<string, SignatureValue>;
   graphics?: Record<string, SignatureValue>;
 }
@@ -131,6 +133,7 @@ export function joinCompositionWithInventory(
         family: staged.family,
         monogram: staged.monogram,
         wordmark: staged.wordmark,
+        icon: staged.icon,
         colors: staged.colors,
         graphics: staged.graphics,
       });
