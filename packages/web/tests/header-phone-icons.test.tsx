@@ -64,9 +64,9 @@ const siteConfig: PublicSiteConfig = {
 };
 const site: WebSite = { _id: "example", site_name: "example", domain: "example.org" };
 
-function drawHeader(items: NavItem[]) {
+function drawHeader(items: NavItem[], config = siteConfig) {
   document.body.innerHTML = renderToStaticMarkup(
-    <ConfigProvider value={siteConfig}>
+    <ConfigProvider value={config}>
       <Header
         locale="en"
         defaultLocale="en"
@@ -218,6 +218,23 @@ describe("the top bar's icon links on a phone", () => {
   it("fit beside the brand and the controls at every width from 320 px, with five icons and the call to action", () => {
     drawHeader(FIVE_ICONS);
     expect(overflowingWidths(PHONE_WIDTHS)).toEqual([]);
+  });
+
+  it("keep a long call to action as a mail icon below the tablet, named by its full label, and fit at every width", () => {
+    const longLabel = "Kontakt aufnehmen";
+    drawHeader(
+      FIVE_ICONS.map((item) => (item.href === "#contact" ? { ...item, label: longLabel } : item)),
+      { ...siteConfig, contactEnabled: true },
+    );
+    const cta = document.querySelector(`button[aria-label="${longLabel}"]`)!;
+    expect(cta).not.toBeNull();
+    expect(cta.getAttribute("title")).toBe(longLabel);
+    // Below md the bar carries the icon in the room of a seven-letter label, which the fit check measures.
+    expect(shown(`button[aria-label="${longLabel}"] span`, 320)).toHaveLength(0);
+    expect(shown(`button[aria-label="${longLabel}"] svg`, 320)).toHaveLength(1);
+    expect(overflowingWidths(PHONE_WIDTHS)).toEqual([]);
+    expect(shown(`button[aria-label="${longLabel}"] span`, 768).map((span) => span.textContent)).toEqual([longLabel]);
+    expect(shown(`button[aria-label="${longLabel}"] svg`, 768)).toHaveLength(0);
   });
 
   it("show none at 320 px, where the menu holds them, and more as the screen widens", () => {
