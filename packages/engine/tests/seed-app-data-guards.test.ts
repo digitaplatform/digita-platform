@@ -126,7 +126,7 @@ describe("seedAppData guards", () => {
       getNextSequence: vi.fn(async () => 1),
       setSequenceValue: vi.fn(async () => {}),
     } as unknown as MongoDBService;
-    await expect(seedAppData(db, registry(), {} as NamingService, [dir])).resolves.toBeUndefined();
+    await expect(seedAppData(db, registry(), {} as NamingService, [dir])).resolves.toEqual({ unresolved_links: [] });
     expect(logSpy.warn).toHaveBeenCalled(); // skip path logged, not fatal
   });
 
