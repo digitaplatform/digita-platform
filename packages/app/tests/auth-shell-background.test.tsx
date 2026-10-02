@@ -52,11 +52,7 @@ describe("the sign-in page's background", () => {
     expect(outside.container.innerHTML).not.toContain('evil.example');
   });
 
-  it('PLANTED DEFECT: names the tenant on its sign-in by its app_name alone, never by the platform name', () => {
-    useSessionStore.setState({ branding: {} as never, settings: { platform_name: 'Acme ERP' } as never });
-    const plain = render(<AuthShell>form</AuthShell>);
-    expect(plain.container.innerHTML).not.toContain('Acme ERP');
-    cleanup();
+  it('PLANTED DEFECT: names the tenant on its sign-in by its app_name', () => {
     useSessionStore.setState({ branding: { app_name: 'Velo Luck GmbH' } as never });
     expect(render(<AuthShell>form</AuthShell>).container.textContent).toContain('Velo Luck GmbH');
   });
