@@ -53,6 +53,9 @@ export function buildEntitySchema(entity: EntityDefinition): ZodTypeAny {
 
 export function buildFieldSchema(field: FieldDefinition): ZodTypeAny {
   let s = baseSchemaForType(field);
+  // A Table that needs rows has none when its key is left out, so it is judged as an empty list.
+  // On an update the record carries its stored rows, so only a record without any is refused.
+  if (field.fieldtype === "Table" && field.min_rows) return z.preprocess((v) => v ?? [], s);
 
   // Apply field-level constraints. Each helper is a no-op if the constraint
   // doesn't apply to the underlying type.

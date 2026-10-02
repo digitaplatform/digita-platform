@@ -145,7 +145,11 @@ beforeEach(async () => {
 });
 
 
-const rule = (extra: Record<string, unknown>) => ({ _id: "r-amount", label: "Amount", entity: "Widget", event: "validate", enabled: 1, ...extra });
+/** A Rule needs at least one action; this one passes every check. */
+const VALID_ACTIONS = [{ type: "validate", condition: "doc.amount > 0", message: "amount must be positive" }];
+const rule = (extra: Record<string, unknown>) => ({
+  _id: "r-amount", label: "Amount", entity: "Widget", event: "validate", enabled: 1, actions: VALID_ACTIONS, ...extra,
+});
 
 /** The refusal of a Rule save: the field it binds to and the parse error it names. */
 async function refusal(save: Promise<unknown>): Promise<{ field: string; error: string | undefined }> {

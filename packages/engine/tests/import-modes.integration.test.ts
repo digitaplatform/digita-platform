@@ -406,6 +406,41 @@ describe("The resource API refuses a Table value that is not a list", () => {
   });
 });
 
+describe("A Table with min_rows", () => {
+  const Order = {
+    name: "MinRowsOrder", module: "test", database: "app", naming: { strategy: "system" },
+    is_submittable: false, is_log: false, track_changes: false, track_views: false,
+    fields: [
+      { fieldname: "title", fieldtype: "Data", label: "Title" },
+      { fieldname: "lines", fieldtype: "Table", label: "Lines", min_rows: 1, child_fields: [{ fieldname: "qty", fieldtype: "Int", label: "Qty" }] },
+    ],
+    permissions: [ADMIN_PERM],
+  } as unknown as EntityDefinition;
+  const post = (payload: object) => app.inject({ method: "POST", url: "/api/v1/resource/MinRowsOrder", headers: bearer(adminTok), payload });
+
+  beforeAll(async () => {
+    registry.register(Order);
+    await db.ensureCollection("MinRowsOrder", "app");
+  });
+
+  it("PLANTED DEFECT: refuses an insert that leaves the Table out, as it refuses an empty one", async () => {
+    for (const payload of [{ title: "No key" }, { title: "Empty", lines: [] }]) {
+      const res = await post(payload);
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.field).toBe("lines");
+    }
+  });
+
+  it("PLANTED INNOCENT: keeps the stored rows on an update that leaves the Table out", async () => {
+    const created = await post({ title: "Has rows", lines: [{ qty: 2 }] });
+    expect(created.statusCode).toBe(201);
+    const id = created.json().data._id as string;
+    const res = await app.inject({ method: "PUT", url: `/api/v1/resource/MinRowsOrder/${id}`, headers: bearer(adminTok), payload: { title: "Renamed" } });
+    expect(res.statusCode).toBe(200);
+    expect(((await findOne("MinRowsOrder", { title: "Renamed" }))!.lines as Record<string, unknown>[]).map((l) => l.qty)).toEqual([2]);
+  });
+});
+
 describe("An engine error reaches a person in their language (#24)", () => {
   const german = (tok: string) => ({ ...bearer(tok), "accept-language": "de-CH,de;q=0.9" });
 
