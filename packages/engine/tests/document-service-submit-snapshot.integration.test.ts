@@ -146,7 +146,7 @@ beforeAll(async () => {
 
   const permissionChecker = new PermissionChecker(registry);
   const hookRunner = new HookRunner();
-  const linkValidator = new LinkValidator(registry, db);
+  const linkValidator = new LinkValidator(registry, db, permissionChecker);
   const linkTitleResolver = new LinkTitleResolver(registry, db, new TranslationService(db), permissionChecker);
   const fetchFromResolver = new FetchFromResolver(registry, db);
   const snapshotResolver = new SnapshotResolver(registry, db);

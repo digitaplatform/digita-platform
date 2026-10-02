@@ -54,6 +54,8 @@ function invoiceEntity(): EntityDefinition {
   } as unknown as EntityDefinition;
 }
 
+// These validations name no writer, so only existence is checked; the checker is never asked.
+const existenceOnly = { hasPermission: () => { throw new Error("no writer, no select check"); } } as never;
 const registry = {
   has: (n: string) => n === "customer" || n === "salesInvoice",
   get: (n: string) => (n === "customer" ? customerEntity() : invoiceEntity()),
@@ -71,7 +73,7 @@ describe("LinkValidator — target_path sub-row Links", () => {
         ],
       }),
     } as never;
-    const validator = new LinkValidator(registry, db);
+    const validator = new LinkValidator(registry, db, existenceOnly);
     const errs = await validator.validate(invoiceEntity(), {
       invoice_address: "CUST-1::row-bbb",
     });
@@ -80,7 +82,7 @@ describe("LinkValidator — target_path sub-row Links", () => {
 
   it("rejects a malformed composite value", async () => {
     const db = { exists: vi.fn(), findOne: vi.fn() } as never;
-    const validator = new LinkValidator(registry, db);
+    const validator = new LinkValidator(registry, db, existenceOnly);
     const errs = await validator.validate(invoiceEntity(), {
       invoice_address: "no-separator",
     });
@@ -93,7 +95,7 @@ describe("LinkValidator — target_path sub-row Links", () => {
       exists: vi.fn(),
       findOne: vi.fn().mockResolvedValue(null),
     } as never;
-    const validator = new LinkValidator(registry, db);
+    const validator = new LinkValidator(registry, db, existenceOnly);
     const errs = await validator.validate(invoiceEntity(), {
       invoice_address: "CUST-MISSING::row-aaa",
     });
@@ -109,7 +111,7 @@ describe("LinkValidator — target_path sub-row Links", () => {
         addresses: [{ _row_id: "row-aaa", city: "Berlin" }],
       }),
     } as never;
-    const validator = new LinkValidator(registry, db);
+    const validator = new LinkValidator(registry, db, existenceOnly);
     const errs = await validator.validate(invoiceEntity(), {
       invoice_address: "CUST-1::row-zzz",
     });
@@ -122,7 +124,7 @@ describe("LinkValidator — target_path sub-row Links", () => {
       exists: vi.fn(),
       findOne: vi.fn().mockResolvedValue({ _id: "CUST-1" /* no addresses field */ }),
     } as never;
-    const validator = new LinkValidator(registry, db);
+    const validator = new LinkValidator(registry, db, existenceOnly);
     const errs = await validator.validate(invoiceEntity(), {
       invoice_address: "CUST-1::row-aaa",
     });
