@@ -4,8 +4,6 @@
   "database": "core",
   "label": "Rule",
   "label_plural": "Rules",
-  "description": "Declarative rule that fires on a dispatched entity lifecycle event (validate, before_save, on_update, before_submit, on_submit, before_cancel — plus file-authored on_workflow_transition:<from>:<to>) and executes an ordered list of actions. Actions run INSIDE the triggering document's MongoDB transaction — all effects roll back together on any error. create_document and update_document are governed (they flow through the full DocumentService pipeline); update_document patches the allow_on_submit band of an already-submitted target; set_value is an in-memory pre-write mutation (validate/before_submit only); validate throws to abort. Seeded from `<appDir>/rules/**.rule.json` files; admin UI stores overrides in this collection.",
-  "icon": "zap",
   "naming": { "strategy": "user_set" },
   "is_submittable": false,
   "track_changes": true,

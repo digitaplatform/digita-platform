@@ -797,7 +797,6 @@ export interface StatePermissionOverride {
 export interface StateDefinition {
   value: string;
   color: string;
-  indicator?: string;
   /** Marks the state stamped onto new documents when no status is given. */
   is_initial?: boolean;
   /** Marks states with no outgoing transitions (validators warn at boot). */
@@ -966,9 +965,6 @@ export interface EntityDefinition {
   module: string;
   label?: string;
   label_plural?: string;
-  description?: string;
-  icon?: string;
-  color?: string;
 
   /**
    * Optional steering of the UI auto-layout engine (see {@link FormLayoutConfig}).
@@ -1055,9 +1051,6 @@ export interface EntityDefinition {
   // List view
   in_global_search?: boolean;
 
-  // Import/export
-  allow_import?: boolean;
-  allow_export?: boolean;
 
   // Timeline — `timeline_field` (singular) is the field whose value the
   // status-resolver looks at to pick a state color from `states[]`.
