@@ -2890,15 +2890,6 @@ export class DocumentService {
       }
     }
 
-    // Pass through unknown fields
-    for (const [key, value] of Object.entries(data)) {
-      if (key.startsWith("_") || result[key] !== undefined) continue;
-      const knownField = entity.fields.find((f) => f.fieldname === key);
-      if (!knownField) {
-        result[key] = value;
-      }
-    }
-
     return result;
   }
 }
