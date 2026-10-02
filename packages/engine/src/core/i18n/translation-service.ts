@@ -18,69 +18,7 @@ export function translationNamespace(key: string): "entity" | "system" {
 }
 
 export class TranslationService {
-  private cache: Map<string, string> = new Map();
-  private fileTranslations: Map<string, Map<string, string>> = new Map();
-
   constructor(private db: MongoDBService) {}
-
-  // ─── Core Translate ────────────────────────────────────
-
-  async translate(key: string, locale: string, params?: Record<string, string>): Promise<string> {
-    // 1. Try cache
-    const cacheKey = `${locale}:${key}`;
-    let value = this.cache.get(cacheKey);
-
-    // 2. Try MongoDB (if source includes mongodb)
-    if (!value && env.TRANSLATION_SOURCE !== "file") {
-      const namespace = translationNamespace(key);
-      const docId = `${namespace}:${locale}:${key}`;
-      const doc = await this.db.findOne(DIGITA.COLLECTIONS.TRANSLATION, docId, DIGITA.DATABASES.CORE);
-      if (doc) {
-        value = (doc as Record<string, unknown>)["value"] as string;
-        this.cache.set(cacheKey, value);
-      }
-    }
-
-    // 3. Try in-memory file translations
-    if (!value) {
-      value = this.fileTranslations.get(locale)?.get(key);
-    }
-
-    // 4. Fallback locale
-    if (!value && locale !== env.TRANSLATION_FALLBACK_LOCALE) {
-      return this.translate(key, env.TRANSLATION_FALLBACK_LOCALE, params);
-    }
-
-    // 5. Fallback to key itself
-    if (!value) return this.interpolate(key, params);
-
-    return this.interpolate(value, params);
-  }
-
-
-  // ─── Entity / Field Labels ─────────────────────────────
-
-  async translateEntity(doctype: string, locale: string): Promise<string> {
-    const result = await this.translate(`entity.${doctype}`, locale);
-    return result === `entity.${doctype}` ? doctype : result;
-  }
-
-  async translateField(doctype: string, fieldname: string, locale: string): Promise<string> {
-    const key = `field.${doctype}.${fieldname}`;
-    const result = await this.translate(key, locale);
-    return result === key ? fieldname : result;
-  }
-
-  async translateOption(
-    doctype: string,
-    fieldname: string,
-    value: string,
-    locale: string,
-  ): Promise<string> {
-    const key = `option.${doctype}.${fieldname}.${value}`;
-    const result = await this.translate(key, locale);
-    return result === key ? value : result;
-  }
 
   /**
    * Scan all loaded entity definitions for Select fields and emit
@@ -321,8 +259,6 @@ export class TranslationService {
       );
     }
 
-    // Invalidate cache
-    this.cache.delete(`${params.locale}:${params.key}`);
   }
 
   // ─── Seed from Files ───────────────────────────────────
@@ -347,14 +283,7 @@ export class TranslationService {
       const content = await readFile(join(localesDir, file), "utf-8");
       const translations: Record<string, string> = JSON.parse(content);
 
-      // Store in memory for file-only mode
-      if (!this.fileTranslations.has(locale)) {
-        this.fileTranslations.set(locale, new Map());
-      }
-      const localeMap = this.fileTranslations.get(locale)!;
-
       const entries = Object.entries(translations);
-      for (const [key, value] of entries) localeMap.set(key, value);
 
       // Also seed into MongoDB if source includes mongodb. Resolve existence in ONE
       // read + apply as ONE bulkWrite per file (was O(keys) findOne+insert/update
@@ -410,28 +339,6 @@ export class TranslationService {
 
     log.info({ inserted, skipped }, "Translations seeded from files");
     return { inserted, skipped };
-  }
-
-  /**
-   * Preload all translations for a locale into cache.
-   */
-  async loadTranslationsForLocale(locale: string): Promise<void> {
-    if (env.TRANSLATION_SOURCE === "file") return;
-
-    const docs = await this.db.find(
-      DIGITA.COLLECTIONS.TRANSLATION,
-      {
-        filters: [{ locale }],
-      },
-      DIGITA.DATABASES.CORE,
-    );
-
-    for (const doc of docs) {
-      const d = doc as Record<string, unknown>;
-      this.cache.set(`${locale}:${d["key"]}`, d["value"] as string);
-    }
-
-    log.debug({ locale, count: docs.length }, "Translations cached for locale");
   }
 
   // ─── Coverage ──────────────────────────────────────────
@@ -500,21 +407,8 @@ export class TranslationService {
         },
         DIGITA.DATABASES.CORE,
       );
-      this.cache.delete(`${d["locale"]}:${d["key"]}`);
       return "reset";
     }
     return "not_overridden";
   }
-
-  // ─── Helpers ───────────────────────────────────────────
-
-  private interpolate(text: string, params?: Record<string, string>): string {
-    if (!params) return text;
-    let result = text;
-    for (const [key, value] of Object.entries(params)) {
-      result = result.replaceAll(`{${key}}`, value);
-    }
-    return result;
-  }
-
 }
