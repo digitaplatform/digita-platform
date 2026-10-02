@@ -56,6 +56,7 @@ import { join } from "path";
 import { DIGITA } from "@digitaplatform/shared";
 import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
+import { seedViewsFromFiles } from "../src/core/view/view-loader.js";
 import { buildTestAuth } from "./_test-auth.js";
 
 const DB = "digita-link-targets-fixture_library";
@@ -129,6 +130,8 @@ async function startAdminApp() {
   const authorTargetOf = (fields: Array<{ fieldname: string; target?: string }>) => fields.find((f) => f.fieldname === "author")?.target;
   return {
     root,
+    db: result.db,
+    inject: (method: "GET" | "POST", url: string, payload?: object) => result.app.inject({ method, url, headers, payload }),
     reload: () => result.app.inject({ method: "POST", url: "/api/v1/admin/reload-definitions", headers }),
     createDefinition: (payload: unknown) => result.app.inject({ method: "POST", url: "/api/v1/meta", headers, payload: payload as object }),
     storedTarget: async () => {
@@ -227,3 +230,40 @@ describe("POST /admin/reload-definitions runs every check boot runs on the defin
   }, 120000);
 });
 
+describe("a View saved through the API", () => {
+  let running: Awaited<ReturnType<typeof startAdminApp>>;
+  const saved = { _id: "saved-books", name: "Saved books", anchored: false, sections: [{ key: "rows", kind: "list", entity: "Book", limit: 10 }] };
+
+  beforeAll(async () => {
+    running = await startAdminApp();
+  }, 60000);
+  afterAll(async () => {
+    await running.close();
+  });
+
+  it("PLANTED DEFECT: is kept by a reload of the definitions and still served", async () => {
+    expect((await running.inject("POST", "/api/v1/resource/View", saved)).statusCode).toBe(201);
+    expect((await running.reload()).statusCode).toBe(200);
+    expect(await running.db.findOne(DIGITA.COLLECTIONS.VIEW, "saved-books", DIGITA.DATABASES.CORE)).not.toBeNull();
+    expect((await running.inject("GET", "/api/v1/view/saved-books")).statusCode).toBe(200);
+  });
+
+  it("is no orphan at the seed of the view files, while a seeded row whose file is gone is pruned", async () => {
+    const now = new Date();
+    await running.db.insertOne(
+      DIGITA.COLLECTIONS.VIEW,
+      { ...saved, _id: "file-gone", owner: "system", modified_by: "system", creation: now, modified: now, docstatus: 0, overridden: false },
+      DIGITA.DATABASES.CORE,
+    );
+    const prune = (env as { PRUNE_ORPHAN_VIEWS: boolean }).PRUNE_ORPHAN_VIEWS;
+    (env as { PRUNE_ORPHAN_VIEWS: boolean }).PRUNE_ORPHAN_VIEWS = true;
+    try {
+      const summary = await seedViewsFromFiles(running.db, [running.root]);
+      expect(summary).toMatchObject({ orphans_detected: 1, pruned: 1 });
+    } finally {
+      (env as { PRUNE_ORPHAN_VIEWS: boolean }).PRUNE_ORPHAN_VIEWS = prune;
+    }
+    expect(await running.db.findOne(DIGITA.COLLECTIONS.VIEW, "file-gone", DIGITA.DATABASES.CORE)).toBeNull();
+    expect(await running.db.findOne(DIGITA.COLLECTIONS.VIEW, "saved-books", DIGITA.DATABASES.CORE)).not.toBeNull();
+  });
+});
