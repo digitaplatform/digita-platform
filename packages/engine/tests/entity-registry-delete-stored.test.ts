@@ -17,6 +17,8 @@ import { tmpdir } from "os";
 import { join } from "path";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
+import { ZodSchemaBuilder } from "../src/core/entity/zod-schema-builder.js";
+import { validateEntityDataZod } from "../src/core/entity/entity-validator-zod.js";
 
 const entity = (name: string, label: string) => ({
   name,
@@ -39,6 +41,25 @@ describe("EntityRegistry.deleteStoredDefinition", () => {
 
     expect(registry.deleteStoredDefinition("Book")?.label).toBe("Book from file");
     expect(registry.get("Book").label).toBe("Book from file");
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("validates a write against the file's definition again, not the deleted one", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "reg-delete-stored-schema-"));
+    const withQty = (fieldtype: string) => ({
+      ...entity("Book", "Book"),
+      fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }, { fieldname: "qty", fieldtype, label: "Qty" }],
+    });
+    await writeFile(join(dir, "Book.entity.json"), JSON.stringify(withQty("Int")));
+    const registry = new EntityRegistry();
+    await registry.loadAll(dir);
+    registry.register(withQty("Data") as unknown as EntityDefinition);
+    const builder = new ZodSchemaBuilder();
+    expect(validateEntityDataZod(registry.get("Book"), { qty: "many" }, builder).valid).toBe(true);
+
+    registry.deleteStoredDefinition("Book");
+
+    expect(validateEntityDataZod(registry.get("Book"), { qty: "many" }, builder).valid).toBe(false);
     await rm(dir, { recursive: true, force: true });
   });
 
