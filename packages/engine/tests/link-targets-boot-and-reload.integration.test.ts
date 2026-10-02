@@ -190,3 +190,40 @@ describe("POST /admin/reload-definitions", () => {
     expect(refused.json().error.detail).toContain('Field "owner" of entity "Book" is named after a system field');
   }, 120000);
 });
+
+describe("POST /admin/reload-definitions runs every check boot runs on the definitions", () => {
+  let running: Awaited<ReturnType<typeof startAdminApp>>;
+  afterEach(async () => {
+    await running.close();
+    (env as { DEMO_TENANT?: boolean }).DEMO_TENANT = undefined;
+  });
+
+  it("refuses a Password field without the key set, and keeps serving what it served", async () => {
+    running = await startAdminApp();
+    await writeBook(running.root, "Author", [{ fieldname: "pin", fieldtype: "Password", label: "PIN" }]);
+    const refused = await running.reload();
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error.detail).toContain("PASSWORD_FIELD_KEYS");
+    expect(await running.servedTarget()).toBe("Author");
+  }, 120000);
+
+  it("refuses an entity a visitor can read without the renderer's revalidate settings", async () => {
+    running = await startAdminApp();
+    await writeJson(join(running.root, "library", "entities", "author.entity.json"), {
+      name: "Author", module: "library", database: DB, naming: { strategy: "system" },
+      fields: [{ fieldname: "name", fieldtype: "Data", label: "Name" }],
+      permissions: [ADMIN, { role: "Guest", level: 0, select: 1, read: 1 }],
+    });
+    const refused = await running.reload();
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error.detail).toContain("REVALIDATE_URL");
+  }, 120000);
+
+  it("reloads a file that links the demo reset on an engine that may reseed, as boot loads it", async () => {
+    (env as { DEMO_TENANT?: boolean }).DEMO_TENANT = true;
+    running = await startAdminApp();
+    await writeBook(running.root, "Author", [{ fieldname: "reset", fieldtype: "Link", label: "Reset", target: "DemoReset" }]);
+    expect((await running.reload()).statusCode).toBe(200);
+  }, 120000);
+});
+
