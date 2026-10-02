@@ -480,6 +480,31 @@ describe("validateEntityDataZod — a Duration refuses a boolean and a list", ()
   });
 });
 
+describe("validateEntityDataZod — a Datetime field takes only a string or a Date", () => {
+  const at = { fieldname: "at", fieldtype: "Datetime", label: "At" };
+
+  it("refuses a number, a boolean, a list and an object, naming the field, before it is stored as 1970", () => {
+    for (const value of [5, true, false, [], {}]) {
+      let thrown: unknown;
+      try {
+        getFieldTypeHandler("Datetime").toStorage(value, at as never);
+      } catch (err) {
+        thrown = err;
+      }
+      expect(thrown).toMatchObject({ field: "at", message_key: "field_invalid_date", params: { field: "At" } });
+    }
+  });
+
+  it("PLANTED INNOCENT: stores an ISO string and a Date as that moment, and a blank as no value", () => {
+    const handler = getFieldTypeHandler("Datetime");
+    expect((handler.toStorage("2026-10-02T08:30:00Z", at as never) as Date).toISOString()).toBe("2026-10-02T08:30:00.000Z");
+    expect((handler.toStorage(new Date("2026-10-02T08:30:00Z"), at as never) as Date).toISOString()).toBe("2026-10-02T08:30:00.000Z");
+    expect(handler.toStorage("", at as never)).toBeNull();
+    builder.invalidate("TestDoc");
+    expect(validateEntityDataZod(entity([at]), { at: handler.toStorage("2026-10-02T08:30:00Z", at as never) }, builder).valid).toBe(true);
+  });
+});
+
 describe("validateEntityDataZod — top-level conditional-required (A11)", () => {
   const e = () =>
     entity([

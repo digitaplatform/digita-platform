@@ -154,9 +154,16 @@ const dateHandler: FieldTypeHandler = {
 
 const datetimeHandler: FieldTypeHandler = {
   isStored: true,
-  toStorage(value) {
+  toStorage(value, field) {
     if (isBlank(value)) return null;
-    return new Date(value as string);
+    // new Date(5) and new Date(true) are moments of 1970: only a string or a Date names a moment.
+    if (typeof value !== "string" && !(value instanceof Date)) {
+      throw new FieldValueError(field.fieldname, "field_invalid_date", {
+        field: field.label || field.fieldname,
+        value: String(value),
+      });
+    }
+    return new Date(value);
   },
   fromStorage(value) {
     if (value instanceof Date) return value.toISOString();
