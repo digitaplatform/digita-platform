@@ -43,11 +43,11 @@ import { useSessionStore } from '@/stores/session';
 const META = { name: 'CustomerGroup', title_field: 'name', fields: [] } as unknown as EntityDefinition;
 const TREE: TreeConfig = {};
 
-function Editor({ qc, tree = TREE }: { qc: QueryClient; tree?: TreeConfig }) {
+function Editor({ qc, tree = TREE, meta = META }: { qc: QueryClient; tree?: TreeConfig; meta?: EntityDefinition }) {
   return (
     <QueryClientProvider client={qc}>
       <DialogHostProvider>
-        <EntityTreeEditor entity="CustomerGroup" meta={META} tree={tree} />
+        <EntityTreeEditor entity="CustomerGroup" meta={meta} tree={tree} />
       </DialogHostProvider>
     </QueryClientProvider>
   );
@@ -159,5 +159,30 @@ describe('EntityTreeEditor kinds', () => {
     await user.type(screen.getByRole('textbox', { name: 'ui.tree.kindName' }), 'Partners');
     await user.click(screen.getByRole('button', { name: 'ui.action.create' }));
     expect(dialogSeed.current).toEqual({ kind: 'Partners' });
+  });
+});
+
+describe('EntityTreeEditor icons and pictures', () => {
+  const renderWith = (meta: EntityDefinition) => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<Editor qc={qc} meta={meta} />);
+  };
+
+  it("draws a node's icon by its lucide name", () => {
+    listState.rows = [{ _id: 'G-1', label: 'Retail', parent: null, icon: 'shopping-cart' }];
+    renderWith(META);
+    expect(row('G-1').querySelector('svg.lucide-shopping-cart')).not.toBeNull();
+  });
+
+  it("draws the picture of the entity's image_field, at the size of a row", () => {
+    listState.rows = [{ _id: 'G-1', label: 'Retail', parent: null, photo: '/api/v1/public/file/f1' }];
+    renderWith({ ...META, image_field: 'photo' } as EntityDefinition);
+    expect(row('G-1').querySelector('img')?.getAttribute('src')).toBe('/api/v1/public/file/f1?thumb=1');
+  });
+
+  it('PLANTED INNOCENT: draws no picture for an entity that names no image_field', () => {
+    listState.rows = [{ _id: 'G-1', label: 'Retail', parent: null, photo: '/api/v1/public/file/f1' }];
+    renderWith(META);
+    expect(row('G-1').querySelector('img')).toBeNull();
   });
 });

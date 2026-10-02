@@ -1,9 +1,10 @@
-import { TREE_KIND_FIELD, TREE_LABEL_FIELD, TREE_PARENT_FIELD, TREE_POSITION_FIELD } from '@digitaplatform/shared';
+import { TREE_ACTIVE_FIELD, TREE_KIND_FIELD, TREE_PARENT_FIELD } from '@digitaplatform/shared';
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { EntityDefinition, TreeConfig } from '@digitaplatform/shared';
 import { TreeEditor, type TreeEditorNode } from '@digitaplatform/components';
 import { useList } from '@/hooks/useList';
+import { treeNodeOf } from '@/lib/tree-node';
 import { updateDoc, deleteDoc } from '@/services/resource';
 import { RecordDialog } from '@/components/record/RecordDialog';
 import { useDialogHost } from '@/components/overlay/DialogHost';
@@ -63,19 +64,12 @@ export function EntityTreeEditor({
 
   const nodes: TreeEditorNode[] = useMemo(
     () =>
-      rows.map((r) => {
-        const parent = r[TREE_PARENT_FIELD];
-        const position = r[TREE_POSITION_FIELD];
-        return {
-          id: String(r._id),
-          label: String(r[TREE_LABEL_FIELD] ?? r._id),
-          parentId: parent != null && parent !== '' ? String(parent) : null,
-          position: typeof position === 'number' ? position : undefined,
-          kind: tree.kind ? String(r[TREE_KIND_FIELD] ?? '') : undefined,
-          muted: r.active === 0 || r.active === false,
-        };
-      }),
-    [rows, tree.kind],
+      rows.map((r) => ({
+        ...treeNodeOf(r, meta),
+        kind: tree.kind ? String(r[TREE_KIND_FIELD] ?? '') : undefined,
+        muted: r[TREE_ACTIVE_FIELD] === 0 || r[TREE_ACTIVE_FIELD] === false,
+      })),
+    [rows, meta, tree.kind],
   );
   // Every node is open until a person closes it, so a node that arrives with an add, a move or
   // another kind opens like the others.
