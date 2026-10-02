@@ -41,6 +41,28 @@ describe("the design switcher", () => {
     localStorage.clear();
   });
 
+  it("writes the look cookie for the tenant's zone of the sign-in address", async () => {
+    const written: string[] = [];
+    const cookie = Object.getOwnPropertyDescriptor(Document.prototype, "cookie")!;
+    const spy = vi.spyOn(Document.prototype, "cookie", "set").mockImplementation(function (this: Document, value: string) {
+      written.push(value);
+      cookie.set!.call(this, value);
+    });
+    const container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () =>
+      root!.render(
+        <DesignSwitcher apps={["crm"]} authUrl="https://auth.acme.example" authCookieSuffix={null} texts={designSwitcherTexts("en")} />,
+      ),
+    );
+    const minimal = [...container.querySelectorAll("button")].find((b) => b.textContent === "minimal")!;
+    await act(async () => minimal.click());
+    spy.mockRestore();
+    expect(written.filter((value) => value.startsWith(`${LOOK_COOKIE_NAME}=`))).toEqual([expect.stringContaining("; Domain=acme.example")]);
+    localStorage.clear();
+  });
+
   it("keeps the clicked button enabled and focused while its design loads, and ignores a second click", async () => {
     const container = document.createElement("div");
     document.body.append(container);

@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import { brandingStyle, darkBandIdentityRule, signatureStyle, PAGE_IDENTITY_ELEMENT_ID } from "@digitaplatform/theme";
+import { brandingStyle, darkBandIdentityRule, lookCookieDomain, signatureStyle, PAGE_IDENTITY_ELEMENT_ID } from "@digitaplatform/theme";
 import { IDENTITY_BOOT_SCRIPT } from "@digitaplatform/theme/identity-boot";
 import favicon from "@digitaplatform/theme/favicon.svg";
 import { SignatureBackdrop } from "@digitaplatform/components";
@@ -115,6 +115,7 @@ export default async function LocaleLayout({
               brand={brand}
               publishedSlugs={publishedSlugs}
               enabledLocales={(site?.enabled_locales ?? []).filter(Boolean)}
+              lookCookieDomain={lookCookieDomain(config.authUrl ?? "")}
             />
             <main id="main" className="flex-1">
               {children}

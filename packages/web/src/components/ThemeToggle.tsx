@@ -3,15 +3,16 @@
 import { useEffect, useState } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { ModeButton, nextMode } from "@digitaplatform/components";
-import { applyMode, resolveInitialMode, MODE_STORAGE_KEY, type ThemeMode } from "@digitaplatform/theme";
+import { applyMode, rememberIdentityChoices, resolveInitialMode, type ThemeMode } from "@digitaplatform/theme";
 
 /**
- * The app's colour-mode button (the kit's ModeButton): light → dark → system. The mode is stored
- * under the app's key (one origin, one setting for website and app) and applied through the theme
- * runtime, which in `system` keeps following the OS. The pre-paint identity boot set the initial
- * class; this takes over from it.
+ * The app's colour-mode button (the kit's ModeButton): light → dark → system. The mode is kept as
+ * the app keeps it, under the app's key (one origin, one setting for website and app) and in the
+ * person's look cookie, which every page reads first; `lookCookieDomain` is lookCookieDomain of the
+ * tenant's sign-in address. It is applied through the theme runtime, which in `system` keeps
+ * following the OS. The pre-paint identity boot set the initial class; this takes over from it.
  */
-export function ThemeToggle({ label }: { label: string }) {
+export function ThemeToggle({ label, lookCookieDomain }: { label: string; lookCookieDomain: string | undefined }) {
   const [mode, setMode] = useState<ThemeMode>("system");
 
   useEffect(() => {
@@ -23,7 +24,7 @@ export function ThemeToggle({ label }: { label: string }) {
   function cycle() {
     const next = nextMode(mode);
     try {
-      localStorage.setItem(MODE_STORAGE_KEY, next);
+      rememberIdentityChoices({ mode: next }, lookCookieDomain);
     } catch {
       /* ignore storage failures (private mode) */
     }

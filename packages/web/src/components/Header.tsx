@@ -49,6 +49,7 @@ export function Header({
   brand,
   publishedSlugs,
   enabledLocales,
+  lookCookieDomain,
 }: {
   locale: Locale;
   defaultLocale: Locale;
@@ -61,6 +62,8 @@ export function Header({
   publishedSlugs: Record<string, string[]>;
   /** The site's own narrowing of the served locales; empty means all of them. */
   enabledLocales: string[];
+  /** The Domain of the person's look cookie, from the tenant's sign-in address. */
+  lookCookieDomain: string | undefined;
 }) {
   const all = sortNav(nav?.items);
   const contact = all.find(isContactItem);
@@ -109,7 +112,7 @@ export function Header({
             </div>
           )}
           <LocaleSwitcher current={locale} publishedSlugs={publishedSlugs} enabledLocales={enabledLocales} label={t("language", locale)} />
-          <ThemeToggle label={t("toggleTheme", locale)} />
+          <ThemeToggle label={t("toggleTheme", locale)} lookCookieDomain={lookCookieDomain} />
           {/* The header menu's item for the contact sheet; SheetButton draws nothing where the site offers no sheet. */}
           {contact && <SheetButton {...buttonAttributes({ size: "sm", className: "shrink-0" })}>{contact.label}</SheetButton>}
           <MobileNav
