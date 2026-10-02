@@ -1,11 +1,10 @@
 import { createRemoteJWKSet, createLocalJWKSet, jwtVerify } from "jose";
-import { TOKEN_TYPE, AUDIENCE_CLAIM, type AudienceGrant, type DelegationScope } from "@digitaplatform/shared";
+import { TOKEN_TYPE, AUDIENCE_CLAIM, TENANT_GLOBAL_ROLES, type AudienceGrant, type DelegationScope } from "@digitaplatform/shared";
 import { env } from "../config/env.js";
 import { createLogger } from "../logging/logger.js";
 import {
   rolesToStringArray,
   scopeRolesToApp,
-  TENANT_GLOBAL_ROLES,
   type UserContext,
 } from "../permissions/types.js";
 import type { AuthnPort, VerifiedIdentity, VerifiedDelegation } from "./authn-port.js";
