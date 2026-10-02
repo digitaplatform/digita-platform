@@ -336,9 +336,3 @@ function walkStrings(node: unknown, fn: (s: string) => void): void {
     for (const v of Object.values(node as Record<string, unknown>)) walkStrings(v, fn);
   }
 }
-
-export const VIEW_VALIDATOR_INTERNAL = {
-  ALLOWED_STAGES,
-  FORBIDDEN_OPERATORS,
-  FILTER_OPS,
-};
