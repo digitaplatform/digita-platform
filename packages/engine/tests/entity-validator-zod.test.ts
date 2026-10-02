@@ -748,3 +748,48 @@ describe("a Select of time zones", () => {
     expect(r.errors.map((x) => [x.field, x.message_key])).toEqual([["timezone", "field_invalid_select"]]);
   });
 });
+
+describe("a value no form offers is refused, by the schema and by the handler", () => {
+  const refusedBoth = (fieldtype: string, value: unknown) => {
+    const field = { fieldname: "f", fieldtype, label: "F" };
+    const asField = validateEntityDataZod(entity([field]), { f: value }, builder).valid;
+    const asCell = validateEntityDataZod(
+      entity([{ fieldname: "rows", fieldtype: "Table", label: "Rows", child_fields: [field] }]),
+      { rows: [{ f: value }] },
+      builder,
+    ).valid;
+    let stored = true;
+    try {
+      getFieldTypeHandler(fieldtype as never).toStorage(value, field as never);
+    } catch {
+      stored = false;
+    }
+    return [asField, asCell, stored];
+  };
+
+  it("refuses an impossible calendar day, and takes a real one", () => {
+    expect(refusedBoth("Date", "2026-02-30")).toEqual([false, false, false]);
+    expect(refusedBoth("Date", "2028-02-29")).toEqual([true, true, true]);
+  });
+
+  it("refuses a Datetime text that is no ISO moment, and takes an ISO day and moment", () => {
+    expect(refusedBoth("Datetime", "5")).toEqual([false, false, false]);
+    expect(refusedBoth("Datetime", "2026-02-30T10:00:00Z")).toEqual([false, false, false]);
+    expect(refusedBoth("Datetime", "2026-01-01T10:00:00Z")).toEqual([true, true, true]);
+    expect(refusedBoth("Datetime", "2026-01-01")).toEqual([true, true, true]);
+  });
+
+  it("refuses an Int or Duration text other than decimal digits with a sign", () => {
+    for (const fieldtype of ["Int", "Duration"]) {
+      expect(refusedBoth(fieldtype, "0x10")).toEqual([false, false, false]);
+      expect(refusedBoth(fieldtype, "1e3")).toEqual([false, false, false]);
+      expect(refusedBoth(fieldtype, "+12")).toEqual([true, true, true]);
+    }
+    expect(refusedBoth("Int", "-3")).toEqual([true, true, true]);
+  });
+
+  it("refuses a Time that is no text, as a field and as a cell", () => {
+    expect(refusedBoth("Time", [])).toEqual([false, false, false]);
+    expect(refusedBoth("Time", "14:30")).toEqual([true, true, true]);
+  });
+});

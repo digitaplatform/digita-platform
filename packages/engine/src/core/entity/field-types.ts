@@ -43,6 +43,22 @@ export function isBlank(value: unknown): boolean {
   return value === null || value === undefined || (typeof value === "string" && value.trim() === "");
 }
 
+/** A `YYYY-MM-DD` day the calendar has: `Date` rolls 2026-02-30 over to March, so the day must come back. */
+export function isCalendarDay(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+/** An ISO 8601 moment: a calendar day, or a day, `T`, a time and an optional zone. */
+export function isIsoMoment(value: string): boolean {
+  const match = /^(\d{4}-\d{2}-\d{2})(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/.exec(value);
+  return match !== null && isCalendarDay(match[1]!) && !isNaN(new Date(value).getTime());
+}
+
+/** A whole number as text: decimal digits with an optional sign, so no `0x10` and no `1e3`. */
+const WHOLE_NUMBER_TEXT = /^[+-]?\d+$/;
+
 // ─── Individual Field Type Handlers ──────────────────────
 
 const dataHandler: FieldTypeHandler = {
@@ -62,7 +78,7 @@ const intHandler: FieldTypeHandler = {
     if (isBlank(value)) return null;
     // parseInt would cut "1.9" to 1 and "12abc" to 12 without a word; anything but a whole
     // number is refused instead. A boolean or a list is no number either (Number(true) is 1).
-    const num = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
+    const num = typeof value === "number" || (typeof value === "string" && WHOLE_NUMBER_TEXT.test(value.trim())) ? Number(value) : NaN;
     if (!Number.isInteger(num)) {
       throw new FieldValueError(field.fieldname, "field_invalid_int", { field: field.label || field.fieldname });
     }
@@ -77,7 +93,7 @@ const durationHandler: FieldTypeHandler = {
   isStored: true,
   toStorage(value, field) {
     if (isBlank(value)) return null;
-    const num = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
+    const num = typeof value === "number" || (typeof value === "string" && WHOLE_NUMBER_TEXT.test(value.trim())) ? Number(value) : NaN;
     // Duration is a non-negative INTEGER count of seconds. Fail loud instead of
     // silently truncating (parseInt("1.5") → 1), storing NaN (parseInt("abc")) or
     // reading a boolean or a list as a number (Number(true) is 1, Number([]) is 0).
@@ -142,7 +158,7 @@ const dateHandler: FieldTypeHandler = {
       return value.toISOString().slice(0, 10);
     }
     const s = String(value);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || isNaN(new Date(s).getTime())) {
+    if (!isCalendarDay(s)) {
       throw new FieldValueError(field.fieldname, "field_invalid_date", { field: field.label || field.fieldname, value: s });
     }
     return s;
@@ -156,17 +172,33 @@ const datetimeHandler: FieldTypeHandler = {
   isStored: true,
   toStorage(value, field) {
     if (isBlank(value)) return null;
-    // new Date(5) and new Date(true) are moments of 1970: only a string or a Date names a moment.
-    if (typeof value !== "string" && !(value instanceof Date)) {
+    // new Date(5) and new Date(true) are moments of 1970, and new Date("5") one of 2001: only an
+    // ISO string or a Date names a moment.
+    if (!(value instanceof Date ? !isNaN(value.getTime()) : typeof value === "string" && isIsoMoment(value))) {
       throw new FieldValueError(field.fieldname, "field_invalid_date", {
         field: field.label || field.fieldname,
         value: String(value),
       });
     }
-    return new Date(value);
+    return new Date(value as string | Date);
   },
   fromStorage(value) {
     if (value instanceof Date) return value.toISOString();
+    return value;
+  },
+};
+
+const timeHandler: FieldTypeHandler = {
+  isStored: true,
+  toStorage(value, field) {
+    if (value === null || value === undefined) return null;
+    // A wall-clock text: a list or a number is no time, as a Table cell already answers.
+    if (typeof value !== "string") {
+      throw new FieldValueError(field.fieldname, "field_invalid_time", { field: field.label || field.fieldname });
+    }
+    return value.trim();
+  },
+  fromStorage(value) {
     return value;
   },
 };
@@ -325,7 +357,7 @@ const FIELD_TYPE_MAP: Record<FieldType, FieldTypeHandler> = {
   Check: checkHandler,
   Date: dateHandler,
   Datetime: datetimeHandler,
-  Time: dataHandler,
+  Time: timeHandler,
   Duration: durationHandler,
   Select: selectHandler,
   Link: linkHandler,
