@@ -595,9 +595,12 @@ describe("A save keeps the stored value of a child field the user may not write"
   it("keeps a gated child field on every existing row and defaults it on a new row", async () => {
     const created = await docService.insert(
       "ChecklistDoc",
-      { title: "WO", checklist: [{ step: "Brakes", note: "pads worn" }, { step: "Chain", note: "stretched" }] },
+      { title: "WO", checklist: [{ note: "pads worn" }, { note: "stretched" }] },
       adminUser,
     );
+    // The read_only steps are a hook's or a seed's to write; the rows are stored as one does.
+    const seeded = (await storedRows(created._id)).map((row, i) => ({ ...row, step: ["Brakes", "Chain"][i] }));
+    await db.updateOne("ChecklistDoc", created._id, { checklist: seeded }, "app");
     const [brakes, chain] = await storedRows(created._id);
 
     // The technician resends the rows as read (no `note`), tries to rename one
@@ -621,19 +624,20 @@ describe("A save keeps the stored value of a child field the user may not write"
     expect(rows.map((r) => r["done"])).toEqual([true, true, false]);
   });
 
-  it("lets Administrator change the gated child field", async () => {
-    const created = await docService.insert("ChecklistDoc", { title: "WO", checklist: [{ step: "Brakes" }] }, adminUser);
-    const [brakes] = await storedRows(created._id);
+  it("lets Administrator change a child field of another level, never a read_only one", async () => {
+    const created = await docService.insert("ChecklistDoc", { title: "WO", checklist: [{ note: "new" }] }, adminUser);
+    const [row0] = await storedRows(created._id);
+    await db.updateOne("ChecklistDoc", created._id, { checklist: [{ ...row0, step: "Brakes" }] }, "app");
 
     await docService.update(
       "ChecklistDoc",
       created._id,
-      { checklist: [{ _row_id: brakes!["_row_id"], step: "Brakes and pads", note: "checked" }] },
+      { checklist: [{ _row_id: row0!["_row_id"], step: "Brakes and pads", note: "checked" }] },
       adminUser,
     );
 
     const [row] = await storedRows(created._id);
-    expect(row!["step"]).toBe("Brakes and pads");
+    expect(row!["step"]).toBe("Brakes");
     expect(row!["note"]).toBe("checked");
   });
 });
@@ -913,7 +917,8 @@ describe("An update re-derives the fetch_from fields of a row whose Link changed
     );
 
     const [stored] = await storedLines(created._id);
-    expect(stored!["product_code"]).toBe("CUSTOM-1");
+    // product_code is read_only, which no role writes, so it takes the new source's value.
+    expect(stored!["product_code"]).toBe("P-200");
     expect(stored!["uom"]).toBe("BOX");
   });
 });
@@ -2239,5 +2244,46 @@ describe("A Link names only a row its writer may select", () => {
     expect(draft).toEqual([expect.objectContaining({ field: "product", message_key: "link_not_found" })]);
     const fine = await docService.preview("SelOrder", { title: "x", product: "SHOP-1" }, seller);
     expect(fine._data["secret"]).toBe("cost 4");
+  });
+});
+
+describe("A read_only field refuses every role's write, an Administrator's included", () => {
+  beforeAll(async () => {
+    registry.register(makeEntity({
+      name: "RoInvoice",
+      fields: [
+        { fieldname: "title", fieldtype: "Data", label: "Title" },
+        { fieldname: "sale", fieldtype: "Data", label: "Sale", read_only: true },
+        {
+          fieldname: "lines",
+          fieldtype: "Table",
+          label: "Lines",
+          child_fields: [
+            { fieldname: "item", fieldtype: "Data", label: "Item" },
+            { fieldname: "booked", fieldtype: "Data", label: "Booked", read_only: true },
+          ],
+        },
+      ],
+    } as unknown as Partial<EntityDefinition>));
+    await db.ensureCollection("RoInvoice", "app");
+  });
+
+  it("keeps a read_only field and a read_only cell an Administrator's update sends", async () => {
+    const created = await docService.insert("RoInvoice", { title: "Inv", lines: [{ item: "a" }] }, adminUser);
+    // Only a hook or the engine sets them: here the stored row holds what a hook wrote.
+    const row = ((await db.findOne("RoInvoice", created._id, "app")) as { lines: Array<Record<string, unknown>> }).lines[0]!;
+    await db.updateOne("RoInvoice", created._id, { sale: "SALE-1", lines: [{ ...row, booked: "yes" }] }, "app");
+
+    await docService.update("RoInvoice", created._id, { title: "Inv 2", sale: null, lines: [{ ...row, item: "b", booked: null }] }, adminUser);
+
+    const stored = (await db.findOne("RoInvoice", created._id, "app")) as Record<string, unknown>;
+    expect(stored["title"]).toBe("Inv 2");
+    expect(stored["sale"]).toBe("SALE-1");
+    expect((stored["lines"] as Array<Record<string, unknown>>)[0]).toEqual(expect.objectContaining({ item: "b", booked: "yes" }));
+  });
+
+  it("drops a read_only field an Administrator's create sends", async () => {
+    const created = await docService.insert("RoInvoice", { title: "Inv", sale: "SALE-9" }, adminUser);
+    expect(((await db.findOne("RoInvoice", created._id, "app")) as Record<string, unknown>)["sale"] ?? null).toBeNull();
   });
 });
