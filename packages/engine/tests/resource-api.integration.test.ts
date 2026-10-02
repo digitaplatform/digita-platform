@@ -785,6 +785,29 @@ describe("Resource API Integration", () => {
       ["a regex that does not compile", base("MetaRegex", field({ fieldname: "code", fieldtype: "Data", label: "Code", regex: "(" })), "code"],
       ["a reserved entity name", base("app"), "reserved"],
       ["an inconsistent workflow", base("MetaFlow", { states: [{ value: "A", is_initial: true }], transitions: [{ from: "A", to: "B", action: "go" }] }), "workflow"],
+      ["no naming", base("MetaNoNaming", { naming: undefined }), "naming"],
+      ["a naming that is a text", base("MetaTextNaming", { naming: "user_set" }), "naming"],
+      ["a naming strategy that does not exist", base("MetaBadStrategy", { naming: { strategy: "random" } }), "naming strategy"],
+      ["by_field without its field", base("MetaByField", { naming: { strategy: "by_field" } }), "naming.field"],
+      ["by_field naming no declared field", base("MetaByMissing", { naming: { strategy: "by_field", field: "code" } }), "naming.field \"code\""],
+      [
+        "by_field naming a Table",
+        base("MetaByTable", {
+          naming: { strategy: "by_field", field: "lines" },
+          ...field({ fieldname: "lines", fieldtype: "Table", label: "Lines", child_fields: [{ fieldname: "qty", fieldtype: "Int", label: "Qty" }] }),
+        }),
+        "naming.field \"lines\"",
+      ],
+      [
+        "by_field naming a layout field",
+        base("MetaByLayout", { naming: { strategy: "by_field", field: "more" }, ...field({ fieldname: "more", fieldtype: "Section Break", label: "More" }) }),
+        "naming.field \"more\"",
+      ],
+      ["expression without its expression", base("MetaExpression", { naming: { strategy: "expression" } }), "naming.expression"],
+      ["permissions that are a text", base("MetaTextPerms", { permissions: "Administrator" }), "permissions"],
+      ["a permission row that is null", base("MetaNullPerm", { permissions: [null] }), "permissions"],
+      ["a permission row without a role", base("MetaNoRolePerm", { permissions: [{}] }), "permissions"],
+      ["a permission row whose role is no text", base("MetaNumberRolePerm", { permissions: [{ role: 5 }] }), "permissions"],
     ];
 
     it.each(refused)("refuses %s with 400, naming the entity and the key, and stores nothing", async (_case, definition, named) => {
@@ -793,6 +816,11 @@ describe("Resource API Integration", () => {
       expect(res.json().error.detail).toContain(`entity "${definition["name"]}"`);
       expect(res.json().error.detail).toContain(named);
       expect(registry.has(definition["name"] as string)).toBe(false);
+    });
+
+    it("PLANTED INNOCENT: stores an entity named by_field after a declared Data field", async () => {
+      const definition = base("MetaByTitle", { naming: { strategy: "by_field", field: "title" } });
+      expect((await app.inject({ method: "POST", url: "/api/v1/meta", headers: authHeaders(), payload: definition })).statusCode).toBe(201);
     });
 
     it("stores and serves the prepared definition: a freeze directive's generated field", async () => {
