@@ -812,8 +812,6 @@ export class EntityRegistry {
       entity.track_changes = entity.track_changes ?? true;
     }
     entity.track_views = entity.track_views ?? false;
-    entity.allow_import = entity.allow_import ?? false;
-    entity.allow_export = entity.allow_export ?? true;
     entity.in_global_search = entity.in_global_search ?? false;
   }
 

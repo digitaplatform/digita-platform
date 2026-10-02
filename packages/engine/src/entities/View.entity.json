@@ -4,8 +4,6 @@
   "database": "core",
   "label": "View",
   "label_plural": "Views",
-  "description": "Declarative multi-collection read endpoint. Composes link/list/aggregate sections under a single anchor (or unanchored). Seeded from `<appDir>/views/**.view.json`; admin UI stores overrides in this collection. Served at `GET /api/v1/view/:viewName(/:rootName)?` by a single generic router.",
-  "icon": "layout-dashboard",
   "naming": { "strategy": "user_set" },
   "is_submittable": false,
   "track_changes": true,

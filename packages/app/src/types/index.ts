@@ -119,8 +119,6 @@ export interface EntitySummary {
   database: string;
   label?: string;
   label_plural?: string;
-  icon?: string;
-  color?: string;
   is_submittable?: boolean;
   is_single?: boolean;
   is_log?: boolean;
