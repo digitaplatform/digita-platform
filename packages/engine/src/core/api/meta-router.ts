@@ -307,13 +307,30 @@ export function registerMetaRoutes(
         );
     }
 
-    // Remove from MongoDB
+    // Only a definition /meta stored can be deleted here; an entity file's definition is the bundle's.
+    if (!(await db.findOne(DIGITA.COLLECTIONS.ENTITY, doctype, DIGITA.DATABASES.CORE))) {
+      return reply
+        .code(409)
+        .send(
+          errorResponse(
+            409,
+            "DEFINED_BY_BUNDLE",
+            `Entity "${doctype}" has no stored definition; the app bundle defines it`,
+            [{ text: "entity_defined_by_bundle", type: "error", show: true, params: { name: doctype } }],
+            request.traceId ?? "",
+          ),
+        );
+    }
+
     await db.deleteOne(DIGITA.COLLECTIONS.ENTITY, doctype, DIGITA.DATABASES.CORE);
+    const fileDefinition = registry.deleteStoredDefinition(doctype);
 
     const ctx = new ResponseContext();
-    ctx.success("entity_deleted", { name: doctype });
-    log.info({ entity: doctype, user }, "Entity definition deleted");
+    ctx.success(fileDefinition ? "entity_definition_restored" : "entity_deleted", { name: doctype });
+    log.info({ entity: doctype, user, restored_from_file: Boolean(fileDefinition) }, "Entity definition deleted");
 
-    return reply.send(successResponse({ name: doctype, deleted: true }, ctx.getMessages()));
+    return reply.send(
+      successResponse({ name: doctype, deleted: true, restored_from_file: Boolean(fileDefinition) }, ctx.getMessages()),
+    );
   });
 }
