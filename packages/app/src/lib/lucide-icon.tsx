@@ -14,14 +14,14 @@ function toPascal(name: string): string {
 /**
  * Resolve a metadata-declared lucide icon name to a rendered icon node. App data
  * supplies arbitrary names; an unknown name is COSMETIC (not load-bearing) so it
- * degrades to no icon + a dev warning rather than failing the card. Returns
+ * degrades to no icon + a dev warning rather than failing what draws it. Returns
  * undefined when no name is given or the name does not resolve.
  */
-export function cardIcon(name: string | undefined, size = 16): ReactNode {
+export function lucideIcon(name: string | undefined, size = 16): ReactNode {
   if (!name) return undefined;
   const Comp = icons[toPascal(name) as keyof typeof icons];
   if (!Comp) {
-    if (import.meta.env.DEV) console.warn(`[dashboard] unknown lucide icon "${name}"`);
+    if (import.meta.env.DEV) console.warn(`[icon] unknown lucide icon "${name}"`);
     return undefined;
   }
   return createElement(Comp, { size, 'aria-hidden': true });

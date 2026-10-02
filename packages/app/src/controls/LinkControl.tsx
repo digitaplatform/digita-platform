@@ -7,6 +7,7 @@ import { FIELD_CLASS, describedBy } from '@/controls/control-styles';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useSearchLink } from '@/hooks/useSearchLink';
 import { useMeta } from '@/hooks/useMeta';
+import { treeNodeOf } from '@/lib/tree-node';
 import { resolveLinkFilters } from '@/lib/link-filters';
 import { toUiMessages } from '@/lib/api-result';
 import { useList } from '@/hooks/useList';
@@ -189,14 +190,7 @@ export default function LinkControl({
     // A node that is switched off is no new choice, nor is any node under it. A record that holds
     // one keeps it: the field shows its path, as it shows any held node.
     const treeRows = withoutSwitchedOff(loadedRows, parentField);
-    const nodes: TreeViewNode[] = treeRows.map((r) => {
-      const parent = r[parentField];
-      return {
-        id: String(r._id),
-        label: String(r[treeLabelField] ?? r._id),
-        parentId: parent != null && parent !== '' ? String(parent) : null,
-      };
-    });
+    const nodes: TreeViewNode[] = treeRows.map((r) => treeNodeOf(r, targetMeta.data));
     // Picking a PARENT for this very node: block the node itself and its whole
     // subtree so a cycle can never be selected (previously only caught at save).
     let disabledIds: Set<string> | undefined;
