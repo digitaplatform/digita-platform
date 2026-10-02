@@ -145,7 +145,21 @@ describe("H18 — token type gate", () => {
   it("rejects a non-access token (refresh/pending) presented as a bearer", async () => {
     const { authn, sign } = await buildTestAuth("erp");
     const refresh = await sign({ sub: "u@x", email: "u@x", roles: ["erp:Manager"], typ: "refresh" });
-    await expect(authn.verifyAccessToken(refresh)).rejects.toThrow(/token type/i);
+    await expect(authn.verifyAccessToken(refresh)).rejects.toMatchObject({
+      code: "token_type_wrong",
+      params: { expected: "access", got: "refresh" },
+    });
+  });
+
+  it("rejects an access token presented as a delegation token, and a delegation token without a scope", async () => {
+    const { authn, sign } = await buildTestAuth("erp");
+    const access = await sign({ sub: "u@x", email: "u@x", roles: ["erp:Manager"] });
+    await expect(authn.verifyDelegationToken(access)).rejects.toMatchObject({
+      code: "token_type_wrong",
+      params: { expected: "delegation", got: "access" },
+    });
+    const unscoped = await sign({ sub: "u@x", email: "u@x", roles: ["erp:Manager"], typ: "delegation" });
+    await expect(authn.verifyDelegationToken(unscoped)).rejects.toMatchObject({ code: "delegation_scope_malformed" });
   });
 
   it("accepts a normal access token", async () => {

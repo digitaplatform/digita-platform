@@ -6,6 +6,7 @@ import type { UserContext } from "../permissions/types.js";
 import { env } from "../config/env.js";
 import { createLogger } from "../logging/logger.js";
 import { urlPath } from "../logging/url-path.js";
+import { EngineError } from "../errors/engine-error.js";
 
 const log = createLogger("auth-middleware");
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -49,6 +50,7 @@ function rejection(err: unknown, fromCookie: boolean, request: FastifyRequest): 
   return {
     reason: e && typeof e === "object" ? `${String(e.name ?? "Error")}: ${String(e.message ?? "")}` : String(err),
     ...(e && typeof e === "object" && e.code !== undefined ? { code: String(e.code) } : {}),
+    ...(err instanceof EngineError ? { params: err.params } : {}),
     source: fromCookie ? "cookie" : "bearer",
     method: request.method,
     url: urlPath(request.url),

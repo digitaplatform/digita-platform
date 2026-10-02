@@ -1,6 +1,7 @@
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { DIGITA } from "@digitaplatform/shared";
 import { createLogger } from "../logging/logger.js";
+import { EngineError } from "../errors/engine-error.js";
 
 const log = createLogger("role-registry");
 
@@ -40,23 +41,6 @@ export class RoleRegistry {
     return this.names.has(name);
   }
 
-  /** All known role codes. */
-  list(): string[] {
-    return Array.from(this.names).sort();
-  }
-
-  /**
-   * Throw if the role doesn't exist. `context` is included in the error
-   * to make misconfigurations easy to locate (e.g. which entity referenced it).
-   */
-  assertExists(name: string, context: string): void {
-    if (!this.has(name)) {
-      throw new Error(
-        `Unknown role "${name}" referenced by ${context}. Known roles: ${this.list().join(", ")}`,
-      );
-    }
-  }
-
   /** Register a newly created role without a full reload. */
   register(name: string): void {
     if (name) this.names.add(name);
@@ -78,7 +62,7 @@ export function setRoleRegistry(instance: RoleRegistry): void {
 
 export function getRoleRegistry(): RoleRegistry {
   if (!_instance) {
-    throw new Error("RoleRegistry not initialized. App must call setRoleRegistry() at startup.");
+    throw new EngineError("role_registry_not_initialised", {}, 500, "INTERNAL_ERROR");
   }
   return _instance;
 }

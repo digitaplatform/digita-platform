@@ -2,6 +2,7 @@ import { createRemoteJWKSet, createLocalJWKSet, jwtVerify } from "jose";
 import { TOKEN_TYPE, AUDIENCE_CLAIM, TENANT_GLOBAL_ROLES, type AudienceGrant, type DelegationScope } from "@digitaplatform/shared";
 import { env } from "../config/env.js";
 import { createLogger } from "../logging/logger.js";
+import { EngineError } from "../errors/engine-error.js";
 import {
   rolesToStringArray,
   scopeRolesToApp,
@@ -128,9 +129,7 @@ export class RemoteAuthnAdapter implements AuthnPort {
     // pending token presented as a bearer verifies as an access token, populating
     // request.user without completing the second factor. Reject anything but access.
     if (p["typ"] !== TOKEN_TYPE.ACCESS) {
-      throw new Error(
-        `Invalid token type: expected "${TOKEN_TYPE.ACCESS}", got "${String(p["typ"])}"`,
-      );
+      throw new EngineError("token_type_wrong", { expected: TOKEN_TYPE.ACCESS, got: String(p["typ"]) }, 401, "TOKEN_EXPIRED");
     }
     return { user: this.buildUser(p), language: p["language"] as string | undefined };
   }
@@ -143,9 +142,7 @@ export class RemoteAuthnAdapter implements AuthnPort {
     });
     const p = payload as Record<string, unknown>;
     if (p["typ"] !== TOKEN_TYPE.DELEGATION) {
-      throw new Error(
-        `Invalid token type: expected "${TOKEN_TYPE.DELEGATION}", got "${String(p["typ"])}"`,
-      );
+      throw new EngineError("token_type_wrong", { expected: TOKEN_TYPE.DELEGATION, got: String(p["typ"]) }, 401, "DELEGATION_INVALID");
     }
     const scope = p["scope"] as DelegationScope | undefined;
     if (
@@ -155,7 +152,7 @@ export class RemoteAuthnAdapter implements AuthnPort {
       typeof scope.doc !== "string" ||
       typeof scope.action !== "string"
     ) {
-      throw new Error("Delegation token is missing a well-formed scope");
+      throw new EngineError("delegation_scope_malformed", {}, 401, "DELEGATION_INVALID");
     }
     const act = p["act"] as { svc?: unknown } | undefined;
     return {

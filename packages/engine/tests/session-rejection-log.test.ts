@@ -13,6 +13,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
 import { createOptionalAuthMiddleware, createAuthMiddleware } from "../src/core/auth/auth-middleware.js";
 import type { AuthnPort } from "../src/core/auth/authn-port.js";
 import { SESSION_COOKIE } from "@digitaplatform/shared";
+import { EngineError } from "../src/core/errors/engine-error.js";
 
 class JWKSTimeoutError extends Error {
   code = "ERR_JWKS_TIMEOUT";
@@ -58,5 +59,19 @@ describe("a rejected session token is logged with its reason", () => {
     expect(sent.code).toBe(401);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0]?.[0]).toMatchObject({ source: "bearer", reason: "JWKSTimeoutError: request timed out" });
+  });
+
+  it("names the code and the params of an engine error, so the log says which token type came", async () => {
+    const wrongType = {
+      verifyAccessToken: vi.fn().mockRejectedValue(
+        new EngineError("token_type_wrong", { expected: "access", got: "refresh" }, 401, "TOKEN_EXPIRED"),
+      ),
+      verifyDelegationToken: vi.fn(),
+    } as unknown as AuthnPort;
+    await createOptionalAuthMiddleware(wrongType)(request({ [SESSION_COOKIE.ACCESS]: "a-refresh-token" }));
+    expect(warn.mock.calls[0]?.[0]).toMatchObject({
+      code: "token_type_wrong",
+      params: { expected: "access", got: "refresh" },
+    });
   });
 });
