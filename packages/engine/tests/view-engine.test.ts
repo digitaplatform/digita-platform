@@ -216,7 +216,7 @@ describe("ViewEngine — link section", () => {
 });
 
 describe("ViewEngine — list section expand", () => {
-  const expandView = (as?: string) =>
+  const expandView = (as?: string, permission_fallback?: "warn" | "silent" | "error") =>
     makeView({
       anchored: false,
       source: undefined,
@@ -227,6 +227,7 @@ describe("ViewEngine — list section expand", () => {
           kind: "list",
           entity: "salesInvoice",
           expand: { field: "customer", entity: "customer", fields: ["name"], ...(as ? { as } : {}) },
+          ...(permission_fallback ? { permission_fallback } : {}),
         },
       ],
     });
@@ -284,6 +285,28 @@ describe("ViewEngine — list section expand", () => {
     const warnings = JSON.stringify(ctx);
     expect(warnings).toContain("expand_no_permission");
     expect(warnings).not.toContain("customer");
+  });
+
+  it("keeps every row, unexpanded and without a warning, when the section's fallback is silent", async () => {
+    const deps = makeDeps();
+    deps.documentService.getList
+      .mockResolvedValueOnce(page(invoices))
+      .mockRejectedValueOnce(PermissionDeniedError.forAction("customer", "select"));
+    const ctx = new ResponseContext();
+    const out = await new ViewEngine(deps as never).execute(expandView("buyer", "silent"), { query: {} }, user, ctx);
+    const rows = out.sections["invoices"] as Record<string, unknown>[];
+    expect(rows.map((r) => [r["_id"], r["buyer"]])).toEqual([["I-1", null], ["I-2", null], ["I-3", null], ["I-4", null]]);
+    expect(JSON.stringify(ctx)).not.toContain("expand_no_permission");
+  });
+
+  it("fails the whole view when the section's fallback is error", async () => {
+    const deps = makeDeps();
+    deps.documentService.getList
+      .mockResolvedValueOnce(page(invoices))
+      .mockRejectedValueOnce(PermissionDeniedError.forAction("customer", "select"));
+    await expect(
+      new ViewEngine(deps as never).execute(expandView("buyer", "error"), { query: {} }, user, new ResponseContext()),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 
   it("PLANTED INNOCENT: still fails the section on another error of the expand read", async () => {
