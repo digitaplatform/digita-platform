@@ -883,9 +883,12 @@ describe("An update re-derives the fetch_from fields of a row whose Link changed
 
   it("previews a draft as a draft, whatever _id its body carries", async () => {
     const other = await docService.insert("FetchOrder", { title: "Other", lines: [{ product: "SERVICE" }] }, adminUser);
-    const preview = await docService.preview("FetchOrder", { _id: other._id, title: "Typed", lines: [{ product: "STOCKABLE" }] }, salesperson);
-    expect(preview._data["title"]).toBe("Typed");
-    expect((preview._data["lines"] as Record<string, unknown>[])[0]!["uom"]).toBe("PCS");
+    // A Picker may select but not read FetchOrder: a draft previews, a saved record would be refused.
+    const picker: UserContext = { _id: "pk-2", email: "pk2@test.local", roles: ["Picker"], full_name: "Picker" };
+    const preview = await docService.preview("FetchOrder", { _id: other._id, title: "Typed", lines: [{ product: "STOCKABLE" }] }, picker);
+    expect(preview._isNew).toBe(true);
+    expect(preview._data["owner"]).toBeUndefined();
+    expect(preview._data["title"]).toBeUndefined();
   });
 
   it("keeps a value the same write sets on the row whose Link changed", async () => {
