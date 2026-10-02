@@ -2129,3 +2129,54 @@ describe("amend, copyDoc and runAction join the caller's session", () => {
     expect(await count()).toBe(before);
   });
 });
+
+describe("An update re-derives the fetched header fields of a Link it changed", () => {
+  beforeAll(async () => {
+    registry.register(makeEntity({
+      name: "HeadProduct",
+      naming: { strategy: "user_set" },
+      fields: [
+        { fieldname: "product_no", fieldtype: "Data", label: "Product No" },
+        { fieldname: "sales_uom", fieldtype: "Data", label: "Sales UOM" },
+      ],
+    } as unknown as Partial<EntityDefinition>));
+    registry.register(makeEntity({
+      name: "HeadOrder",
+      fields: [
+        { fieldname: "title", fieldtype: "Data", label: "Title" },
+        { fieldname: "product", fieldtype: "Link", label: "Product", target: "HeadProduct" },
+        { fieldname: "product_code", fieldtype: "Data", label: "Code", read_only: true, fetch_from: "product.product_no" },
+        { fieldname: "uom", fieldtype: "Data", label: "UOM", fetch_from: "product.sales_uom", fetch_if_empty: true },
+      ],
+    } as unknown as Partial<EntityDefinition>));
+    await db.ensureCollection("HeadProduct", "app");
+    await db.ensureCollection("HeadOrder", "app");
+    await docService.insert("HeadProduct", { _id: "HP-FULL", product_no: "P-1", sales_uom: "PCS" }, adminUser);
+    await docService.insert("HeadProduct", { _id: "HP-BARE" }, adminUser);
+  });
+
+  const stored = async (name: string) => (await db.findOne("HeadOrder", name, "app")) as Record<string, unknown>;
+
+  it("clears the fetched values when the update clears the Link", async () => {
+    const order = await docService.insert("HeadOrder", { title: "O", product: "HP-FULL" }, adminUser);
+    expect((await stored(order._id))["product_code"]).toBe("P-1");
+    await docService.update("HeadOrder", order._id, { product: null }, adminUser);
+    const after = await stored(order._id);
+    expect(after["product_code"] ?? null).toBeNull();
+    expect(after["uom"] ?? null).toBeNull();
+  });
+
+  it("clears the fetched values when the new source has none", async () => {
+    const order = await docService.insert("HeadOrder", { title: "O", product: "HP-FULL" }, adminUser);
+    await docService.update("HeadOrder", order._id, { product: "HP-BARE" }, adminUser);
+    const after = await stored(order._id);
+    expect(after["product_code"] ?? null).toBeNull();
+    expect(after["uom"] ?? null).toBeNull();
+  });
+
+  it("keeps a fetch_if_empty value the same write sets", async () => {
+    const order = await docService.insert("HeadOrder", { title: "O", product: "HP-FULL" }, adminUser);
+    await docService.update("HeadOrder", order._id, { product: "HP-BARE", uom: "BOX" }, adminUser);
+    expect((await stored(order._id))["uom"]).toBe("BOX");
+  });
+});
