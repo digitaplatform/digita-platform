@@ -185,9 +185,20 @@ export class EntityRegistry {
   }
 
   private async loadEntityFile(filePath: string, defaultDatabase?: string): Promise<void> {
+    // A file that does not parse is malformed; a well-formed one a check refuses is refused, so the
+    // reader of the message knows whether to look for broken JSON or for the key the message names.
+    // Both fail the boot, or the reload that checks the files first, instead of dropping the entity.
+    const content = await readFile(filePath, "utf-8");
+    let entity: EntityDefinition;
     try {
-      const content = await readFile(filePath, "utf-8");
-      const entity: EntityDefinition = JSON.parse(content);
+      entity = JSON.parse(content);
+    } catch (err) {
+      log.error({ file: filePath, err }, "Entity definition is not valid JSON");
+      throw err instanceof Error
+        ? new Error(`Malformed entity definition ${filePath}: ${err.message}`, { cause: err })
+        : err;
+    }
+    try {
       // The app matches its own pages case-sensitively, so an entity with exactly one of
       // these names would lose its list page to them; `Account` and its kin stay free.
       if (RESERVED_ENTITY_NAMES.includes(entity.name)) {
@@ -246,12 +257,9 @@ export class EntityRegistry {
         "Entity loaded",
       );
     } catch (err) {
-      // A malformed .entity.json used to be log-and-continue (silently disabling
-      // that entity). Fail loud like the platform's other boot lints so a broken
-      // definition can't ship unnoticed.
-      log.error({ file: filePath, err }, "Failed to load entity definition — aborting boot");
+      log.error({ file: filePath, entity: entity.name, err }, "Entity definition refused");
       throw err instanceof Error
-        ? new Error(`Malformed entity definition ${filePath}: ${err.message}`, { cause: err })
+        ? new Error(`Refused entity definition ${filePath} (entity "${entity.name}"): ${err.message}`, { cause: err })
         : err;
     }
   }
