@@ -13,6 +13,7 @@ export interface SwitchProps {
   'aria-label'?: string;
   'aria-labelledby'?: string;
   'aria-describedby'?: string;
+  'aria-required'?: boolean;
 }
 
 /**
@@ -32,6 +33,7 @@ export function Switch({
   'aria-label': ariaLabel,
   'aria-labelledby': ariaLabelledby,
   'aria-describedby': ariaDescribedby,
+  'aria-required': ariaRequired,
 }: SwitchProps) {
   const labelId = useId();
   const control = (
@@ -43,6 +45,7 @@ export function Switch({
       // The label drawn beside the switch is its name, unless the caller points at another element.
       aria-labelledby={ariaLabelledby ?? (label != null ? labelId : undefined)}
       aria-describedby={ariaDescribedby}
+      aria-required={ariaRequired}
       id={id}
       name={name}
       data-ui="switch"
