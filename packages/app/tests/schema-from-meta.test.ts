@@ -75,6 +75,26 @@ describe('buildZodSchema — conditional required (superRefine)', () => {
   });
 });
 
+describe('buildZodSchema — a field required by the resolver that the engine fills on insert', () => {
+  const fields = [field({ fieldname: 'ref', mandatory_depends_on: 'doc.x', default: 'eval:doc.code' })];
+
+  it('refuses whitespace on a new record, which the engine keeps and refuses', () => {
+    const schema = buildZodSchema(entity(fields), () => true);
+    expect(schema.safeParse({ ref: '   ' }).success).toBe(false);
+  });
+
+  it('PLANTED INNOCENT: lets a new record leave it empty, for the engine to fill', () => {
+    const schema = buildZodSchema(entity(fields), () => true);
+    expect(schema.safeParse({ ref: undefined }).success).toBe(true);
+    expect(schema.safeParse({ ref: '' }).success).toBe(true);
+  });
+
+  it('refuses it empty on a stored record, which gets no default', () => {
+    const schema = buildZodSchema(entity(fields), () => true, { _id: 'R-1', ref: 'old' });
+    expect(schema.safeParse({ ref: '' }).success).toBe(false);
+  });
+});
+
 describe('buildZodSchema — a required Check must be ticked and a required Rating above 0', () => {
   const issues = (schema: ReturnType<typeof buildZodSchema>, doc: Record<string, unknown>) => {
     const r = schema.safeParse(doc);
