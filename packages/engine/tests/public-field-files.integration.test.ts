@@ -397,8 +397,6 @@ describe("The first start after the upgrade that makes the fields public", () =>
     });
     expect(saved.statusCode, saved.body).toBe(200);
 
-    // The database the upgrade meets has not yet attached its legacy loose uploads.
-    await db.deleteOne("_migrations", "attach-legacy-loose-files", DIGITA.DATABASES.CORE);
     await bootWithPublicFields();
   }, 60000);
 
