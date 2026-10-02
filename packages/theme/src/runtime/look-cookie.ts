@@ -1,0 +1,93 @@
+import type { Density, ThemeMode } from './runtime.js';
+
+/**
+ * The cookie that carries a person's look, the design, the light/dark mode and the density they
+ * chose in the app, to every page of their tenant: the sign-in pages, the report designer and the
+ * website. Those are separate programs, and for a tenant routed by host they stand on hosts of
+ * their own, where the app's browser storage cannot be read. The cookie holds the three choices and
+ * no identifier, and the pages write it, never a server.
+ */
+export const LOOK_COOKIE_NAME = 'digita-look';
+
+const LOOK_COOKIE_MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
+
+/** The choices the cookie carries; a choice the person never made is absent. */
+export interface LookChoices {
+  design?: string;
+  mode?: ThemeMode;
+  density?: Density;
+}
+
+/** A design id as the design registry names them, so the cookie cannot carry anything else. */
+const DESIGN_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+/** A browser's cookie jar, as `document` offers it: reading lists the cookies, writing sets one. */
+export interface CookieJar {
+  cookie: string;
+  location?: { protocol: string };
+}
+
+/** The choices the cookie holds; a value that is no valid choice is left out. */
+export function readLookCookie(jar?: CookieJar): LookChoices {
+  // A server render has no document, and no cookie of the person to read.
+  const source = jar ?? (typeof document === 'undefined' ? undefined : document);
+  if (!source) return {};
+  const entry = source.cookie
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${LOOK_COOKIE_NAME}=`));
+  if (!entry) return {};
+  let params: URLSearchParams;
+  try {
+    params = new URLSearchParams(decodeURIComponent(entry.slice(LOOK_COOKIE_NAME.length + 1)));
+  } catch {
+    return {};
+  }
+  const choices: LookChoices = {};
+  const design = params.get('design');
+  if (design && DESIGN_ID.test(design)) choices.design = design;
+  const mode = params.get('mode');
+  if (mode === 'light' || mode === 'dark' || mode === 'system') choices.mode = mode;
+  const density = params.get('density');
+  if (density === 'comfortable' || density === 'compact' || density === 'spacious') choices.density = density;
+  return choices;
+}
+
+/**
+ * The Domain the cookie is written for, from the address of the tenant's sign-in pages. With a path
+ * (`https://<zone>/auth`: a tenant routed by path, or on its own domain) every page stands on that
+ * one host, so the cookie is host-only (undefined). Without one (`https://auth.<zone>`: routed by
+ * host) it is the tenant's zone, the sign-in host minus its first label, which every host of the
+ * tenant shares and no other tenant does. That is the rule digita-auth's postLoginRedirect uses to
+ * recognize the tenant's hosts. A host of fewer than three labels, or an IP address, gets host-only.
+ */
+export function lookCookieDomain(signInUrl: string): string | undefined {
+  let url: URL;
+  try {
+    url = new URL(signInUrl);
+  } catch {
+    return undefined;
+  }
+  if (url.pathname.replace(/\/+$/, '') !== '') return undefined;
+  const host = url.hostname.toLowerCase();
+  if (/^[\d.]+$/.test(host) || host.includes(':')) return undefined;
+  const labels = host.split('.');
+  return labels.length >= 3 ? labels.slice(1).join('.') : undefined;
+}
+
+/** Write the choices into the cookie, keeping the ones already there that `choices` does not name. */
+export function writeLookCookie(choices: LookChoices, domain: string | undefined, jar: CookieJar = document): void {
+  const merged: LookChoices = { ...readLookCookie(jar), ...choices };
+  const params = new URLSearchParams();
+  if (merged.design) params.set('design', merged.design);
+  if (merged.mode) params.set('mode', merged.mode);
+  if (merged.density) params.set('density', merged.density);
+  const attributes = [
+    'Path=/',
+    `Max-Age=${LOOK_COOKIE_MAX_AGE_SECONDS}`,
+    'SameSite=Lax',
+    ...(domain ? [`Domain=${domain}`] : []),
+    ...(jar.location?.protocol === 'https:' ? ['Secure'] : []),
+  ];
+  jar.cookie = `${LOOK_COOKIE_NAME}=${encodeURIComponent(params.toString())}; ${attributes.join('; ')}`;
+}

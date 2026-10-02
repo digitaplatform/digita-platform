@@ -9,6 +9,8 @@ export * from './runtime/runtime.js';
 export * from './runtime/boot-identity.js';
 export * from './runtime/delivered-identity.js';
 export * from './runtime/identity-preferences.js';
+export * from './runtime/look-cookie.js';
+export * from './runtime/drawn-look.js';
 export * from './designs/index.js';
 export * from './signatures/index.js';
 export * from './signatures/runtime-registry.js';

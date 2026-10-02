@@ -1,3 +1,4 @@
+import { readLookCookie } from './look-cookie.js';
 import { COLOR_PALETTES, type PaletteName } from '../tokens/palettes.js';
 import { cssVarName, semantic } from '../tokens/index.js';
 import { synthesizeRamp } from '../tokens/synthesize.js';
@@ -279,15 +280,16 @@ export function resolveInitialTint(
   return null;
 }
 
-/** Initial design from localStorage, else the default. */
+/** Initial design from this browser's storage, else the person's look cookie (a page on another
+ *  host of the tenant than the app, see look-cookie.ts), else the default. */
 export function resolveInitialDesign(storageKey: string = DESIGN_STORAGE_KEY): string {
   try {
     const stored = localStorage.getItem(storageKey);
     if (stored) return stored;
   } catch {
-    /* private mode — fall through to the default */
+    /* private mode — fall through to the cookie and the default */
   }
-  return DEFAULT_DESIGN_ID;
+  return readLookCookie().design ?? DEFAULT_DESIGN_ID;
 }
 
 /**
@@ -312,7 +314,8 @@ export function pointerDefaultDensity(): Density {
   return 'comfortable';
 }
 
-/** Initial density: the stored user choice ALWAYS wins; otherwise the tenant's
+/** Initial density: the stored user choice ALWAYS wins, from this browser's storage or else the
+ *  person's look cookie; otherwise the tenant's
  *  density, else the default by pointer type (see pointerDefaultDensity). Resolution is synchronous — call
  *  `applyDensity(resolveInitialDensity())` once in the boot script before
  *  first paint, so the value is applied exactly once (no double-apply flash). */
@@ -324,18 +327,19 @@ export function resolveInitialDensity(
     const stored = localStorage.getItem(storageKey);
     if (stored === 'comfortable' || stored === 'compact' || stored === 'spacious') return stored;
   } catch {
-    /* private mode — fall through to the tenant's or the pointer default */
+    /* private mode — fall through to the cookie, the tenant's or the pointer default */
   }
-  return tenantDensity ?? pointerDefaultDensity();
+  return readLookCookie().density ?? tenantDensity ?? pointerDefaultDensity();
 }
 
-/** Initial mode from localStorage, else `system` (follow the OS preference live). */
+/** Initial mode from this browser's storage, else the person's look cookie, else `system`
+ *  (follow the OS preference live). */
 export function resolveInitialMode(storageKey: string = MODE_STORAGE_KEY): ThemeMode {
   try {
     const stored = localStorage.getItem(storageKey);
     if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
   } catch {
-    /* private mode — fall through to the system default */
+    /* private mode — fall through to the cookie and the system default */
   }
-  return 'system';
+  return readLookCookie().mode ?? 'system';
 }
