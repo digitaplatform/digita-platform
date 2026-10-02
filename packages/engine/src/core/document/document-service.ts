@@ -2608,10 +2608,9 @@ export class DocumentService {
       return this.insert(doctype, copyData, user, ctx, session, amendData);
     });
 
-    // The "Amended" entry is supplemental to the "Created" entry that
-    // insert() already wrote transactionally; if this one fails we keep
-    // the new doc rather than rolling it back, so a session-less
-    // best-effort write is the right shape here.
+    // The "Amended" entry is written after the amendment's own transaction. A caller's session
+    // takes it into the caller's transaction, so it rolls back with it; without one, a failed
+    // entry is logged and the amendment stands.
     await this.activityLogService.log({
       entity: doctype,
       document_name: newDoc._id,

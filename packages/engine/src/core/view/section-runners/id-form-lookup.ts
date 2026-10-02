@@ -34,18 +34,14 @@ function otherIdForm(value: string): Document {
  * concise form compares stored types strictly, so the two never met. The parent first gets a key
  * field that holds each of its values, list elements one by one, in both forms; the $lookup joins
  * on that key, through the joined collection's index, and the key is removed after it. The same
- * holds inside the branches of a $facet, the sub-pipeline of a $lookup and that of a $unionWith;
- * any other stage is returned as it is.
+ * holds inside the branches of a $facet and the sub-pipeline of a $lookup; any other stage is
+ * returned as it is.
  */
 export function joinByStoredIdForms(stage: Document): Document[] {
   const rewrite = (pipeline: unknown) => (Array.isArray(pipeline) ? (pipeline as Document[]).flatMap(joinByStoredIdForms) : pipeline);
   const facet = stage["$facet"] as Record<string, Document[]> | undefined;
   if (facet && typeof facet === "object") {
     return [{ ...stage, $facet: Object.fromEntries(Object.entries(facet).map(([name, branch]) => [name, rewrite(branch)])) }];
-  }
-  const union = stage["$unionWith"] as Document | string | undefined;
-  if (union && typeof union === "object" && "pipeline" in union) {
-    return [{ ...stage, $unionWith: { ...union, pipeline: rewrite(union["pipeline"]) } }];
   }
   let lookup = stage["$lookup"] as Document | undefined;
   if (!lookup) return [stage];
