@@ -4,8 +4,6 @@
   "database": "core",
   "label": "User Preference",
   "label_plural": "User Preferences",
-  "description": "Generic per-user key-value settings store (theme mode, density, and any future per-user UI/setting that should ROAM across devices — distinct from device-local localStorage). One row per (owner, pref_key), enforced by a unique index; the client upserts by that pair. Personal: every row is its owner's alone, for every role, an Administrator included. Named saved list views live in their own richer entity, ListPreference, NOT here.",
-  "icon": "settings",
   "naming": { "strategy": "uuid" },
   "is_single": false,
   "personal": true,
