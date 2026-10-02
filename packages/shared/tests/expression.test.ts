@@ -121,3 +121,22 @@ describe("helpers", () => {
     for (const value of ["0", 1, true, [0], {}]) expect(isTruthy(value), String(value)).toBe(true);
   });
 });
+
+describe("parseExpression — bounded input", () => {
+  it.each([
+    ["1,000 nested parentheses", `${"(".repeat(1000)}doc.a${")".repeat(1000)}`],
+    ["1,000 nested lists", `${"[".repeat(1000)}1${"]".repeat(1000)}`],
+    ["1,000 prefix operators", `${"!".repeat(1000)}doc.a`],
+    ["100 nested ternaries", `${"doc.a ? 1 : ".repeat(100)}0`],
+    ["a source of 5,000 characters", `doc.a${" + 1".repeat(1249)}`],
+  ])("refuses %s with ExpressionError, not a stack overflow", (_what, source) => {
+    expect(() => parseExpression(source)).toThrow(ExpressionError);
+  });
+
+  it("PLANTED INNOCENT: parses 64 levels and a source of 4,096 characters", () => {
+    expect(() => parseExpression(`${"(".repeat(63)}doc.a${")".repeat(63)}`)).not.toThrow();
+    const long = `doc.a${" + 1".repeat(1022)}`;
+    expect(long.length).toBeLessThanOrEqual(4096);
+    expect(() => parseExpression(long)).not.toThrow();
+  });
+});
