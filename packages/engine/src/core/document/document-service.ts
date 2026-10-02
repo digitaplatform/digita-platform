@@ -2054,6 +2054,8 @@ export class DocumentService {
     ctx?: ResponseContext,
     params?: Record<string, unknown>,
     extraServices?: Partial<HookServices>,
+    /** When provided, the action runs in the caller's transaction instead of opening its own. */
+    sessionOverride?: import("mongodb").ClientSession,
   ): Promise<unknown> {
     const entity = this.registry.get(doctype);
     const action = entity.actions?.find((a) => a.action === actionName);
@@ -2081,8 +2083,8 @@ export class DocumentService {
     // the session into its per-call services view; a handler that passes
     // `services.session` to insert, update, transition, deleteDoc, submit,
     // cancel or updateSubmitted joins this transaction.
-    return this.db.withTransaction(async (session) => {
-      const doc2 = await this.loadDocInternal(doctype, name);
+    return this.inTransaction(sessionOverride, async (session) => {
+      const doc2 = await this.loadDocInternal(doctype, name, session);
       if (!this.actionRunner.isShown(action, doc2, user)) {
         throw new ActionNotAvailableError(doctype, name, action);
       }
@@ -2554,9 +2556,11 @@ export class DocumentService {
     name: string,
     user: UserContext = GUEST_USER,
     ctx?: ResponseContext,
+    /** When provided, the amendment joins the caller's transaction instead of opening its own. */
+    sessionOverride?: import("mongodb").ClientSession,
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
-    const { doc, stored } = await this.loadDocAndStoredRow(doctype, name);
+    const { doc, stored } = await this.loadDocAndStoredRow(doctype, name, sessionOverride);
 
     // Permission check
     await this.permissionChecker.check(user, doctype, "amend", doc._data);
@@ -2565,7 +2569,7 @@ export class DocumentService {
     // Give the amendment its own File docs (sharing the same blob) for the files it may lose with a
     // cleanup, so deleting or replacing an attachment on either document never destroys the other's. The
     // clones are written in the insert's transaction, so a refused amendment leaves none.
-    const newDoc = await this.db.withTransaction(async (session) => {
+    const newDoc = await this.inTransaction(sessionOverride, async (session) => {
       const copyData = copyDocumentData(entity, doc._data, stored);
       await this.cloneAttachments(entity, doc._id, copyData, user, session);
       return this.insert(doctype, copyData, user, ctx, session, amendData);
@@ -2582,7 +2586,7 @@ export class DocumentService {
       user: user.email,
       user_name: user.full_name ?? user.email,
       details: { amended_from: name },
-    });
+    }, sessionOverride);
 
     return newDoc;
   }
@@ -2594,6 +2598,8 @@ export class DocumentService {
     name: string,
     user: UserContext = GUEST_USER,
     ctx?: ResponseContext,
+    /** When provided, the copy joins the caller's transaction instead of opening its own. */
+    sessionOverride?: import("mongodb").ClientSession,
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
 
@@ -2603,14 +2609,14 @@ export class DocumentService {
     await this.permissionChecker.check(user, doctype, "create");
     await this.permissionChecker.check(user, doctype, "read");
 
-    const { doc, stored } = await this.loadDocAndStoredRow(doctype, name);
+    const { doc, stored } = await this.loadDocAndStoredRow(doctype, name, sessionOverride);
     // Document-level read check (owner / condition / scope filters).
     await this.permissionChecker.check(user, doctype, "read", doc._data);
 
     // Give the copy its own File docs (sharing the same blob) for the files it may lose with a
     // cleanup, so attachment deletes or replaces on either document don't destroy the other's file. The
     // clones are written in the insert's transaction, so a refused copy leaves none.
-    return this.db.withTransaction(async (session) => {
+    return this.inTransaction(sessionOverride, async (session) => {
       const copyData = copyDocumentData(entity, doc._data, stored);
       await this.cloneAttachments(entity, doc._id, copyData, user, session);
       return this.insert(doctype, copyData, user, ctx, session);
@@ -2761,6 +2767,14 @@ export class DocumentService {
 
   /** The document as a reader gets it, and its row as stored, from one read: a
    *  copy judges and carries the same state of the row. */
+  /** Run `work` in the caller's session when one is given, else in a transaction of its own. */
+  private inTransaction<T>(
+    session: import("mongodb").ClientSession | undefined,
+    work: (session: import("mongodb").ClientSession) => Promise<T>,
+  ): Promise<T> {
+    return session ? work(session) : this.db.withTransaction(work);
+  }
+
   private async loadDocAndStoredRow(
     doctype: string,
     name: string,
