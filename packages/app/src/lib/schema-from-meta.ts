@@ -20,7 +20,7 @@ const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const isValidColor = (v: unknown): boolean => typeof v === 'string' && HEX.test(v);
 
 function isStored(t: FieldDefinition['fieldtype']): boolean {
-  return !LAYOUT_FIELD_TYPES.includes(t) && t !== 'ReadOnly';
+  return !LAYOUT_FIELD_TYPES.includes(t);
 }
 
 function dataLike(field: FieldDefinition): ZodTypeAny {
@@ -100,8 +100,6 @@ function baseForType(field: FieldDefinition): ZodTypeAny {
     case 'Table':
       // A Table inside a row: the engine defaults no row of it.
       return tableSchema(field, () => false);
-    case 'ReadOnly':
-      return z.any();
     default:
       if (import.meta.env.DEV) console.warn(`[schema-from-meta] unknown field type "${field.fieldtype}" → z.any()`);
       return z.any();

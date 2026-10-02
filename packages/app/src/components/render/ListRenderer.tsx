@@ -58,12 +58,10 @@ interface ListRendererProps {
   rowActions?: (row: Row) => ReactNode;
 }
 
-/** A field is showable as a column if it carries data (not layout/section, not a
- *  read-only display, not a child table). */
+/** A field is showable as a column if it carries data (not layout/section, not a child table). */
 function isColumnField(f: FieldDefinition): boolean {
   return (
     !LAYOUT_FIELD_TYPES.includes(f.fieldtype) &&
-    f.fieldtype !== 'ReadOnly' &&
     f.fieldtype !== 'Table'
   );
 }

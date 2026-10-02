@@ -76,7 +76,6 @@ export type FieldType =
   | "Color"
   | "Tag"
   | "Phone"
-  | "ReadOnly"
   | "SectionBreak"
   | "ColumnBreak"
   | "TabBreak"
@@ -89,11 +88,6 @@ export const LAYOUT_FIELD_TYPES: readonly FieldType[] = [
   "TabBreak",
   "Heading",
   "HTML",
-] as const;
-
-export const NON_STORED_FIELD_TYPES: readonly FieldType[] = [
-  ...LAYOUT_FIELD_TYPES,
-  "ReadOnly",
 ] as const;
 
 /**

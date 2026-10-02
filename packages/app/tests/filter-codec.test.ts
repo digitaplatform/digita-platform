@@ -111,12 +111,11 @@ describe('filter-operators matrix', () => {
     expect(() => assertValidTuple(['x', 'nope', 1])).toThrow();
     expect(() => assertValidTuple(['x', '>=', 1])).not.toThrow();
   });
-  it('filterableFields excludes layout/Table/ReadOnly; standardFilterFields needs the flag', () => {
+  it('filterableFields excludes layout/Table; standardFilterFields needs the flag', () => {
     const fields = [
       { fieldname: 'a', fieldtype: 'Data', label: 'A', in_standard_filter: true },
       { fieldname: 'sb', fieldtype: 'SectionBreak', label: '' },
       { fieldname: 't', fieldtype: 'Table', label: 'T' },
-      { fieldname: 'r', fieldtype: 'ReadOnly', label: 'R' },
       { fieldname: 'b', fieldtype: 'Int', label: 'B' },
     ] as FieldDefinition[];
     expect(filterableFields({ fields }).map((f) => f.fieldname)).toEqual(['a', 'b']);

@@ -533,7 +533,7 @@ describe("validateEntityDataZod — a blank value is no value", () => {
     "Data", "Phone", "Barcode", "Signature", "Password", "Time", "Attach", "AttachImage", "Image",
     "Text", "SmallText", "TextEditor", "Code", "Markdown", "Select", "Link", "Color",
     "Int", "Float", "Currency", "Percent", "Duration", "Date", "Datetime", "JSON", "Tag",
-    "Geolocation", "ReadOnly",
+    "Geolocation",
   ];
   const validateStored = (field: Record<string, unknown>, value: unknown) => {
     const stored = getFieldTypeHandler(field.fieldtype as never).toStorage(value, field as never);

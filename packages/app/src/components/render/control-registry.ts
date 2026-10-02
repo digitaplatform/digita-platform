@@ -44,7 +44,6 @@ const LOADERS: Partial<Record<FieldType, Loader>> = {
   Geolocation: () => import('@/controls/GeolocationControl'),
   Signature: () => import('@/controls/SignatureControl'),
   Image: () => import('@/controls/ImageControl'),
-  ReadOnly: () => import('@/controls/ReadOnlyControl'),
   // Relational / file
   Link: () => import('@/controls/LinkControl'),
   Table: () => import('@/controls/TableControl'),

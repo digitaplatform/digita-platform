@@ -188,8 +188,6 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
       return z.unknown().refine((v) => geoPointSchema.safeParse(v).success, "field_invalid_geolocation");
     case "Table":
       return tableSchema(field);
-    case "ReadOnly":
-      return z.any();
     default:
       return z.any();
   }
@@ -346,10 +344,6 @@ function tableSchema(field: FieldDefinition): ZodTypeAny {
 }
 
 function isStoredFieldType(t: FieldType): boolean {
-  // A5: ReadOnly IS stored (matches field-types.isStoredFieldType) — it's now
-  // included in the validation shape (permissive z.any()) instead of being
-  // dropped, so serialization and validation agree and a persisted ReadOnly value
-  // (computed / fetch_from display) is validated rather than silently skipped.
   return !LAYOUT_FIELD_TYPES.includes(t);
 }
 

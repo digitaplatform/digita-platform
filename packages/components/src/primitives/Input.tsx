@@ -26,7 +26,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   rightIcon?: ReactNode;
   wrapperClassName?: string;
   /** Draw the framed box without a label, icons or error text, so a design's `input-frame`
-   *  rules reach a control whose label the form renderer owns (a locked ReadOnly field). */
+   *  rules reach a box whose label its caller renders. */
   framed?: boolean;
 }
 

@@ -244,7 +244,6 @@ function fieldToProperty(field: FieldDefinition): Record<string, unknown> {
     Color: () => ({ type: "string", pattern: "^#[0-9A-Fa-f]{6}$" }),
     Tag: () => ({ type: "array", items: { type: "string" } }),
     Phone: () => ({ type: "string" }),
-    ReadOnly: () => ({ type: "string", readOnly: true }),
   };
 
   const builder = typeMap[field.fieldtype];
