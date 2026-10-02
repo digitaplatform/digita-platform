@@ -13,6 +13,10 @@ import { seedViewsFromFiles } from "../view/view-loader.js";
 import { successResponse } from "./response-model.js";
 import { BadRequestError } from "../view/view-engine.js";
 import { createLogger } from "../logging/logger.js";
+import type { RevalidateSettings } from "./revalidate-notifier.js";
+import { assertDefinitionsServable } from "./assert-definitions.js";
+import { demoResetDefinition } from "../setup/demo-reset.js";
+import { isReseedAllowed } from "../setup/reseed-app-data.js";
 
 const log = createLogger("admin-reload-definitions-router");
 
@@ -43,6 +47,8 @@ export interface AdminReloadDefinitionsDeps {
   viewRegistry: ViewRegistry;
   translationService: TranslationService;
   roleRegistry: RoleRegistry;
+  /** The renderer's settings, which an entity a visitor can read needs. */
+  revalidateSettings: RevalidateSettings;
   /** App roots (e.g. `apps/erp`). Rules + views may live at this level. */
   appDirs: string[];
   /** Late-bound: platform internal entity dir + each `<appDir>/entities/` (flat layout). */
@@ -101,14 +107,16 @@ async function performReload(deps: AdminReloadDefinitionsDeps): Promise<ReloadSu
     }
   };
 
-  // 1. Check the files in a scratch registry. A file boot would refuse, a malformed definition or
-  //    a Link to an entity no file has, is refused here with the same message, before anything the
-  //    engine serves or stores changes: `loadAll` below overwrites the live registry. Only the
-  //    files are checked, as at boot, so a definition POST /meta wrote cannot refuse a reload.
+  // 1. Check the files in a scratch registry, which holds what boot's registry holds before its
+  //    checks, the demo reset included where the engine may reseed. A file boot would refuse is
+  //    refused here with the same message, before anything the engine serves or stores changes:
+  //    `loadAll` below overwrites the live registry. Only the files are checked, as at boot, so a
+  //    definition POST /meta wrote cannot refuse a reload.
   try {
     const staged = new EntityRegistry();
     await loadEntityFiles(staged);
-    staged.assertLinkTargetsLoaded();
+    if (isReseedAllowed()) staged.register(demoResetDefinition());
+    await assertDefinitionsServable(staged, deps.revalidateSettings);
   } catch (err) {
     throw new BadRequestError(err instanceof Error ? err.message : String(err));
   }

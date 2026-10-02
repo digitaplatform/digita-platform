@@ -16,19 +16,9 @@ const DEMO_RESET = "DemoReset";
 /** The single's one row: the action route runs an action on a document. */
 const DEMO_RESET_ROW = "demo-reset";
 
-/**
- * Register the entity, its row and the action. The action runs the reseed route's own code: it
- * wipes the app's data and loads the seed tiers this engine loads at boot, `seeds/` and, where the
- * demo tier is on, `seeds-demo/`. It loads no site folder, which is where a website engine's pages
- * come from, so a website engine must never get it.
- */
-export async function enableDemoReset(
-  db: MongoDBService,
-  registry: EntityRegistry,
-  hookRunner: HookRunner,
-  reseed: ReseedDeps,
-): Promise<void> {
-  registry.register({
+/** The demo reset's entity definition, as `enableDemoReset` registers it. */
+export function demoResetDefinition(): EntityDefinition {
+  return {
     name: DEMO_RESET,
     module: "core",
     database: DIGITA.DATABASES.CORE,
@@ -42,7 +32,22 @@ export async function enableDemoReset(
       { action: "reset", label: "Reset app data", long_running: true, confirm: true, requires_permission: "write" },
     ],
     permissions: [{ role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1 }],
-  } as EntityDefinition);
+  } as EntityDefinition;
+}
+
+/**
+ * Register the entity, its row and the action. The action runs the reseed route's own code: it
+ * wipes the app's data and loads the seed tiers this engine loads at boot, `seeds/` and, where the
+ * demo tier is on, `seeds-demo/`. It loads no site folder, which is where a website engine's pages
+ * come from, so a website engine must never get it.
+ */
+export async function enableDemoReset(
+  db: MongoDBService,
+  registry: EntityRegistry,
+  hookRunner: HookRunner,
+  reseed: ReseedDeps,
+): Promise<void> {
+  registry.register(demoResetDefinition());
 
   await db.ensureCollection(DEMO_RESET, DIGITA.DATABASES.CORE);
   if (!(await db.findOne(DEMO_RESET, DEMO_RESET_ROW, DIGITA.DATABASES.CORE))) {
