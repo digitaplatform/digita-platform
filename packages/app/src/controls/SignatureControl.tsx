@@ -139,6 +139,7 @@ export default function SignatureControl({
   };
 
   const hintId = `${controlId}-hint`;
+  const requiredId = `${controlId}-required`;
   return (
     <div className="flex flex-col items-start gap-1.5">
       <canvas
@@ -149,7 +150,8 @@ export default function SignatureControl({
         tabIndex={-1}
         role="img"
         aria-labelledby={labelId}
-        aria-describedby={describedBy(hintId, describedById, errorId)}
+        // A canvas named as an image takes no aria-required, so the pad says it in its description.
+        aria-describedby={describedBy(hintId, state.required ? requiredId : undefined, describedById, errorId)}
         aria-invalid={state.invalid || undefined}
         width={PAD_WIDTH * ratio}
         height={PAD_HEIGHT * ratio}
@@ -165,6 +167,11 @@ export default function SignatureControl({
         <span id={hintId} className="text-xs text-textMuted">
           {tc('ui.signature.hint')}
         </span>
+        {state.required && (
+          <span id={requiredId} className="sr-only">
+            {tc('ui.field.required')}
+          </span>
+        )}
         {stored && clear}
       </div>
     </div>

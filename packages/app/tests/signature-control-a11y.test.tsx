@@ -241,3 +241,14 @@ describe('Clear names the field it clears', () => {
     expect(pad()).toBeInTheDocument();
   });
 });
+
+describe('a required Signature field', () => {
+  it('tells a screen reader that the pad is required, and an optional pad nothing', () => {
+    const { unmount } = render(<Field state={{ ...STATE, required: true }} />);
+    expect(screen.getByRole('img', { name: 'Customer signature', description: /ui\.field\.required/ })).toBeInTheDocument();
+    unmount();
+    render(<Field />);
+    expect(screen.getByRole('img', { name: 'Customer signature' })).not.toHaveAccessibleDescription(/ui\.field\.required/);
+  });
+});
+
