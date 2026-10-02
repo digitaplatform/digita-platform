@@ -117,6 +117,41 @@ describe('writing the look cookie', () => {
     });
   });
 
+  it('writes nothing when the choices it is handed are the ones the cookie holds', () => {
+    // An app start and a page load hand the stored choices over again; only a change may count.
+    const stored = () => decodeURIComponent(document.cookie.split('; ').find((c) => c.startsWith(`${LOOK_COOKIE_NAME}=`))!.split('=').slice(1).join('='));
+    writeLookCookie({ design: 'ios', mode: 'dark' }, undefined);
+    expect(stored()).toBe('design=ios&mode=dark&n=1');
+    writeLookCookie({ mode: 'dark' }, undefined);
+    storeIdentityPreferences({ mode: 'dark', density: undefined, design: 'ios' }, undefined);
+    storeIdentityPreferences({ mode: undefined, density: undefined, design: undefined }, undefined);
+    writeLookCookie({ design: 'not a design id' }, undefined);
+    expect(stored()).toBe('design=ios&mode=dark&n=1');
+    writeLookCookie({ mode: 'light' }, undefined);
+    expect(stored()).toBe('design=ios&mode=light&n=2');
+  });
+
+  it('reads the later of two entries with the same count, the one of the current routing', () => {
+    const first = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=minimal&n=3')}`;
+    const later = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=editorial&n=3')}`;
+    expect(readLookCookie(recordingJar('https:', `${first}; ${later}`))).toEqual({ design: 'editorial' });
+  });
+
+  it('counts on past nine digits, so a high count does not pin the look', () => {
+    const jar = recordingJar('https:', `${LOOK_COOKIE_NAME}=${encodeURIComponent('mode=dark&n=999999999')}`);
+    writeLookCookie({ mode: 'light' }, undefined, jar);
+    const written = jar.written[0]!.split(';')[0]!;
+    expect(decodeURIComponent(written.slice(LOOK_COOKIE_NAME.length + 1))).toBe('mode=light&n=1000000000');
+    const both = `${LOOK_COOKIE_NAME}=${encodeURIComponent('mode=dark&n=999999999')}; ${written}`;
+    expect(readLookCookie(recordingJar('https:', both))).toEqual({ mode: 'light' });
+  });
+
+  it('skips an entry it cannot decode and reads the next one', () => {
+    const broken = `${LOOK_COOKIE_NAME}=%E0%A4%A`;
+    const valid = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=fluent&n=1')}`;
+    expect(readLookCookie(recordingJar('https:', `${broken}; ${valid}`))).toEqual({ design: 'fluent' });
+  });
+
   it('reads no density the runtime does not know', () => {
     const jar = recordingJar('https:', `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=ios&density=huge')}`);
     expect(readLookCookie(jar)).toEqual({ design: 'ios' });
