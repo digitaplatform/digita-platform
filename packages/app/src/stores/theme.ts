@@ -119,6 +119,12 @@ function showFavicon(href: string): void {
   link.setAttribute('href', href);
 }
 
+// Keep a choice on the person's account, which the app and the website read at their next load.
+// A write the account refuses is logged with its key, so a choice lost there is not silent.
+function keepChoiceOnAccount(key: string, value: string): void {
+  setUserPreference(key, value).catch((err) => console.error(`[identity] ${key} could not be kept on the account`, err));
+}
+
 // Apply signature `id`, then re-assert the tenant's branding on top: a tenant's
 // configured primary colour / fonts WIN over the signature's defaults, and the
 // per-user density is re-asserted too. Every store path that (re)applies the
@@ -144,20 +150,20 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     rememberIdentityChoices({ mode }, LOOK_COOKIE_DOMAIN);
     applyMode(mode);
     set({ mode });
-    if (get().roams) void setUserPreference(IDENTITY_PREFERENCE_KEYS.mode, mode).catch(() => {});
+    if (get().roams) keepChoiceOnAccount(IDENTITY_PREFERENCE_KEYS.mode, mode);
   },
   cycleMode: () => get().setMode(nextMode(get().mode)),
   setDensity: (density) => {
     rememberIdentityChoices({ density }, LOOK_COOKIE_DOMAIN);
     applyDensity(density);
     set({ density });
-    if (get().roams) void setUserPreference(IDENTITY_PREFERENCE_KEYS.density, density).catch(() => {});
+    if (get().roams) keepChoiceOnAccount(IDENTITY_PREFERENCE_KEYS.density, density);
   },
   setDesign: (design) => {
     rememberIdentityChoices({ design }, LOOK_COOKIE_DOMAIN);
     applyDesign(design);
     set({ design });
-    if (get().roams) void setUserPreference(IDENTITY_PREFERENCE_KEYS.design, design).catch(() => {});
+    if (get().roams) keepChoiceOnAccount(IDENTITY_PREFERENCE_KEYS.design, design);
   },
   previewSignature: (id) => {
     applySignatureLayered(id, get);
