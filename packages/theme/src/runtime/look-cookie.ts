@@ -39,10 +39,12 @@ function readNewestEntry(source: CookieJar): { count: number; params: URLSearchP
     } catch {
       continue;
     }
-    // An entry without a valid count counts as the oldest.
+    // An entry without a valid count counts as the oldest. On a tie the later entry wins: the
+    // browser lists the entry it created first first, and a rewrite keeps that creation time, so
+    // after a routing move the entry of the current routing is the later one.
     const written = params.get('n');
-    const count = written && /^\d{1,9}$/.test(written) ? Number(written) : 0;
-    if (!newest || count > newest.count) newest = { count, params };
+    const count = written && /^\d{1,15}$/.test(written) ? Number(written) : 0;
+    if (!newest || count >= newest.count) newest = { count, params };
   }
   return newest;
 }
@@ -53,8 +55,10 @@ function readNewestEntry(source: CookieJar): { count: number; params: URLSearchP
  * after the tenant moved between routing by path and by host. Both reach the page, the older one
  * first, so each write counts one up from the newest entry it sees (`n`), and the entry with the
  * highest count is read. A count, not a time, so the cookie carries no value unique to a person.
- * A page on another host does not see a host-only entry: after a move from path to host routing,
- * the site at the zone can show the older choice until the person changes the look there.
+ * A page on another host does not see a host-only entry. After a move from path to host routing,
+ * the site at the zone reads its older host-only entry, and a light/dark switch there merges into
+ * that entry, so the older design and density come back on every host until the person picks the
+ * look once in the app.
  */
 export function readLookCookie(jar?: CookieJar): LookChoices {
   // A server render has no document, and no cookie of the person to read.
@@ -63,12 +67,15 @@ export function readLookCookie(jar?: CookieJar): LookChoices {
   const newest = readNewestEntry(source);
   if (!newest) return {};
   const { params } = newest;
+  return validChoices({ design: params.get('design'), mode: params.get('mode'), density: params.get('density') });
+}
+
+/** The choices among `values` that are valid, as the reader takes them. */
+function validChoices(values: { design?: unknown; mode?: unknown; density?: unknown }): LookChoices {
   const choices: LookChoices = {};
-  const design = params.get('design');
-  if (design && DESIGN_ID.test(design)) choices.design = design;
-  const mode = params.get('mode');
+  const { design, mode, density } = values;
+  if (typeof design === 'string' && DESIGN_ID.test(design)) choices.design = design;
   if (mode === 'light' || mode === 'dark' || mode === 'system') choices.mode = mode;
-  const density = params.get('density');
   if (density === 'comfortable' || density === 'compact' || density === 'spacious') choices.density = density;
   return choices;
 }
@@ -97,16 +104,19 @@ export function lookCookieDomain(signInUrl: string): string | undefined {
 
 /**
  * Write the choices into the cookie, one count above the newest entry, keeping the choices already
- * there that `choices` does not name.
+ * there that `choices` does not name. Only a change is written, so the count counts changes, and an
+ * app start or a page load that hands over the stored choices again writes nothing.
  */
 export function writeLookCookie(choices: LookChoices, domain: string | undefined, jar: CookieJar = document): void {
-  const merged: LookChoices = { ...readLookCookie(jar), ...choices };
+  const held = readLookCookie(jar);
+  // Only valid choices are merged, as the reader would take them: an invalid one neither erases a
+  // held choice nor counts as a change on every load.
+  const merged: LookChoices = { ...held, ...validChoices(choices) };
+  if (merged.design === held.design && merged.mode === held.mode && merged.density === held.density) return;
   const params = new URLSearchParams();
   if (merged.design) params.set('design', merged.design);
   if (merged.mode) params.set('mode', merged.mode);
   if (merged.density) params.set('density', merged.density);
-  // No choice, no cookie: an empty one would travel with every request of the zone for nothing.
-  if (params.toString() === '') return;
   params.set('n', String((readNewestEntry(jar)?.count ?? 0) + 1));
   const value = params.toString();
   const attributes = [
