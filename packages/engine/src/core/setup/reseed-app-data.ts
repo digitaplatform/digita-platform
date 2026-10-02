@@ -43,6 +43,9 @@ export interface ReseedSummary {
   rows_deleted: number;
 }
 
+/** The reseed this engine is running, which a second call joins. */
+let running: { mode: ReseedMode; done: Promise<ReseedSummary> } | null = null;
+
 /**
  * The destructive reseed of app data. Two modes:
  *
@@ -66,6 +69,25 @@ export interface ReseedSummary {
  * through the UI like a real user.
  */
 export async function reseedAppData(mode: ReseedMode, deps: ReseedDeps): Promise<ReseedSummary> {
+  // One reset per app at a time: digita-jobs retries a chunk that runs past its limit while the
+  // first attempt still runs, and a second wipe would empty what the first one is seeding. The
+  // second call waits for the running one and answers its result.
+  // ponytail: an in-process lock, one engine per app; a second replica would need a lock in the database.
+  if (running) {
+    if (running.mode !== mode) throw new Error(`a reseed in mode ${running.mode} is running; start the reseed in mode ${mode} once it has ended`);
+    return running.done;
+  }
+  const done = reseedOnce(mode, deps).finally(() => {
+    running = null;
+  });
+  running = { mode, done };
+  return done;
+}
+
+/** How often the seed runs after the wipe before the reset fails, naming the error. */
+const SEED_ATTEMPTS = 2;
+
+async function reseedOnce(mode: ReseedMode, deps: ReseedDeps): Promise<ReseedSummary> {
   const { db, registry, translationService, appDirs } = deps;
   const domainDirs = deps.getDomainDirs();
 
@@ -112,8 +134,21 @@ export async function reseedAppData(mode: ReseedMode, deps: ReseedDeps): Promise
       ...domainDirs.map((d) => join(d.root, "seeds-demo")),
     );
   }
-  await seedAppData(db, registry, new NamingService(db), seedDirs);
-  await seedDataTranslations(db, registry, translationService, seedDirs);
+  // The wipe has run, so a seed that fails leaves the app empty: it runs again, and a second
+  // failure fails the reset with the error, which the run record then shows.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await seedAppData(db, registry, new NamingService(db), seedDirs);
+      await seedDataTranslations(db, registry, translationService, seedDirs);
+      break;
+    } catch (e) {
+      const message = (e as Error).message;
+      if (attempt >= SEED_ATTEMPTS) {
+        throw new Error(`the seed failed ${attempt} times after the app data was wiped, so the app is empty: ${message}`);
+      }
+      log.warn({ attempt, err: message }, "seed after the wipe failed; running it again");
+    }
+  }
 
   // is_first_run flag: demo mode flips it off (no further setup
   // expected); template mode keeps it on so the wizard's Done step
