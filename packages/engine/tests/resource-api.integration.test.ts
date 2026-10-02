@@ -674,6 +674,12 @@ describe("Resource API Integration", () => {
       const ws = items.find((e) => e.name === "Workspace");
       expect(ws?.navigable).toBe(false);
     });
+
+    it("/meta answers no icon or color of an entity, which no client reads", async () => {
+      const res = await app.inject({ method: "GET", url: "/api/v1/meta", headers: authHeaders() });
+      const items = res.json().data as Record<string, unknown>[];
+      expect(items.filter((e) => "icon" in e || "color" in e)).toEqual([]);
+    });
   });
 });
 

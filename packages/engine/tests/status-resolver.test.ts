@@ -151,12 +151,12 @@ describe("resolveStatusIndicator", () => {
 
   it("returns only { color } — does not include the full StateDefinition", () => {
     const entity = makeEntity({
-      states: [{ value: "Active", color: "green", indicator: "dot" }],
+      states: [{ value: "Active", color: "green", is_initial: true }],
     });
     const result = resolveStatusIndicator(entity, { status: "Active" });
     expect(result).toEqual({ color: "green" });
     expect(result).not.toHaveProperty("value");
-    expect(result).not.toHaveProperty("indicator");
+    expect(result).not.toHaveProperty("is_initial");
   });
 
   // ── Multiple states — correct match ───────────────────────────────────────
