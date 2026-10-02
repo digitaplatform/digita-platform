@@ -229,4 +229,8 @@ describe("validateViewDefinition — the view's own limits", () => {
   it("PLANTED INNOCENT: accepts positive whole limits", () => {
     expect(validateViewDefinition({ ...(VALID as Record<string, unknown>), default_limit: 50, max_limit: 200 })).toEqual([]);
   });
+
+  it("PLANTED INNOCENT: accepts an empty limit, which a person stores by clearing the field", () => {
+    expect(validateViewDefinition({ ...(VALID as Record<string, unknown>), default_limit: null, max_limit: null })).toEqual([]);
+  });
 });
