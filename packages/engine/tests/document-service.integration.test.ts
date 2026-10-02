@@ -2425,3 +2425,36 @@ describe("A save stores only declared fields, an Administrator's included", () =
     expect("colour" in stored).toBe(false);
   });
 });
+
+describe("The lifecycle hooks an app keeps its numbers right with", () => {
+  type Hook = (doc: { _id: string; get(f: string): unknown }) => unknown;
+  const hooks = () => (docService as unknown as { hookRunner: { hooks: Map<string, Map<string, Hook>> } }).hookRunner.hooks;
+
+  beforeAll(async () => {
+    registry.register(makeEntity({ name: "HookedDoc" }));
+    await db.ensureCollection("HookedDoc", "app");
+  });
+  afterAll(() => hooks().delete("HookedDoc"));
+
+  it("refuses a delete its before_delete handler refuses, and keeps the row", async () => {
+    hooks().set("HookedDoc", new Map([["before_delete", () => { throw new Error("a booked stock movement stays"); }]]));
+    const doc = await docService.insert("HookedDoc", { title: "Booked" }, adminUser);
+    await expect(docService.deleteDoc("HookedDoc", doc._id, adminUser)).rejects.toThrow("a booked stock movement stays");
+    expect(await db.findOne("HookedDoc", doc._id, "app")).not.toBeNull();
+  });
+
+  it("runs on_field_change for the changed field only, on update", async () => {
+    const seen: string[] = [];
+    hooks().set(
+      "HookedDoc",
+      new Map<string, Hook>([
+        ["on_field_change:title", (doc) => { seen.push(`title=${String(doc.get("title"))}`); }],
+        ["on_field_change:amount", () => { seen.push("amount"); }],
+      ]),
+    );
+    const doc = await docService.insert("HookedDoc", { title: "Before", amount: 5 }, adminUser);
+    seen.length = 0;
+    await docService.update("HookedDoc", doc._id, { title: "After", amount: 5 }, adminUser);
+    expect(seen).toEqual(["title=After"]);
+  });
+});
