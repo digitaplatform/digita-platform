@@ -31,12 +31,13 @@ function initials(user: SessionUser): string {
   return (user.email[0] ?? '?').toUpperCase();
 }
 
-/** Self-service account page — owns the useAccount hooks; the cards are pure. */
-/** A refused request names its reason, as the IdP words it (the demo's read-only profile, a field it
- *  takes no value for); a server failure names nothing the person can act on. */
+/** The reason of a refused request, when the server sent a text for the person (the demo's
+ *  read-only profile); a refusal without one, and a server failure, name nothing to act on. */
 function serverReason(error: unknown): string | undefined {
-  return error instanceof ApiClientError && error.status < 500 ? error.message : undefined;
+  return error instanceof ApiClientError && error.status < 500 ? error.reason : undefined;
 }
+
+/** Self-service account page — owns the useAccount hooks; the cards are pure. */
 
 export default function AccountPage() {
   const tc = useChrome();
