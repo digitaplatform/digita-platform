@@ -51,7 +51,7 @@ describe("POST /admin/reseed answers a refused or failed reset with its reason",
     expect(res.json()).toMatchObject({
       error: {
         code: "RESEED_RUNNING",
-        detail: "a reseed in mode demo is running; start the reseed in mode template once it has ended",
+        detail: "reseed_running",
       },
       messages: [{ text: "reseed_running", params: { running: "demo", requested: "template" } }],
     });
@@ -66,8 +66,7 @@ describe("POST /admin/reseed answers a refused or failed reset with its reason",
     expect(res.json()).toMatchObject({
       error: {
         code: "RESEED_FAILED",
-        detail:
-          "the seed failed 2 times after the app data was wiped; the app holds only the rows seeded before the failure: E11000 duplicate key",
+        detail: "reseed_seed_failed",
       },
       messages: [{ text: "reseed_seed_failed", params: { attempts: "2", error: "E11000 duplicate key" } }],
     });
@@ -84,7 +83,7 @@ describe("POST /admin/reseed answers a refused or failed reset with its reason",
       expect(res.json()).toMatchObject({
         error: {
           code: "RESEED_WRITES_RUNNING",
-          detail: "the reset waited 60 s for writes that had not ended, and wiped nothing: action spawn on Thing",
+          detail: "reseed_writes_running",
         },
         messages: [{ text: "reseed_writes_running", params: { seconds: "60", writes: "action spawn on Thing" } }],
       });

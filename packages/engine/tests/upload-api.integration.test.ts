@@ -2080,7 +2080,7 @@ describe("Upload API Integration", () => {
 
       const second = await createApp({ authn: ta.authn });
       try {
-        await expect(second.startup()).rejects.toThrow(/storage-path lint failed/);
+        await expect(second.startup()).rejects.toMatchObject({ code: "attach_storage_path_invalid" });
       } finally {
         await second.app.close();
         await second.db.disconnect();

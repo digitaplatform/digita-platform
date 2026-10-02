@@ -51,7 +51,7 @@ describe("the demo reset", () => {
   it("refuses a reset in the other mode while one runs, naming both", async () => {
     seedAppData.mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve({ unresolved_links: [] }), 20)));
     const demo = reseedAppData("demo", deps);
-    await expect(reseedAppData("template", deps)).rejects.toThrow("a reseed in mode demo is running; start the reseed in mode template once it has ended");
+    await expect(reseedAppData("template", deps)).rejects.toMatchObject({ code: "reseed_running", params: { running: "demo", requested: "template" } });
     await demo;
   });
 
@@ -63,9 +63,10 @@ describe("the demo reset", () => {
 
   it("fails, saying the app is empty and why, when the seed fails again", async () => {
     seedAppData.mockRejectedValue(new Error("disk full"));
-    await expect(reseedAppData("demo", deps)).rejects.toThrow(
-      "the seed failed 2 times after the app data was wiped; the app holds only the rows seeded before the failure: disk full",
-    );
+    await expect(reseedAppData("demo", deps)).rejects.toMatchObject({
+      code: "reseed_seed_failed",
+      params: { attempts: "2", error: "disk full" },
+    });
     // The lock is released after a failure, so the next reset can repair the app.
     seedAppData.mockReset().mockResolvedValue({ unresolved_links: [] });
     await expect(reseedAppData("demo", deps)).resolves.toMatchObject({ mode: "demo" });
@@ -77,9 +78,10 @@ describe("the demo reset's wait for writes under way", () => {
     vi.useFakeTimers();
     const end = beginWrite("action spawn on Thing");
     try {
-      const refused = expect(reseedAppData("demo", deps)).rejects.toThrow(
-        "the reset waited 60 s for writes that had not ended, and wiped nothing: action spawn on Thing",
-      );
+      const refused = expect(reseedAppData("demo", deps)).rejects.toMatchObject({
+        code: "reseed_writes_running",
+        params: { seconds: "60", writes: "action spawn on Thing" },
+      });
       await vi.advanceTimersByTimeAsync(60_000);
       await refused;
       expect(wipes()).toBe(0);

@@ -243,9 +243,9 @@ describe("seedAppData modes", () => {
   it("upsert-delete mode refuses an invalid docstatus exactly as insert mode does", async () => {
     await seedFile([{ ...seedHome, docstatus: 5 }]);
     const { db, stored } = mockDb([storedHome]);
-    await expect(seedSite(db, mockDocumentService(stored))).rejects.toThrow("invalid docstatus");
+    await expect(seedSite(db, mockDocumentService(stored))).rejects.toMatchObject({ code: "seed_row_docstatus_invalid", params: { value: "5" } });
     expect(db.upsertOne).not.toHaveBeenCalled();
-    await expect(seedAppData(db, registry(), {} as NamingService, [dir])).rejects.toThrow("invalid docstatus");
+    await expect(seedAppData(db, registry(), {} as NamingService, [dir])).rejects.toMatchObject({ code: "seed_row_docstatus_invalid", params: { value: "5" } });
   });
 });
 

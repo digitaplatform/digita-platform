@@ -2,6 +2,7 @@ import { createTranslator, type Translator } from "@digitaplatform/shared";
 import { readBundle } from "@digitaplatform/shared/i18n-node";
 import { env } from "./core/config/env.js";
 import { createLogger } from "./core/logging/logger.js";
+import { EngineError } from "./core/errors/engine-error.js";
 
 const log = createLogger("i18n");
 
@@ -38,6 +39,6 @@ export function messageLocale(userLanguage: string | undefined, acceptLanguage: 
 
 /** The boot-loaded translator; throws until loadEngineI18n() has run. */
 export function engineI18n(): Translator {
-  if (!translator) throw new Error("engine i18n: loadEngineI18n() has not run");
+  if (!translator) throw new EngineError("engine_i18n_not_loaded", {}, 500, "INTERNAL_ERROR");
   return translator;
 }

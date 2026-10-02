@@ -9,9 +9,7 @@ import {
 } from "mongodb";
 import { ValidationFailedError } from "../../document/document-service.js";
 import { UnknownDoctypeError } from "../../entity/entity-registry.js";
-import { PasswordKeyNotListedError } from "../../entity/password-cipher.js";
 import { EngineError } from "../../errors/engine-error.js";
-import { ReseedRunningError, ReseedSeedFailedError, ReseedWritesRunningError } from "../../setup/reseed-app-data.js";
 import { englishText } from "../../../i18n.js";
 import { createLogger } from "../../logging/logger.js";
 import { urlPath } from "../../logging/url-path.js";
@@ -38,12 +36,12 @@ export function globalErrorHandler(
   );
 
   // Every EngineError answers alike: its code with its params as the message, which the response
-  // hook translates into the requester's language, and its status. The log reads it in English.
+  // hook translates into the requester's language, and its status. The log reads it in English; a
+  // 5xx is the engine's or an author's fault, so it is logged as an error with its stack.
   if (error instanceof EngineError) {
-    log.debug(
-      { trace_id: traceId, code: error.code, params: error.params, text: englishText(error.code, error.params) },
-      "Request refused",
-    );
+    const entry = { trace_id: traceId, code: error.code, params: error.params, text: englishText(error.code, error.params) };
+    if (error.status >= 500) log.error({ ...entry, err: error }, "Request failed");
+    else log.debug(entry, "Request refused");
     // A refused save answers with one message per field it refuses.
     if (error instanceof ValidationFailedError) {
       const response: ApiResponse<null> = {
@@ -113,68 +111,6 @@ export function globalErrorHandler(
       },
     };
     reply.code(404).send(response);
-    return;
-  }
-
-  // A refused or failed reset: the text a person reads, and in `detail` the English sentence,
-  // which digita-jobs writes into the run record of the demo reset.
-  if (error instanceof ReseedRunningError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 409,
-      data: null,
-      messages: [
-        { text: "reseed_running", type: "error", show: true, params: { running: error.running, requested: error.requested } },
-      ],
-      error: { code: "RESEED_RUNNING", detail: error.message, trace_id: traceId },
-    };
-    reply.code(409).send(response);
-    return;
-  }
-
-  if (error instanceof ReseedWritesRunningError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 409,
-      data: null,
-      messages: [
-        {
-          text: "reseed_writes_running",
-          type: "error",
-          show: true,
-          params: { seconds: String(error.seconds), writes: error.writes.join(", ") },
-        },
-      ],
-      error: { code: "RESEED_WRITES_RUNNING", detail: error.message, trace_id: traceId },
-    };
-    reply.code(409).send(response);
-    return;
-  }
-
-  if (error instanceof ReseedSeedFailedError) {
-    log.error({ trace_id: traceId, err: error }, "Reseed failed after the wipe");
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 500,
-      data: null,
-      messages: [
-        { text: "reseed_seed_failed", type: "error", show: true, params: { attempts: String(error.attempts), error: error.reason } },
-      ],
-      error: { code: "RESEED_FAILED", detail: error.message, trace_id: traceId },
-    };
-    reply.code(500).send(response);
-    return;
-  }
-
-  if (error instanceof PasswordKeyNotListedError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 409,
-      data: null,
-      messages: [{ text: error.message, type: "error", show: true }],
-      error: { code: "PASSWORD_KEY_NOT_LISTED", detail: error.message, trace_id: traceId },
-    };
-    reply.code(409).send(response);
     return;
   }
 

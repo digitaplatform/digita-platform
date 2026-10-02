@@ -5,6 +5,7 @@ import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { TranslationService } from "../i18n/translation-service.js";
 import { createLogger } from "../logging/logger.js";
+import { ConfigurationError } from "../errors/engine-error.js";
 
 const log = createLogger("seed-data-translations");
 
@@ -62,7 +63,7 @@ export async function seedDataTranslations(
       let rows: TranslationRow[];
       try {
         const parsed = JSON.parse(await readFile(join(dir, file), "utf-8"));
-        if (!Array.isArray(parsed)) throw new Error("top-level JSON must be an array");
+        if (!Array.isArray(parsed)) throw new ConfigurationError("seed_file_not_list", { file });
         rows = parsed as TranslationRow[];
       } catch (e) {
         log.error(

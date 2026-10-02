@@ -17,6 +17,7 @@ import type { RevalidateSettings } from "./revalidate-notifier.js";
 import { assertDefinitionsServable } from "./assert-definitions.js";
 import { demoResetDefinition } from "../setup/demo-reset.js";
 import { isReseedAllowed } from "../setup/reseed-app-data.js";
+import { EngineError } from "../errors/engine-error.js";
 
 const log = createLogger("admin-reload-definitions-router");
 
@@ -118,6 +119,8 @@ async function performReload(deps: AdminReloadDefinitionsDeps): Promise<ReloadSu
     if (isReseedAllowed()) staged.register(demoResetDefinition());
     await assertDefinitionsServable(staged, deps.revalidateSettings);
   } catch (err) {
+    // A refusal that carries its own code keeps it, answered as the reload's 400.
+    if (err instanceof EngineError) throw new BadRequestError(err.code, err.params);
     throw new BadRequestError("definition_refused", { reason: err instanceof Error ? err.message : String(err) });
   }
 

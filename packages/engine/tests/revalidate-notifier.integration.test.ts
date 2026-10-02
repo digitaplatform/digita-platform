@@ -263,9 +263,10 @@ describe("a website engine's start-up", () => {
     try {
       const result = await createApp({ authn: (await buildTestAuth()).authn });
       try {
-        await expect(result.startup()).rejects.toThrow(
-          /^Missing required environment variable: REVALIDATE_URL \((WebSite|WebPage|WebBlock) grants Guest read\)$/,
-        );
+        await expect(result.startup()).rejects.toMatchObject({
+          code: "setting_missing_for_guest_read",
+          params: { setting: "REVALIDATE_URL", doctype: expect.stringMatching(/^(WebSite|WebPage|WebBlock)$/) },
+        });
       } finally {
         await result.app.close();
         await result.db.disconnect();
