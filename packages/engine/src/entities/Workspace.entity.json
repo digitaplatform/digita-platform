@@ -4,8 +4,6 @@
   "database": "core",
   "label": "Workspace",
   "label_plural": "Workspaces",
-  "description": "Role-bound dashboard. An ordered list of presentation cards (number/chart/list/shortcut/links) that compose the View engine — each card points at a named view + section. App-agnostic; the engine stores `cards` as opaque JSON and never interprets a card kind.",
-  "icon": "layout-dashboard",
   "naming": { "strategy": "user_set" },
   "is_single": false,
   "is_submittable": false,
