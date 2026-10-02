@@ -342,7 +342,6 @@ const FIELD_TYPE_MAP: Record<FieldType, FieldTypeHandler> = {
   Color: colorHandler,
   Tag: tagHandler,
   Phone: dataHandler,
-  ReadOnly: passthroughHandler,
   SectionBreak: layoutHandler,
   ColumnBreak: layoutHandler,
   TabBreak: layoutHandler,

@@ -17,7 +17,7 @@ describe('fieldSpan (form-UX height killer)', () => {
   });
 
   it('defaults the workhorse half-width types to 6', () => {
-    for (const t of ['Data', 'Link', 'Select', 'Phone', 'Password', 'Tag', 'ReadOnly', 'Barcode'])
+    for (const t of ['Data', 'Link', 'Select', 'Phone', 'Password', 'Tag', 'Barcode'])
       expect(fieldSpan(f(t))).toBe(6);
   });
 

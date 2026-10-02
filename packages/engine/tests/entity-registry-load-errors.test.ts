@@ -17,7 +17,7 @@ import { mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
-import { NON_STORED_FIELD_TYPES, STORED_FIELD_TYPES } from "@digitaplatform/shared";
+import { LAYOUT_FIELD_TYPES, STORED_FIELD_TYPES } from "@digitaplatform/shared";
 
 const okEntity = (name: string) => ({
   name,
@@ -89,8 +89,14 @@ describe("EntityRegistry refuses an unknown fieldtype at load", () => {
     expect((await loadBook({ actions }))?.message).toContain('Field "title" of action "lend" of entity "Book" has the unknown fieldtype "Txet"');
   });
 
+  it("refuses ReadOnly, a type that is gone: a read-only field is a typed field with read_only", async () => {
+    const total = { fieldname: "total", fieldtype: "ReadOnly", label: "Total" };
+    expect((await loadBook({ fields: [total] }))?.message).toContain('Field "total" of entity "Book" has the unknown fieldtype "ReadOnly"');
+    expect(await loadBook({ fields: [{ ...total, fieldtype: "Currency", read_only: true }] })).toBeUndefined();
+  });
+
   it("PLANTED INNOCENT: loads a file with every valid type", async () => {
-    const fields = [...STORED_FIELD_TYPES, ...NON_STORED_FIELD_TYPES].map((fieldtype, i) => ({
+    const fields = [...STORED_FIELD_TYPES, ...LAYOUT_FIELD_TYPES].map((fieldtype, i) => ({
       fieldname: `f${i}`,
       fieldtype,
       label: fieldtype,

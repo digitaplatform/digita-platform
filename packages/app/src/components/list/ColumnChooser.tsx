@@ -14,7 +14,7 @@ import { useChrome } from '@/lib/chrome-i18n';
  * default order (visible = []).
  *
  * Candidate columns = the entity's listable fields (in_list_view default set
- * PLUS any other non-layout/Table/ReadOnly field the user may opt in to).
+ * PLUS any other non-layout/Table field the user may opt in to).
  */
 
 export interface ColumnChooserProps {
@@ -29,7 +29,7 @@ export interface ColumnChooserProps {
 
 function candidateFields(meta: EntityDefinition): FieldDefinition[] {
   return meta.fields.filter(
-    (f) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype) && f.fieldtype !== 'Table' && f.fieldtype !== 'ReadOnly',
+    (f) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype) && f.fieldtype !== 'Table',
   );
 }
 

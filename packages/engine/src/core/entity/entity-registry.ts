@@ -2,7 +2,7 @@ import { readdir, readFile } from "fs/promises";
 import { join, extname } from "path";
 import type { EntityDefinition, FieldDefinition, FieldType, FreezeSpec } from "@digitaplatform/shared";
 import { DIGITA } from "@digitaplatform/shared";
-import { LAYOUT_FIELD_TYPES, NON_STORED_FIELD_TYPES, ROW_ID_FIELD, STORED_FIELD_TYPES, UPLOAD_FIELD_TYPES } from "@digitaplatform/shared";
+import { LAYOUT_FIELD_TYPES, ROW_ID_FIELD, STORED_FIELD_TYPES, UPLOAD_FIELD_TYPES } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { createLogger } from "../logging/logger.js";
 import { isValidStoragePath, STORAGE_PATH_RULE } from "../storage/storage-path.js";
@@ -33,7 +33,7 @@ const RESERVED_ENTITY_NAMES = ["account", "app", "login"];
 /** Hook keys no engine code runs: an entity that declares one restricts and changes nothing. */
 const NEVER_RUN_HOOKS = ["has_permission", "on_list_load"];
 
-const KNOWN_FIELD_TYPES: ReadonlySet<string> = new Set<string>([...STORED_FIELD_TYPES, ...NON_STORED_FIELD_TYPES]);
+const KNOWN_FIELD_TYPES: ReadonlySet<string> = new Set<string>([...STORED_FIELD_TYPES, ...LAYOUT_FIELD_TYPES]);
 
 /**
  * What the engine writes itself, on every document (`BaseDocument.toMongo`) and on every Table

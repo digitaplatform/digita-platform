@@ -13,7 +13,7 @@ const FIELDS = [
   { fieldname: 'tab_order', fieldtype: 'TabBreak', label: 'Order' },
   { fieldname: 'customer', fieldtype: 'Data', label: 'Customer' },
   { fieldname: 'sec_totals', fieldtype: 'SectionBreak', label: 'Totals', collapsible: true },
-  { fieldname: 'grand_total', fieldtype: 'ReadOnly', label: 'Grand total' },
+  { fieldname: 'grand_total', fieldtype: 'Data', label: 'Grand total', read_only: true },
   { fieldname: 'remarks', fieldtype: 'Data', label: 'Remarks' },
   { fieldname: 'tab_history', fieldtype: 'TabBreak', label: 'History' },
   { fieldname: 'note', fieldtype: 'Data', label: 'Note' },
@@ -22,7 +22,7 @@ const FIELDS = [
 const STATE: FieldStateMap = Object.fromEntries(
   FIELDS.map((f) => [
     f.fieldname,
-    { visible: true, required: false, readOnly: false, invalid: false, isComputed: false, isFrozen: false, updating: false },
+    { visible: true, required: false, readOnly: f.read_only === true, invalid: false, isComputed: false, isFrozen: false, updating: false },
   ]),
 );
 
@@ -90,7 +90,7 @@ describe('FormRenderer through the kit composites', () => {
     render(form({ customer: 'Pick a customer.' }));
     const total = await screen.findByLabelText('Grand total');
     expect(total).toHaveAttribute('readonly');
-    expect(total.closest('[data-ui="input-frame"]')).toHaveAttribute('data-readonly', 'true');
+    expect(total).toHaveAttribute('data-ui', 'input');
     expect(total).toHaveValue('€1,886.15');
     // The Order tab counts its one error.
     expect(screen.getAllByRole('tab')[0]).toHaveTextContent('Order1');

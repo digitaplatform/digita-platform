@@ -30,7 +30,6 @@ export function csvCell(value: unknown): string {
 function isColumnField(f: FieldDefinition): boolean {
   return (
     !LAYOUT_FIELD_TYPES.includes(f.fieldtype) &&
-    f.fieldtype !== 'ReadOnly' &&
     f.fieldtype !== 'Table'
   );
 }

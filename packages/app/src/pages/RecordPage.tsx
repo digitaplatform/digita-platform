@@ -202,7 +202,7 @@ export function stripForSave(meta: EntityDefinition, values: Doc, original?: Doc
   const drop = new Set<string>(DISPLAY_ONLY_KEYS);
   const tables = new Map<string, FieldDefinition>();
   for (const f of meta.fields) {
-    if (LAYOUT_FIELD_TYPES.includes(f.fieldtype) || f.fieldtype === 'ReadOnly') drop.add(f.fieldname);
+    if (LAYOUT_FIELD_TYPES.includes(f.fieldtype)) drop.add(f.fieldname);
     if (f.fieldtype === 'Table') tables.set(f.fieldname, f);
   }
   const out: Doc = {};

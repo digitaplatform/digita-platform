@@ -63,7 +63,7 @@ function group(ft: FieldType): Group {
   if (DATE.includes(ft)) return 'date';
   if (ft === 'Check') return 'check';
   if (PRESENCE_ONLY.includes(ft)) return 'presence';
-  return 'excluded'; // Table + ReadOnly + layout
+  return 'excluded'; // Table + layout
 }
 
 const OPS_BY_GROUP: Record<Group, FilterOp[]> = {
@@ -87,7 +87,7 @@ export function operatorsForFieldtype(ft: FieldType): FilterOp[] {
   return OPS_BY_GROUP[group(ft)];
 }
 
-/** Fields a user can build a filter on (excludes layout / Table / ReadOnly / presence-less). */
+/** Fields a user can build a filter on (excludes layout / Table / presence-less). */
 export function filterableFields(meta: Pick<EntityDefinition, 'fields'>): FieldDefinition[] {
   return meta.fields.filter(
     (f) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype) && operatorsForFieldtype(f.fieldtype).length > 0,
