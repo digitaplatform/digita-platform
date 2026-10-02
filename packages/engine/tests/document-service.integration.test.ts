@@ -2577,3 +2577,35 @@ describe("A Table cell is stored as a field of its type is", () => {
     expect(refused).toEqual([expect.objectContaining({ field: "rows.1.f0", message_key: "field_invalid_int" })]);
   });
 });
+
+describe("A list masks a field level that only the owner reads as getDoc does", () => {
+  const reader: UserContext = { _id: "owner-l1", email: "owner-l1@test.local", roles: ["OwnerL1"], full_name: "Owner L1" };
+
+  beforeAll(async () => {
+    registry.register(
+      makeEntity({
+        name: "OwnerLevelNote",
+        fields: [
+          { fieldname: "title", fieldtype: "Data" as const, label: "Title" },
+          { fieldname: "secret", fieldtype: "Data" as const, label: "Secret", perm_level: 1 },
+        ],
+        permissions: [
+          { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
+          { role: "OwnerL1", level: 0, select: 1, read: 1 },
+          { role: "OwnerL1", level: 1, read: 1, if_owner: 1 },
+        ],
+      } as Partial<EntityDefinition>),
+    );
+    await db.ensureCollection("OwnerLevelNote", "app");
+    const row = { doctype: "OwnerLevelNote", docstatus: 0, modified_by: "system", creation: new Date(), modified: new Date() };
+    await db.insertOne("OwnerLevelNote", { ...row, _id: "OLN-mine", owner: reader.email, title: "Mine", secret: "s-mine" }, "app");
+    await db.insertOne("OwnerLevelNote", { ...row, _id: "OLN-theirs", owner: "other@test.local", title: "Theirs", secret: "s-theirs" }, "app");
+  });
+
+  it("PLANTED DEFECT: shows the owner the level-1 field of their own row, and masks it on the other row", async () => {
+    const listed = await docService.getList("OwnerLevelNote", { fields: ["_id", "secret"], order_by: "_id asc" }, reader);
+    const secrets = Object.fromEntries((listed.data as Array<Record<string, unknown>>).map((r) => [r["_id"], r["secret"]]));
+    expect(secrets).toEqual({ "OLN-mine": "s-mine", "OLN-theirs": undefined });
+    expect((await docService.getDoc("OwnerLevelNote", "OLN-mine", reader))._data["secret"]).toBe("s-mine");
+  });
+});
