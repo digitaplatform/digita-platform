@@ -1,0 +1,50 @@
+{
+  "name": "WebSite",
+  "module": "web",
+  "database": "web_content",
+  "label": "Web Site",
+  "label_plural": "Web Sites",
+  "is_submittable": false,
+  "naming": { "strategy": "user_set" },
+  "title_field": "site_name",
+  "search_fields": ["_id", "site_name", "domain"],
+  "default_sort": { "field": "_id", "order": "asc" },
+  "in_global_search": false,
+  "track_changes": true,
+  "storage_path": "web/site",
+  "fields": [
+    { "fieldname": "sb_identity", "fieldtype": "SectionBreak", "label": "Identity", "idx": 1 },
+    { "fieldname": "site_name", "fieldtype": "Data", "label": "Site Name", "required": true, "in_list_view": true, "idx": 2 },
+    { "fieldname": "domain", "fieldtype": "Data", "label": "Domain", "description": "Public host, e.g. web.example.com", "in_list_view": true, "idx": 3 },
+    { "fieldname": "theme", "fieldtype": "Data", "label": "Theme", "description": "The bundled signature this site wears: digita, simetrix, veloluck-workbench, veloluck-lakeside or veloluck-precise. Empty: the website look the tenant's settings name, else digita.", "idx": 4 },
+    { "fieldname": "enabled_locales", "fieldtype": "JSON", "label": "Enabled Locales", "description": "Array of locale codes this site publishes, e.g. [\"en\",\"de\"].", "idx": 6 },
+    { "fieldname": "sb_defaults", "fieldtype": "SectionBreak", "label": "Defaults & SEO", "idx": 7 },
+    { "fieldname": "default_og_image", "fieldtype": "AttachImage", "label": "Default OG Image", "idx": 8 },
+    { "fieldname": "footer_text", "fieldtype": "SmallText", "label": "Footer Text", "idx": 9 },
+    { "fieldname": "contact_email", "fieldtype": "Data", "label": "Contact email", "description": "The address the contact sheet notifies and the footer shows.", "idx": 10 },
+    { "fieldname": "booking_url", "fieldtype": "Data", "label": "Booking URL", "description": "A link to book a call; empty hides the button.", "idx": 11 },
+    { "fieldname": "link_apps", "fieldtype": "Check", "label": "Link tenant apps", "description": "Show the tenant's apps in the header; off for a public site.", "default": false, "idx": 12 },
+    { "fieldname": "design_switcher", "fieldtype": "Check", "label": "Design switcher", "description": "Show the design switcher band above the footer.", "default": false, "idx": 13 },
+    { "fieldname": "hero_atmosphere", "fieldtype": "Select", "label": "Hero atmosphere", "options": ["none", "data-rain"], "description": "What the hero of every page draws behind its text, unless the page names its own: none, or data-rain with the hero rain.", "idx": 14 },
+    { "fieldname": "hero_rain", "fieldtype": "JSON", "label": "Hero rain", "description": "The columns of the data rain, up to five, each a list of tokens: [{\"tokens\": [\"Link→Customer\", \"Table\"]}]", "idx": 15 },
+    { "fieldname": "sb_publish", "fieldtype": "SectionBreak", "label": "Publish", "idx": 16 },
+    { "fieldname": "status", "fieldtype": "Select", "label": "Status", "options": ["draft", "published"], "default": "draft", "in_list_view": true, "in_standard_filter": true, "idx": 17 }
+  ],
+  "actions": [
+    {
+      "label": "Delete expired contact requests of all sites",
+      "action": "deleteExpiredContactRequests",
+      "type": "danger",
+      "icon": "trash",
+      "confirm": true,
+      "requires_permission": "delete",
+      "long_running": true
+    }
+  ],
+  "hooks": { "actions": { "deleteExpiredContactRequests": "contact-request/deleteExpiredContactRequests.deleteExpiredContactRequests" } },
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1 },
+    { "role": "System User", "level": 0, "select": 1, "read": 1, "write": 1 },
+    { "role": "Guest", "level": 0, "select": 1, "read": 1, "condition": "eval:doc.status=='published'" }
+  ]
+}

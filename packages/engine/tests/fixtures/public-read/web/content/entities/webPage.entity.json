@@ -1,0 +1,55 @@
+{
+  "name": "WebPage",
+  "module": "web",
+  "database": "web_content",
+  "label": "Web Page",
+  "label_plural": "Web Pages",
+  "is_submittable": false,
+  "naming": { "strategy": "user_set" },
+  "title_field": "title",
+  "search_fields": ["_id", "title", "slug"],
+  "default_sort": { "field": "modified", "order": "desc" },
+  "in_global_search": false,
+  "track_changes": true,
+  "storage_path": "web/page",
+  "fields": [
+    { "fieldname": "sb_identity", "fieldtype": "SectionBreak", "label": "Identity", "idx": 1 },
+    { "fieldname": "site", "fieldtype": "Link", "label": "Site", "target": "WebSite", "target_display": "site_name", "required": true, "in_list_view": true, "in_standard_filter": true, "idx": 2 },
+    { "fieldname": "locale", "fieldtype": "Select", "label": "Locale", "options": ["en", "de", "it", "fr", "es", "tr"], "required": true, "in_list_view": true, "in_standard_filter": true, "idx": 3 },
+    { "fieldname": "slug", "fieldtype": "Data", "label": "Slug", "description": "URL path; empty for the home page. Lowercase letters, digits, hyphens, slashes.", "regex": "^[a-z0-9-/]*$", "regex_message": "Slug must be lowercase letters, digits, hyphens or slashes", "in_list_view": true, "in_standard_filter": true, "idx": 4 },
+    { "fieldname": "title", "fieldtype": "Data", "label": "Title", "required": true, "in_list_view": true, "idx": 5 },
+    { "fieldname": "translation_group", "fieldtype": "Data", "label": "Translation Group", "description": "Shared id linking the locale variants of one logical page (drives hreflang).", "in_standard_filter": true, "idx": 7 },
+    { "fieldname": "sb_content", "fieldtype": "SectionBreak", "label": "Content", "idx": 8 },
+    {
+      "fieldname": "blocks",
+      "fieldtype": "Table",
+      "label": "Blocks",
+      "description": "Ordered content blocks rendered top-to-bottom by digita-web.",
+      "child_fields": [
+        { "fieldname": "type", "fieldtype": "Select", "label": "Type", "options": ["hero", "richtext", "feature_grid", "media", "cta", "stats", "embed", "plugin", "code", "hero_brand", "pillars", "stack", "pipeline", "compare", "checklist", "segments", "signals", "cta_panel", "contact_details", "showcase", "record_form", "app_list"], "required": true, "in_list_view": true, "idx": 1 },
+        { "fieldname": "props", "fieldtype": "JSON", "label": "Props", "description": "Type-specific config (heading, body, items, image File id, plugin_id, …).", "idx": 2 },
+        { "fieldname": "anchor", "fieldtype": "Data", "label": "Anchor", "description": "Optional #id for in-page nav.", "idx": 3 },
+        { "fieldname": "theme_variant", "fieldtype": "Select", "label": "Theme Variant", "options": ["dark"], "description": "dark: the block shows as a dark band on a light page, in the site's own dark colors. Empty: the block follows the page.", "idx": 4 }
+      ],
+      "idx": 9
+    },
+    { "fieldname": "sb_seo", "fieldtype": "SectionBreak", "label": "SEO", "idx": 10 },
+    { "fieldname": "meta_title", "fieldtype": "Data", "label": "Meta Title", "idx": 11 },
+    { "fieldname": "meta_description", "fieldtype": "SmallText", "label": "Meta Description", "max_length": 320, "idx": 12 },
+    { "fieldname": "og_image", "fieldtype": "AttachImage", "label": "OG Image", "idx": 13 },
+    { "fieldname": "canonical_url", "fieldtype": "Data", "label": "Canonical URL", "idx": 14 },
+    { "fieldname": "no_index", "fieldtype": "Check", "label": "No Index", "default": false, "idx": 15 },
+    { "fieldname": "sb_publish", "fieldtype": "SectionBreak", "label": "Publish", "idx": 16 },
+    { "fieldname": "status", "fieldtype": "Select", "label": "Status", "options": ["draft", "published"], "default": "draft", "in_list_view": true, "in_standard_filter": true, "idx": 17 }
+  ],
+  "indexes": [
+    { "fields": ["site", "locale", "slug"], "name": "idx_site_locale_slug", "unique": true },
+    { "fields": ["site", "status", "locale"], "name": "idx_site_status_locale" },
+    { "fields": ["translation_group"], "name": "idx_translation_group" }
+  ],
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1 },
+    { "role": "System User", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1 },
+    { "role": "Guest", "level": 0, "select": 1, "read": 1, "condition": "eval:doc.status=='published'" }
+  ]
+}
