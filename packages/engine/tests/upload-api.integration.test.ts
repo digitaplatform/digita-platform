@@ -1282,6 +1282,19 @@ describe("Upload API Integration", () => {
         expect(await fileCount()).toBe(before);
       });
 
+      it("deletes the letter bound to a book when a colleague who did not upload it clears it", async () => {
+        const { bookId, letter } = await salesBookWithLetter("%PDF sales book letter, cleared by a colleague");
+        const cleared = await app.inject({
+          method: "PUT",
+          url: `/api/v1/resource/TestBook/${bookId}`,
+          headers: authHeaders(ownerToken),
+          payload: { letter: null },
+        });
+        expect(cleared.statusCode).toBe(200);
+        await cleanupDone();
+        expect(await db.findOne(DIGITA.COLLECTIONS.FILE, letter._id, "core")).toBeNull();
+      });
+
       it("lets a colleague's copy of a book own the clone of the letter bound to it (innocent case)", async () => {
         const { bookId } = await salesBookWithLetter("%PDF sales book letter, copied");
         const copied = await app.inject({
