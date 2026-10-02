@@ -17,7 +17,6 @@ const deps = {
   db: {
     listAppDatabases: () => [{ name: "app_x" }],
     deleteMany,
-    updateOne: vi.fn().mockResolvedValue(undefined),
   },
   registry: { getAll: () => [{ name: "Thing", database: "app_x" }] },
   translationService: {},
