@@ -185,7 +185,8 @@ describe("the language menu", () => {
 describe("the header", () => {
   it("renders the menu item #contact as the button that opens the contact sheet", () => {
     const html = renderHeader(true);
-    expect(html).toMatch(/<button type="button"[^>]*data-variant="primary"[^>]*>Book a call<\/button>/);
+    // Named by its label at every width: a mail icon below md, the label from md on.
+    expect(html).toMatch(/<button type="button"[^>]*data-variant="primary"[^>]*aria-label="Book a call"[^>]*>.*<span class="hidden md:inline">Book a call<\/span><\/button>/);
     expect(html).not.toContain('href="#contact"');
     expect(html).toContain('href="/de/about"');
   });
