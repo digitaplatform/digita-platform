@@ -107,7 +107,7 @@ describe('editing a saved job on the Jobs page', () => {
   it('opens the dialog with the job and saves it through PUT, keeping what the dialog does not show', async () => {
     renderJobs();
     const dialog = await editJob(nightly.name);
-    expect(within(dialog).getByLabelText('Job name')).toHaveValue('Nightly dunning');
+    expect(within(dialog).getByLabelText(/^Job name/)).toHaveValue('Nightly dunning');
     expect(within(dialog).getByLabelText(/^Target document/)).toHaveValue('c1');
     expect(within(dialog).getByLabelText('Days overdue')).toHaveValue(30);
     expect(within(dialog).getByLabelText(/^Cron/)).toHaveValue('0 3 * * *');
@@ -173,5 +173,21 @@ describe('editing a saved job on the Jobs page', () => {
     const edited = await editJob(manual.name);
     expect(within(edited).getByText('Cron (empty = manual only)')).toBeInTheDocument();
     expect(within(edited).getByLabelText(/^Cron/)).not.toBeRequired();
+  });
+
+  it('names the target document and the job name required where Save needs them', async () => {
+    renderJobs();
+    fireEvent.click(await screen.findByTestId('action:task-schedule-sendDunning'));
+    const dialog = await screen.findByRole('dialog');
+    const doc = within(dialog).getByLabelText(/^Target document \(required\)/);
+    const name = within(dialog).getByLabelText(/^Job name \(required\)/);
+    expect(doc).toBeRequired();
+    expect(name).toBeRequired();
+    fireEvent.change(within(dialog).getByLabelText(/^Cron/), { target: { value: '0 5 * * *' } });
+    expect(within(dialog).getByTestId('action:job-save')).toBeDisabled();
+    fireEvent.change(doc, { target: { value: 'c3' } });
+    expect(within(dialog).getByTestId('action:job-save')).toBeEnabled();
+    fireEvent.change(name, { target: { value: ' ' } });
+    expect(within(dialog).getByTestId('action:job-save')).toBeDisabled();
   });
 });
