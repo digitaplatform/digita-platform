@@ -1,6 +1,6 @@
 import type { EntityDefinition, ActionDefinition, TransitionDefinition, SubmittedPatch, DeclaredClientError } from "@digitaplatform/shared";
 import { EngineError } from "../errors/engine-error.js";
-import { LAYOUT_FIELD_TYPES, DIGITA, DocStatus } from "@digitaplatform/shared";
+import { LAYOUT_FIELD_TYPES, DIGITA, DocStatus, ROW_ID_FIELD } from "@digitaplatform/shared";
 import { calculateChanges, deepEqual, type FieldChange } from "./change-tracker.js";
 import type { DocumentServiceDeps } from "./service-deps.js";
 import type { HookServices } from "../hooks/hook-runner.js";
@@ -1578,6 +1578,12 @@ export class DocumentService {
         });
       }
       resultDoc = doc;
+      // The Tables as stored, before the patch, a hook or a side effect changes them in place: the
+      // lock judges each Table and its cells against this copy. A JSON copy, as the values compare.
+      const tableNames = entity.fields.filter((f) => f.fieldtype === "Table").map((f) => f.fieldname);
+      const storedTables = JSON.parse(
+        JSON.stringify(Object.fromEntries(tableNames.map((t) => [t, doc._data[t] ?? null]))),
+      ) as Record<string, unknown>;
       // A patch can name a file: in an attach cell of a flagged Table, or in a flagged Image field.
       const attachFilesBefore = new Set(collectAttachFileIds(entity.fields, doc._data));
 
@@ -1630,7 +1636,6 @@ export class DocumentService {
       for (const [f, delta] of Object.entries(patch.increment ?? {})) {
         doc.set(f, Number(doc.get(f) ?? 0) + Number(delta));
       }
-      const cellChanges: PatchChange[] = [];
 
       // Children — per-row set/increment, addressed by _row_id.
       for (const entry of patch.children ?? []) {
@@ -1653,13 +1658,8 @@ export class DocumentService {
             new: val ?? null,
           });
         }
-        const cellsBefore = Object.fromEntries(Object.keys(rowPatch).map((cf) => [cf, row[cf]]));
         doc.updateChildById(entry.table, entry.row_id, rowPatch);
         touchedTables.add(entry.table);
-        const rowAfter = doc.getChildById(entry.table, entry.row_id)!;
-        for (const cf of Object.keys(rowPatch)) {
-          cellChanges.push({ table: entry.table, row: rowAfter, field: cf, old: cellsBefore[cf], new: rowAfter[cf] });
-        }
       }
       // Normalize each touched table through serializeFields (mirror the draft
       // merge path). NOTE: the Table handler's toStorage encrypts a Password
@@ -1819,15 +1819,32 @@ export class DocumentService {
         }
       }
 
-      // The lock judges every field this save changes on the document it produces: the patch's
-      // own, a before_submitted_update hook's and a transition's side effects, and the cells of the
-      // rows the patch names. Declared computed targets are derived outputs, which update does not
+      // The lock judges every field and cell this save changes, whatever changed it (the patch, a
+      // before_submitted_update hook, a transition's side effects), on what the save produces: a
+      // field on the document, a Table also as a whole, and a cell of a row the stored Table holds
+      // on its row. Declared computed targets are derived outputs, which update does not
       // lock-check either.
-      const lockedFields = doc.getChangedFields().filter((f) => !computedTargets.has(f) && !touchedTables.has(f));
-      this.permissionChecker.assertPatchKeepsLocks(user, entity.name, doc._data, [
-        ...lockedFields.map((field) => ({ field, old: doc._original[field], new: doc.get(field) })),
-        ...cellChanges,
-      ]);
+      const changes: PatchChange[] = doc
+        .getChangedFields()
+        .filter((f) => !computedTargets.has(f) && !tableNames.includes(f))
+        .map((field) => ({ field, old: doc._original[field], new: doc.get(field) }));
+      for (const table of tableNames) {
+        const before = storedTables[table];
+        const after = doc.get(table);
+        if (computedTargets.has(table) || JSON.stringify(before) === JSON.stringify(after ?? null)) continue;
+        changes.push({ field: table, old: before, new: after });
+        const storedRows = new Map(
+          (Array.isArray(before) ? (before as Array<Record<string, unknown>>) : []).map((r) => [r[ROW_ID_FIELD], r]),
+        );
+        for (const row of Array.isArray(after) ? (after as Array<Record<string, unknown>>) : []) {
+          const stored = storedRows.get(row[ROW_ID_FIELD]);
+          if (!stored) continue;
+          for (const field of new Set([...Object.keys(stored), ...Object.keys(row)])) {
+            if (!field.startsWith("_")) changes.push({ table, row, field, old: stored[field], new: row[field] });
+          }
+        }
+      }
+      this.permissionChecker.assertPatchKeepsLocks(user, entity.name, doc._data, changes);
 
       // Closing band guardrail: a before_submitted_update hook that dirtied a
       // NON-band field aborts the tx here (construction guarantee). The allowed
