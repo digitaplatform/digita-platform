@@ -19,6 +19,7 @@ import {
   IllegalTransitionError,
   AmbiguousDocStatusStateError,
 } from "../src/core/workflow/workflow-engine.js";
+import { workflowDefinitionProblems } from "../src/core/workflow/workflow-definition.js";
 
 const expenseEntity = (): EntityDefinition => ({
   name: "Expense",
@@ -228,29 +229,25 @@ describe("WorkflowEngine — resolveStateOverride", () => {
   });
 });
 
-describe("WorkflowEngine — validateDefinition (boot warnings)", () => {
+describe("workflowDefinitionProblems (the load refusal)", () => {
   it("flags multiple is_initial states", () => {
     const e = expenseEntity();
     e.states![1] = { ...e.states![1]!, is_initial: true } as never;
-    const w = new WorkflowEngine();
-    const warnings = w.validateDefinition(e);
+    const warnings = workflowDefinitionProblems(e);
     expect(warnings.some((s) => s.includes("multiple is_initial"))).toBe(true);
   });
 
   it("flags transition.to referencing unknown state", () => {
     const e = expenseEntity();
     e.transitions!.push({ from: "Draft", to: "Phantom", allowed_roles: ["Manager"] });
-    const w = new WorkflowEngine();
-    const warnings = w.validateDefinition(e);
+    const warnings = workflowDefinitionProblems(e);
     expect(warnings.some((s) => s.includes('"Phantom"'))).toBe(true);
   });
 
   it("does NOT flag a DECLARED transition out of a terminal state (Reopen is permitted)", () => {
     const e = expenseEntity();
     e.transitions!.push({ from: "Approved", to: "Draft", allowed_roles: ["Manager"] });
-    const w = new WorkflowEngine();
-    const warnings = w.validateDefinition(e);
-    expect(warnings.some((s) => s.includes("terminal state"))).toBe(false);
+    expect(workflowDefinitionProblems(e)).toEqual([]);
   });
 });
 
