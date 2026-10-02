@@ -5,7 +5,7 @@ import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { DomainDirectory } from "../database/app-db-discovery.js";
 import type { TranslationService } from "../i18n/translation-service.js";
 import { NamingService } from "../document/naming-service.js";
-import { seedAppData } from "./seed-app-data.js";
+import { seedAppData, type UnresolvedSeedLink } from "./seed-app-data.js";
 import { seedDataTranslations } from "./seed-data-translations.js";
 import { createLogger } from "../logging/logger.js";
 import { env } from "../config/env.js";
@@ -41,6 +41,8 @@ export interface ReseedSummary {
   app_databases_wiped: string[];
   collections_wiped: number;
   rows_deleted: number;
+  /** Seed Link values that name no business key of their target; each is stored as it stands. */
+  unresolved_links: UnresolvedSeedLink[];
 }
 
 /**
@@ -112,7 +114,7 @@ export async function reseedAppData(mode: ReseedMode, deps: ReseedDeps): Promise
       ...domainDirs.map((d) => join(d.root, "seeds-demo")),
     );
   }
-  await seedAppData(db, registry, new NamingService(db), seedDirs);
+  const { unresolved_links } = await seedAppData(db, registry, new NamingService(db), seedDirs);
   await seedDataTranslations(db, registry, translationService, seedDirs);
 
   // is_first_run flag: demo mode flips it off (no further setup
@@ -137,5 +139,6 @@ export async function reseedAppData(mode: ReseedMode, deps: ReseedDeps): Promise
     app_databases_wiped: appDbs,
     collections_wiped: collectionsWiped,
     rows_deleted: rowsDeleted,
+    unresolved_links,
   };
 }
