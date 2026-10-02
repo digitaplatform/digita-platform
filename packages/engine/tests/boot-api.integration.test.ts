@@ -253,6 +253,15 @@ describe("Boot API Integration", () => {
       await db.updateOne("BrandingSetting", "branding", { app_name: null }, "core");
     });
 
+    it("PLANTED DEFECT: answers no app's name for an empty one, so every page shows the look's name", async () => {
+      const branding = async () => (await app.inject({ method: "GET", url: "/api/v1/boot" })).json().data.branding;
+      for (const empty of ["", "  "]) {
+        await db.updateOne("BrandingSetting", "branding", { app_name: empty }, "core");
+        expect(await branding(), JSON.stringify(empty)).not.toHaveProperty("app_name");
+      }
+      await db.updateOne("BrandingSetting", "branding", { app_name: null }, "core");
+    });
+
     it("hands the tenant's time zone, whose day the form's __today__ names", async () => {
       const zone = async () => (await app.inject({ method: "GET", url: "/api/v1/boot" })).json().data.system_settings.timezone;
       await db.updateOne("Setting", "settings", { timezone: "Europe/Zurich" }, "core");

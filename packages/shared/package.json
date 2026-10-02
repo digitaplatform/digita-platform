@@ -1,6 +1,6 @@
 {
   "name": "@digitaplatform/shared",
-  "version": "0.3.54",
+  "version": "0.3.57",
   "type": "module",
   "description": "Digita shared contracts: TypeScript types (ApiResponse, EntityDefinition, FieldTypes, Permissions), the cross-service auth contract, and the plugin-SDK surface. Consumed by every Digita service.",
   "main": "./dist/index.js",
@@ -13,6 +13,10 @@
     "./i18n-node": {
       "types": "./dist/i18n-node.d.ts",
       "import": "./dist/i18n-node.js"
+    },
+    "./report-schema": {
+      "types": "./dist/report-schema.d.ts",
+      "import": "./dist/report-schema.js"
     }
   },
   "files": [
@@ -36,5 +40,8 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "@types/node": "^25.9.3"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   }
 }

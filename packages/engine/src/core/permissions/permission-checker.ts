@@ -1,6 +1,16 @@
 import type { EntityDefinition, EntityPermission, FieldDefinition, StatePermissionOverride } from "@digitaplatform/shared";
 import { EngineError } from "../errors/engine-error.js";
-import { PermissionAction, ROW_ID_FIELD, SYSTEM_ROLES, canGrantActionTo, opensField, opensOperatorFields } from "@digitaplatform/shared";
+import {
+  IDENTITY_FIELDS,
+  OPERATOR_FIELDS,
+  PermissionAction,
+  ROW_ID_FIELD,
+  SYSTEM_ROLES,
+  canGrantActionTo,
+  opensField,
+  readableChildFields,
+  readableFields,
+} from "@digitaplatform/shared";
 import type { ReadRow } from "@digitaplatform/shared";
 import { UnknownDoctypeError, type EntityRegistry } from "../entity/entity-registry.js";
 import { docFieldsOf, evaluateExpression } from "../expression/expression-evaluator.js";
@@ -381,15 +391,7 @@ export class PermissionChecker {
       (perm) => user.roles.includes(perm.role) && !!perm.read && admits(perm),
     );
     if (readsLevel0) rows.push({ level: 0 });
-
-    const readableFields = new Set<string>(IDENTITY_FIELDS);
-    for (const field of entity.fields) {
-      if (rows.some((row) => opensField(row, field.fieldname, field.perm_level ?? 0))) {
-        readableFields.add(field.fieldname);
-      }
-    }
-    if (opensOperatorFields(rows)) for (const field of OPERATOR_FIELDS) readableFields.add(field);
-    return readableFields;
+    return readableFields(entity.fields, rows);
   }
 
   /**
@@ -437,19 +439,12 @@ export class PermissionChecker {
     if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return null;
     const entity = this.registry.get(entityName);
     const tableField = entity.fields.find((f) => f.fieldname === tableFieldname);
-    if (!tableField || !tableField.child_fields?.length) return null;
-    const anyGated = tableField.child_fields.some((c) => (c.perm_level ?? 0) > 0);
-    if (!anyGated) return null;
-
+    if (!tableField) return null;
     const rows: ReadRow[] = permissionRowsFor(entity, user).filter(
       (perm) => user.roles.includes(perm.role) && !!perm.read && admits(perm),
     );
     if (readsLevel0) rows.push({ level: 0 });
-    const out = new Set<string>(["_row_id", "idx"]);
-    for (const child of tableField.child_fields) {
-      if (rows.some((row) => opensField(row, tableFieldname, child.perm_level ?? 0))) out.add(child.fieldname);
-    }
-    return out;
+    return readableChildFields(tableField, rows);
   }
 
   /**
@@ -905,10 +900,10 @@ export class PermissionChecker {
     data: Record<string, unknown>,
     sharedForRead = false,
   ): Record<string, unknown> {
-    const readableFields = this.getReadableFields(user, entityName, data, sharedForRead);
+    const readable = this.getReadableFields(user, entityName, data, sharedForRead);
 
     // null means all fields are readable
-    if (!readableFields) return data;
+    if (!readable) return data;
 
     const entity = this.registry.get(entityName);
     const tableFields = new Map(
@@ -917,7 +912,7 @@ export class PermissionChecker {
 
     const filtered: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
-      if (!(readableFields.has(key) || key.startsWith("_"))) continue;
+      if (!(readable.has(key) || key.startsWith("_"))) continue;
 
       // Mask child-field rows when the Table declares any gated child.
       if (tableFields.has(key) && Array.isArray(value)) {
@@ -957,11 +952,6 @@ function entityHasStateStripOverrides(entity: EntityDefinition): boolean {
   }
   return false;
 }
-
-/** The stored fields every readable row shows: what the row is and when it changed. */
-const IDENTITY_FIELDS = ["_id", "doctype", "docstatus", "creation", "modified"] as const;
-/** The stored fields that name the people who wrote a row. A read row with `fields` hides them. */
-const OPERATOR_FIELDS = ["owner", "modified_by"] as const;
 
 /** Whether a list reads what `opens` picks on every row it answers through `rows`, the user's
  *  rows that grant it: a row that holds on every row opens it, or else each level-0 row must,
