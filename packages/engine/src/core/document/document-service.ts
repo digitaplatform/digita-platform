@@ -30,6 +30,7 @@ import { collectAttachFileIds, cleanupDocumentAttachments, parseFileId, FILE_FIE
 import { assertAttachFilesReadable, mayReadFile } from "../storage/file-access.js";
 import { usePublicUrlsOfPublicFiles } from "../storage/public-field-files.js";
 import { assertSetupAllowsCreate, listPendingSetupRecords, type PendingSetupRecord } from "../setup/setup-state.js";
+import { dropTreeKeys, placeTreeNode, writeTreePlacement } from "../tree/tree-rules.js";
 import {
   buildMongoFilter,
   assertFieldAllowed,
@@ -1223,8 +1224,13 @@ export class DocumentService {
       // `_row_id` gets a new one on every load, so no later save could name it.
       doc.ensureRowIds();
 
+      // A node of a tree takes its place there, or the insert is refused; a client's tree keys are dropped.
+      dropTreeKeys(doc._data);
+      const treePlacement = await placeTreeNode(this.db, entity, doc._id, doc._data, undefined, session);
+
       // Store in DB
       await this.db.insertOne(entity.name, doc.toMongo(), entity.database, session);
+      if (treePlacement) await writeTreePlacement(this.db, entity, doc._id, treePlacement, session);
       await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
 
       await this.hookRunner.run(doctype, "after_insert", doc, ctx, session, user);
@@ -1508,6 +1514,10 @@ export class DocumentService {
       for (const field of await usePublicUrlsOfPublicFiles(this.db, entity, doc._data, session)) doc._dirty.add(field);
       await assertAttachFilesReadable(this.fileAccess(), entity, doc._data, new Set(attachFilesBefore), user, session);
 
+      // A node of a tree that changes its parent or its tree is placed again, or the update refused.
+      dropTreeKeys(doc._data, doc._dirty);
+      const treePlacement = await placeTreeNode(this.db, entity, name, doc._data, doc._original, session);
+
       // Save to DB
       await this.db.updateOne(
         entity.name,
@@ -1520,6 +1530,7 @@ export class DocumentService {
         entity.database,
         session,
       );
+      if (treePlacement) await writeTreePlacement(this.db, entity, name, treePlacement, session);
       await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
 
       await this.hookRunner.run(doctype, "on_update", doc, ctx, session, user);
@@ -1986,6 +1997,9 @@ export class DocumentService {
       }
 
       await assertAttachFilesReadable(this.fileAccess(), entity, doc._data, attachFilesBefore, user, session);
+      // A patch that moves a node of a tree, as a rule's update_document can, is held as a PUT is.
+      dropTreeKeys(doc._data, doc._dirty);
+      const treePlacement = await placeTreeNode(this.db, entity, name, doc._data, doc._original, session);
 
       // Stamp + write. modified/modified_by are class props (never in _dirty);
       // getChanges() appends them.
@@ -1998,6 +2012,7 @@ export class DocumentService {
         entity.database,
         session,
       );
+      if (treePlacement) await writeTreePlacement(this.db, entity, name, treePlacement, session);
       await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
 
       await this.hookRunner.run(doctype, "on_submitted_update", doc, ctx, session, user);

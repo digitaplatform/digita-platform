@@ -267,6 +267,17 @@ describe("Import modes — insert / upsert / validate", () => {
     expect(ch!.parent).toBe(String(pa!._id)); // self-link resolved by bk
   });
 
+  it("takes a tree's _ancestors, _depth and _tree_rev columns, and stores the engine's place instead", async () => {
+    const res = await imp("Group", adminTok, { rows: [
+      { code: "TA", name: "Top", _ancestors: ["X"], _depth: 9, _tree_rev: 4 },
+      { code: "TB", name: "Below", parent: "TA", _ancestors: ["Y"], _depth: 9 },
+    ], mode: "insert" });
+    expect(res.json().data.inserted).toBe(2);
+    const ta = await findOne("Group", { code: "TA" });
+    const tb = await findOne("Group", { code: "TB" });
+    expect([ta!._ancestors, ta!._depth, tb!._ancestors, tb!._depth]).toEqual([[], 1, [String(ta!._id)], 2]);
+  });
+
   it("a self-link cycle fails its members with import_circular_reference", async () => {
     const res = await imp("Group", adminTok, { rows: [
       { code: "CY1", parent: "CY2" },

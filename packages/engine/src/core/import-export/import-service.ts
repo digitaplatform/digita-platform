@@ -29,6 +29,7 @@ import { serializeRowForStorage } from "./row-serializer.js";
 import { assertAttachFilesReadable } from "../storage/file-access.js";
 import { collectAttachFileIds } from "../storage/file-cleanup.js";
 import { createLogger } from "../logging/logger.js";
+import { TREE_ANCESTORS, TREE_DEPTH, TREE_REVISION } from "../tree/tree-rules.js";
 
 const log = createLogger("import-service");
 
@@ -43,6 +44,10 @@ const SYSTEM_KEYS = new Set([
   "creation",
   "modified",
   "_link_titles",
+  // A tree node's place, which an export of a tree can carry back; the engine sets it again.
+  TREE_ANCESTORS,
+  TREE_DEPTH,
+  TREE_REVISION,
 ]);
 
 export class ImportService {
