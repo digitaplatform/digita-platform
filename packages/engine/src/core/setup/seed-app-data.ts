@@ -12,6 +12,7 @@ import { injectRowIds } from "../document/base-document.js";
 import { deepEqual } from "../document/change-tracker.js";
 import { toIdString } from "../document/id-codec.js";
 import { SEED_HASH_FIELD } from "../entity/field-types.js";
+import { decryptPassword, isEncryptedPassword, PasswordKeyNotListedError } from "../entity/password-cipher.js";
 import {
   BkResolver,
   businessKeyFields,
@@ -624,6 +625,7 @@ async function insertRows(
       // pinned on the stored `modified`, so a person's save that lands after the read above
       // keeps its values.
       const changes = serializeRowForStorage(entity, rowData);
+      keepEqualStoredPasswords(entity, rowData, changes, existing);
       carryRowIds(changes, existing);
       injectRowIds(changes);
       if (Object.entries(changes).every(([key, value]) => deepEqual(value, existing[key]))) {
@@ -644,6 +646,7 @@ async function insertRows(
     }
     if (existing) {
       const replacement = serializeRowForStorage(entity, rowData);
+      keepEqualStoredPasswords(entity, rowData, replacement, existing);
       carryRowIds(replacement, existing);
       injectRowIds(replacement);
       // The seed row is the whole truth of the document; only what the seed cannot
@@ -749,6 +752,46 @@ function carryRowIds(replacement: Record<string, unknown>, stored: Record<string
       if (!row || typeof row !== "object" || !storedRow || typeof storedRow !== "object") return;
       const storedId = (storedRow as Record<string, unknown>)[ROW_ID_FIELD];
       if (typeof storedId === "string" && storedId) (row as Record<string, unknown>)[ROW_ID_FIELD] = storedId;
+    });
+  }
+}
+
+/**
+ * Encrypting a Password value draws a new IV every time, so a seed's clear text never equals its
+ * stored ciphertext. Where the stored value decrypts to the seed's text, the stored one stands in
+ * `serialized`, so an unchanged row compares equal: a Password field, and a Password cell of a
+ * Table row, the rows paired by position as `carryRowIds` pairs them. A stored value under a key
+ * no longer listed cannot be compared, and is written anew under the active key.
+ */
+function keepEqualStoredPasswords(
+  entity: EntityDefinition,
+  row: Record<string, unknown>,
+  serialized: Record<string, unknown>,
+  existing: Record<string, unknown>,
+): void {
+  const keepIfSameText = (text: unknown, stored: unknown, into: Record<string, unknown>, key: string) => {
+    if (typeof text !== "string" || !isEncryptedPassword(stored)) return;
+    try {
+      if (decryptPassword(stored) === text) into[key] = stored;
+    } catch (err) {
+      if (!(err instanceof PasswordKeyNotListedError)) throw err;
+    }
+  };
+  for (const field of entity.fields) {
+    if (field.fieldtype === "Password") {
+      keepIfSameText(row[field.fieldname], existing[field.fieldname], serialized, field.fieldname);
+      continue;
+    }
+    const cells = field.fieldtype === "Table" ? (field.child_fields ?? []).filter((c) => c.fieldtype === "Password") : [];
+    const seedRows = row[field.fieldname];
+    const storedRows = existing[field.fieldname];
+    const writtenRows = serialized[field.fieldname];
+    if (cells.length === 0 || !Array.isArray(seedRows) || !Array.isArray(storedRows) || !Array.isArray(writtenRows)) continue;
+    writtenRows.forEach((written, i) => {
+      const seedRow = seedRows[i] as Record<string, unknown> | undefined;
+      const storedRow = storedRows[i] as Record<string, unknown> | undefined;
+      if (!written || typeof written !== "object" || !seedRow || !storedRow) return;
+      for (const cell of cells) keepIfSameText(seedRow[cell.fieldname], storedRow[cell.fieldname], written as Record<string, unknown>, cell.fieldname);
     });
   }
 }
