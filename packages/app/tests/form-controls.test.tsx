@@ -184,6 +184,16 @@ describe('Check', () => {
     expect(await screen.findByRole('switch', { name: 'Thing' })).toHaveAttribute('aria-checked', 'true');
   });
 
+  it('tells a screen reader that a required switch is required', async () => {
+    drawField(buildField('Check'), 0, { required: true });
+    expect(await screen.findByRole('switch', { name: 'Thing' })).toHaveAttribute('aria-required', 'true');
+  });
+
+  it('says nothing of required on an optional switch', async () => {
+    drawField(buildField('Check'), 0);
+    expect(await screen.findByRole('switch', { name: 'Thing' })).not.toHaveAttribute('aria-required');
+  });
+
   it('refuses a click while it is read-only', async () => {
     const user = userEvent.setup();
     const { onFieldChange } = drawField(buildField('Check'), 1, { readOnly: true });

@@ -21,6 +21,7 @@ export default function CheckControl({
       id={controlId}
       aria-labelledby={labelId}
       aria-describedby={describedBy(describedById, errorId)}
+      aria-required={state.required || undefined}
       checked={checked}
       disabled={state.readOnly}
       onChange={(next) => onChange(next ? 1 : 0)}
