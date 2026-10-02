@@ -1156,3 +1156,17 @@ describe("docFieldsOf", () => {
     expect(docFieldsOf("doc.status ==")).toBeUndefined();
   });
 });
+
+describe("the in operator, which the engine parses with the form's grammar", () => {
+  // Each call passes the safe default opposite to the expected answer, so a parse failure goes red.
+  it("answers whether a list holds a value", () => {
+    expect(evaluateExpression("doc.kind in ['a', 'c']", ctx({ kind: "c" }), false)).toBe(true);
+    expect(evaluateExpression("doc.kind in ['a', 'c']", ctx({ kind: "b" }), true)).toBe(false);
+  });
+
+  it("answers whether a user holds a role, inside a condition with more parts", () => {
+    const condition = "'Staff' in user.roles || doc.customer_email == user.email";
+    expect(evaluateExpression(condition, ctx({ customer_email: "c@test" }, { roles: ["Staff"], email: "s@test" }), false)).toBe(true);
+    expect(evaluateExpression(condition, ctx({ customer_email: "c@test" }, { roles: ["Customer"], email: "o@test" }), true)).toBe(false);
+  });
+});
