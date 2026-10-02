@@ -24,10 +24,12 @@ beforeAll(async () => {
   });
 }, 120_000);
 
+// Closing waits for the dependency optimizer the transforms started, which a machine busy with other
+// runs slows past the default hook timeout.
 afterAll(async () => {
   await server?.close();
   rmSync(cacheDir, { recursive: true, force: true });
-});
+}, 120_000);
 
 /** The URL a served module imports `name` from. */
 async function importUrl(url: string, name: string): Promise<string> {
