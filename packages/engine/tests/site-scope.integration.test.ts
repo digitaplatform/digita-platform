@@ -222,8 +222,8 @@ describe("Per-site website engine (hostyour-manager#308)", () => {
     const page = booted[0]!.registry.get("WebPage");
     const stale = { ...stamps, _id: "site-a::stale", site: "site-a", title: "Stale", owner: "system", modified_by: "system" };
     const mine = { ...stamps, _id: "site-a::mine", site: "site-a", title: "Mine", owner: "system", modified_by: "admin@example.com" };
-    await db.insertOne("WebPage", { ...stale, _seed_hash: seedHash(page, stale) }, DB);
-    await db.insertOne("WebPage", { ...mine, _seed_hash: seedHash(page, { ...mine, title: "Seeded" }) }, DB);
+    await db.insertOne("WebPage", { ...stale, _seed_hash: seedHash(stale) }, DB);
+    await db.insertOne("WebPage", { ...mine, _seed_hash: seedHash({ ...mine, title: "Seeded" }) }, DB);
 
     await boot("site-a");
 
