@@ -450,6 +450,34 @@ describe("seedAppData tiers in insert mode", () => {
     await rm(app, { recursive: true, force: true });
   });
 
+  it("keeps the first of two demo directories that carry the reference tier's _id, and writes once", async () => {
+    const second = await mkdtemp(join(tmpdir(), "seed-tiers-second-demo-"));
+    await mkdir(join(second, "seeds-demo"));
+    await writeFile(join(second, "seeds-demo", "ShopSetting.seed.json"), JSON.stringify([{ _id: "shop", company_name: "Second demo" }]));
+    const { db, stored } = mockDb([]);
+    const dirs = [join(app, "seeds"), join(app, "seeds-demo"), join(second, "seeds-demo")];
+
+    await seedTiers(db, dirs);
+    expect(stored.get("shop")?.company_name).toBe("Veloluck Velo AG");
+    expect(db.updateOne).toHaveBeenCalledTimes(1);
+    vi.clearAllMocks();
+    await seedTiers(db, dirs);
+    expect(db.updateOne).not.toHaveBeenCalled();
+    await rm(second, { recursive: true, force: true });
+  });
+
+  it("keeps the first of two reference directories that carry the same _id", async () => {
+    const second = await mkdtemp(join(tmpdir(), "seed-tiers-second-"));
+    await mkdir(join(second, "seeds"));
+    await writeFile(join(second, "seeds", "ShopSetting.seed.json"), JSON.stringify([{ _id: "shop", company_name: "Second app" }]));
+    const { db, stored } = mockDb([]);
+
+    await seedTiers(db, [join(app, "seeds"), join(second, "seeds")]);
+
+    expect(stored.get("shop")?.company_name).toBe("Workshop");
+    await rm(second, { recursive: true, force: true });
+  });
+
   it("lands the demo tier's values on the row the reference tier writes in the same load", async () => {
     const { db, stored } = mockDb([]);
     await seedTiers(db);
