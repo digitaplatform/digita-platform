@@ -1715,14 +1715,20 @@ describe("A Table cell's read_only_depends_on locks the cell on update", () => {
     expect((await storedLines(doc._id)).map((r) => r["note"])).toEqual(["a"]);
   });
 
-  it("lets an Administrator drop a locked row and resend it without its _row_id (#245)", async () => {
+  it("holds an Administrator's drop of a locked row until he changes its state, then lets him resend it without its _row_id (#245)", async () => {
     const doc = await docService.insert(
       "LoanDoc",
       { title: "L", lines: [{ state: "returned", note: "scratch on frame" }, { state: "out", note: "open" }] },
       clerk,
     );
-    const [, open] = await storedLines(doc._id);
-    await docService.update("LoanDoc", doc._id, { lines: [{ state: "returned", note: "no damage" }, open] }, adminUser);
+    const [returned, open] = await storedLines(doc._id);
+    await expect(
+      docService.update("LoanDoc", doc._id, { lines: [{ state: "returned", note: "no damage" }, open] }, adminUser),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    expect((await storedLines(doc._id)).map((r) => r["note"])).toEqual(["scratch on frame", "open"]);
+    // The lock binds every role; the Administrator lifts it by changing the state that sets it.
+    await docService.update("LoanDoc", doc._id, { lines: [{ ...returned, state: "out" }, open] }, adminUser);
+    await docService.update("LoanDoc", doc._id, { lines: [{ state: "out", note: "no damage" }, open] }, adminUser);
     expect((await storedLines(doc._id)).map((r) => r["note"])).toEqual(["no damage", "open"]);
     await docService.update("LoanDoc", doc._id, { lines: [open] }, adminUser);
     expect((await storedLines(doc._id)).map((r) => r["note"])).toEqual(["open"]);
