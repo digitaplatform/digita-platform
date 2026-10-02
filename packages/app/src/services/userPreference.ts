@@ -25,8 +25,19 @@ export async function getUserPreference<T = unknown>(key: string): Promise<T | u
   return res.data?.[0]?.value as T | undefined;
 }
 
-/** Upsert a preference value for the current user. */
-export async function setUserPreference(key: string, value: unknown): Promise<void> {
+/** Upsert a preference value for the current user. The page's writes run one after another, so
+ *  a second write finds the row the first created. */
+export function setUserPreference(key: string, value: unknown): Promise<void> {
+  const write = writes.then(() => upsertPreference(key, value));
+  writes = write.catch(() => {});
+  return write;
+}
+
+/** This page's preference writes in order. Two overlapping lookups would both find no row, both
+ *  create one, and the account refuses the second row of the key, keeping the first value. */
+let writes: Promise<void> = Promise.resolve();
+
+async function upsertPreference(key: string, value: unknown): Promise<void> {
   const res = await findOwnRow(key);
   const existing = res.data?.[0];
   if (existing) {
