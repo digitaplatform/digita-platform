@@ -39,16 +39,19 @@ describe("engine delegation mint client", () => {
   it("throws loudly when AUTH_URL is not configured (no silent fallback)", async () => {
     envMock.AUTH_URL = "";
     const client = createDelegationClient(fetchStub({ token: "x" }));
-    await expect(client.mint("user.jwt", scope)).rejects.toThrow(/AUTH_URL is not configured/);
+    await expect(client.mint("user.jwt", scope)).rejects.toMatchObject({ code: "setting_missing", params: { setting: "AUTH_URL" } });
   });
 
   it("throws without the acting user's token", async () => {
     const client = createDelegationClient(fetchStub({ token: "x" }));
-    await expect(client.mint("", scope)).rejects.toThrow(/without the acting user's access token/);
+    await expect(client.mint("", scope)).rejects.toMatchObject({ code: "delegation_user_token_missing" });
   });
 
   it("throws with the status on an auth error", async () => {
     const client = createDelegationClient(fetchStub({ error: "audience_not_assigned" }, false, 401));
-    await expect(client.mint("user.jwt", scope)).rejects.toThrow(/mint failed \(401\).*audience_not_assigned/);
+    await expect(client.mint("user.jwt", scope)).rejects.toMatchObject({
+      code: "delegation_mint_failed",
+      params: { status: "401", error: "audience_not_assigned" },
+    });
   });
 });

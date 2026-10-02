@@ -1,5 +1,6 @@
 import { DELEGATION_MINT_PATH, type DelegationScope } from "@digitaplatform/shared";
 import { env } from "../config/env.js";
+import { ConfigurationError, EngineError } from "../errors/engine-error.js";
 
 /**
  * Mints on-behalf delegation tokens at digita-auth for hooks that drive a
@@ -17,12 +18,10 @@ export function createDelegationClient(fetchImpl: typeof fetch = fetch): EngineD
     async mint(rawJwt, scope) {
       if (!env.AUTH_URL) {
         // No silent fallback: fail loud so the missing config is visible.
-        throw new Error(
-          "AUTH_URL is not configured — cannot mint an on-behalf delegation token (set AUTH_URL to the digita-auth base URL)",
-        );
+        throw new ConfigurationError("setting_missing", { setting: "AUTH_URL" });
       }
       if (!rawJwt) {
-        throw new Error("cannot mint a delegation token without the acting user's access token");
+        throw new EngineError("delegation_user_token_missing", {}, 500, "INTERNAL_ERROR");
       }
       const res = await fetchImpl(`${env.AUTH_URL}${DELEGATION_MINT_PATH}`, {
         method: "POST",
@@ -37,8 +36,11 @@ export function createDelegationClient(fetchImpl: typeof fetch = fetch): EngineD
         | { token?: string; error?: string }
         | null;
       if (!res.ok || !body?.token) {
-        throw new Error(
-          `delegation mint failed (${res.status})${body?.error ? `: ${body.error}` : ""}`,
+        throw new EngineError(
+          "delegation_mint_failed",
+          { status: String(res.status), error: body?.error ?? "" },
+          500,
+          "INTERNAL_ERROR",
         );
       }
       return body.token;

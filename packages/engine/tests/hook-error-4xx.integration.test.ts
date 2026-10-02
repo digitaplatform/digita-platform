@@ -54,7 +54,8 @@ import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
-import type { HookRunner } from "../src/core/hooks/hook-runner.js";
+import type { HookRunner, HookServices } from "../src/core/hooks/hook-runner.js";
+import { readBundle } from "@digitaplatform/shared/i18n-node";
 import type { BaseDocument } from "../src/core/document/base-document.js";
 
 let replSet: MongoMemoryReplSet;
@@ -78,6 +79,7 @@ const PROBE: EntityDefinition = {
   fields: [
     { fieldname: "mode", fieldtype: "Data", label: "Mode" },
   ],
+  actions: [{ action: "render", label: "Render" }],
   permissions: [
     { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, submit: 1, cancel: 1, amend: 1 },
   ],
@@ -127,6 +129,10 @@ beforeAll(async () => {
       // A genuine, undeclared server fault — must still become a generic 500.
       throw new Error("unexpected boom");
     }
+  }) as never);
+  // An action that drives a satellite service on the user's behalf, as an app's render action does.
+  probeHooks.set("action:render", (async (doc: BaseDocument, _ctx: unknown, services: HookServices) => {
+    await services.mintDelegation!({ service: "report", entity: "HookProbe", doc: doc._id, action: "render" });
   }) as never);
   (result.hookRunner as unknown as { hooks: Map<string, Map<string, unknown>> })
     .hooks.set("HookProbe", probeHooks as never);
@@ -256,5 +262,22 @@ describe("D2 — business-rule hook errors surface as typed 4xx (HTTP)", () => {
 
     expect(res.statusCode).toBe(201);
     expect(res.json().success).toBe(true);
+  });
+});
+
+describe("an action whose delegation token cannot be minted", () => {
+  it("answers 500 with the reason in the reader's language", async () => {
+    const created = await app.inject({ method: "POST", url: "/api/v1/resource/HookProbe", headers: authHeaders(), payload: { mode: "ok" } });
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/resource/HookProbe/${created.json().data._id}/action/render`,
+      headers: { ...authHeaders(), "accept-language": "de" },
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json().error.code).toBe("CONFIGURATION_INVALID");
+    const german = readBundle(process.env.TRANSLATIONS_DIR!).de!["setting_missing"]!;
+    expect(res.json().messages[0].text).toBe(german.replaceAll("{setting}", "AUTH_URL"));
   });
 });
