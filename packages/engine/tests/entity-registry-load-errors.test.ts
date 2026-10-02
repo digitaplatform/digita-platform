@@ -34,7 +34,17 @@ describe("EntityRegistry load errors + duplicates (A13)", () => {
     const dir = await mkdtemp(join(tmpdir(), "reg-load-"));
     await writeFile(join(dir, "broken.entity.json"), "{ this is not valid json ");
     const registry = new EntityRegistry();
-    await expect(registry.loadAll(dir)).rejects.toThrow(/Malformed entity definition/);
+    await expect(registry.loadAll(dir)).rejects.toThrow(/^Malformed entity definition .*broken\.entity\.json: /);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("calls a well-formed file a check refuses refused, naming the entity and the key", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "reg-refused-"));
+    const file = join(dir, "book.entity.json");
+    await writeFile(file, JSON.stringify({ ...okEntity("Book"), hooks: { on_list_load: "x" } }));
+    const err = await new EntityRegistry().loadAll(dir).then(() => undefined, (e: Error) => e);
+    expect(err?.message.startsWith(`Refused entity definition ${file} (entity "Book"): `)).toBe(true);
+    expect(err?.message).toContain("hooks.on_list_load");
     await rm(dir, { recursive: true, force: true });
   });
 
