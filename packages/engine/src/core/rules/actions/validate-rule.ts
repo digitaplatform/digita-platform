@@ -1,5 +1,17 @@
 import type { RuleAction, RuleExecContext } from "../rule-types.js";
 import { evaluateExpression } from "../rule-expression.js";
+import { EngineError } from "../../errors/engine-error.js";
+
+/**
+ * A save a validate rule refused. Its message is the rule author's own text, so it reaches the
+ * person as it was written, as a parameter of rule_refused, with 400.
+ */
+export class RuleRefusedError extends EngineError {
+  constructor(message: string) {
+    super("rule_refused", { message }, 400, "RULE_REFUSED");
+    this.message = message;
+  }
+}
 
 /**
  * Execute a `validate` rule action — throws when `condition` evaluates
@@ -23,11 +35,11 @@ export async function executeValidate(
       const row = rows[i];
       const ok = evaluateExpression(action.condition, { ...exec, row });
       if (!ok) {
-        throw new Error(`${rawMessage} (row ${i + 1})`);
+        throw new RuleRefusedError(`${rawMessage} (row ${i + 1})`);
       }
     }
     return;
   }
   const ok = evaluateExpression(action.condition, exec);
-  if (!ok) throw new Error(rawMessage);
+  if (!ok) throw new RuleRefusedError(rawMessage);
 }

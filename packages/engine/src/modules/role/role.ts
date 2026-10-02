@@ -1,5 +1,6 @@
 import type { BaseDocument } from "../../core/document/base-document.js";
 import { getRoleRegistry } from "../../core/permissions/role-registry.js";
+import { EngineError } from "../../core/errors/engine-error.js";
 
 /**
  * Role — before_save hook.
@@ -13,7 +14,7 @@ export async function beforeSave(doc: BaseDocument): Promise<void> {
   const previous = doc.getPreviousValue("name") as string | undefined;
   const current = doc.get("name") as string | undefined;
   if (previous && current && previous !== current) {
-    throw new Error("role_name_immutable");
+    throw new EngineError("role_name_immutable", {}, 400, "ROLE_NAME_IMMUTABLE");
   }
 }
 
