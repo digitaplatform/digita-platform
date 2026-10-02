@@ -8,3 +8,13 @@ export function calendarDay(instant: Date, timeZone: string): string {
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)!.value;
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
+
+/** Whether `timeZone` names a zone Intl knows, so that `calendarDay` can name a day in it. */
+export function isTimeZone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}

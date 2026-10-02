@@ -697,3 +697,22 @@ describe("validateEntityDataZod — a failed rule answers the key it names", () 
     expect(r.errors.map((x) => [x.field, x.message_key])).toEqual([["lines[0].qty", "field_min_value"]]);
   });
 });
+
+describe("a Select of time zones", () => {
+  // Setting.timezone names the tenant's day; a zone no runtime knows would make every __today__
+  // default and every $now filter on a Date field throw.
+  const settings = entity([{ fieldname: "timezone", fieldtype: "Select", options_source: "timezones", label: "Timezone" }]);
+
+  it("takes a zone Intl knows, UTC included", () => {
+    builder.invalidate("TestDoc");
+    for (const zone of ["Europe/Zurich", "America/New_York", "UTC"]) {
+      expect(validateEntityDataZod(settings, { timezone: zone }, builder).valid, zone).toBe(true);
+    }
+  });
+
+  it("refuses a zone no runtime knows", () => {
+    builder.invalidate("TestDoc");
+    const r = validateEntityDataZod(settings, { timezone: "Mars/Olympus" }, builder);
+    expect(r.errors.map((x) => [x.field, x.message_key])).toEqual([["timezone", "field_invalid_select"]]);
+  });
+});
