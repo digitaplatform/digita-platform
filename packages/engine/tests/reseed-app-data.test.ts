@@ -8,7 +8,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
 }));
 const { seedAppData } = vi.hoisted(() => ({ seedAppData: vi.fn() }));
 vi.mock("../src/core/setup/seed-app-data.js", () => ({ seedAppData }));
-vi.mock("../src/core/setup/seed-data-translations.js", () => ({ seedDataTranslations: vi.fn().mockResolvedValue({ unresolved_links: [] }) }));
+vi.mock("../src/core/setup/seed-data-translations.js", () => ({ seedDataTranslations: vi.fn().mockResolvedValue(undefined) }));
 
 import { reseedAppData, type ReseedDeps } from "../src/core/setup/reseed-app-data.js";
 
@@ -17,7 +17,7 @@ const deps = {
   db: {
     listAppDatabases: () => [{ name: "app_x" }],
     deleteMany,
-    updateOne: vi.fn().mockResolvedValue({ unresolved_links: [] }),
+    updateOne: vi.fn().mockResolvedValue(undefined),
   },
   registry: { getAll: () => [{ name: "Thing", database: "app_x" }] },
   translationService: {},
