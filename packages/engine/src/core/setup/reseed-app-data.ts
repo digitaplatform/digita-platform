@@ -7,6 +7,7 @@ import { NamingService } from "../document/naming-service.js";
 import { seedAppData, type UnresolvedSeedLink } from "./seed-app-data.js";
 import { seedDataTranslations } from "./seed-data-translations.js";
 import { createLogger } from "../logging/logger.js";
+import { listWritesUnderWay, markReseedRunning, writesEnded } from "./reseed-lock.js";
 import { env } from "../config/env.js";
 
 const log = createLogger("reseed-app-data");
@@ -69,6 +70,33 @@ export class ReseedSeedFailedError extends Error {
   }
 }
 
+/** A reset that gave up before the wipe, because writes that began before it did not end in time. */
+export class ReseedWritesRunningError extends Error {
+  constructor(
+    readonly seconds: number,
+    readonly writes: string[],
+  ) {
+    super(`the reset waited ${seconds} s for writes that had not ended, and wiped nothing: ${writes.join(", ")}`);
+    this.name = "ReseedWritesRunningError";
+  }
+}
+
+/** How long the reset waits for the writes under way before it gives up, so a write that never ends cannot lock the app. */
+const WRITES_WAIT_MS = 60_000;
+
+/** Resolves once the writes under way have ended, or rejects naming them after `WRITES_WAIT_MS`. */
+async function writesEndedInTime(): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new ReseedWritesRunningError(WRITES_WAIT_MS / 1000, listWritesUnderWay())), WRITES_WAIT_MS);
+  });
+  try {
+    await Promise.race([writesEnded(), late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** The reseed this engine is running, which a second call joins. */
 let running: { mode: ReseedMode; done: Promise<ReseedSummary> } | null = null;
 
@@ -102,8 +130,12 @@ export async function reseedAppData(mode: ReseedMode, deps: ReseedDeps): Promise
     if (running.mode !== mode) throw new ReseedRunningError(running.mode, mode);
     return running.done;
   }
-  const done = reseedOnce(mode, deps).finally(() => {
+  // Marked first, so every write that begins from now on is refused; the wipe waits for the writes
+  // that began before, so none of them lands after it, and gives up after a bound, wiping nothing.
+  markReseedRunning(mode);
+  const done = writesEndedInTime().then(() => reseedOnce(mode, deps)).finally(() => {
     running = null;
+    markReseedRunning(undefined);
   });
   running = { mode, done };
   return done;

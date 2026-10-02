@@ -15,6 +15,7 @@ import Fastify from "fastify";
 import { registerAdminReseedRoutes } from "../src/core/api/admin-reseed-router.js";
 import { globalErrorHandler } from "../src/core/api/middleware/error-handler.js";
 import { reseedAppData, type ReseedDeps } from "../src/core/setup/reseed-app-data.js";
+import { beginWrite } from "../src/core/setup/reseed-lock.js";
 
 const deps = {
   db: { listAppDatabases: () => [{ name: "app_x" }], deleteMany: vi.fn().mockResolvedValue(1), updateOne: vi.fn() },
@@ -70,6 +71,27 @@ describe("POST /admin/reseed answers a refused or failed reset with its reason",
       },
       messages: [{ text: "reseed_seed_failed", params: { attempts: "2", error: "E11000 duplicate key" } }],
     });
+  });
+
+  it("answers 409 RESEED_WRITES_RUNNING, naming the writes, when they do not end within 60 s", async () => {
+    vi.useFakeTimers();
+    const end = beginWrite("action spawn on Thing");
+    try {
+      const answer = post("demo");
+      await vi.advanceTimersByTimeAsync(60_000);
+      const res = await answer;
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({
+        error: {
+          code: "RESEED_WRITES_RUNNING",
+          detail: "the reset waited 60 s for writes that had not ended, and wiped nothing: action spawn on Thing",
+        },
+        messages: [{ text: "reseed_writes_running", params: { seconds: "60", writes: "action spawn on Thing" } }],
+      });
+    } finally {
+      end();
+      vi.useRealTimers();
+    }
   });
 
   it("PLANTED INNOCENT: answers the summary of a reset that ran", async () => {

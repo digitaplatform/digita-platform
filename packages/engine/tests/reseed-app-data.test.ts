@@ -11,6 +11,7 @@ vi.mock("../src/core/setup/seed-app-data.js", () => ({ seedAppData }));
 vi.mock("../src/core/setup/seed-data-translations.js", () => ({ seedDataTranslations: vi.fn().mockResolvedValue(undefined) }));
 
 import { reseedAppData, type ReseedDeps } from "../src/core/setup/reseed-app-data.js";
+import { beginWrite, runningReseedMode } from "../src/core/setup/reseed-lock.js";
 
 const deleteMany = vi.fn();
 const deps = {
@@ -68,5 +69,40 @@ describe("the demo reset", () => {
     // The lock is released after a failure, so the next reset can repair the app.
     seedAppData.mockReset().mockResolvedValue({ unresolved_links: [] });
     await expect(reseedAppData("demo", deps)).resolves.toMatchObject({ mode: "demo" });
+  });
+});
+
+describe("the demo reset's wait for writes under way", () => {
+  it("PLANTED DEFECT: gives up after 60 s, naming the writes, wiping nothing, and clears its mark", async () => {
+    vi.useFakeTimers();
+    const end = beginWrite("action spawn on Thing");
+    try {
+      const refused = expect(reseedAppData("demo", deps)).rejects.toThrow(
+        "the reset waited 60 s for writes that had not ended, and wiped nothing: action spawn on Thing",
+      );
+      await vi.advanceTimersByTimeAsync(60_000);
+      await refused;
+      expect(wipes()).toBe(0);
+      expect(runningReseedMode()).toBeUndefined();
+    } finally {
+      end();
+      vi.useRealTimers();
+    }
+  });
+
+  it("PLANTED INNOCENT: wipes once the write ends before the bound", async () => {
+    vi.useFakeTimers();
+    const end = beginWrite("insert Thing");
+    try {
+      const reset = reseedAppData("demo", deps);
+      await vi.advanceTimersByTimeAsync(59_000);
+      expect(wipes()).toBe(0);
+      end();
+      await expect(reset).resolves.toMatchObject({ mode: "demo" });
+      expect(wipes()).toBe(1);
+    } finally {
+      end();
+      vi.useRealTimers();
+    }
   });
 });

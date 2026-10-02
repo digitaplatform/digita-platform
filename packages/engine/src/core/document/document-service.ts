@@ -21,6 +21,7 @@ import { resolveDefaults, applyNewChildRowDefaults, type DefaultContext } from "
 import { applyScopeFilters, applyRoleVisibilityFilter, isRoleVisible, readsThroughRoleList } from "../permissions/scope-filter.js";
 import { env } from "../config/env.js";
 import { PermissionDeniedError, type PatchChange } from "../permissions/permission-checker.js";
+import { beginWrite, ReseedWriteRefusedError, runningReseedMode } from "../setup/reseed-lock.js";
 import { DocumentShareService } from "../permissions/document-share-service.js";
 import { entityHasAnySnapshot, entityHasAnyFreeze } from "../snapshot/snapshot-resolver.js";
 import { resolveStatusIndicator } from "../status/status-resolver.js";
@@ -1011,7 +1012,11 @@ export class DocumentService {
     return row;
   }
 
-  async insert(
+  async insert(...args: Parameters<DocumentService["performInsert"]>): ReturnType<DocumentService["performInsert"]> {
+    return this.writeOutsideReset(args[0], "insert", () => this.performInsert(...args));
+  }
+
+  private async performInsert(
     doctype: string,
     data: Record<string, unknown>,
     user: UserContext = GUEST_USER,
@@ -1227,7 +1232,11 @@ export class DocumentService {
 
   // ─── UPDATE ────────────────────────────────────────────
 
-  async update(
+  async update(...args: Parameters<DocumentService["performUpdate"]>): ReturnType<DocumentService["performUpdate"]> {
+    return this.writeOutsideReset(args[0], "update", () => this.performUpdate(...args));
+  }
+
+  private async performUpdate(
     doctype: string,
     name: string,
     data: Record<string, unknown>,
@@ -1571,7 +1580,11 @@ export class DocumentService {
   // their inputs — but their writes are fenced: only declared computed target
   // fields (plus the band itself) may effectively change; any other effective
   // change a computed hook attempts aborts in the closing band guardrail.
-  async updateSubmitted(
+  async updateSubmitted(...args: Parameters<DocumentService["performUpdateSubmitted"]>): ReturnType<DocumentService["performUpdateSubmitted"]> {
+    return this.writeOutsideReset(args[0], "updateSubmitted", () => this.performUpdateSubmitted(...args));
+  }
+
+  private async performUpdateSubmitted(
     doctype: string,
     name: string,
     patch: SubmittedPatch,
@@ -2027,7 +2040,11 @@ export class DocumentService {
 
   // ─── DELETE ────────────────────────────────────────────
 
-  async deleteDoc(
+  async deleteDoc(...args: Parameters<DocumentService["performDeleteDoc"]>): ReturnType<DocumentService["performDeleteDoc"]> {
+    return this.writeOutsideReset(args[0], "deleteDoc", () => this.performDeleteDoc(...args));
+  }
+
+  private async performDeleteDoc(
     doctype: string,
     name: string,
     user: UserContext = GUEST_USER,
@@ -2156,13 +2173,18 @@ export class DocumentService {
     // the session into its per-call services view; a handler that passes
     // `services.session` to insert, update, transition, deleteDoc, submit,
     // cancel or updateSubmitted joins this transaction.
-    return this.inTransaction(sessionOverride, async (session) => {
-      const doc2 = await this.loadDocInternal(doctype, name, session);
-      if (!this.actionRunner.isShown(action, doc2, user)) {
-        throw new ActionNotAvailableError(doctype, name, action);
-      }
-      return this.hookRunner.runAction(doctype, actionName, doc2, ctx, session, user, params, extraServices);
-    });
+    const run = () =>
+      this.inTransaction(sessionOverride, async (session) => {
+        const doc2 = await this.loadDocInternal(doctype, name, session);
+        if (!this.actionRunner.isShown(action, doc2, user)) {
+          throw new ActionNotAvailableError(doctype, name, action);
+        }
+        return this.hookRunner.runAction(doctype, actionName, doc2, ctx, session, user, params, extraServices);
+      });
+    // An action on an app's entity is one write until its transaction commits, raw writes of its
+    // handler included. An action on a core entity is not counted: the demo reset runs inside one.
+    if (!this.db.listAppDatabases().some((d) => d.name === entity.database)) return run();
+    return this.writeOutsideReset(doctype, `action ${actionName} on`, run);
   }
 
   // ─── TRANSITION ────────────────────────────────────────
@@ -2287,7 +2309,11 @@ export class DocumentService {
 
   // ─── SUBMIT ────────────────────────────────────────────
 
-  async submit(
+  async submit(...args: Parameters<DocumentService["performSubmit"]>): ReturnType<DocumentService["performSubmit"]> {
+    return this.writeOutsideReset(args[0], "submit", () => this.performSubmit(...args));
+  }
+
+  private async performSubmit(
     doctype: string,
     name: string,
     user: UserContext = GUEST_USER,
@@ -2466,7 +2492,11 @@ export class DocumentService {
 
   // ─── CANCEL ────────────────────────────────────────────
 
-  async cancel(
+  async cancel(...args: Parameters<DocumentService["performCancel"]>): ReturnType<DocumentService["performCancel"]> {
+    return this.writeOutsideReset(args[0], "cancel", () => this.performCancel(...args));
+  }
+
+  private async performCancel(
     doctype: string,
     name: string,
     user: UserContext = GUEST_USER,
@@ -2622,9 +2652,35 @@ export class DocumentService {
     return doc;
   }
 
+  /**
+   * While a demo reset runs, a write to a database it wipes is refused, so it neither survives the
+   * wipe nor takes an id the seed then wants; the core, identity and log databases, which the reset
+   * keeps, go on. A write that begins while no reset runs is counted under `verb` and the entity's
+   * name, so a reset that starts meanwhile waits for it before it wipes, and names it if it waits
+   * too long.
+   */
+  private async writeOutsideReset<T>(doctype: string, verb: string, write: () => Promise<T>): Promise<T> {
+    const entity = this.registry.get(doctype);
+    const mode = runningReseedMode();
+    if (mode) {
+      if (this.db.listAppDatabases().some((d) => d.name === entity.database)) throw new ReseedWriteRefusedError(entity.name, mode);
+      return write();
+    }
+    const end = beginWrite(`${verb} ${entity.name}`);
+    try {
+      return await write();
+    } finally {
+      end();
+    }
+  }
+
   // ─── AMEND ─────────────────────────────────────────────
 
-  async amend(
+  async amend(...args: Parameters<DocumentService["performAmend"]>): ReturnType<DocumentService["performAmend"]> {
+    return this.writeOutsideReset(args[0], "amend", () => this.performAmend(...args));
+  }
+
+  private async performAmend(
     doctype: string,
     name: string,
     user: UserContext = GUEST_USER,
@@ -2665,7 +2721,11 @@ export class DocumentService {
 
   // ─── COPY ──────────────────────────────────────────────
 
-  async copyDoc(
+  async copyDoc(...args: Parameters<DocumentService["performCopyDoc"]>): ReturnType<DocumentService["performCopyDoc"]> {
+    return this.writeOutsideReset(args[0], "copyDoc", () => this.performCopyDoc(...args));
+  }
+
+  private async performCopyDoc(
     doctype: string,
     name: string,
     user: UserContext = GUEST_USER,

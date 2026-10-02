@@ -15,6 +15,7 @@ vi.mock("../src/core/config/env.js", () => ({
 }));
 
 import { globalErrorHandler } from "../src/core/api/middleware/error-handler.js";
+import { ReseedWriteRefusedError } from "../src/core/setup/reseed-lock.js";
 import {
   NotFoundError,
   ValidationFailedError,
@@ -828,5 +829,20 @@ describe("globalErrorHandler – response shape", () => {
     expect(data.error).toHaveProperty("code");
     expect(data.error).toHaveProperty("detail");
     expect(data.error).toHaveProperty("trace_id");
+  });
+});
+
+describe("globalErrorHandler – ReseedWriteRefusedError", () => {
+  it("answers 409 RESEED_RUNNING, naming the entity and the running reset", () => {
+    const reply = mockReply();
+
+    globalErrorHandler(new ReseedWriteRefusedError("Book", "demo"), mockRequest(), reply);
+
+    expect(reply.statusCode).toBe(409);
+    expect(reply.sentData).toMatchObject({
+      success: false,
+      error: { code: "RESEED_RUNNING" },
+      messages: [{ text: "reseed_write_refused", params: { doctype: "Book", running: "demo" } }],
+    });
   });
 });
