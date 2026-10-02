@@ -382,6 +382,30 @@ describe("The resource API refuses a Table write that repeats a _row_id", () => 
   });
 });
 
+describe("The resource API refuses a Table value that is not a list", () => {
+  it("PLANTED DEFECT: answers 400 on the field for an object or a text, on insert and on update, and keeps the stored rows", async () => {
+    for (const lines of [{}, "x"]) {
+      const res = await app.inject({
+        method: "POST", url: "/api/v1/resource/Item", headers: bearer(adminTok),
+        payload: { item_no: `NL-${typeof lines}`, name: "Not a list", lines },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.field).toBe("lines");
+    }
+    const created = await app.inject({
+      method: "POST", url: "/api/v1/resource/Item", headers: bearer(adminTok),
+      payload: { item_no: "NL-KEEP", name: "Keep", lines: [{ amount: 1 }] },
+    });
+    const id = created.json().data._id as string;
+    for (const lines of [{}, "x"]) {
+      const res = await app.inject({ method: "PUT", url: `/api/v1/resource/Item/${id}`, headers: bearer(adminTok), payload: { lines } });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.field).toBe("lines");
+    }
+    expect(((await findOne("Item", { item_no: "NL-KEEP" }))!.lines as Record<string, unknown>[]).map((l) => l.amount)).toEqual([1]);
+  });
+});
+
 describe("An engine error reaches a person in their language (#24)", () => {
   const german = (tok: string) => ({ ...bearer(tok), "accept-language": "de-CH,de;q=0.9" });
 

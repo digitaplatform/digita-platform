@@ -306,6 +306,8 @@ const linkHandler: FieldTypeHandler = {
 const tableHandler: FieldTypeHandler = {
   isStored: true,
   toStorage(value, field) {
+    // A value that is no list stays as it is, for the schema to refuse with the field's name.
+    if (value && !Array.isArray(value)) return value;
     const rows = (value || []) as unknown[];
     // Each declared cell is stored as a field of its type is, so "42" in an Int cell is the number 42.
     const cells = (field.child_fields ?? []).filter((c) => isStoredFieldType(c.fieldtype));
