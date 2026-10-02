@@ -1146,6 +1146,61 @@ describe("Upload API Integration", () => {
       expect(row["attached_to_name"]).toBe(created.json().data._id);
     });
 
+    describe("a file whose owner holds the user's _id, not the email the engine stamps", () => {
+      // Only an Administrator may read such a file, so only an Administrator's save reaches the owner check.
+      const adminId = "admin-id-0091";
+      const idAdminToken = () => ta.sign({ sub: adminId, email: "admin@digita.local", roles: ["Administrator"] });
+      async function looseFileOwnedById(body: string) {
+        const file = await uploadAsApp(await idAdminToken(), "letter", body);
+        await db.updateOne(DIGITA.COLLECTIONS.FILE, file._id, { owner: adminId }, "core");
+        return file;
+      }
+
+      it("is not bound by that user's save", async () => {
+        const file = await looseFileOwnedById("%PDF owned by id, saved");
+        const created = await app.inject({
+          method: "POST",
+          url: "/api/v1/resource/TestBook",
+          headers: authHeaders(await idAdminToken()),
+          payload: { title: "Id-owned", letter: file.file_url },
+        });
+        expect(created.statusCode).toBe(201);
+        expect(((await db.findOne(DIGITA.COLLECTIONS.FILE, file._id, "core")) as Record<string, unknown>)["attached_to_name"] ?? null).toBeNull();
+      });
+
+      it("is not the copier's when that user copies a record that names it", async () => {
+        const file = await looseFileOwnedById("%PDF owned by id, copied");
+        const planted = await plantBook(ownerToken, { title: "Id-owned, copied", letter: file.file_url });
+        const copied = await app.inject({
+          method: "POST",
+          url: `/api/v1/resource/TestBook/${planted.json().data._id}/copy`,
+          headers: authHeaders(await idAdminToken()),
+        });
+        expect(copied.statusCode).toBe(201);
+        const cloneId = /\/file\/([^/]+)\/download/.exec(copied.json().data.letter as string)![1]!;
+        expect(((await db.findOne(DIGITA.COLLECTIONS.FILE, cloneId, "core")) as Record<string, unknown>)["owner"]).toBe(adminId);
+      });
+
+      it("is not deleted with a record that user deletes", async () => {
+        const file = await looseFileOwnedById("%PDF owned by id, record deleted");
+        const book = await app.inject({
+          method: "POST",
+          url: "/api/v1/resource/TestBook",
+          headers: authHeaders(await idAdminToken()),
+          payload: { title: "Id-owned, deleted", letter: file.file_url },
+        });
+        expect(book.statusCode).toBe(201);
+        const deleted = await app.inject({
+          method: "DELETE",
+          url: `/api/v1/resource/TestBook/${book.json().data._id}`,
+          headers: authHeaders(await idAdminToken()),
+        });
+        expect(deleted.statusCode).toBe(200);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        expect(await db.findOne(DIGITA.COLLECTIONS.FILE, file._id, "core")).not.toBeNull();
+      });
+    });
+
     describe("a record that names a file it does not own", () => {
       beforeAll(() => {
         // A note is its owner's only; it may name any file its owner may read.

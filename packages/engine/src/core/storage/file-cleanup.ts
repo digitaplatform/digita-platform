@@ -178,7 +178,7 @@ export async function cleanupDocumentAttachments(
       if (!file) continue;
       const isOwned = file["attached_to_name"]
         ? file["attached_to_entity"] === document.entity && file["attached_to_name"] === document.name
-        : file["owner"] === user.email || file["owner"] === user._id;
+        : file["owner"] === user.email;
       if (isOwned) await deleteFileRefCounted(db, storage, fileId);
     } catch (err) {
       log.warn({ fileId, ...document, err }, "Attachment cleanup failed for one file");
