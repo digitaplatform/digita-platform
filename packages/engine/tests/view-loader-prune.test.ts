@@ -96,6 +96,18 @@ describe("seedViewsFromFiles — orphan pruning (PRUNE_ORPHAN_VIEWS=true)", () =
     expect(row).toBeNull();
   });
 
+  it("deletes a row the seed itself wrote from a file that is gone at the next seed", async () => {
+    const goneFile = join(appDir, "views", "gone-widget.view.json");
+    await writeFile(goneFile, JSON.stringify({ ...KEPT_VIEW, _id: "gone-widget", name: "Gone Widget" }));
+    await seedViewsFromFiles(db, [appDir]);
+    expect(await db.findOne(DIGITA.COLLECTIONS.VIEW, "gone-widget", DIGITA.DATABASES.CORE)).not.toBeNull();
+    await rm(goneFile);
+
+    await seedViewsFromFiles(db, [appDir]);
+
+    expect(await db.findOne(DIGITA.COLLECTIONS.VIEW, "gone-widget", DIGITA.DATABASES.CORE)).toBeNull();
+  });
+
   it("keeps an admin-overridden DB-only row (no backing file, by design)", async () => {
     await db.insertOne(
       DIGITA.COLLECTIONS.VIEW,
