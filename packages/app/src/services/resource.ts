@@ -215,8 +215,9 @@ export function runAction(
   );
 }
 
-/** Run computed hooks against a draft doc WITHOUT persisting (generic preview).
- *  A draft has no name yet — the engine route is POST /resource/:entity/preview. */
-export function previewDoc<T = Doc>(entity: string, body: Doc): Promise<ApiResponse<T>> {
-  return api.post<ApiResponse<T>>(`${RESOURCE}/${enc(entity)}/preview`, body);
+/** Run computed hooks against a draft doc WITHOUT persisting (generic preview). The edit of a
+ *  saved record names it, so the engine re-derives against the stored record as the save will. */
+export function previewDoc<T = Doc>(entity: string, body: Doc, name?: string): Promise<ApiResponse<T>> {
+  const path = name ? `${RESOURCE}/${enc(entity)}/${enc(name)}/preview` : `${RESOURCE}/${enc(entity)}/preview`;
+  return api.post<ApiResponse<T>>(path, body);
 }

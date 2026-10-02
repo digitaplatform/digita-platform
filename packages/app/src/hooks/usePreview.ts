@@ -22,7 +22,7 @@ export interface PreviewState<T> {
  */
 export function usePreview<T = Doc>(
   entity: string,
-  opts?: { enabled?: boolean; debounceMs?: number },
+  opts?: { enabled?: boolean; debounceMs?: number; /** The saved record the form edits. */ name?: string },
 ) {
   const enabled = opts?.enabled ?? true;
   const debounceMs = opts?.debounceMs ?? 350;
@@ -37,7 +37,7 @@ export function usePreview<T = Doc>(
       timerRef.current = setTimeout(() => {
         const ticket = ++seqRef.current;
         setState((s) => ({ ...s, status: 'loading' }));
-        previewDoc<T>(entity, draft)
+        previewDoc<T>(entity, draft, opts?.name)
           .then((res) => {
             if (ticket !== seqRef.current) return; // superseded
             setState({ data: unwrap(res), status: 'idle' });
@@ -48,7 +48,7 @@ export function usePreview<T = Doc>(
           });
       }, debounceMs);
     },
-    [entity, enabled, debounceMs],
+    [entity, enabled, debounceMs, opts?.name],
   );
 
   const cancel = useCallback(() => {

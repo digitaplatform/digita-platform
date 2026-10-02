@@ -851,7 +851,7 @@ describe("An update re-derives the fetch_from fields of a row whose Link changed
     expect(row!["uom"]).toBe("HOUR");
     const draft = { _id: created._id, title: "SO", lines: [{ ...row, product: "STOCKABLE" }] };
 
-    const preview = await docService.preview("FetchOrder", draft, salesperson);
+    const preview = await docService.preview("FetchOrder", draft, salesperson, undefined, created._id);
     await docService.update("FetchOrder", created._id, { lines: draft.lines }, salesperson);
 
     const [saved] = await storedLines(created._id);
@@ -864,7 +864,28 @@ describe("An update re-derives the fetch_from fields of a row whose Link changed
   it("refuses to preview a saved record to a role that may pick but not read it", async () => {
     const created = await docService.insert("FetchOrder", { title: "SO", lines: [{ product: "SERVICE" }] }, adminUser);
     const picker: UserContext = { _id: "pk-1", email: "pk@test.local", roles: ["Picker"], full_name: "Picker" };
-    await expect(docService.preview("FetchOrder", { _id: created._id, lines: [] }, picker)).rejects.toThrow();
+    await expect(docService.preview("FetchOrder", { lines: [] }, picker, undefined, created._id)).rejects.toThrow();
+  });
+
+  it("previews the unchanged rows of a saved record with their stored read-only cells", async () => {
+    const created = await docService.insert(
+      "FetchOrder",
+      { title: "SO", lines: [{ product: "SERVICE" }, { product: "STOCKABLE" }] },
+      salesperson,
+    );
+    const rows = await storedLines(created._id);
+    // product_code is read_only: the Salesperson's draft carries it as read, and may not write it.
+    const preview = await docService.preview("FetchOrder", { title: "SO renamed", lines: rows }, salesperson, undefined, created._id);
+    const previewed = preview._data["lines"] as Record<string, unknown>[];
+    expect(rows.map((r) => r["product_code"]).every(Boolean)).toBe(true);
+    expect(previewed.map((r) => r["product_code"])).toEqual(rows.map((r) => r["product_code"]));
+  });
+
+  it("previews a draft as a draft, whatever _id its body carries", async () => {
+    const other = await docService.insert("FetchOrder", { title: "Other", lines: [{ product: "SERVICE" }] }, adminUser);
+    const preview = await docService.preview("FetchOrder", { _id: other._id, title: "Typed", lines: [{ product: "STOCKABLE" }] }, salesperson);
+    expect(preview._data["title"]).toBe("Typed");
+    expect((preview._data["lines"] as Record<string, unknown>[])[0]!["uom"]).toBe("PCS");
   });
 
   it("keeps a value the same write sets on the row whose Link changed", async () => {

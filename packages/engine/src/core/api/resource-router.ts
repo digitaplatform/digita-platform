@@ -155,6 +155,17 @@ export function registerResourceRoutes(
     return reply.send(successResponse(projectRead(request, documentService.toReadableJSON(doctype, doc, getUser(request))), ctx.getMessages()));
   });
 
+  // The preview of a saved record's edit, named as its update names it: it re-derives against the
+  // stored record as the save will.
+  app.post(`${basePath}/:doctype/:name/preview`, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { doctype, name } = request.params as { doctype: string; name: string };
+    const data = request.body as Record<string, unknown>;
+    const ctx = new ResponseContext();
+
+    const doc = await documentService.preview(doctype, data, getUser(request), ctx, name);
+    return reply.send(successResponse(projectRead(request, documentService.toReadableJSON(doctype, doc, getUser(request))), ctx.getMessages()));
+  });
+
   // ─── CREATE ────────────────────────────────────────────
   app.post(`${basePath}/:doctype`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { doctype } = request.params as { doctype: string };

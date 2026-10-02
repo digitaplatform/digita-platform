@@ -910,6 +910,9 @@ export class DocumentService {
     data: Record<string, unknown>,
     user: UserContext = GUEST_USER,
     ctx?: ResponseContext,
+    /** The saved record the draft edits, named by the route as an update names it; a body's `_id`
+     *  never decides it, since a new draft may carry a typed id of its own. */
+    storedName?: string,
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
 
@@ -918,8 +921,6 @@ export class DocumentService {
 
     // Same prep as insert (minus workflow stamping): strip non-writable fields,
     // resolve defaults + fetch_from, serialize.
-    const writeData = this.permissionChecker.filterFieldsForWrite(user, doctype, data);
-    const storedName = typeof data["_id"] === "string" && data["_id"] !== "" ? data["_id"] : undefined;
     let doc: BaseDocument;
     if (storedName) {
       // A saved record previews as its update would store it: a row whose Link moved re-derives
@@ -927,6 +928,8 @@ export class DocumentService {
       await this.assertReadAccess(user, doctype, storedName);
       doc = await this.loadDocInternal(doctype, storedName);
       await this.assertRowReadable(entity, doctype, storedName, user, doc._data);
+      // As update does: a cell the person may not write keeps its stored value, not the draft's.
+      const writeData = this.permissionChecker.filterFieldsForWrite(user, doctype, data, doc._data);
       applyNewChildRowDefaults(entity, writeData, doc._original, this.defaultContext(user));
       doc.merge(this.serializeFields(entity, writeData));
       const changedFields = doc.getChangedFields();
@@ -935,6 +938,7 @@ export class DocumentService {
       }
       await this.fetchFromResolver.resolveChangedRows(entity, doc._data, doc._original);
     } else {
+      const writeData = this.permissionChecker.filterFieldsForWrite(user, doctype, data);
       let processed = resolveDefaults(entity, writeData, this.defaultContext(user));
       processed = await this.fetchFromResolver.resolve(entity, processed);
       doc = new BaseDocument(doctype);
