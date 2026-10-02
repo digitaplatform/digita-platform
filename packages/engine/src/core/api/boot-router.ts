@@ -189,10 +189,11 @@ export function registerBootRoutes(
         // An anonymous caller gets no setup state: it could fill nothing.
         setup: user ? await resolveSetup(user, documentService, permissionChecker) : null,
         // Resolved branding (BrandingSetting singleton); undefined fields are
-        // omitted → the frontend applies its defaults. app_name falls back to the
-        // platform name. The design-system runtime (applyBranding) consumes these.
+        // omitted → the frontend applies its defaults. app_name is the tenant's own or
+        // none: a name it never set must not stand in for one, on its sign-in least of all.
+        // The design-system runtime (applyBranding) consumes these.
         branding: {
-          app_name: b["app_name"] ?? settingsData["platform_name"] ?? "Digita Platform",
+          app_name: b["app_name"] ?? undefined,
           logo: b["logo"] ?? undefined,
           logo_dark: b["logo_dark"] ?? undefined,
           favicon: b["favicon"] ?? undefined,

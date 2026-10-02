@@ -11,7 +11,7 @@
   "storage_path": "branding",
   "fields": [
     { "fieldname": "sb_identity", "fieldtype": "SectionBreak", "label": "Identity", "idx": 1 },
-    { "fieldname": "app_name", "fieldtype": "Data", "label": "App Name", "translatable": true, "description": "Shown in the operator UI shell + login. Falls back to the platform name.", "idx": 2 },
+    { "fieldname": "app_name", "fieldtype": "Data", "label": "App Name", "translatable": true, "description": "Shown in the operator UI shell + login. Without it the app shows the platform name, and the sign-in pages the name of the drawn signature.", "idx": 2 },
     { "fieldname": "logo", "fieldtype": "AttachImage", "label": "Logo", "public": true, "idx": 3 },
     { "fieldname": "logo_dark", "fieldtype": "AttachImage", "label": "Logo (dark mode)", "public": true, "idx": 4 },
     { "fieldname": "favicon", "fieldtype": "AttachImage", "label": "Favicon", "public": true, "idx": 5 },
