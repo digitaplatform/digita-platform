@@ -7,6 +7,7 @@ import { NamingService } from "../document/naming-service.js";
 import { seedAppData, type UnresolvedSeedLink } from "./seed-app-data.js";
 import { seedDataTranslations } from "./seed-data-translations.js";
 import { createLogger } from "../logging/logger.js";
+import { markReseedRunning, writesEnded } from "./reseed-lock.js";
 import { env } from "../config/env.js";
 
 const log = createLogger("reseed-app-data");
@@ -102,8 +103,12 @@ export async function reseedAppData(mode: ReseedMode, deps: ReseedDeps): Promise
     if (running.mode !== mode) throw new ReseedRunningError(running.mode, mode);
     return running.done;
   }
-  const done = reseedOnce(mode, deps).finally(() => {
+  // Marked first, so every write that begins from now on is refused; the wipe waits for the writes
+  // that began before, so none of them lands after it.
+  markReseedRunning(mode);
+  const done = writesEnded().then(() => reseedOnce(mode, deps)).finally(() => {
     running = null;
+    markReseedRunning(undefined);
   });
   running = { mode, done };
   return done;
