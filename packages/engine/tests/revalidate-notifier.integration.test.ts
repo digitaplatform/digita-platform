@@ -55,7 +55,7 @@ import { MongoMemoryReplSet } from "mongodb-memory-server";
 import type { FastifyInstance } from "fastify";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdir, writeFile, rm } from "fs/promises";
+import { mkdir, mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { env } from "../src/core/config/env.js";
@@ -75,8 +75,9 @@ async function writeJson(path: string, data: unknown): Promise<void> {
 }
 
 async function writeFixture(): Promise<string> {
-  const appDir = join(tmpdir(), APP_BASENAME);
-  await rm(appDir, { recursive: true, force: true });
+  // A folder of this run alone: two runs on one machine at once would otherwise rewrite and delete
+  // each other's app. The app keeps its folder name, which names its database.
+  const appDir = join(await mkdtemp(join(tmpdir(), "revalidate-")), APP_BASENAME);
   const entities = join(appDir, "content", "entities");
   await writeJson(join(entities, "WebSite.entity.json"), {
     name: "WebSite", module: "web", database: DB, naming: { strategy: "user_set" }, title_field: "site_name",
@@ -111,6 +112,8 @@ type Purge = { secret: string | undefined; tags: string[]; storedTitle: unknown 
 let replSet: MongoMemoryReplSet;
 let renderer: Server;
 let rendererStatus = 200;
+/** How long the stand-in renderer takes before it records a purge and answers. */
+let rendererDelayMs = 0;
 const purges: Purge[] = [];
 let app: FastifyInstance;
 let db: MongoDBService;
@@ -118,8 +121,10 @@ let adminToken: string;
 let fixtureRoot: string;
 
 const bearer = () => ({ authorization: `Bearer ${adminToken}` });
+/** The purge posts after the commit, so a test waits for it; the limit is far above a busy machine's delay. */
+const PURGE_WAIT = { timeout: 20000, interval: 20 };
 const purgesAfter = async (count: number): Promise<Purge[]> => {
-  await vi.waitFor(() => expect(purges.length).toBeGreaterThanOrEqual(count));
+  await vi.waitFor(() => expect(purges.length).toBeGreaterThanOrEqual(count), PURGE_WAIT);
   return purges.slice(count - 1);
 };
 
@@ -128,7 +133,7 @@ beforeAll(async () => {
     let raw = "";
     req.on("data", (chunk: Buffer) => (raw += chunk.toString()));
     req.on("end", () => {
-      void db?.findOne("WebPage", "p1", DB).then((row) => {
+      void new Promise((resolve) => setTimeout(resolve, rendererDelayMs)).then(() => db?.findOne("WebPage", "p1", DB)).then((row) => {
         purges.push({
           secret: req.headers["x-revalidate-secret"] as string | undefined,
           tags: (JSON.parse(raw) as { tags: string[] }).tags,
@@ -157,7 +162,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await app?.close();
   await db?.disconnect();
-  await rm(fixtureRoot, { recursive: true, force: true });
+  await rm(join(fixtureRoot, ".."), { recursive: true, force: true });
   await replSet?.stop();
   await new Promise((resolve) => renderer?.close(resolve));
 }, 30000);
@@ -225,6 +230,18 @@ describe("the renderer's cache purge", () => {
     expect((await purgesAfter(seen + 1))[0]!.tags).toEqual(["entity:WebSite"]);
   });
 
+  it("PLANTED DEFECT: is waited for when the renderer answers slower than vitest's default wait", async () => {
+    rendererDelayMs = 1500;
+    try {
+      const seen = purges.length;
+      const updated = await app.inject({ method: "PUT", url: `${RES}/WebSite/site-a`, headers: bearer(), payload: { site_name: "Site A slow" } });
+      expect(updated.statusCode).toBe(200);
+      expect((await purgesAfter(seen + 1))[0]!.tags).toEqual(["entity:WebSite"]);
+    } finally {
+      rendererDelayMs = 0;
+    }
+  });
+
   it("refused by the renderer, is logged, and the save still answers 200", async () => {
     rendererStatus = 401;
     try {
@@ -232,8 +249,9 @@ describe("the renderer's cache purge", () => {
       const updated = await app.inject({ method: "PUT", url: `${RES}/WebSite/site-a`, headers: bearer(), payload: { site_name: "Site A3" } });
       expect(updated.statusCode).toBe(200);
       await purgesAfter(seen + 1);
-      await vi.waitFor(() =>
-        expect(logError).toHaveBeenCalledWith({ entities: ["WebSite"], status: 401 }, "Renderer refused the cache purge"),
+      await vi.waitFor(
+        () => expect(logError).toHaveBeenCalledWith({ entities: ["WebSite"], status: 401 }, "Renderer refused the cache purge"),
+        PURGE_WAIT,
       );
     } finally {
       rendererStatus = 200;
