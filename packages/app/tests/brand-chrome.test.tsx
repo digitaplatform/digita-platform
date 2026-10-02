@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
-import { registerSignature } from '@digitaplatform/theme';
+import { getSignature, registerSignature } from '@digitaplatform/theme';
 import { BrandChrome } from '@/components/layout/BrandChrome';
 import { useThemeStore } from '@/stores/theme';
 import { useSessionStore } from '@/stores/session';
@@ -23,6 +23,17 @@ afterEach(() => {
   cleanup();
   useThemeStore.setState({ signature: 'digita' });
   useSessionStore.setState({ branding: null, settings: null });
+});
+
+describe('BrandChrome — the name without an app_name', () => {
+  it("PLANTED DEFECT: names the look the tenant wears, as the tab and the sign-in do", () => {
+    useThemeStore.setState({ signature: 'simetrix' });
+    useSessionStore.setState({ branding: {} as BootBranding });
+    const { container } = render(<BrandChrome side="top" />);
+    expect(getSignature('simetrix').name).not.toBe('Digita');
+    expect(container.innerHTML).toContain(getSignature('simetrix').name);
+    expect(container.innerHTML).not.toContain('Digita');
+  });
 });
 
 describe('BrandChrome — signature wordmark', () => {

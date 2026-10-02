@@ -10,6 +10,8 @@ vi.hoisted(() => {
   (window as unknown as Record<string, unknown>).__APP_BASE_PATH__ = '/erp';
 });
 const { useSessionStore } = await import('@/stores/session');
+const { useThemeStore } = await import('@/stores/theme');
+const { getSignature } = await import('@digitaplatform/theme');
 const { AuthShell } = await import('@/templates/AuthShell');
 
 vi.mock('@/components/layout/LanguageSwitcher', () => ({ LanguageSwitcher: () => null }));
@@ -50,6 +52,15 @@ describe("the sign-in page's background", () => {
     useSessionStore.setState({ branding: { logo: 'https://evil.example/logo.png', logo_dark: '//evil.example/dark.png' } as never });
     const outside = render(<AuthShell>form</AuthShell>);
     expect(outside.container.innerHTML).not.toContain('evil.example');
+  });
+
+  it("PLANTED DEFECT: names the look the tenant wears on its sign-in when it set no app_name", () => {
+    useThemeStore.setState({ signature: 'simetrix' });
+    useSessionStore.setState({ branding: {} as never });
+    const { container } = render(<AuthShell>form</AuthShell>);
+    expect(getSignature('simetrix').name).not.toBe('Digita');
+    expect(container.innerHTML).toContain(getSignature('simetrix').name);
+    expect(container.innerHTML).not.toContain('Digita');
   });
 
   it('PLANTED DEFECT: names the tenant on its sign-in by its app_name', () => {
