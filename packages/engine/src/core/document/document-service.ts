@@ -2730,7 +2730,7 @@ export class DocumentService {
       // binds to the copy; the clone of a colleague's loose upload stays theirs and loose.
       const boundToSource = s["attached_to_entity"] === entity.name && s["attached_to_name"] === sourceName;
       if (s["attached_to_name"] && !boundToSource) return undefined;
-      const copiers = boundToSource || s["owner"] === user.email || s["owner"] === user._id;
+      const copiers = boundToSource || s["owner"] === user.email;
       const seq = await this.db.getNextSequence(
         DIGITA.COLLECTIONS.FILE,
         "naming_seq",
@@ -2813,7 +2813,7 @@ export class DocumentService {
       // write grant alone would let an Administrator's save of a record bind a colleague's loose
       // upload that the record's owner named in it, and open it to that owner.
       const uploader = file["owner"];
-      if (uploader !== user.email && uploader !== user._id) continue;
+      if (uploader !== user.email) continue;
       if (!(await this.permissionChecker.hasPermission(user, DIGITA.COLLECTIONS.FILE, "write", file)).allowed) continue;
       await this.db.updateOne(
         DIGITA.COLLECTIONS.FILE,
