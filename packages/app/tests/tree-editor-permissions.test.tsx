@@ -23,7 +23,7 @@ vi.mock('@/components/record/RecordDialog', () => ({
   RecordDialog: () => null,
 }));
 
-import { TreeEditor } from '@/components/render/TreeEditor';
+import { EntityTreeEditor } from '@/components/render/EntityTreeEditor';
 import { DialogHostProvider } from '@/components/overlay/DialogHost';
 import { useSessionStore } from '@/stores/session';
 
@@ -48,7 +48,7 @@ function renderAs(roles: string[]) {
   render(
     <QueryClientProvider client={qc}>
       <DialogHostProvider>
-        <TreeEditor entity="CustomerGroup" meta={META} tree={TREE} />
+        <EntityTreeEditor entity="CustomerGroup" meta={META} tree={TREE} />
       </DialogHostProvider>
     </QueryClientProvider>,
   );

@@ -52,6 +52,8 @@ export { SearchDialog } from './composites/SearchDialog.js';
 export type { SearchDialogProps, SearchDialogColumn } from './composites/SearchDialog.js';
 export { TreeView } from './composites/TreeView.js';
 export type { TreeViewProps, TreeViewNode } from './composites/TreeView.js';
+export { TreeEditor } from './composites/TreeEditor.js';
+export type { TreeEditorProps, TreeEditorNode, TreeEditorLabels } from './composites/TreeEditor.js';
 export { Menu, MenuItem } from './composites/Menu.js';
 export type { MenuProps, MenuItemProps } from './composites/Menu.js';
 export { LoadingBlock, ErrorBlock, EmptyState } from './composites/StatusBlocks.js';
