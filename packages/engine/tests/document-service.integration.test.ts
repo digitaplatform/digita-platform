@@ -2535,3 +2535,45 @@ describe("The lifecycle hooks an app keeps its numbers right with", () => {
     expect(seen).toEqual(["title=After"]);
   });
 });
+
+describe("A Table cell is stored as a field of its type is", () => {
+  const typed = [
+    ["Int", "42"],
+    ["Float", "1.5"],
+    ["Currency", "9.95"],
+    ["Percent", "12.5"],
+    ["Duration", "90"],
+    ["Date", "2026-03-01"],
+    ["Datetime", "2026-03-01T10:00:00Z"],
+  ] as const;
+
+  beforeAll(async () => {
+    const fields = typed.map(([fieldtype], i) => ({ fieldname: `f${i}`, fieldtype, label: fieldtype }));
+    registry.register(makeEntity({
+      name: "TypedCellDoc",
+      fields: [
+        { fieldname: "title", fieldtype: "Data", label: "Title" },
+        ...fields,
+        { fieldname: "rows", fieldtype: "Table", label: "Rows", child_fields: fields },
+      ],
+    } as unknown as Partial<EntityDefinition>));
+    await db.ensureCollection("TypedCellDoc", "app");
+  });
+
+  it.each(typed.map(([fieldtype, text], i) => [fieldtype, text, i] as const))("stores a %s cell given %j like the field", async (_type, text, i) => {
+    const values = { [`f${i}`]: text };
+    const created = await docService.insert("TypedCellDoc", { title: "t", ...values, rows: [values] }, adminUser);
+    const raw = (await db.findOne("TypedCellDoc", created._id, "app")) as Record<string, unknown>;
+    const cell = (raw["rows"] as Array<Record<string, unknown>>)[0]![`f${i}`];
+    expect(cell).toEqual(raw[`f${i}`]);
+    expect(typeof cell === "string" && typeof raw[`f${i}`] !== "string").toBe(false);
+  });
+
+  it("refuses a cell its type refuses, on the cell's path", async () => {
+    const refused = await docService.insert("TypedCellDoc", { title: "t", rows: [{ f0: "1" }, { f0: "0x10" }] }, adminUser).then(
+      () => undefined,
+      (e: { errors?: Array<{ field: string; message_key: string }> }) => e.errors,
+    );
+    expect(refused).toEqual([expect.objectContaining({ field: "rows.1.f0", message_key: "field_invalid_int" })]);
+  });
+});

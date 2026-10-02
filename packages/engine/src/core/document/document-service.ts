@@ -1735,10 +1735,8 @@ export class DocumentService {
         touchedTables.add(entry.table);
       }
       // Normalize each touched table through serializeFields (mirror the draft
-      // merge path). NOTE: the Table handler's toStorage encrypts a Password
-      // cell and passes every other child cell through — no other per-cell
-      // serialization runs on ANY path, draft or post-submit — so this matches
-      // draft behavior exactly. updateChildById already marked the table dirty.
+      // merge path): the Table handler stores each cell as a field of its type,
+      // as on every path. updateChildById already marked the table dirty.
       for (const table of touchedTables) {
         const serialized = this.serializeFields(entity, { [table]: doc.get(table) });
         if (serialized[table] !== undefined) doc.set(table, serialized[table]);
