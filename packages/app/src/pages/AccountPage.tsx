@@ -32,6 +32,12 @@ function initials(user: SessionUser): string {
 }
 
 /** Self-service account page — owns the useAccount hooks; the cards are pure. */
+/** A refused request names its reason, as the IdP words it (the demo's read-only profile, a field it
+ *  takes no value for); a server failure names nothing the person can act on. */
+function serverReason(error: unknown): string | undefined {
+  return error instanceof ApiClientError && error.status < 500 ? error.message : undefined;
+}
+
 export default function AccountPage() {
   const tc = useChrome();
   const dialog = useDialogHost();
@@ -186,7 +192,7 @@ export default function AccountPage() {
         languages={languages}
         onSave={onSaveProfile}
         saving={profileM.isPending}
-        error={profileM.isError ? tc('ui.status.somethingWrong') : undefined}
+        error={profileM.isError ? (serverReason(profileM.error) ?? tc('ui.status.somethingWrong')) : undefined}
       />
       <RegionCard
         formatLocale={locale?.format_locale}
