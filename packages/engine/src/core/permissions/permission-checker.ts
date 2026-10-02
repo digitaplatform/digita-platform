@@ -52,6 +52,9 @@ export interface StateOverrideResolver {
   ): StatePermissionOverride | null;
 }
 
+/** A key of a Table row that no child field declares and every write keeps: its position and the engine's `_` keys. */
+const isRowKey = (key: string) => key === "idx" || key.startsWith("_");
+
 export class PermissionChecker {
   private workflowEngine?: StateOverrideResolver;
   // One-time warning per entity when a state-strip override is declared
@@ -622,7 +625,14 @@ export class PermissionChecker {
 
       if (tableFields.has(key) && Array.isArray(value)) {
         const allowedChildKeys = this.getWritableChildFields(user, entityName, key, contextDoc);
-        if (allowedChildKeys === null) {
+        const childFields = tableFields.get(key)?.child_fields;
+        if (allowedChildKeys === null && childFields) {
+          // No cell is gated: every declared cell is written, an undeclared one is not.
+          const declaredCells = new Set(childFields.map((c) => c.fieldname));
+          filtered[key] = (value as Array<Record<string, unknown>>).map((row) =>
+            Object.fromEntries(Object.entries(row ?? {}).filter(([k]) => declaredCells.has(k) || isRowKey(k))),
+          );
+        } else if (allowedChildKeys === null) {
           filtered[key] = value;
         } else {
           const storedTable = contextDoc?.[key];
@@ -706,7 +716,7 @@ export class PermissionChecker {
         continue;
       }
       const readOnlyCells = new Set(table.child_fields.filter((c) => c.read_only).map((c) => c.fieldname));
-      // A row's cells are filtered as the top level is: undeclared ones go, `_` keys pass.
+      // A row's cells are filtered as the top level is: undeclared ones go, `idx` and `_` keys pass.
       const writableCells = new Set(table.child_fields.filter((c) => !c.read_only).map((c) => c.fieldname));
       const storedTable = contextDoc?.[key];
       const storedRows = new Map(
@@ -715,7 +725,7 @@ export class PermissionChecker {
       out[key] = (value as Array<Record<string, unknown>>).map((row) => {
         const stored = storedRows.get(row?.[ROW_ID_FIELD]);
         const kept: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(row ?? {})) if (writableCells.has(k) || k.startsWith("_")) kept[k] = v;
+        for (const [k, v] of Object.entries(row ?? {})) if (writableCells.has(k) || isRowKey(k)) kept[k] = v;
         for (const cell of readOnlyCells) if (stored && cell in stored) kept[cell] = stored[cell];
         return kept;
       });
