@@ -1025,7 +1025,6 @@ export interface EntityDefinition {
 
   // Behavior flags
   is_submittable?: boolean;
-  is_child?: boolean;
   is_single?: boolean;
   is_virtual?: boolean;
   is_log?: boolean;
