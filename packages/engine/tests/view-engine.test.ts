@@ -270,6 +270,30 @@ describe("ViewEngine — list section expand", () => {
     expect(rows.map((r) => r["buyer"])).toEqual([{ _id: "C-1", name: "Acme AG" }, null, { _id: "C-1", name: "Acme AG" }, null]);
     expect(rows.some((r) => "customer_doc" in r)).toBe(false);
   });
+
+  it("keeps every row, unexpanded, when the reader may not read the expand's entity, and warns without naming it", async () => {
+    const deps = makeDeps();
+    deps.documentService.getList
+      .mockResolvedValueOnce(page(invoices))
+      .mockRejectedValueOnce(PermissionDeniedError.forAction("customer", "select"));
+    const ctx = new ResponseContext();
+    const out = await new ViewEngine(deps as never).execute(expandView("buyer"), { query: {} }, user, ctx);
+    const rows = out.sections["invoices"] as Record<string, unknown>[];
+    expect(rows.map((r) => r["_id"])).toEqual(["I-1", "I-2", "I-3", "I-4"]);
+    expect(rows.map((r) => r["buyer"])).toEqual([null, null, null, null]);
+    const warnings = JSON.stringify(ctx);
+    expect(warnings).toContain("expand_no_permission");
+    expect(warnings).not.toContain("customer");
+  });
+
+  it("PLANTED INNOCENT: still fails the section on another error of the expand read", async () => {
+    const deps = makeDeps();
+    deps.documentService.getList.mockResolvedValueOnce(page(invoices)).mockRejectedValueOnce(new Error("database gone"));
+    const ctx = new ResponseContext();
+    const out = await new ViewEngine(deps as never).execute(expandView("buyer"), { query: {} }, user, ctx);
+    expect(out.sections["invoices"]).toEqual([]);
+    expect(JSON.stringify(ctx)).toContain("section_failed");
+  });
 });
 
 describe("ViewEngine — root resolution", () => {

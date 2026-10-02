@@ -2,6 +2,7 @@ import type { ListSection, ViewFilterTuple } from "@digitaplatform/shared";
 import type { DocumentService } from "../../document/document-service.js";
 import type { UserContext } from "../../permissions/types.js";
 import type { ResponseContext } from "../../api/response-context.js";
+import { PermissionDeniedError } from "../../permissions/permission-checker.js";
 import type { ListQuery, FilterTuple } from "../../database/filter-builder.js";
 import { resolveTokens, type ResolverContext } from "../param-resolver.js";
 
@@ -82,19 +83,31 @@ async function applyExpand(
   );
   if (ids.length === 0) return rows;
 
-  const expanded = await deps.documentService.getList(
-    exp.entity,
-    {
-      filters: [["_id", "in", ids]],
-      fields: exp.fields,
-      limit: ids.length,
-    },
-    user,
-    ctx,
-  );
+  const property = exp.as ?? `${exp.field}_doc`;
+  let expanded: Awaited<ReturnType<DocumentService["getList"]>>;
+  try {
+    expanded = await deps.documentService.getList(
+      exp.entity,
+      {
+        filters: [["_id", "in", ids]],
+        fields: exp.fields,
+        limit: ids.length,
+      },
+      user,
+      ctx,
+    );
+  } catch (err) {
+    // A reader may read the list's entity and not the one its expand names: the rows stay, without
+    // their linked records, and the warning names no entity the reader may not see.
+    if (!(err instanceof PermissionDeniedError)) throw err;
+    ctx.addRaw(`Section "${section.key}": linked records left out: permission denied`, "warning", true, {
+      path: `/sections/${section.key}`,
+      code: "expand_no_permission",
+    });
+    return rows.map((r) => ({ ...r, [property]: null }));
+  }
   const byId = new Map(expanded.data.map((d) => [String(d["_id"]), d]));
 
-  const property = exp.as ?? `${exp.field}_doc`;
   return rows.map((r) => {
     const key = r[exp.field];
     const linked = typeof key === "string" ? byId.get(key) : undefined;
