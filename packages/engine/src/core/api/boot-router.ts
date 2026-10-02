@@ -68,7 +68,9 @@ async function resolveDefaultWorkspace(
 /**
  * Whether the engine's apps are set up, as `user` may know it. Every signed-in caller learns
  * whether the setup is complete. A pending settings record and its open fields go only to a
- * caller who may write that record, so nobody reads here a schema their audience does not get.
+ * caller who may write that record and every open field of it, so nobody reads here a schema
+ * their audience does not get, and nobody is sent to a form whose save refuses a field they
+ * cannot fill; such a caller is told to ask.
  */
 async function resolveSetup(
   user: UserContext,
@@ -79,6 +81,8 @@ async function resolveSetup(
   const records = [];
   for (const { entity, row, fields } of pending) {
     if (!(await permissionChecker.hasPermission(user, entity.name, "write", row)).allowed) continue;
+    const writable = permissionChecker.getWritableFields(user, entity.name, row);
+    if (writable && !fields.every((field) => writable.has(field))) continue;
     records.push({ entity: entity.name, fields, missing_record: row === undefined });
   }
   return { complete: pending.length === 0, records };

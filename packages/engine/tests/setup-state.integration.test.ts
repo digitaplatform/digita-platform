@@ -81,6 +81,12 @@ const COMPLETION = {
 };
 
 const dirs: string[] = [];
+
+/** More fields and permission rows for the settings record of one app. */
+interface SettingsExtra {
+  fields?: object[];
+  permissions?: object[];
+}
 let replSet: MongoMemoryReplSet;
 
 const writeJson = (path: string, data: unknown) => writeFile(path, JSON.stringify(data), "utf-8");
@@ -89,7 +95,7 @@ const writeJson = (path: string, data: unknown) => writeFile(path, JSON.stringif
  * An app `name` of a settings record and an Order, in its own database `<name>_shop`;
  * `seededSettings` is its reference seed, if it has one.
  */
-async function writeApp(name: string, seededSettings?: object): Promise<string> {
+async function writeApp(name: string, seededSettings?: object, settingsExtra: SettingsExtra = {}): Promise<string> {
   const base = await mkdtemp(join(tmpdir(), "setup-state-"));
   dirs.push(base);
   const root = join(base, name);
@@ -112,8 +118,9 @@ async function writeApp(name: string, seededSettings?: object): Promise<string> 
       // A read hides a Password; the setup state must count its stored value all the same.
       { fieldname: "gateway_key", fieldtype: "Password", label: "Gateway key", required: true },
       { fieldname: "note", fieldtype: "Data", label: "Note" },
+      ...(settingsExtra.fields ?? []),
     ],
-    permissions: [ADMINISTRATOR, { role: "Clerk", level: 0, select: 1, read: 1 }],
+    permissions: [ADMINISTRATOR, { role: "Clerk", level: 0, select: 1, read: 1 }, ...(settingsExtra.permissions ?? [])],
   });
   await writeJson(join(root, "shop", "entities", "order.entity.json"), {
     name: "Order", module: "shop", database, naming: { strategy: "system" },
@@ -128,8 +135,8 @@ async function writeApp(name: string, seededSettings?: object): Promise<string> 
 }
 
 /** A running engine over the app `name`, and the calls of an administrator and of a clerk against it. */
-async function startApp(name: string, seededSettings?: object) {
-  (env as { APP_DIRS: string[] }).APP_DIRS = [await writeApp(name, seededSettings)];
+async function startApp(name: string, seededSettings?: object, settingsExtra: SettingsExtra = {}) {
+  (env as { APP_DIRS: string[] }).APP_DIRS = [await writeApp(name, seededSettings, settingsExtra)];
   const ta = await buildTestAuth();
   const result = await createApp({ authn: ta.authn });
   await result.startup();
@@ -362,5 +369,46 @@ describe("a save that completes the settings record and creates records through 
     expect(res.statusCode).toBe(200);
     expect((await running.db.find("Order", {}, running.database)).map((o) => o["title"])).toEqual(["Opening order"]);
     expect((await running.boot(running.admin)).setup).toEqual({ complete: true, records: [] });
+  });
+});
+
+describe("a required settings field above the level of a person who may write the record", () => {
+  let running: Awaited<ReturnType<typeof startApp>>;
+  let manager: Record<string, string>;
+  let controller: Record<string, string>;
+
+  beforeAll(async () => {
+    running = await startApp("digita-setup-levels", INCOMPLETE, {
+      fields: [{ fieldname: "approval_code", fieldtype: "Data", label: "Approval code", required: true, perm_level: 1 }],
+      permissions: [
+        { role: "Manager", level: 0, select: 1, read: 1, write: 1 },
+        { role: "Controller", level: 0, select: 1, read: 1, write: 1 },
+        { role: "Controller", level: 1, read: 1, write: 1 },
+      ],
+    });
+    manager = await running.bearer(["Manager", "System User"]);
+    controller = await running.bearer(["Controller", "System User"]);
+  }, 60000);
+
+  afterAll(async () => {
+    await running.close();
+  });
+
+  it("PLANTED DEFECT: sends that person to no form their save would refuse, so they are told to ask", async () => {
+    // The save refuses the required field the person cannot write, whatever else they fill.
+    expect((await running.save("ShopSetting", "shop", COMPLETION, manager)).statusCode).toBe(400);
+    expect((await running.boot(manager)).setup).toEqual({ complete: false, records: [] });
+  });
+
+  it("asks a person who is no Administrator but may write every open field for all of them", async () => {
+    expect((await running.boot(controller)).setup.records).toEqual([
+      { entity: "ShopSetting", fields: ["street", "hourly_rate", "rates", "iban", "gateway_key", "approval_code"], missing_record: false },
+    ]);
+  });
+
+  it("PLANTED INNOCENT: asks a person who may write every open field for all of them", async () => {
+    expect((await running.boot(running.admin)).setup.records).toEqual([
+      { entity: "ShopSetting", fields: ["street", "hourly_rate", "rates", "iban", "gateway_key", "approval_code"], missing_record: false },
+    ]);
   });
 });
