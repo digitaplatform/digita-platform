@@ -174,15 +174,18 @@ export async function runAggregateSection(
     return coerced;
   });
 
-  // A Password value never enters the pipeline: it is dropped right after the
-  // security $match, and at the head of every $lookup sub-pipeline from an
-  // entity that stores one, so no later stage can output it under any name. A
-  // $lookup without a sub-pipeline gets one of the $unset alone, because it
-  // joins whole rows that any later stage may copy or move.
+  // A value the reader may not see never enters the pipeline: a Password field for every reader,
+  // and each field the reader may not read on every row. They are dropped right after the
+  // security $match, and at the head of every $lookup sub-pipeline, so no later stage reads,
+  // sorts by or outputs them, whatever its syntax; the field check above only gives the shapes it
+  // knows a clear refusal. A $lookup without a sub-pipeline gets one of the $unset alone,
+  // because it joins whole rows that any later stage may copy or move.
+  const hiddenOf = (name: string): Document[] =>
+    deps.registry.has(name) ? unsetHidden(deps.registry.get(name), readableByEntity.get(name)) : [];
   const finalPipeline = [
     ...securityMatch,
-    ...unsetPasswords(entity),
-    ...coercedUserPipeline.flatMap(joinByStoredIdForms).map((stage) => unsetPasswordsInLookups(stage, deps.registry)),
+    ...unsetHidden(entity, readableByEntity.get(section.entity)),
+    ...coercedUserPipeline.flatMap(joinByStoredIdForms).map((stage) => unsetHiddenInLookups(stage, hiddenOf)),
   ];
 
   // 4. Execute.
@@ -228,22 +231,31 @@ function passwordFields(def: EntityDefinition): string[] {
   return (def.fields ?? []).filter((f) => f.fieldtype === "Password").map((f) => f.fieldname);
 }
 
-/** The stage that drops an entity's Password fields, or nothing when it stores none. */
-function unsetPasswords(def: EntityDefinition): Document[] {
-  const fields = passwordFields(def);
-  return fields.length ? [{ $unset: fields }] : [];
+/**
+ * The stage that drops what a reader may not see of an entity: its Password fields for every
+ * reader, and, for a reader who may not read every field (`readable` not null), each field
+ * outside `readable`. Nothing when there is nothing to drop.
+ */
+function unsetHidden(def: EntityDefinition, readable: Set<string> | null | undefined): Document[] {
+  const hidden = new Set(passwordFields(def));
+  if (readable) {
+    for (const f of def.fields ?? []) {
+      if (!META_FIELDS.has(f.fieldname) && !f.fieldname.startsWith("_") && !readable.has(f.fieldname)) hidden.add(f.fieldname);
+    }
+  }
+  return hidden.size ? [{ $unset: [...hidden] }] : [];
 }
 
-/** The stage with the Password fields of every joined entity dropped at the head
+/** The stage with the hidden fields of every joined entity dropped at the head
  *  of its `$lookup` sub-pipeline, `$facet` branches included. A `$lookup` with
  *  `localField`/`foreignField` and no sub-pipeline gets one of the $unset alone
  *  (MongoDB 5.0 and later take both together). */
-function unsetPasswordsInLookups(stage: Document, registry: EntityRegistry): Document {
+function unsetHiddenInLookups(stage: Document, hiddenOf: (entity: string) => Document[]): Document {
   const lookup = stage["$lookup"];
-  if (lookup && typeof lookup === "object" && registry.has(lookup["from"])) {
-    const unset = unsetPasswords(registry.get(lookup["from"]));
+  if (lookup && typeof lookup === "object" && typeof lookup["from"] === "string") {
+    const unset = hiddenOf(lookup["from"]);
     const pipeline = Array.isArray(lookup["pipeline"])
-      ? (lookup["pipeline"] as Document[]).map((s) => unsetPasswordsInLookups(s, registry))
+      ? (lookup["pipeline"] as Document[]).map((s) => unsetHiddenInLookups(s, hiddenOf))
       : undefined;
     if (!pipeline && unset.length === 0) return stage;
     return { ...stage, $lookup: { ...lookup, pipeline: [...unset, ...(pipeline ?? [])] } };
@@ -252,7 +264,7 @@ function unsetPasswordsInLookups(stage: Document, registry: EntityRegistry): Doc
   if (facet && typeof facet === "object") {
     const branches = Object.entries(facet as Record<string, unknown>).map(([k, branch]) => [
       k,
-      Array.isArray(branch) ? branch.map((s) => unsetPasswordsInLookups(s as Document, registry)) : branch,
+      Array.isArray(branch) ? branch.map((s) => unsetHiddenInLookups(s as Document, hiddenOf)) : branch,
     ]);
     return { ...stage, $facet: Object.fromEntries(branches) };
   }
