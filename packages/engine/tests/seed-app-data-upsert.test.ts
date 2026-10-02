@@ -32,7 +32,7 @@ import type { NamingService } from "../src/core/document/naming-service.js";
 import type { TranslationService } from "../src/core/i18n/translation-service.js";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { DeleteBlockedError, NotFoundError } from "../src/core/document/document-service.js";
-import { seedAppData } from "../src/core/setup/seed-app-data.js";
+import { seedAppData, seedHash } from "../src/core/setup/seed-app-data.js";
 import { registerAdminReseedRoutes } from "../src/core/api/admin-reseed-router.js";
 
 const page: EntityDefinition = {
@@ -146,7 +146,8 @@ function mockDb(initial: Record<string, unknown>[]) {
     updateOne: vi.fn(
       async (_coll: string, id: string, changes: Record<string, unknown>, _target: string, _session: unknown, expected: Record<string, unknown> = {}) => {
         const doc = stored.get(id);
-        if (!doc || !Object.entries(expected).every(([k, v]) => doc[k] === v)) return false;
+        // Compared by value, as Mongo compares a stored Date with the one the filter names.
+        if (!doc || !Object.entries(expected).every(([k, v]) => JSON.stringify(doc[k]) === JSON.stringify(v))) return false;
         stored.set(id, { ...doc, ...changes });
         return true;
       },
@@ -248,8 +249,11 @@ describe("seedAppData modes", () => {
 
 describe("seedAppData upsert-delete mode", () => {
   /** Rows of the site the seed no longer carries: one the seed wrote, one a person last changed. */
-  const seedWrote = { ...storedHome, _id: "site::en::dropped", title: "Dropped", owner: "system", modified_by: "system" };
-  const personChanged = { ...storedHome, _id: "site::en::mine", title: "Mine", owner: "system", modified_by: "admin@example.com" };
+  // The seed stamps the hash of the values it wrote; a person's change breaks it.
+  const seedWroteValues = { ...storedHome, _id: "site::en::dropped", title: "Dropped", owner: "system", modified_by: "system" };
+  const seedWrote = { ...seedWroteValues, _seed_hash: seedHash(page, seedWroteValues) };
+  const personChangedValues = { ...storedHome, _id: "site::en::mine", title: "Mine", owner: "system", modified_by: "admin@example.com" };
+  const personChanged = { ...personChangedValues, _seed_hash: seedHash(page, { ...personChangedValues, title: "Seeded" }) };
   const otherSite = { ...seedWrote, _id: "other::en::dropped", site: "other" };
 
   it("deletes a row the seed wrote and no longer carries, through the document service, and logs it", async () => {
@@ -330,7 +334,8 @@ describe("seedAppData upsert-delete mode", () => {
     // The catalog dropped `dropped` and pointed the menu at the home page instead. The stored
     // menu still links `dropped` when the sweep runs, so its delete is refused until Pass 4
     // has rewritten the menu.
-    const storedMenu = { ...seedWrote, _id: "site::main", doctype: "WebNavMenu", items: [{ page: "site::en::dropped", _row_id: "row0000000000002" }] };
+    const menuValues = { ...seedWroteValues, _id: "site::main", doctype: "WebNavMenu", items: [{ page: "site::en::dropped", _row_id: "row0000000000002" }] };
+    const storedMenu = { ...menuValues, _seed_hash: seedHash(menu, menuValues) };
     await writeFile(join(dir, "WebNavMenu.seed.json"), JSON.stringify([{ _id: "site::main", site: "site", items: [{ page: "site::en::" }] }]));
     const { db, stored } = mockDb([storedHome, seedWrote, storedMenu]);
     const documentService = mockDocumentService(stored);
@@ -363,7 +368,8 @@ describe("seedAppData upsert-delete mode", () => {
     // The stored menu links `dropped` when the sweep runs and the seed rewrites the menu, so
     // the retry after the write would delete the page; a person changed the page through
     // another engine meanwhile, so the retry reads it again and keeps it.
-    const storedMenu = { ...seedWrote, _id: "site::main", doctype: "WebNavMenu", items: [{ page: "site::en::dropped", _row_id: "row0000000000002" }] };
+    const menuValues = { ...seedWroteValues, _id: "site::main", doctype: "WebNavMenu", items: [{ page: "site::en::dropped", _row_id: "row0000000000002" }] };
+    const storedMenu = { ...menuValues, _seed_hash: seedHash(menu, menuValues) };
     await writeFile(join(dir, "WebNavMenu.seed.json"), JSON.stringify([{ _id: "site::main", site: "site", items: [{ page: "site::en::" }] }]));
     const { db, stored } = mockDb([storedHome, seedWrote, storedMenu]);
     const refusing = mockDocumentService(stored);
@@ -372,7 +378,7 @@ describe("seedAppData upsert-delete mode", () => {
         try {
           await refusing.deleteDoc(...args);
         } catch (err) {
-          stored.set(args[1], { ...stored.get(args[1])!, modified_by: "editor@example.com" });
+          stored.set(args[1], { ...stored.get(args[1])!, title: "Edited", modified_by: "editor@example.com" });
           throw err;
         }
       }),
@@ -415,7 +421,7 @@ describe("seedAppData tiers in insert mode", () => {
   const neutral = { _id: "shop", company_name: "Workshop", quote_threshold: 150 };
   const demoCompany = { _id: "shop", company_name: "Veloluck Velo AG", hourly_rate: 120 };
   /** The reference tier's row as this loader stored it on an earlier boot. */
-  const storedNeutral = {
+  const neutralValues = {
     ...neutral,
     doctype: "ShopSetting",
     docstatus: 0,
@@ -424,6 +430,7 @@ describe("seedAppData tiers in insert mode", () => {
     modified_by: "system",
     modified: new Date("2026-01-01T00:00:00Z"),
   };
+  const storedNeutral = { ...neutralValues, _seed_hash: seedHash(shopSetting, neutralValues) };
   const bothTiers = () => [join(app, "seeds"), join(app, "seeds-demo")];
   const seedTiers = (db: MongoDBService, dirs: string[] = bothTiers()) =>
     seedAppData(db, registry(), {} as NamingService, dirs);
@@ -473,6 +480,26 @@ describe("seedAppData tiers in insert mode", () => {
     expect(stored.get("shop")).toEqual(saved);
   });
 
+  it("keeps a person's values that a rule without a user saved again afterwards", async () => {
+    // The person changes the company; a rule without a user then saves the row as "system",
+    // which makes it look written by the seed to a check of the last writer.
+    const ruleSaved = { ...storedNeutral, company_name: "Meier Velos", modified_by: "system", modified: new Date("2026-01-04T00:00:00Z") };
+    const { db, stored } = mockDb([ruleSaved]);
+    await seedTiers(db);
+    expect(db.updateOne).not.toHaveBeenCalled();
+    expect(db.upsertOne).not.toHaveBeenCalled();
+    expect(stored.get("shop")).toEqual(ruleSaved);
+  });
+
+  it("treats a row stored before the seed stamped its rows as not the seed's", async () => {
+    const { _seed_hash: _dropped, ...legacy } = storedNeutral;
+    void _dropped;
+    const { db, stored } = mockDb([legacy]);
+    await seedTiers(db);
+    expect(db.updateOne).not.toHaveBeenCalled();
+    expect(stored.get("shop")).toEqual(legacy);
+  });
+
   it("keeps the values of a person who saves the row while the seed runs", async () => {
     const { db, stored } = mockDb([storedNeutral]);
     // The person's save lands right after the demo tier, the second tier to read the row, read it
@@ -480,7 +507,9 @@ describe("seedAppData tiers in insert mode", () => {
     let reads = 0;
     (db.findOne as ReturnType<typeof vi.fn>).mockImplementation(async (_coll: string, id: string) => {
       const doc = stored.get(id) ?? null;
-      if (doc && ++reads === 2) stored.set("shop", { ...storedNeutral, company_name: "Meier Velos", modified_by: "admin@example.com" });
+      if (doc && ++reads === 2) {
+        stored.set("shop", { ...storedNeutral, company_name: "Meier Velos", modified_by: "admin@example.com", modified: new Date("2026-01-03T00:00:00Z") });
+      }
       return doc;
     });
     await seedTiers(db);

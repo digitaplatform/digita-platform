@@ -60,6 +60,7 @@ import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
+import { seedHash } from "../src/core/setup/seed-app-data.js";
 
 // Self-contained fixture app (no dependency on a sibling digita-catalog checkout):
 // a minimal WebSite/WebPage pair under a "content" domain, with seed folders for
@@ -128,7 +129,7 @@ async function writeFixture(): Promise<string> {
 }
 
 let replSet: MongoMemoryReplSet;
-const booted: { app: FastifyInstance; db: MongoDBService }[] = [];
+const booted: { app: FastifyInstance; db: MongoDBService; registry: import("../src/core/entity/entity-registry.js").EntityRegistry }[] = [];
 
 async function boot(siteId: string): Promise<{ app: FastifyInstance; db: MongoDBService; registry: import("../src/core/entity/entity-registry.js").EntityRegistry }> {
   (env as { SITE_ID: string }).SITE_ID = siteId;
@@ -137,7 +138,7 @@ async function boot(siteId: string): Promise<{ app: FastifyInstance; db: MongoDB
   const { app, db, startup, registry } = await createApp({ authn });
   await startup();
   await app.ready();
-  booted.push({ app, db });
+  booted.push({ app, db, registry });
   return { app, db, registry };
 }
 
@@ -217,8 +218,12 @@ describe("Per-site website engine (hostyour-manager#308)", () => {
     // Rows of an earlier catalog: one this loader wrote, one a person changed since.
     const db = booted[0]!.db;
     const stamps = { doctype: "WebPage", docstatus: 0, creation: new Date(), modified: new Date() };
-    await db.insertOne("WebPage", { ...stamps, _id: "site-a::stale", site: "site-a", title: "Stale", owner: "system", modified_by: "system" }, DB);
-    await db.insertOne("WebPage", { ...stamps, _id: "site-a::mine", site: "site-a", title: "Mine", owner: "system", modified_by: "admin@example.com" }, DB);
+    // The seed stamps the hash of the values it wrote; the person's row no longer holds them.
+    const page = booted[0]!.registry.get("WebPage");
+    const stale = { ...stamps, _id: "site-a::stale", site: "site-a", title: "Stale", owner: "system", modified_by: "system" };
+    const mine = { ...stamps, _id: "site-a::mine", site: "site-a", title: "Mine", owner: "system", modified_by: "admin@example.com" };
+    await db.insertOne("WebPage", { ...stale, _seed_hash: seedHash(page, stale) }, DB);
+    await db.insertOne("WebPage", { ...mine, _seed_hash: seedHash(page, { ...mine, title: "Seeded" }) }, DB);
 
     await boot("site-a");
 
