@@ -108,7 +108,7 @@ describe("entity-registry — period_check validation", () => {
     expect(r.get("journalEntry").period_check?.require_period).toBe(false);
   });
 
-  it("refuses the load when require_period is not a boolean, as the string \"false\"", async () => {
+  it("refuses the load when require_period is not a boolean", async () => {
     await expect(
       loadEntity(
         baseJournal({
