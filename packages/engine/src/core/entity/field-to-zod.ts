@@ -3,7 +3,7 @@ import type { EntityDefinition, FieldDefinition, FieldType } from "@digitaplatfo
 import { isTimeZone, LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from "@digitaplatform/shared";
 import { isValidColor } from "../validation/validators/color.js";
 import { evaluateExpression } from "../expression/expression-evaluator.js";
-import { isBlank } from "./field-types.js";
+import { isBlank, isCalendarDay, isIsoMoment } from "./field-types.js";
 
 const encryptedPasswordSchema = z.object({ key_id: z.string(), iv: z.string(), tag: z.string(), data: z.string() });
 const geoPointSchema = z.object({
@@ -144,17 +144,18 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
         (v) => {
           if (v instanceof Date) return !isNaN(v.getTime());
           if (typeof v !== "string") return false;
-          return v === "" || (/^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(new Date(v).getTime()));
+          return v === "" || isCalendarDay(v);
         },
         { message: "field_invalid_date" },
       );
     case "Datetime":
-      // A timestamp — stored as a BSON Date; any parseable date string / Date is fine.
+      // A timestamp — stored as a BSON Date; an ISO 8601 string or a Date. Text `Date` would still
+      // parse, such as "5" (a day of 2001), names no moment the writer meant.
       return z.unknown().refine(
         (v) => {
           if (v instanceof Date) return !isNaN(v.getTime());
           if (typeof v !== "string" || !v) return v === "";
-          return !isNaN(new Date(v).getTime());
+          return isIsoMoment(v);
         },
         { message: "field_invalid_date" },
       );
@@ -289,9 +290,12 @@ const NUMERIC_COERCE_TYPES: ReadonlySet<FieldType> = new Set<FieldType>([
  */
 function applyNumericEmptyGuard(schema: ZodTypeAny, field: FieldDefinition): ZodTypeAny {
   if (!NUMERIC_COERCE_TYPES.has(field.fieldtype)) return schema;
+  const isWhole = field.fieldtype === "Int" || field.fieldtype === "Duration";
   return z.preprocess((v) => {
     if (typeof v === "boolean" || Array.isArray(v)) return NaN;
     if (typeof v === "string" && v.trim() === "") return NaN;
+    // A whole number as text is decimal digits with a sign at most: coercion reads "0x10" as 16.
+    if (isWhole && typeof v === "string" && !/^[+-]?\d+$/.test(v.trim())) return NaN;
     return v;
   }, schema);
 }
