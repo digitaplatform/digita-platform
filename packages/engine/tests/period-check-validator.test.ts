@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
-const { warn } = vi.hoisted(() => ({ warn: vi.fn() }));
 vi.mock("../src/core/config/env.js", () => ({
   env: {
     MONGODB_URI: "mongodb://localhost:27017",
@@ -10,8 +9,8 @@ vi.mock("../src/core/config/env.js", () => ({
   },
 }));
 vi.mock("../src/core/logging/logger.js", () => ({
-  createLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn, error: vi.fn(), fatal: vi.fn() }),
-  getRootLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn, error: vi.fn(), fatal: vi.fn() }),
+  createLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
+  getRootLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
 }));
 
 import { mkdtemp, writeFile, rm } from "fs/promises";
@@ -19,16 +18,21 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 
-beforeEach(() => warn.mockClear());
-
 async function loadEntity(json: Record<string, unknown>): Promise<EntityRegistry> {
   const dir = await mkdtemp(join(tmpdir(), "period-check-"));
   await writeFile(join(dir, "x.entity.json"), JSON.stringify(json));
   const r = new EntityRegistry();
-  await r.loadAll(dir);
-  await rm(dir, { recursive: true, force: true });
+  try {
+    await r.loadAll(dir);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
   return r;
 }
+
+/** The message a refused period_check stops the load with, naming the entity and the fault. */
+const refusal = (fault: string) =>
+  `period_check of entity "journalEntry" is invalid: ${fault}`;
 
 const baseJournal = (override: Record<string, unknown>) => ({
   name: "journalEntry",
@@ -58,47 +62,41 @@ describe("entity-registry — period_check validation", () => {
     expect(r.get("journalEntry").period_check).toBeDefined();
   });
 
-  it("strips when date_field is missing", async () => {
-    const r = await loadEntity(
-      baseJournal({ period_check: { period_entity: "fiscalPeriod" } }),
-    );
-    expect(r.get("journalEntry").period_check).toBeUndefined();
-    expect(warn).toHaveBeenCalled();
+  it("refuses the load when date_field is missing", async () => {
+    await expect(
+      loadEntity(baseJournal({ period_check: { period_entity: "fiscalPeriod" } })),
+    ).rejects.toThrow(refusal("date_field required"));
   });
 
-  it("strips when date_field is not Date/Datetime", async () => {
-    const r = await loadEntity(
-      baseJournal({
-        period_check: { date_field: "amount", period_entity: "fiscalPeriod" },
-      }),
-    );
-    expect(r.get("journalEntry").period_check).toBeUndefined();
+  it("refuses the load when date_field is not Date/Datetime", async () => {
+    await expect(
+      loadEntity(baseJournal({ period_check: { date_field: "amount", period_entity: "fiscalPeriod" } })),
+    ).rejects.toThrow(refusal("date_field must be Date/Datetime (got Currency)"));
   });
 
-  it("strips when period_field is not a Link", async () => {
-    const r = await loadEntity(
-      baseJournal({
-        period_check: {
-          date_field: "posting_date",
-          period_entity: "fiscalPeriod",
-          period_field: "amount",
-        },
-      }),
-    );
-    expect(r.get("journalEntry").period_check).toBeUndefined();
+  it("refuses the load when period_field is not a Link", async () => {
+    await expect(
+      loadEntity(
+        baseJournal({
+          period_check: { date_field: "posting_date", period_entity: "fiscalPeriod", period_field: "amount" },
+        }),
+      ),
+    ).rejects.toThrow(refusal("period_field must be Link (got Currency)"));
   });
 
-  it("strips when block_on contains an unknown phase", async () => {
-    const r = await loadEntity(
-      baseJournal({
-        period_check: {
-          date_field: "posting_date",
-          period_entity: "fiscalPeriod",
-          block_on: ["submit", "explode" as unknown as "submit"],
-        },
-      }),
-    );
-    expect(r.get("journalEntry").period_check).toBeUndefined();
+  it("refuses the load when block_on contains an unknown phase or is no list", async () => {
+    await expect(
+      loadEntity(
+        baseJournal({
+          period_check: { date_field: "posting_date", period_entity: "fiscalPeriod", block_on: ["submit", "explode"] },
+        }),
+      ),
+    ).rejects.toThrow(refusal("block_on contains unknown phases: explode"));
+    await expect(
+      loadEntity(
+        baseJournal({ period_check: { date_field: "posting_date", period_entity: "fiscalPeriod", block_on: "submit" } }),
+      ),
+    ).rejects.toThrow(refusal("block_on must be a list of phases"));
   });
 
   it("keeps require_period: false", async () => {
@@ -110,23 +108,24 @@ describe("entity-registry — period_check validation", () => {
     expect(r.get("journalEntry").period_check?.require_period).toBe(false);
   });
 
-  it("strips when require_period is not a boolean", async () => {
-    const r = await loadEntity(
-      baseJournal({
-        period_check: { date_field: "posting_date", period_entity: "fiscalPeriod", require_period: "no" },
-      }),
-    );
-    expect(r.get("journalEntry").period_check).toBeUndefined();
-    expect(warn).toHaveBeenCalled();
+  it("refuses the load when require_period is not a boolean, as the string \"false\"", async () => {
+    await expect(
+      loadEntity(
+        baseJournal({
+          period_check: { date_field: "posting_date", period_entity: "fiscalPeriod", require_period: "false" },
+        }),
+      ),
+    ).rejects.toThrow(refusal("require_period must be a boolean"));
   });
 
-  it("strips when entity also declares time_series (mutually exclusive)", async () => {
-    const r = await loadEntity(
-      baseJournal({
-        period_check: { date_field: "posting_date", period_entity: "fiscalPeriod" },
-        time_series: { time_field: "posting_date" },
-      }),
-    );
-    expect(r.get("journalEntry").period_check).toBeUndefined();
+  it("refuses the load when the entity also declares time_series (mutually exclusive)", async () => {
+    await expect(
+      loadEntity(
+        baseJournal({
+          period_check: { date_field: "posting_date", period_entity: "fiscalPeriod" },
+          time_series: { time_field: "posting_date" },
+        }),
+      ),
+    ).rejects.toThrow(refusal("incompatible with time_series"));
   });
 });

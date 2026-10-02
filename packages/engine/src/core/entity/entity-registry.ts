@@ -715,8 +715,9 @@ export class EntityRegistry {
   }
 
   /**
-   * Validate `entity.period_check`. Strips the config and emits a warning
-   * when:
+   * Validate `entity.period_check`, the guard that refuses a posting into a closed period. A
+   * config with a fault refuses the file, naming each fault, instead of loading the entity
+   * without its guard. A fault is:
    *   the date_field doesn't exist or isn't Date/Datetime
    *   the period_field (if set) isn't a Link
    *   block_on entries are unknown phases
@@ -755,7 +756,9 @@ export class EntityRegistry {
         reasons.push(`period_field must be Link (got ${pf.fieldtype})`);
       }
     }
-    if (pc.block_on) {
+    if (pc.block_on !== undefined && !Array.isArray(pc.block_on)) {
+      reasons.push("block_on must be a list of phases");
+    } else if (pc.block_on) {
       // "cancel" added in #23 so submitted docs in closed
       // accounting periods can't be silently rolled back.
       // "post_submit_update" gates updateSubmitted() patches independently
@@ -768,11 +771,7 @@ export class EntityRegistry {
       reasons.push("require_period must be a boolean");
     }
     if (reasons.length) {
-      log.warn(
-        { entity: entity.name, reasons },
-        "period_check config invalid — disabled for this entity",
-      );
-      delete entity.period_check;
+      throw new Error(`period_check of entity "${entity.name}" is invalid: ${reasons.join("; ")}`);
     }
   }
 
