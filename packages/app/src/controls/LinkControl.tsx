@@ -1,4 +1,4 @@
-import { TREE_KIND_FIELD, TREE_LABEL_FIELD, TREE_PARENT_FIELD } from '@digitaplatform/shared';
+import { TREE_ACTIVE_FIELD, TREE_KIND_FIELD, TREE_LABEL_FIELD, TREE_PARENT_FIELD } from '@digitaplatform/shared';
 import { useEffect, useState } from 'react';
 import { Input, SearchDialog, BaseDialog, TreeView, Combobox, cn } from '@digitaplatform/components';
 import type { TreeViewNode, ComboboxOption } from '@digitaplatform/components';
@@ -185,7 +185,10 @@ export default function LinkControl({
     const parentField = TREE_PARENT_FIELD;
     // Rows kept from the query of another partition are not this partition's nodes: offered, a
     // click would store a group of the previous partition on this record.
-    const treeRows = treeList.isPlaceholderData ? [] : (treeList.data?.rows ?? []);
+    const loadedRows = treeList.isPlaceholderData ? [] : (treeList.data?.rows ?? []);
+    // A node that is switched off is no new choice, nor is any node under it. A record that holds
+    // one keeps it: the field shows its path, as it shows any held node.
+    const treeRows = withoutSwitchedOff(loadedRows, parentField);
     const nodes: TreeViewNode[] = treeRows.map((r) => {
       const parent = r[parentField];
       return {
@@ -457,4 +460,22 @@ function SearchIcon() {
       <path d="m13.5 13.5 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
+}
+
+/** `rows` without every node whose `active` is off and every node under one. A node without the
+ *  field is on, as the block's default is. */
+function withoutSwitchedOff(rows: Record<string, unknown>[], parentField: string): Record<string, unknown>[] {
+  const off = new Set(
+    rows.filter((r) => r[TREE_ACTIVE_FIELD] === 0 || r[TREE_ACTIVE_FIELD] === false).map((r) => String(r._id)),
+  );
+  if (off.size === 0) return rows;
+  const parentOf = new Map(rows.map((r) => [String(r._id), r[parentField] == null ? '' : String(r[parentField])]));
+  const isOff = (id: string, seen = new Set<string>()): boolean => {
+    if (off.has(id)) return true;
+    const parent = parentOf.get(id);
+    if (!parent || seen.has(parent)) return false;
+    seen.add(id);
+    return isOff(parent, seen);
+  };
+  return rows.filter((r) => !isOff(String(r._id)));
 }

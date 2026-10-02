@@ -4,6 +4,8 @@ import type { EntityDefinition, FieldDefinition, IndexDefinition, TreeConfig } f
 export const TREE_PARENT_FIELD = "parent";
 export const TREE_LABEL_FIELD = "label";
 export const TREE_POSITION_FIELD = "position";
+/** Whether a node is switched on: a picker offers no node that is off, nor its subtree. */
+export const TREE_ACTIVE_FIELD = "active";
 /** The column that partitions an entity with `tree.kind` into trees of one kind each. */
 export const TREE_KIND_FIELD = "kind";
 /** The field of an app menu that names the roles a node shows to; the block makes it the `role_visibility_field`. */
@@ -26,7 +28,7 @@ export function treeBlockFields(entity: Pick<EntityDefinition, "name" | "tree">)
     field({ fieldname: TREE_PARENT_FIELD, fieldtype: "Link", label: "Parent", target: entity.name }),
     field({ fieldname: TREE_POSITION_FIELD, fieldtype: "Int", label: "Position" }),
     field({ fieldname: "icon", fieldtype: "Data", label: "Icon" }),
-    field({ fieldname: "active", fieldtype: "Check", label: "Active", default: 1 }),
+    field({ fieldname: TREE_ACTIVE_FIELD, fieldtype: "Check", label: "Active", default: 1 }),
   ];
   if (tree.kind) fields.push(field({ fieldname: TREE_KIND_FIELD, fieldtype: "Data", label: "Kind", required: true }));
   if (tree.menu === "app") {
