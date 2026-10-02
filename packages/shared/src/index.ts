@@ -207,6 +207,8 @@ export {
   isTruthy,
   identifiersOf,
   rootFieldsOf,
+  RULE_ROOTS,
+  foreignRuleRoots,
   ExpressionError,
 } from "./expression.js";
 export type { ExprNode, ExprBinaryOperator, ExprUnaryOperator, ExprIdentifierResolver } from "./expression.js";

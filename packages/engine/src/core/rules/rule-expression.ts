@@ -21,10 +21,11 @@
  *     expression. `$param.*` is never available in rules (no request params).
  */
 
+import { foreignRuleRoots } from "@digitaplatform/shared";
 import type { UserContext } from "../permissions/types.js";
 import {
   evaluateExpressionValueIn,
-  assertExpressionParsableIn,
+  UnsafeExpressionError,
 } from "../expression/expression-evaluator.js";
 import {
   resolveString,
@@ -40,9 +41,6 @@ export interface RuleExprContext {
   [key: string]: unknown;
 }
 
-/** The identifier roots a rule expression may reference (== old SAFE_ROOTS). */
-export const RULE_ROOTS = ["doc", "row", "item", "item_index", "user", "now"] as const;
-const RULE_ROOT_SET = new Set<string>(RULE_ROOTS);
 
 function buildRoots(ctx: RuleExprContext): Record<string, unknown> {
   // Every root is present (value may be undefined) so `row.x` resolves to
@@ -170,7 +168,7 @@ export function assertExpressionParsable(expr: string): void {
     assertValueToken(expr);
     return;
   }
-  assertExpressionParsableIn(expr, RULE_ROOT_SET);
+  assertRuleRoots(expr);
 }
 
 /**
@@ -178,5 +176,12 @@ export function assertExpressionParsable(expr: string): void {
  * rule roots ONLY — tokens are rejected here (they are value-position sugar).
  */
 export function assertConditionParsable(expr: string): void {
-  assertExpressionParsableIn(expr, RULE_ROOT_SET);
+  assertRuleRoots(expr);
+}
+
+/** Refuse an expression that does not parse or reads a root a rule cannot read, by the rule of
+ *  @digitaplatform/shared that the handbook's app check applies too. */
+function assertRuleRoots(expr: string): void {
+  const [foreign] = foreignRuleRoots(expr);
+  if (foreign !== undefined) throw new UnsafeExpressionError(`Identifier:${foreign}`);
 }
