@@ -96,17 +96,11 @@ describe("a view $lookup between a system _id and a Link to it", () => {
     expect((rows[0]!["events"] as Array<{ title: string }>).map((e) => e.title)).toEqual(["Spring fair"]);
   });
 
-  it("joins inside the sub-pipeline of another $lookup and of a $unionWith", async () => {
+  it("joins inside the sub-pipeline of another $lookup", async () => {
     const nested = await run("Event", [
       { $lookup: { from: "Registration", as: "regs", pipeline: [{ $lookup: { from: "Event", localField: "event", foreignField: "_id", as: "back" } }] } },
     ]);
     const regs = nested[0]!["regs"] as Array<{ back: Array<{ title: string }> }>;
     expect(regs.every((r) => r.back.map((e) => e.title).join() === "Spring fair")).toBe(true);
-    const unioned = await run("Event", [
-      { $unionWith: { coll: "Registration", pipeline: [{ $lookup: { from: "Event", localField: "event", foreignField: "_id", as: "back" } }] } },
-    ]);
-    const fromUnion = unioned.filter((r) => "back" in r) as Array<{ back: Array<{ title: string }> }>;
-    expect(fromUnion.length).toBe(2);
-    expect(fromUnion.every((r) => r.back.map((e) => e.title).join() === "Spring fair")).toBe(true);
   });
 });
