@@ -242,6 +242,18 @@ describe("Boot API Integration", () => {
       expect((await branding()).default_signature).toBe("veloluck-workbench");
     });
 
+    it("PLANTED DEFECT: answers the app's name only when the tenant set one, never the platform's", async () => {
+      const branding = async () => (await app.inject({ method: "GET", url: "/api/v1/boot" })).json().data.branding;
+      await db.updateOne("Setting", "settings", { platform_name: "Acme Platform" }, "core");
+      await db.updateOne("BrandingSetting", "branding", { app_name: null }, "core");
+      expect(await branding()).not.toHaveProperty("app_name");
+
+      await db.updateOne("BrandingSetting", "branding", { app_name: "Velo Luck GmbH" }, "core");
+      expect((await branding()).app_name).toBe("Velo Luck GmbH");
+      await db.updateOne("BrandingSetting", "branding", { app_name: null }, "core");
+      await db.updateOne("Setting", "settings", { platform_name: null }, "core");
+    });
+
     it("hands the tenant's time zone, whose day the form's __today__ names", async () => {
       const zone = async () => (await app.inject({ method: "GET", url: "/api/v1/boot" })).json().data.system_settings.timezone;
       await db.updateOne("Setting", "settings", { timezone: "Europe/Zurich" }, "core");
