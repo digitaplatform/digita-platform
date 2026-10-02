@@ -116,11 +116,12 @@ export class BkResolver {
    * Build a bk index for every bk-bearing Link target of `entity` (top-level
    * and inside every Table's `child_fields`, incl. self-links / tree parents),
    * plus the entity itself when `includeSelf` (upsert / self-referential files).
-   * Targets without a business key are skipped — their `_id` IS the readable key.
+   * Targets without a business key are skipped — their `_id` IS the readable key, and so are the
+   * targets `known` already holds.
    */
   async indexLinkTargets(
     entity: EntityDefinition,
-    opts: { includeSelf?: boolean } = {},
+    opts: { includeSelf?: boolean; known?: BkIndex } = {},
   ): Promise<BkIndex> {
     const targets = new Set<string>();
     const collect = (fields: FieldDefinition[]): void => {
@@ -134,7 +135,7 @@ export class BkResolver {
 
     const idx: BkIndex = new Map();
     for (const targetName of targets) {
-      if (!this.registry.has(targetName)) continue;
+      if (!this.registry.has(targetName) || opts.known?.has(targetName)) continue;
       const target = this.registry.get(targetName);
       if (!businessKeyFields(target).length) continue;
       const map = new Map<string, string>();
