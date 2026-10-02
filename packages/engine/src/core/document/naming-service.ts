@@ -320,3 +320,40 @@ export class NamingService {
     return String(v);
   }
 }
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * The counter an `expression` naming would have advanced to make `id`, and the number it gave:
+ * `{####}` counts per entity, `{####:<field>}` per series value, as `evaluateNamingExpression`
+ * keys them. Undefined for an id the expression could not have made. A seed moves the counter
+ * past its own ids with it, so the first new document does not walk them.
+ */
+export function expressionSequenceOf(
+  entityName: string,
+  expression: string,
+  id: string,
+): { sequence: string; value: number } | undefined {
+  let series = false;
+  const pattern = expression
+    .split(/(\{[^}]*\})/)
+    .map((part) => {
+      if (part === "{YYYY}") return "\\d{4}";
+      if (part === "{YY}" || part === "{MM}" || part === "{DD}") return "\\d{2}";
+      const seriesToken = /^\{(#+):\w+\}$/.exec(part);
+      if (seriesToken) {
+        series = true;
+        return `(.+)-(\\d{${seriesToken[1]!.length},})`;
+      }
+      const sequenceToken = /^\{(#+)\}$/.exec(part);
+      if (sequenceToken) return `(\\d{${sequenceToken[1]!.length},})`;
+      if (/^\{\w+\}$/.test(part)) return "[^{}#:]*?";
+      return escapeRegExp(part);
+    })
+    .join("");
+  const match = new RegExp(`^${pattern}$`).exec(id);
+  if (!match) return undefined;
+  const value = Number(series ? match[2] : match[1]);
+  if (!Number.isSafeInteger(value)) return undefined;
+  return { sequence: series ? `${entityName}:${match[1]}` : entityName, value };
+}
