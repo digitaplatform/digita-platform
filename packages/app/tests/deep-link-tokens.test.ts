@@ -14,4 +14,8 @@ describe("a dashboard deep link's tokens", () => {
     expect(resolveDeepLinkTokens('/WorkOrder?assignee=$user.email', { email: 'mia@shop.example' }, 'UTC')).toBe('/WorkOrder?assignee=mia@shop.example');
     expect(resolveDeepLinkTokens('/WorkOrder?x=$unknown', null, 'UTC')).toBeNull();
   });
+
+  it('resolves a link without $now under a zone the runtime does not know', () => {
+    expect(resolveDeepLinkTokens('/WorkOrder?status=Open', null, 'Mars/Olympus')).toBe('/WorkOrder?status=Open');
+  });
 });

@@ -90,9 +90,15 @@ vi.mock('@/stores/session', () => ({
       user: { email: 'mia@shop.example', roles: ['Mechanic'] },
       default_workspace: fixtures.current.workspace,
       locale: { format_locale: 'en-GB' },
-      settings: { default_currency: 'CHF' },
+      settings: { default_currency: 'CHF', timezone: 'Europe/Zurich' },
     }),
 }));
+// The real resolver, watched: a deep link fills $now with the tenant's day, so the page hands it
+// the tenant's zone.
+vi.mock('@/lib/deep-link-tokens', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/deep-link-tokens')>();
+  return { resolveDeepLinkTokens: vi.fn(actual.resolveDeepLinkTokens) };
+});
 vi.mock('@/hooks/useWorkspaceCatalog', () => ({
   useWorkspaceCatalog: () => ({ isLoading: false, visible: [{ _id: fixtures.current.workspace }] }),
 }));
@@ -119,6 +125,7 @@ vi.mock('@/services/meta', () => ({
 }));
 
 import DashboardPage from '@/pages/DashboardPage';
+import { resolveDeepLinkTokens } from '@/lib/deep-link-tokens';
 
 // The chart reads the size of its frame through a ResizeObserver, which jsdom has no layout for.
 // getBoundingClientRect is left alone: the axes and the legend measure their own text with it, and
@@ -176,6 +183,8 @@ describe('the dashboard page with one card of each kind', () => {
 
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith('/WorkOrder?status=Open');
+    // The tenant's zone, not the browser's UTC day.
+    expect(resolveDeepLinkTokens).toHaveBeenLastCalledWith('/WorkOrder?status=Open', expect.anything(), 'Europe/Zurich');
   });
 
   it('draws the chart card with its label and one bar per row, as tall as the value of the row', async () => {

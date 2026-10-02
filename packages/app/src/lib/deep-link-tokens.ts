@@ -11,7 +11,8 @@ export function resolveDeepLinkTokens(
 ): string | null {
   const out = to
     .replace(/\$user\.(\w+)/g, (_, k: string) => String(user?.[k] ?? ''))
-    .replace(/\$now/g, calendarDay(now, timeZone));
+    // The day only where a link names $now: a zone no runtime knows then fails that link alone.
+    .replace(/\$now/g, () => calendarDay(now, timeZone));
   if (out.includes('$')) {
     if (import.meta.env.DEV) console.error('[dashboard] unresolved deep-link token:', to);
     return null;
