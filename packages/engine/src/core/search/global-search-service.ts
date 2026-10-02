@@ -3,7 +3,7 @@ import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
 import { applyScopeFilters } from "../permissions/scope-filter.js";
-import { isFieldAllowed } from "../database/filter-builder.js";
+import { escapeRegex, isFieldAllowed, searchCondition } from "../database/filter-builder.js";
 import { readStoredRow } from "../entity/field-types.js";
 
 export interface SearchResult {
@@ -32,7 +32,7 @@ export class GlobalSearchService {
     const results: SearchResult[] = [];
     const entities = this.registry.getAll().filter((e) => e.in_global_search);
 
-    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escaped = escapeRegex(query);
 
     await Promise.all(
       entities.map(async (entity) => {
@@ -58,9 +58,7 @@ export class GlobalSearchService {
         );
         if (searchFields.length === 0) return;
 
-        const orConditions = searchFields.map((field) => ({
-          [field]: { $regex: escaped, $options: "i" },
-        }));
+        const orConditions = searchFields.map((field) => searchCondition(field, escaped));
 
         // Scope narrowing (if_owner / permission.scope) — same semantics as getList.
         const mongoFilter = applyScopeFilters(entity, user, { $or: orConditions });
