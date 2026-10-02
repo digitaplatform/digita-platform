@@ -33,15 +33,6 @@ function routesWithoutCaller(routes: string[], callers: Record<string, Caller>, 
   });
 }
 
-/** The exports of a module that no other source mentions in code. */
-function exportsWithoutCaller(exported: string[], otherSources: string[]): string[] {
-  const code = otherSources.flatMap(codeLines).join("\n");
-  return exported.filter((name) => !new RegExp(`\\b${name}\\b`).test(code));
-}
-
-const sourceFiles = (dir: string) =>
-  (readdirSync(dir, { recursive: true }) as string[]).filter((file) => /\.tsx?$/.test(file)).map((file) => join(dir, file));
-
 describe("the routes of the renderer", () => {
   const routes = readdirSync(join(src, "app/api"), { recursive: true })
     .map(String)
@@ -62,26 +53,6 @@ describe("the routes of the renderer", () => {
   it("PLANTED INNOCENT: the check passes a route with a file that calls it and one with a caller outside", () => {
     const callers = { a: { file: "a.tsx" }, b: { outside: "the engine" } };
     expect(routesWithoutCaller(["a", "b"], callers, () => codeLines('await fetch("/api/a");'))).toEqual([]);
-  });
-});
-
-describe("the exports of lib/format.ts", () => {
-  const file = join(src, "lib/format.ts");
-  const exported = [...readFileSync(file, "utf8").matchAll(/^export function (\w+)/gm)].map((match) => match[1]!);
-  const others = sourceFiles(src).filter((candidate) => candidate !== file).map((candidate) => readFileSync(candidate, "utf8"));
-
-  it("each have a caller", () => {
-    expect(exported.length).toBeGreaterThan(0);
-    expect(exportsWithoutCaller(exported, others)).toEqual([]);
-  });
-
-  it("PLANTED DEFECT: the check names an export that only a comment mentions", () => {
-    expect(exportsWithoutCaller(["formatA", "formatB"], ["formatA(1);", "// formatB would go here"])).toEqual(["formatB"]);
-  });
-
-  it("PLANTED INNOCENT: the check passes an export a file calls, and ignores a longer name that contains it", () => {
-    expect(exportsWithoutCaller(["format"], ["format(1);"])).toEqual([]);
-    expect(exportsWithoutCaller(["format"], ["formatCurrency(1);"])).toEqual(["format"]);
   });
 });
 

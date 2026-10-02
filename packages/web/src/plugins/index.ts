@@ -12,7 +12,7 @@ export const PLUGIN_MANIFESTS: PluginManifest[] = [
     id: "metadata-demo",
     name: "Metadata demo",
     description:
-      "Animated: one Sales Order definition generates a REST API + admin UI — naming series, child-table lines, computed totals, workflow.",
+      "Animated: an entity definition beside the API answer and the form generated from it, all three from the block's props.",
     category: "interactive",
     component: dynamic(() => import("./metadata-demo")),
   },
