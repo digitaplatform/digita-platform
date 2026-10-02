@@ -441,11 +441,25 @@ export async function seedAppData(
       const rawId = row.__seedId ?? row["_id"];
       if (rawId == null) continue;
       const id = toIdString(rawId);
+      // A row a person changed since the seed wrote it, a cancel among them, is theirs.
+      const stored = (await db.findOne(entity.name, id, entity.database)) as Record<string, unknown> | null;
+      if (!stored || !seedWrote(stored)) continue;
       try {
         const resolved = (await snapshotResolver.resolve(entity, row)) as Record<string, unknown>;
-        const { _id: _ignore, ...delta } = resolved;
-        // Through the same serialization as Pass 4, so a Password value is written back encrypted.
-        await db.updateOne(entity.name, id, serializeRowForStorage(entity, delta), entity.database);
+        // Only the fields the resolver sealed are written, and the stamp follows them, so the
+        // row stays the seed's.
+        const before = serializeRowForStorage(entity, row);
+        const after = serializeRowForStorage(entity, resolved);
+        const sealedFields = Object.fromEntries(
+          Object.entries(after).filter(([key, value]) => key !== "_id" && canonicalJson(value) !== canonicalJson(before[key])),
+        );
+        if (Object.keys(sealedFields).length === 0) continue;
+        await db.updateOne(
+          entity.name,
+          id,
+          { ...sealedFields, [SEED_HASH_FIELD]: seedHash({ ...stored, ...sealedFields }) },
+          entity.database,
+        );
         sealed++;
       } catch (err) {
         // Seed backfill must not abort the entire reseed because ONE demo row has a
