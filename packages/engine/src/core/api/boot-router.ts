@@ -193,10 +193,10 @@ export function registerBootRoutes(
         setup: user ? await resolveSetup(user, documentService, permissionChecker) : null,
         // Resolved branding (BrandingSetting singleton); undefined fields are
         // omitted → the frontend applies its defaults. app_name is the tenant's own or
-        // none: a name it never set must not stand in for one, on its sign-in least of all.
-        // The design-system runtime (applyBranding) consumes these.
+        // none: a name it never set, or an empty one, must not stand in for one, on its
+        // sign-in least of all. The design-system runtime (applyBranding) consumes these.
         branding: {
-          app_name: b["app_name"] ?? undefined,
+          app_name: typeof b["app_name"] === "string" && b["app_name"].trim() ? b["app_name"] : undefined,
           logo: b["logo"] ?? undefined,
           logo_dark: b["logo_dark"] ?? undefined,
           favicon: b["favicon"] ?? undefined,
