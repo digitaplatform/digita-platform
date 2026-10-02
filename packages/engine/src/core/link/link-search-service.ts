@@ -5,7 +5,7 @@ import { readStoredRow } from "../entity/field-types.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
 import { applyScopeFilters } from "../permissions/scope-filter.js";
-import { assertObjectFilterAllowed, isFieldAllowed } from "../database/filter-builder.js";
+import { assertObjectFilterAllowed, escapeRegex, isFieldAllowed, searchCondition } from "../database/filter-builder.js";
 
 export interface LinkSearchResult {
   _id: string;
@@ -71,8 +71,8 @@ export class LinkSearchService {
     const requestedCols = columns?.filter((c) => knownFields.has(c));
     const cols = requestedCols && requestedCols.length > 0 ? requestedCols : undefined;
 
-    const escaped = this.escapeRegex(query);
-    const searchConditions = searchFields.map((field) => this.searchCondition(field, escaped));
+    const escaped = escapeRegex(query);
+    const searchConditions = searchFields.map((field) => searchCondition(field, escaped));
 
     let mongoFilter: Record<string, unknown> = {};
 
@@ -157,13 +157,6 @@ export class LinkSearchService {
     return showsTitle || fields.includes("_id") ? fields : [...fields, "_id"];
   }
 
-  /** The condition that finds the escaped text in `field` as the result shows it: the id as its
-   *  string, since a `system`-named row stores it as an ObjectId, which `$regex` never matches. */
-  private searchCondition(field: string, escaped: string): Record<string, unknown> {
-    if (field !== "_id") return { [field]: { $regex: escaped, $options: "i" } };
-    return { $expr: { $regexMatch: { input: { $toString: "$_id" }, regex: escaped, options: "i" } } };
-  }
-
   /**
    * Search parents and expand into row-level results. Each parent's matching
    * `<target_path>[]` rows become individual results with a composite `_id`
@@ -195,9 +188,9 @@ export class LinkSearchService {
 
     const { allowed, gatesRows, masksStoredRows } = this.readScope(user, targetEntity, filters);
     const showsTitle = this.showsTitle(user, targetEntity, displayField, allowed);
-    const escaped = this.escapeRegex(query);
+    const escaped = escapeRegex(query);
     const parentSearch = this.searchableFields(entity.search_fields ?? [displayField], displayField, allowed, showsTitle).map((f) =>
-      this.searchCondition(f, escaped),
+      searchCondition(f, escaped),
     );
     const childTextFields = tableField.child_fields
       .filter((c) => c.fieldtype === "Data" || c.fieldtype === "Text")
@@ -254,9 +247,5 @@ export class LinkSearchService {
       }
     }
     return out;
-  }
-
-  private escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 }
