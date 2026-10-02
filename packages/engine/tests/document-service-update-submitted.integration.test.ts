@@ -375,6 +375,24 @@ describe("updateSubmitted — hooks", () => {
     (hookRunner as unknown as { hooks: Map<string, unknown> }).hooks.delete("BandHookDoc");
   });
 
+  it("runs on_submitted_update inside the transaction: a throwing handler leaves the row unchanged", async () => {
+    registry.register(settleEntity("PaidDoc"));
+    await db.ensureCollection("PaidDoc", "app");
+    const id = await insertSubmitted("PaidDoc", { title: "Inv", grand_total: 100, amount_due: 100 });
+    (hookRunner as unknown as { hooks: Map<string, Map<string, unknown>> }).hooks.set(
+      "PaidDoc",
+      new Map([["on_submitted_update", () => { throw new Error("the paid amount does not add up"); }]]),
+    );
+
+    await expect(
+      docService.updateSubmitted("PaidDoc", id, { increment: { amount_paid: 10 } }, admin),
+    ).rejects.toThrow("the paid amount does not add up");
+    const raw = await db.findOne("PaidDoc", id, "app");
+    expect(raw?.["amount_paid"]).toBe(0);
+
+    (hookRunner as unknown as { hooks: Map<string, unknown> }).hooks.delete("PaidDoc");
+  });
+
   it("T7: draft-era validate/before_save hooks do NOT fire on updateSubmitted", async () => {
     registry.register(settleEntity("QuietDoc"));
     await db.ensureCollection("QuietDoc", "app");
