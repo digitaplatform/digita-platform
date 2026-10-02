@@ -35,9 +35,6 @@
     { "fieldname": "platform_name", "fieldtype": "Data", "label": "Platform Name", "default": "Digita Platform", "translatable": true, "idx": 6 },
     { "fieldname": "timezone", "fieldtype": "Select", "options_source": "timezones", "label": "Timezone", "default": "UTC", "idx": 7 },
     { "fieldname": "default_currency", "fieldtype": "Select", "options_source": "currencies", "label": "Currency", "description": "ISO 4217 currency code (e.g. EUR, USD) used to format amounts that carry no own currency. Optional — when unset, such amounts render without a currency symbol (the platform bakes in no currency).", "idx": 8 },
-    { "fieldname": "cb_2", "fieldtype": "ColumnBreak", "idx": 9 },
-    { "fieldname": "session_timeout_minutes", "fieldtype": "Int", "label": "Session Timeout (minutes)", "default": 480, "min_value": 5, "idx": 10 },
-    { "fieldname": "max_login_attempts", "fieldtype": "Int", "label": "Max Login Attempts", "default": 5, "min_value": 1, "idx": 11 },
     { "fieldname": "sb_setup", "fieldtype": "SectionBreak", "label": "Setup", "idx": 20 },
     {
       "fieldname": "is_first_run",
