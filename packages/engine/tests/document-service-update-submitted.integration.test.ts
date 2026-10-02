@@ -749,6 +749,22 @@ describe("updateSubmitted — computed refresh (D5)", () => {
     return { id: doc._id, rowIds };
   }
 
+  it("leaves a declared computed target out of the read_only_depends_on lock", async () => {
+    const entity = rollupEntity("RollupDoc");
+    entity.fields.find((f) => f.fieldname === "total_released")!.read_only_depends_on = "eval:doc.docstatus==1";
+    registry.register(entity);
+    const { id, rowIds } = await seedSubmittedRollup();
+    await docService.updateSubmitted(
+      "RollupDoc",
+      id,
+      { children: [{ table: "lines", row_id: rowIds[0]!, increment: { released_quantity: 3 } }] },
+      viewer,
+      undefined,
+      { skipWritePermCheck: true },
+    );
+    expect((await db.findOne("RollupDoc", id, "app"))?.["total_released"]).toBe(15);
+  });
+
   it("D5-1: bumping a band line counter refreshes the computed header rollup (in DB, versioned)", async () => {
     const { id, rowIds } = await seedSubmittedRollup();
     const before = await db.findOne("RollupDoc", id, "app");
@@ -1032,9 +1048,17 @@ describe("updateSubmitted — a read_only_depends_on lock holds for a hook, a ru
           fieldtype: "Table",
           label: "Lines",
           child_fields: [
-            { fieldname: "sealed", fieldtype: "Check", label: "Sealed" },
+            { fieldname: "sealed", fieldtype: "Check", label: "Sealed", allow_on_submit: true },
             { fieldname: "delivered", fieldtype: "Float", label: "Delivered", allow_on_submit: true, default: 0, read_only_depends_on: "eval:doc.sealed==1" },
           ],
+        },
+        {
+          // The Table itself locks while `locked` is set, whatever its cells allow.
+          fieldname: "steps",
+          fieldtype: "Table",
+          label: "Steps",
+          read_only_depends_on: "eval:doc.locked==1",
+          child_fields: [{ fieldname: "done", fieldtype: "Check", label: "Done", allow_on_submit: true }],
         },
       ],
       permissions: [fullPerms, viewerPerms],
@@ -1052,6 +1076,7 @@ describe("updateSubmitted — a read_only_depends_on lock holds for a hook, a ru
       locked: 1,
       note: "kept",
       lines: [{ sealed: 0 }, { sealed: 1 }],
+      steps: [{ done: 0 }],
     });
     const raw = await db.findOne("LockDoc", id, "app");
     return { id, rowIds: (raw?.["lines"] as Array<Record<string, unknown>>).map((r) => r["_row_id"] as string) };
@@ -1080,6 +1105,68 @@ describe("updateSubmitted — a read_only_depends_on lock holds for a hook, a ru
     const other = await lockedDoc();
     await docService.updateSubmitted("LockDoc", other.id, { set: { note: "by admin" } }, admin);
     expect((await db.findOne("LockDoc", other.id, "app"))?.["note"]).toBe("by admin");
+  });
+
+  it("passes a row patch that releases its own cell lock, judged on the row it produces", async () => {
+    const { id, rowIds } = await lockedDoc();
+    await docService.updateSubmitted(
+      "LockDoc",
+      id,
+      { children: [{ table: "lines", row_id: rowIds[1]!, set: { sealed: 0 }, increment: { delivered: 3 } }] },
+      viewer,
+      undefined,
+      asHook,
+    );
+    const lines = (await db.findOne("LockDoc", id, "app"))?.["lines"] as Array<Record<string, unknown>>;
+    expect(lines[1]!["delivered"]).toBe(3);
+  });
+
+  it("refuses a row patch of a Table whose own lock holds", async () => {
+    const { id } = await lockedDoc();
+    const stepId = ((await db.findOne("LockDoc", id, "app"))?.["steps"] as Array<Record<string, unknown>>)[0]!["_row_id"] as string;
+    await expect(
+      docService.updateSubmitted(
+        "LockDoc",
+        id,
+        { children: [{ table: "steps", row_id: stepId, set: { done: 1 } }] },
+        viewer,
+        undefined,
+        asHook,
+      ),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+
+  it("refuses a before_submitted_update hook that changes a locked cell in place", async () => {
+    const { id, rowIds } = await lockedDoc();
+    (hookRunner as unknown as { hooks: Map<string, Map<string, unknown>> }).hooks.set(
+      "LockDoc",
+      new Map([
+        [
+          "before_submitted_update",
+          (doc: BaseDocument) => {
+            const lines = doc.get("lines") as Array<Record<string, unknown>>;
+            lines[1]!["delivered"] = 99;
+            doc.set("lines", lines);
+          },
+        ],
+      ]),
+    );
+    try {
+      await expect(
+        docService.updateSubmitted(
+          "LockDoc",
+          id,
+          { children: [{ table: "lines", row_id: rowIds[0]!, increment: { delivered: 1 } }] },
+          viewer,
+          undefined,
+          asHook,
+        ),
+      ).rejects.toBeInstanceOf(PermissionDeniedError);
+    } finally {
+      (hookRunner as unknown as { hooks: Map<string, unknown> }).hooks.delete("LockDoc");
+    }
+    const lines = (await db.findOne("LockDoc", id, "app"))?.["lines"] as Array<Record<string, unknown>>;
+    expect(lines.map((l) => l["delivered"] ?? 0)).toEqual([0, 0]);
   });
 
   it("judges a row patch on its own row: a locked cell is refused, a row beside a locked one passes", async () => {

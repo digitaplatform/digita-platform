@@ -69,6 +69,28 @@ describe("PermissionChecker", () => {
     checker = new PermissionChecker(registry as never);
   });
 
+  // ── A lock on the patch of a submitted document ───────────────────────────
+
+  describe("assertPatchKeepsLocks", () => {
+    it("passes a locked field resent with its value, and refuses a change of it", () => {
+      registry.register(
+        makeEntity({
+          fields: [
+            { fieldname: "locked", fieldtype: "Check", label: "Locked" },
+            { fieldname: "title", fieldtype: "Data", label: "Title", read_only_depends_on: "eval:doc.locked==1" },
+          ],
+        }),
+      );
+      const doc = { locked: 1, title: "kept" };
+      expect(() =>
+        checker.assertPatchKeepsLocks(makeUser(), "TestDoc", doc, [{ field: "title", old: "kept", new: "kept" }]),
+      ).not.toThrow();
+      expect(() =>
+        checker.assertPatchKeepsLocks(makeUser(), "TestDoc", doc, [{ field: "title", old: "before", new: "kept" }]),
+      ).toThrow(PermissionDeniedError);
+    });
+  });
+
   // ── The actions of a permission row ───────────────────────────────────────
 
   describe("the actions of a permission row", () => {
