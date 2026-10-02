@@ -117,6 +117,7 @@ export default async function LocaleLayout({
               brand={brand}
               publishedSlugs={publishedSlugs}
               enabledLocales={(site?.enabled_locales ?? []).filter(Boolean)}
+              identity={identitySources}
               lookCookieDomain={lookCookieDomain(config.authUrl ?? "")}
               modeLocked={modeLocked}
             />

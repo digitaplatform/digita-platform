@@ -55,8 +55,41 @@ export async function loadDeliveredIdentity(sources: DeliveredIdentitySources): 
   if (changed) {
     const page = readPageIdentity();
     bootIdentity({ signature: page?.signature, signatures: page?.signatures, branding: page?.branding, mode: page?.mode, followSystemMode: false });
+    window.dispatchEvent(new Event(IDENTITY_DELIVERED_EVENT));
   }
   return changed;
+}
+
+/** What the page hears when the account's choices painted it again, so a part that shows a choice,
+ *  such as the light/dark button, reads it anew. */
+export const IDENTITY_DELIVERED_EVENT = "digita:identity-delivered";
+
+/**
+ * Keep a choice the visitor made on the website on their account too, as the app's button does:
+ * their own UserPreference row of the key is updated, or created. The website takes the account's
+ * choices on every page load, so a choice kept only in this browser would be undone by the next.
+ * Without a session, and for the demo user, whose read the engine refuses, the choice stays in
+ * this browser and nothing is written. A write the account refuses throws, naming the key.
+ */
+export async function storeIdentityChoiceOnAccount(
+  choices: Partial<IdentityChoices>,
+  sources: DeliveredIdentitySources,
+): Promise<void> {
+  const [firstApp] = sources.apps;
+  if (!firstApp || !findCookie(document.cookie, csrfCookieName(sources))) return;
+  const resource = `/${firstApp}/api/v1/resource/UserPreference`;
+  for (const [choice, value] of Object.entries(choices)) {
+    if (value === undefined) continue;
+    const key = IDENTITY_PREFERENCE_KEYS[choice as keyof IdentityChoices];
+    const filter = encodeURIComponent(JSON.stringify([["pref_key", "=", key]]));
+    const response = await fetchSignedIn(`${resource}?page_size=1&filters=${filter}`, sources);
+    if (!response) return;
+    const own = ((await response.json()) as ApiResponse<{ _id: string }[]>).data?.[0];
+    const saved = own
+      ? await sendSignedIn("PUT", `${resource}/${encodeURIComponent(own._id)}`, { value }, sources)
+      : await sendSignedIn("POST", resource, { pref_key: key, value }, sources);
+    if (!saved) throw new Error(`the account did not keep ${key}`);
+  }
 }
 
 /**
@@ -139,6 +172,25 @@ async function fetchSignedIn(url: string, sources: DeliveredIdentitySources): Pr
   let response = await request();
   if (response.status === 401 && (await refreshSession(sources))) response = await request();
   return response.ok ? response : null;
+}
+
+/** A write with the visitor's session and the CSRF header, refreshed once as fetchSignedIn does.
+ *  Whether the server took it. */
+async function sendSignedIn(method: "POST" | "PUT", url: string, body: unknown, sources: DeliveredIdentitySources): Promise<boolean> {
+  const request = () =>
+    fetch(url, {
+      method,
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        [CSRF_HEADER]: findCookie(document.cookie, csrfCookieName(sources)) ?? "",
+      },
+      body: JSON.stringify(body),
+    });
+  let response = await request();
+  if (response.status === 401 && (await refreshSession(sources))) response = await request();
+  return response.ok;
 }
 
 /** Rotate the session through the IdP: the refresh cookie authenticates, the readable CSRF cookie

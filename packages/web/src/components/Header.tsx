@@ -11,6 +11,7 @@ import { MobileNav } from "./MobileNav";
 import { FamilySwitcher } from "./FamilySwitcher";
 import { LocaleSwitcher } from "./LocaleSwitcher";
 import { ThemeToggle } from "./ThemeToggle";
+import type { DeliveredIdentitySources } from "@/lib/delivered-identity";
 
 /** The lucide icon a menu item names, in kebab or Pascal case. The site's data names it, so the
  *  renderer keeps no list of icons; a name lucide lacks is reported, and the item shows as one
@@ -52,6 +53,7 @@ export function Header({
   enabledLocales,
   lookCookieDomain,
   modeLocked,
+  identity,
 }: {
   locale: Locale;
   defaultLocale: Locale;
@@ -68,6 +70,8 @@ export function Header({
   lookCookieDomain: string | undefined;
   /** The tenant locks light/dark: the bar offers no mode button. */
   modeLocked: boolean;
+  /** Where a signed-in visitor's account keeps the mode the button sets. */
+  identity: DeliveredIdentitySources;
 }) {
   const all = sortNav(nav?.items);
   const contact = all.find(isContactItem);
@@ -116,7 +120,7 @@ export function Header({
             </div>
           )}
           <LocaleSwitcher current={locale} publishedSlugs={publishedSlugs} enabledLocales={enabledLocales} label={t("language", locale)} />
-          {!modeLocked && <ThemeToggle label={t("toggleTheme", locale)} lookCookieDomain={lookCookieDomain} />}
+          {!modeLocked && <ThemeToggle label={t("toggleTheme", locale)} lookCookieDomain={lookCookieDomain} identity={identity} />}
           {/* The header menu's item for the contact sheet; SheetButton draws nothing where the site offers no sheet.
               Below the tablet a label of any length can crowd the bar, so the button shows a mail icon
               there and its label from md on; its name is the full label at every width. */}

@@ -13,7 +13,7 @@ import {
   subscribeRuntimeDesigns,
 } from "@digitaplatform/theme";
 import { cn } from "@digitaplatform/components";
-import { loadDesignFromApps, type DeliveredIdentitySources } from "@/lib/delivered-identity";
+import { loadDesignFromApps, storeIdentityChoiceOnAccount, type DeliveredIdentitySources } from "@/lib/delivered-identity";
 
 /** The designs the band shows: the bundled default and the four premium design plugins. */
 const SHOWCASED_DESIGNS = ["minimal", "editorial", "fluent", "ios", "material"];
@@ -73,6 +73,10 @@ export function DesignSwitcher({ texts, ...sources }: DeliveredIdentitySources &
     } catch {
       /* private mode: the design applies to this page view only */
     }
+    // A signed-in visitor's account keeps it too, or the next page load takes the account's back.
+    storeIdentityChoiceOnAccount({ design: id }, sources).catch((err: unknown) =>
+      console.error("[identity] the design could not be kept on the account", err),
+    );
     setStored(id);
   }
 
