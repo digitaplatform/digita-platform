@@ -58,9 +58,15 @@ const dataHandler: FieldTypeHandler = {
 
 const intHandler: FieldTypeHandler = {
   isStored: true,
-  toStorage(value) {
+  toStorage(value, field) {
     if (isBlank(value)) return null;
-    return parseInt(String(value), 10);
+    // parseInt would cut "1.9" to 1 and "12abc" to 12 without a word; anything but a whole
+    // number is refused instead. A boolean or a list is no number either (Number(true) is 1).
+    const num = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
+    if (!Number.isInteger(num)) {
+      throw new FieldValueError(field.fieldname, "field_invalid_int", { field: field.label || field.fieldname });
+    }
+    return num;
   },
   fromStorage(value) {
     return value;

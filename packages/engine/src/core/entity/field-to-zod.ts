@@ -121,7 +121,7 @@ function baseSchemaForType(field: FieldDefinition): ZodTypeAny {
       // Single source of truth for the hex rule: validators/color.ts
       return z.string().refine(isValidColor, "field_invalid_color");
     case "Int":
-      return z.coerce.number().int();
+      return z.coerce.number().int("field_invalid_int");
     case "Float":
     case "Currency":
     case "Percent":
