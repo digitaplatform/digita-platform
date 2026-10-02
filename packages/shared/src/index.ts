@@ -33,7 +33,7 @@ export type {
 export { LAYOUT_FIELD_TYPES, ROW_ID_FIELD } from "./types/entity.js";
 
 export type { EntityPermission, ReadRow } from "./types/permissions.js";
-export { PermissionAction, SYSTEM_ROLES, canGrantActionTo, opensField, opensOperatorFields } from "./types/permissions.js";
+export { PermissionAction, SYSTEM_ROLES, TENANT_GLOBAL_ROLES, canGrantActionTo, opensField, opensOperatorFields } from "./types/permissions.js";
 
 export { DocStatus } from "./types/docstatus.js";
 
