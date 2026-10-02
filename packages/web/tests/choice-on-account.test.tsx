@@ -21,12 +21,18 @@ const PREFERENCES = "/erp/api/v1/resource/UserPreference";
 let account: { _id: string; pref_key: string; value: unknown }[];
 let refuse = false;
 let writes: { method: string; url: string; body: unknown }[];
+/** How long each answer takes, so two clicks can overlap as on a slow line. */
+let latency = 0;
+/** Whether the next write is refused once: with 500, or with 401 until the session is refreshed. */
+let failNextWrite: 500 | 401 | null = null;
 
 function serveAccount() {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       const method = init?.method ?? "GET";
+      if (latency) await new Promise((resolve) => setTimeout(resolve, latency));
+      if (url === "https://auth.acme.example/api/v1/auth/refresh") return new Response("{}");
       if (!url.startsWith(PREFERENCES)) throw new Error(`unexpected fetch ${url}`);
       if (refuse) return new Response(JSON.stringify({ success: false, error: { code: "PERMISSION_DENIED" } }), { status: 403 });
       if (method === "GET") {
@@ -39,7 +45,16 @@ function serveAccount() {
       if ((init?.headers as Record<string, string> | undefined)?.[CSRF_HEADER] !== "token-1") {
         return new Response(JSON.stringify({ success: false, error: { code: "CSRF_MISMATCH" } }), { status: 403 });
       }
+      if (failNextWrite) {
+        const status = failNextWrite;
+        failNextWrite = null;
+        return new Response(JSON.stringify({ success: false }), { status });
+      }
       const body = JSON.parse(String(init?.body)) as { pref_key?: string; value: unknown };
+      // The unique index on (owner, pref_key): a second row of a key is refused.
+      if (method === "POST" && account.some((row) => row.pref_key === body.pref_key)) {
+        return new Response(JSON.stringify({ success: false, error: { code: "DUPLICATE_ENTRY" } }), { status: 409 });
+      }
       writes.push({ method, url, body });
       if (method === "PUT") account.find((row) => url.endsWith(`/${row._id}`))!.value = body.value;
       else account.push({ _id: `P-${account.length + 1}`, pref_key: body.pref_key!, value: body.value });
@@ -68,6 +83,8 @@ beforeEach(() => {
   account = [{ _id: "P-1", pref_key: IDENTITY_PREFERENCE_KEYS.mode, value: "light" }];
   refuse = false;
   writes = [];
+  latency = 0;
+  failNextWrite = null;
   document.cookie = `${CSRF}=token-1; Path=/`;
   serveAccount();
 });
@@ -127,5 +144,49 @@ describe("a light/dark choice a signed-in visitor makes on the website", () => {
     // From dark the button goes on to system; a button still holding the mount's system would go to light.
     await act(async () => button.click());
     expect(resolveInitialMode()).toBe("system");
+  });
+
+  it("PLANTED DEFECT: keeps the last of two quick clicks on an account without a row, one write after the other", async () => {
+    account = [];
+    latency = 30;
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const button = await renderToggle();
+    expect(resolveInitialMode()).toBe("system");
+    // Two clicks without waiting: light, then dark, while the first lookup is still on its way.
+    await act(async () => button.click());
+    await act(async () => button.click());
+    expect(resolveInitialMode()).toBe("dark");
+    await vi.waitFor(() => expect(writes).toHaveLength(2), { timeout: 2000 });
+    expect(writes.map((write) => write.method)).toEqual(["POST", "PUT"]);
+    expect(account).toEqual([{ _id: "P-1", pref_key: IDENTITY_PREFERENCE_KEYS.mode, value: "dark" }]);
+    expect(errors).not.toHaveBeenCalled();
+  });
+
+  it("PLANTED DEFECT: names a write the account refuses, so a choice lost on the account is not silent", async () => {
+    failNextWrite = 500;
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const button = await renderToggle();
+    await clickUntil(button, "light");
+    await vi.waitFor(() => expect(errors).toHaveBeenCalledWith("[identity] the mode could not be kept on the account", expect.any(Error)));
+  });
+
+  it("PLANTED DEFECT: asks nothing of the account without the session's CSRF cookie", async () => {
+    document.cookie = `${CSRF}=; Path=/; Max-Age=0`;
+    const button = await renderToggle();
+    await clickUntil(button, "light");
+    await act(async () => {});
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it("refreshes an expired session once and keeps the choice", async () => {
+    failNextWrite = 401;
+    const container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    const withIdp = { ...sources, authUrl: "https://auth.acme.example" };
+    await act(async () => root!.render(<ThemeToggle label="Toggle theme" lookCookieDomain={undefined} identity={withIdp} />));
+    await clickUntil(container.querySelector("button")!, "dark");
+    await vi.waitFor(() => expect(account[0]!.value).toBe("dark"));
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => String(url))).toContain("https://auth.acme.example/api/v1/auth/refresh");
   });
 });
