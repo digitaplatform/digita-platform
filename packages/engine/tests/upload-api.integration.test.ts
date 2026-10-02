@@ -62,7 +62,6 @@ import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import type { EntityRegistry } from "../src/core/entity/entity-registry.js";
-import { attachLegacyLooseFiles, attachLegacyLooseFilesOnce } from "../src/core/storage/legacy-file-attachment.js";
 import sharp from "sharp";
 import { IMAGE_VARIANT_WIDTHS } from "../src/core/storage/image-variants.js";
 
@@ -1432,91 +1431,6 @@ describe("Upload API Integration", () => {
         expect(dryRun.errors[0].message).toBe(realRun.errors[0].message);
       });
 
-      it("lets a colleague copy a book whose legacy loose letter the migration attached to it", async () => {
-        const letter = await uploadAsApp(ownerToken, "letter", "%PDF legacy letter, L1");
-        const created = await app.inject({
-          method: "POST",
-          url: "/api/v1/resource/TestBook",
-          headers: authHeaders(ownerToken),
-          payload: { title: "legacy", letter: letter.file_url },
-        });
-        expect(created.statusCode).toBe(201);
-        // As a save before uploads were attached left it: the File names no document.
-        await db.updateOne(DIGITA.COLLECTIONS.FILE, letter._id, { attached_to_name: null }, "core");
-        await attachLegacyLooseFiles(db, registry.getAll());
-        const copied = await app.inject({
-          method: "POST",
-          url: `/api/v1/resource/TestBook/${created.json().data._id}/copy`,
-          headers: authHeaders(salesToken),
-        });
-        expect(copied.statusCode).toBe(201);
-      });
-
-      it("deletes a legacy loose letter the migration attached, when a colleague clears it", async () => {
-        const letter = await uploadAsApp(ownerToken, "letter", "%PDF legacy letter, L2");
-        const created = await app.inject({
-          method: "POST",
-          url: "/api/v1/resource/TestBook",
-          headers: authHeaders(ownerToken),
-          payload: { title: "legacy2", letter: letter.file_url },
-        });
-        await db.updateOne(DIGITA.COLLECTIONS.FILE, letter._id, { attached_to_name: null }, "core");
-        await attachLegacyLooseFiles(db, registry.getAll());
-        const cleared = await app.inject({
-          method: "PUT",
-          url: `/api/v1/resource/TestBook/${created.json().data._id}`,
-          headers: authHeaders(salesToken),
-          payload: { letter: null },
-        });
-        expect(cleared.statusCode).toBe(200);
-        await cleanupDone();
-        expect(await db.findOne(DIGITA.COLLECTIONS.FILE, letter._id, "core")).toBeNull();
-      });
-    });
-
-    describe("the migration of legacy loose uploads", () => {
-      async function attachedTo(fileId: string) {
-        return ((await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, "core")) as Record<string, unknown>)["attached_to_name"];
-      }
-
-      it("attaches a loose upload to the one record of its uploader that names it, and nothing else", async () => {
-        // The files the earlier tests left loose are counted in `settled`.
-        const settled = await attachLegacyLooseFiles(db, registry.getAll());
-        // Legacy state: an Administrator's save attaches nothing of the owner's, so each file stays
-        // as a save before uploads were attached left it, with no document named.
-        const letter = await uploadAsApp(ownerToken, "letter", "%PDF legacy letter");
-        const scan = await uploadAsApp(ownerToken, "scan", "%PDF legacy scan");
-        const shared = await uploadAsApp(ownerToken, "letter", "%PDF legacy letter, named twice");
-        const foreign = await uploadAsApp(salesToken, "letter", "%PDF legacy letter, a colleague's");
-        const book = await plantBook(ownerToken, { title: "Legacy", letter: letter.file_url, pages: [{ scan: scan.file_url }] });
-        await plantBook(ownerToken, { title: "Twice, one", letter: shared.file_url });
-        await plantBook(ownerToken, { title: "Twice, two", letter: shared.file_url });
-        await plantBook(ownerToken, { title: "Planted", letter: foreign.file_url });
-        for (const file of [letter, scan, shared, foreign]) expect(await attachedTo(file._id)).toBeUndefined();
-
-        const first = await attachLegacyLooseFiles(db, registry.getAll());
-        expect(first).toEqual({
-          attached: 2,
-          named_by_several: settled.named_by_several + 1,
-          named_by_other_owner: settled.named_by_other_owner + 1,
-        });
-        expect(await attachedTo(letter._id)).toBe(book.json().data._id);
-        expect(await attachedTo(scan._id)).toBe(book.json().data._id);
-        expect(await attachedTo(shared._id)).toBeUndefined();
-        expect(await attachedTo(foreign._id)).toBeUndefined();
-        expect((await downloadAs(salesToken, letter._id)).statusCode).toBe(200);
-        expect((await downloadAs(ownerToken, foreign._id)).statusCode).toBe(403);
-
-        expect(await attachLegacyLooseFiles(db, registry.getAll())).toEqual({ ...first, attached: 0 });
-      });
-
-      it("ran once at boot, so a later boot attaches nothing", async () => {
-        expect(await db.findOne("_migrations", "attach-legacy-loose-files", "core")).not.toBeNull();
-        const letter = await uploadAsApp(ownerToken, "letter", "%PDF letter after the migration");
-        await plantBook(ownerToken, { title: "After", letter: letter.file_url });
-        await attachLegacyLooseFilesOnce(db, registry.getAll());
-        expect(await attachedTo(letter._id)).toBeUndefined();
-      });
     });
 
     describe("an amendment of a cancelled document with an attachment", () => {
@@ -1565,14 +1479,13 @@ describe("Upload API Integration", () => {
     });
 
     describe("a record that names a colleague's file uploaded before files were bound", () => {
-      /** The state the migration of legacy loose uploads leaves: the colleague's letter stays
-       *  loose, because the record's owner did not upload it. */
+      /** A colleague's letter uploaded before files were bound: no document names it, and it
+       *  stays loose because the record's owner did not upload it. */
       function legacyLetterOfSales(entity: string, body: string) {
         return uploadAsApp(salesToken, "letter", body, entity);
       }
 
       async function expectStillLoose(fileId: string) {
-        await attachLegacyLooseFiles(db, registry.getAll());
         const row = (await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, "core")) as Record<string, unknown>;
         expect(row["owner"]).toBe("sales@digita.local");
         expect(row["attached_to_name"]).toBeUndefined();
