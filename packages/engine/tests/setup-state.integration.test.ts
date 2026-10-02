@@ -171,6 +171,7 @@ describe("an app whose seeded settings record passes its own save", () => {
   let running: Awaited<ReturnType<typeof startApp>>;
   let client: MongoClient;
   const settings = () => client.db(env.MONGODB_CORE_DB).collection<{ _id: string }>(DIGITA.COLLECTIONS.SETTING);
+  const roles = () => client.db(env.MONGODB_IDENTITY_DB).collection<{ _id: string }>(DIGITA.COLLECTIONS.ROLE);
 
   beforeAll(async () => {
     // The core database of an engine before the first-run flag was removed: its seeded settings row carries it.
@@ -181,6 +182,11 @@ describe("an app whose seeded settings record passes its own save", () => {
       allow_user_language: true, platform_name: "Digita Platform", timezone: "UTC", is_first_run: true,
       owner: "system", modified_by: "system", creation: now, modified: now,
     } as never);
+    // An identity database from before the system role Website User was dropped, with a role a tenant made.
+    await roles().insertMany([
+      { _id: "Website User", name: "Website User", is_custom: false, owner: "system", creation: now, modified: now },
+      { _id: "Clerk", name: "Clerk", is_custom: true, owner: "admin@digita.local", creation: now, modified: now },
+    ] as never);
     running = await startApp("digita-setup-complete", { ...INCOMPLETE, ...COMPLETION });
   }, 60000);
 
@@ -209,6 +215,11 @@ describe("an app whose seeded settings record passes its own save", () => {
     } finally {
       await settings().updateOne({ _id: "settings" }, { $unset: { is_first_run: "" } });
     }
+  });
+
+  it("PLANTED DEFECT: has lost the system role Website User with that start, and keeps a role a tenant made", async () => {
+    expect(await roles().findOne({ _id: "Website User" })).toBeNull();
+    expect(await roles().findOne({ _id: "Clerk" })).toMatchObject({ name: "Clerk" });
   });
 });
 
