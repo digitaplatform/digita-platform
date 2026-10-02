@@ -46,7 +46,6 @@ export interface ListSection extends ViewSectionBase {
   fields?: string[];
   search?: string;
   expand?: ExpandDefinition;
-  deep_link?: string;
 }
 
 export interface AggregateSection extends ViewSectionBase {
