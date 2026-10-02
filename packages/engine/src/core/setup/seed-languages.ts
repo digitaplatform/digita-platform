@@ -1,6 +1,7 @@
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { DIGITA } from "@digitaplatform/shared";
 import { createLogger } from "../logging/logger.js";
+import { runForwardMigrationOnce } from "../database/forward-migration.js";
 
 const log = createLogger("seed-languages");
 
@@ -84,10 +85,14 @@ export async function seedLanguages(db: MongoDBService): Promise<void> {
   for (const lang of DEFAULT_LANGUAGES) {
     const existing = await db.findOne(DIGITA.COLLECTIONS.LANGUAGE, lang._id, DIGITA.DATABASES.CORE);
     if (!existing) {
+      // Language is named by its code, which it requires: the row's id is that code. The code is
+      // unique, so a code another language holds is left out instead of stopping the start.
+      const holder = await findCodeHolder(db, lang._id);
       await db.insertOne(
         DIGITA.COLLECTIONS.LANGUAGE,
         {
           ...lang,
+          ...(holder ? {} : { code: lang._id }),
           owner: "system",
           modified_by: "system",
           creation: new Date(),
@@ -95,7 +100,45 @@ export async function seedLanguages(db: MongoDBService): Promise<void> {
         },
         DIGITA.DATABASES.CORE,
       );
-      log.info({ language: lang._id, name: lang.name }, "Language seeded");
+      if (holder) log.warn({ language: lang._id, code_held_by: holder }, "Language seeded without its code, which another language holds");
+      else log.info({ language: lang._id, name: lang.name }, "Language seeded");
     }
   }
+  await fillLanguageCodesOnce(db);
+}
+
+/** The id of the language that holds a code, or undefined when none does. */
+async function findCodeHolder(db: MongoDBService, code: string): Promise<string | undefined> {
+  const holder = await db.findOneByFilter(DIGITA.COLLECTIONS.LANGUAGE, { code }, DIGITA.DATABASES.CORE);
+  return holder ? String(holder["_id"]) : undefined;
+}
+
+/**
+ * The seed stored its languages without the code they are named by and that a save requires, so
+ * no seeded language could be saved. The code is set from the id where it is blank, once per
+ * database. A row whose code another language holds keeps its blank code and is named in the log
+ * and in the migration row, so the start goes on and an Administrator gives one of them a code.
+ */
+export async function fillLanguageCodesOnce(db: MongoDBService): Promise<void> {
+  await runForwardMigrationOnce(db, "fill-language-code", async () => {
+    const blank = await db.findManyByFilter(
+      DIGITA.COLLECTIONS.LANGUAGE,
+      { $or: [{ code: { $exists: false } }, { code: null }, { code: "" }] },
+      DIGITA.DATABASES.CORE,
+    );
+    let filled = 0;
+    const unfilled: Array<{ language: string; code_held_by: string }> = [];
+    for (const row of blank) {
+      const code = String(row["_id"]);
+      const holder = await findCodeHolder(db, code);
+      if (holder) {
+        unfilled.push({ language: code, code_held_by: holder });
+        log.warn({ language: code, code_held_by: holder }, "Language left without its code, which another language holds");
+        continue;
+      }
+      await db.updateOne(DIGITA.COLLECTIONS.LANGUAGE, code, { code }, DIGITA.DATABASES.CORE);
+      filled++;
+    }
+    return { filled, unfilled };
+  });
 }
