@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
 import { getSignature } from '@digitaplatform/theme';
+import { brandingImageKind } from '@digitaplatform/shared';
 import { BrandMark } from '@digitaplatform/components';
 import { useSessionStore } from '@/stores/session';
 import { useThemeStore } from '@/stores/theme';
@@ -17,16 +18,28 @@ export function AuthShell({ children }: { children: ReactNode }) {
   const platformName = useSessionStore((s) => s.settings?.platform_name);
   const appName = branding?.app_name ?? platformName ?? 'Digita';
   const signatureId = useThemeStore((s) => s.signature);
+  const background = branding?.login_background;
+  const backgroundKind = background ? brandingImageKind(background) : null;
 
   return (
     <div
       // The signature's `panel` layer is the REAL panel-contact vector (a
       // stretch-adapted data-URI SVG, preserveAspectRatio=none) — painted
       // 100%×100% like the sites stretch the panel over its section. A tenant
-      // login_background (inline style below) still wins with `cover`.
-      className="relative flex min-h-screen items-center justify-center bg-background bg-no-repeat bg-[length:100%_100%] p-4 bg-[image:var(--sig-panel-l)] dark:bg-[image:var(--sig-panel-d)]"
-      style={branding?.login_background ? { backgroundImage: `url(${appUrl(branding.login_background)})`, backgroundSize: 'cover' } : undefined}
+      // login_background (the image below) still covers it.
+      className="relative isolate flex min-h-screen items-center justify-center bg-background bg-no-repeat bg-[length:100%_100%] p-4 bg-[image:var(--sig-panel-l)] dark:bg-[image:var(--sig-panel-d)]"
     >
+      {/* An image element takes the address as it is: written into a CSS url(), a quote in it
+          could end the address and add another. Only the app's own paths and inline images load. */}
+      {background && backgroundKind && (
+        <img
+          src={backgroundKind === 'path' ? appUrl(background) : background}
+          alt=""
+          aria-hidden="true"
+          data-testid="auth-background"
+          className="pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover"
+        />
+      )}
       <div className="absolute right-4 top-4">
         <LanguageSwitcher />
       </div>
