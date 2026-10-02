@@ -259,3 +259,37 @@ describe("A document service call with the caller's session joins its transactio
     expect(deletedBlobs).toEqual(["bookings/FILE-000703.pdf"]);
   });
 });
+
+describe("A read with the caller's session sees what its transaction wrote", () => {
+  it("runs an action on a document the same transaction inserted", async () => {
+    const bookingId = (await docService.insert("Booking", { title: "Outer" }, admin))._id;
+    onConvert(async (doc, _ctx, services) => {
+      if (doc._data["title"] === "Inner") return "inner ran";
+      const inner = await docService.insert("Booking", { title: "Inner" }, admin, undefined, services.session);
+      return docService.runAction("Booking", inner._id, "convert", admin, undefined, undefined, undefined, services.session);
+    });
+
+    expect(await docService.runAction("Booking", bookingId, "convert", admin)).toBe("inner ran");
+  });
+
+  it("PLANTED DEFECT: reads, lists, finds and counts a document the action inserted, before the commit", async () => {
+    const bookingId = (await docService.insert("Booking", { title: "B" }, admin))._id;
+    onConvert(async (_doc, _ctx, services) => {
+      const wo = await docService.insert("WorkOrder", { title: "Read back" }, admin, undefined, services.session);
+      const filter = [{ title: "Read back" }];
+      return {
+        title: (await docService.getDoc("WorkOrder", wo._id, admin, undefined, undefined, services.session))._data["title"],
+        listed: await docService
+          .getList("WorkOrder", { filters: [["title", "=", "Read back"]] }, admin, undefined, undefined, { session: services.session })
+          .then((list) => ({ total: list.total, titles: list.data.map((row) => row["title"]) })),
+        exists: await docService.exists("WorkOrder", wo._id, admin, services.session),
+        counted: await docService.count("WorkOrder", filter, admin, { session: services.session }),
+        outside: await docService.exists("WorkOrder", wo._id, admin),
+      };
+    });
+
+    const seen = await docService.runAction("Booking", bookingId, "convert", admin);
+
+    expect(seen).toEqual({ title: "Read back", listed: { total: 1, titles: ["Read back"] }, exists: true, counted: 1, outside: false });
+  });
+});

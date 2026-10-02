@@ -480,13 +480,14 @@ export class DocumentService {
     doctype: string,
     name: string,
     user: UserContext,
+    session?: import("mongodb").ClientSession,
   ): Promise<BaseDocument> {
     // Permission check — an explicit DocShare grants read on this doc (D10b).
     await this.assertReadAccess(user, doctype, name);
 
     // Load from DB
     const dbTarget = entity.database;
-    const raw = await this.db.findOne(entity.name, name, dbTarget);
+    const raw = await this.db.findOne(entity.name, name, dbTarget, session);
     if (!raw) throw new NotFoundError(doctype, name);
 
     const doc = new BaseDocument(doctype, raw as Record<string, unknown>);
@@ -521,9 +522,11 @@ export class DocumentService {
     user: UserContext = GUEST_USER,
     ctx?: ResponseContext,
     locale?: string,
+    /** A caller's transaction, so a hook reads a row it wrote before the commit. */
+    session?: import("mongodb").ClientSession,
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
-    const doc = await this.loadReadableDoc(entity, doctype, name, user);
+    const doc = await this.loadReadableDoc(entity, doctype, name, user, session);
 
     // Filter fields by read permission before anything is derived from them: a
     // link title or a status color resolved from a masked field would show it.
@@ -570,7 +573,12 @@ export class DocumentService {
     user: UserContext = GUEST_USER,
     ctx?: ResponseContext,
     locale?: string,
-    options: { everyRowNeedsRead?: boolean; scope?: Record<string, unknown> } = {},
+    options: {
+      everyRowNeedsRead?: boolean;
+      scope?: Record<string, unknown>;
+      /** A caller's transaction, so a hook lists rows it wrote before the commit. */
+      session?: import("mongodb").ClientSession;
+    } = {},
   ): Promise<ListResult> {
     const entity = this.registry.get(doctype);
 
@@ -657,11 +665,11 @@ export class DocumentService {
       // The page and the total both come from the rows the user may read. A total
       // over every matching row counts hidden rows past the page, and a filter then
       // reads a hidden row's values one answer at a time.
-      const readable = await this.listReadableRows(user, doctype, entity, filterArray, query.order_by ?? defaultSort);
+      const readable = await this.listReadableRows(user, doctype, entity, filterArray, query.order_by ?? defaultSort, options.session);
       total = readable.length;
-      docs = await this.loadRowsInOrder(entity, readable.slice(offset, offset + limit).map((row) => row["_id"]));
+      docs = await this.loadRowsInOrder(entity, readable.slice(offset, offset + limit).map((row) => row["_id"]), options.session);
     } else {
-      const [data, count] = await Promise.all([
+      const page = () =>
         this.db.find(
           entity.name,
           {
@@ -672,9 +680,11 @@ export class DocumentService {
             offset,
           },
           dbTarget,
-        ),
-        this.db.count(entity.name, filterArray, dbTarget),
-      ]);
+          options.session,
+        );
+      const matching = () => this.db.count(entity.name, filterArray, dbTarget, options.session);
+      // A transaction runs one operation at a time, so under a session the two reads take turns.
+      const [data, count] = options.session ? [await page(), await matching()] : await Promise.all([page(), matching()]);
       // Read as getDoc reads, before the masks see it.
       docs = (data as Record<string, unknown>[]).map((row) => readStoredRow(entity, row));
       total = count;
@@ -719,6 +729,8 @@ export class DocumentService {
     doctype: string,
     name: string,
     user: UserContext = GUEST_USER,
+    /** A caller's transaction, so a hook finds a row it wrote before the commit. */
+    session?: import("mongodb").ClientSession,
   ): Promise<boolean> {
     const entity = this.registry.get(doctype);
     // Apply scope filter and role visibility so users with restricted scope or
@@ -728,12 +740,12 @@ export class DocumentService {
       user,
       applyScopeFilters(entity, user, { _id: name }),
     );
-    const hits = await this.db.count(entity.name, [scopedFilter], entity.database);
+    const hits = await this.db.count(entity.name, [scopedFilter], entity.database, session);
     if (hits === 0) return false;
     // C1: a `condition` read grant can't be a scope filter, so a scope-visible
     // row may still be condition-hidden. Re-check the specific doc.
     if (this.permissionChecker.hasConditionalRowRead(user, doctype)) {
-      const stored = await this.db.findOne(entity.name, name, entity.database);
+      const stored = await this.db.findOne(entity.name, name, entity.database, session);
       if (!stored) return false;
       // Read as getDoc reads, before the row gate sees it.
       const row = readStoredRow(entity, stored as Record<string, unknown>);
@@ -750,7 +762,11 @@ export class DocumentService {
     doctype: string,
     filters?: Record<string, unknown>[],
     user: UserContext = GUEST_USER,
-    options: { scope?: Record<string, unknown> } = {},
+    options: {
+      scope?: Record<string, unknown>;
+      /** A caller's transaction, so a hook counts rows it wrote before the commit. */
+      session?: import("mongodb").ClientSession;
+    } = {},
   ): Promise<number> {
     const entity = this.registry.get(doctype);
     // P-SEC: count is a sibling of getList and must enforce the SAME gates — an
@@ -780,9 +796,9 @@ export class DocumentService {
     // C1: a `condition` read grant cannot be a Mongo filter, so count only the
     // condition-visible rows, as getList's total does.
     if (this.permissionChecker.hasConditionalRowRead(user, doctype)) {
-      return (await this.listReadableRows(user, doctype, entity, filterArray)).length;
+      return (await this.listReadableRows(user, doctype, entity, filterArray, undefined, options.session)).length;
     }
-    return this.db.count(entity.name, filterArray, entity.database);
+    return this.db.count(entity.name, filterArray, entity.database, options.session);
   }
 
   /**
@@ -797,14 +813,15 @@ export class DocumentService {
     entity: EntityDefinition,
     filters: Record<string, unknown>[],
     orderBy?: string,
+    session?: import("mongodb").ClientSession,
   ): Promise<Record<string, unknown>[]> {
     // Every matching row is re-checked, so the work is bounded before any row loads,
     // and each row carries only the fields its read check reads.
-    if ((await this.db.count(entity.name, filters, entity.database)) > env.LIST_GATED_MAX_ROWS) {
+    if ((await this.db.count(entity.name, filters, entity.database, session)) > env.LIST_GATED_MAX_ROWS) {
       throw new GatedListTooBroadError(doctype, env.LIST_GATED_MAX_ROWS);
     }
     const fields = this.permissionChecker.listReadGateFields(user, doctype);
-    const rows = (await this.db.find(entity.name, { filters, fields, order_by: orderBy }, entity.database)) as Record<string, unknown>[];
+    const rows = (await this.db.find(entity.name, { filters, fields, order_by: orderBy }, entity.database, session)) as Record<string, unknown>[];
     const readable: Record<string, unknown>[] = [];
     // Read as getDoc reads, before the row gate sees it.
     for (const stored of rows) {
@@ -815,9 +832,13 @@ export class DocumentService {
   }
 
   /** The whole stored rows with these ids, read as getDoc reads, in the order given. */
-  private async loadRowsInOrder(entity: EntityDefinition, ids: unknown[]): Promise<Record<string, unknown>[]> {
+  private async loadRowsInOrder(
+    entity: EntityDefinition,
+    ids: unknown[],
+    session?: import("mongodb").ClientSession,
+  ): Promise<Record<string, unknown>[]> {
     if (ids.length === 0) return [];
-    const rows = (await this.db.find(entity.name, { filters: [{ _id: { $in: ids } }] }, entity.database)) as Record<string, unknown>[];
+    const rows = (await this.db.find(entity.name, { filters: [{ _id: { $in: ids } }] }, entity.database, session)) as Record<string, unknown>[];
     const byId = new Map(rows.map((row) => [String(row["_id"]), readStoredRow(entity, row)]));
     return ids.map((id) => byId.get(String(id))).filter((row): row is Record<string, unknown> => row !== undefined);
   }
@@ -2177,7 +2198,7 @@ export class DocumentService {
 
     // Check the standard read permission first — `getDoc` does this — then
     // the action-specific requires_permission if declared.
-    const doc = await this.getDoc(doctype, name, user, ctx);
+    const doc = await this.getDoc(doctype, name, user, ctx, undefined, sessionOverride);
     if (action.requires_permission) {
       await this.permissionChecker.check(user, doctype, action.requires_permission, doc._data);
     }
