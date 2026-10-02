@@ -2088,7 +2088,7 @@ describe("amend, copyDoc and runAction join the caller's session", () => {
       makeEntity({
         name: "SessDoc",
         is_submittable: true,
-        actions: [{ action: "amend_then_fail", label: "A" }, { action: "copy_then_fail", label: "C" }, { action: "copy_inside", label: "I" }],
+        actions: [{ action: "amend_then_fail", label: "A" }, { action: "copy_then_fail", label: "C" }, { action: "copy_inside", label: "I" }, { action: "load_uncommitted", label: "U" }],
       } as unknown as Partial<EntityDefinition>),
     );
     await db.ensureCollection("SessDoc", "app");
@@ -2112,6 +2112,24 @@ describe("amend, copyDoc and runAction join the caller's session", () => {
     const before = await count();
     await expect(docService.runAction("SessDoc", original._id, "amend_then_fail", adminUser)).rejects.toThrow("after the amend");
     expect(await count()).toBe(before);
+    const amendedEntries = await db.find(DIGITA.COLLECTIONS.LOG, { filters: [{ entity: "SessDoc", action: "Amended" }] }, "logs");
+    expect(amendedEntries.filter((e) => (e as { details: { amended_from?: string } }).details.amended_from === original._id)).toEqual([]);
+  });
+
+  it("amends and copies a document the action inserted and has not committed", async () => {
+    const trigger = await docService.insert("SessDoc", { title: "Trigger" }, adminUser);
+    const now = new Date();
+    const row = { doctype: "SessDoc", owner: "system", modified_by: "system", creation: now, modified: now };
+    hookRunner().registerAction("SessDoc", "load_uncommitted", async (_doc: unknown, _ctx: unknown, services: Svc) => {
+      const ds = docService as unknown as Ds;
+      await db.insertOne("SessDoc", { ...row, _id: "SESS-UNCOMMITTED-CANCELLED", docstatus: 2, title: "Cancelled" }, "app", services.session);
+      await db.insertOne("SessDoc", { ...row, _id: "SESS-UNCOMMITTED-DRAFT", docstatus: 0, title: "Draft" }, "app", services.session);
+      await ds.amend("SessDoc", "SESS-UNCOMMITTED-CANCELLED", adminUser, undefined, services.session);
+      await ds.copyDoc("SessDoc", "SESS-UNCOMMITTED-DRAFT", adminUser, undefined, services.session);
+    });
+    const before = await count();
+    await docService.runAction("SessDoc", trigger._id, "load_uncommitted", adminUser);
+    expect(await count()).toBe(before + 4);
   });
 
   it("rolls back a copy when the action that made it fails afterwards", async () => {
