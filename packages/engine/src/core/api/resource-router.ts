@@ -9,7 +9,8 @@ import { callerIsInternal, stripInternalFields } from "../auth/audience.js";
 import { createDelegationClient } from "../auth/delegation-client.js";
 import { ResponseContext } from "./response-context.js";
 import { successResponse, errorResponse } from "./response-model.js";
-import { listQueryFrom } from "./list-query.js";
+import { jsonParam, listQueryFrom } from "./list-query.js";
+import { BadRequestError } from "../view/view-engine.js";
 import type { HookServices } from "../hooks/hook-runner.js";
 import type { DelegationScope } from "@digitaplatform/shared";
 import { createLogger } from "../logging/logger.js";
@@ -269,11 +270,16 @@ export function registerResourceRoutes(
   app.get(`${basePath}/:doctype/count`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { doctype } = request.params as { doctype: string };
     const query = request.query as Record<string, unknown>;
-    const filters = query["filters"] ? JSON.parse(query["filters"] as string) : undefined;
+    // count takes its filters as a list of { field: value } objects, not as tuples.
+    const filters = jsonParam(query, "filters");
+    const isPlainObject = (f: unknown) => typeof f === "object" && f !== null && !Array.isArray(f);
+    if (filters !== undefined && !(Array.isArray(filters) && filters.every(isPlainObject))) {
+      throw new BadRequestError("filters must be a list of { field: value } objects");
+    }
 
     // Pass the real caller so count enforces select + per-user scope (P-SEC) —
     // previously it defaulted to GUEST and counted unscoped over the whole collection.
-    const count = await documentService.count(doctype, filters, getUser(request));
+    const count = await documentService.count(doctype, filters as Record<string, unknown>[] | undefined, getUser(request));
     return reply.send(successResponse({ count }));
   });
 
