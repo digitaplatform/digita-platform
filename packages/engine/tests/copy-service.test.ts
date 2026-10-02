@@ -395,10 +395,11 @@ describe("copyDocumentData", () => {
     expect(rows[0]!.item_code).toBe("A");
     expect(rows[0]!.qty).toBe(5);
     expect(rows[1]!.item_code).toBe("B");
-    // idx re-stamped to array position; stable _row_id dropped for re-stamping.
+    // idx re-stamped to array position; each row gets a fresh _row_id of its own.
     expect(rows[0]!.idx).toBe(0);
     expect(rows[1]!.idx).toBe(1);
-    expect("_row_id" in rows[0]!).toBe(false);
+    expect(rows.map((r) => r["_row_id"])).not.toContain("rid1");
+    expect(new Set(rows.map((r) => r["_row_id"])).size).toBe(2);
   });
 
   // ── business_key drop (E11000-on-copy fix) ──────────────────────────────────
