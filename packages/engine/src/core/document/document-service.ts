@@ -2798,8 +2798,6 @@ export class DocumentService {
     return (await this.loadDocAndStoredRow(doctype, name, session)).doc;
   }
 
-  /** The document as a reader gets it, and its row as stored, from one read: a
-   *  copy judges and carries the same state of the row. */
   /** Run `work` in the caller's session when one is given, else in a transaction of its own. */
   private inTransaction<T>(
     session: import("mongodb").ClientSession | undefined,
@@ -2808,6 +2806,8 @@ export class DocumentService {
     return session ? work(session) : this.db.withTransaction(work);
   }
 
+  /** The document as a reader gets it, and its row as stored, from one read: a
+   *  copy judges and carries the same state of the row. */
   private async loadDocAndStoredRow(
     doctype: string,
     name: string,
