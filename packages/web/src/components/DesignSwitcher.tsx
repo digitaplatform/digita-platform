@@ -4,10 +4,11 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   applyDesign,
   DEFAULT_DESIGN_ID,
-  DESIGN_STORAGE_KEY,
   DESIGNS,
   getRuntimeDesign,
   getRuntimeDesigns,
+  lookCookieDomain,
+  rememberIdentityChoices,
   resolveInitialDesign,
   subscribeRuntimeDesigns,
 } from "@digitaplatform/theme";
@@ -66,7 +67,9 @@ export function DesignSwitcher({ texts, ...sources }: DeliveredIdentitySources &
     }
     applyDesign(id);
     try {
-      localStorage.setItem(DESIGN_STORAGE_KEY, id);
+      // The app's own choice: kept in this browser and in the person's look cookie, which every
+      // page of the tenant reads first.
+      rememberIdentityChoices({ design: id }, lookCookieDomain(sources.authUrl ?? ""));
     } catch {
       /* private mode: the design applies to this page view only */
     }

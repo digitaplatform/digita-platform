@@ -9,6 +9,7 @@ import { CSRF_HEADER, findCookie, sessionCookieNames, type ApiResponse } from "@
 import {
   bootIdentity,
   DESIGNS,
+  lookCookieDomain,
   getRuntimeDesign,
   IDENTITY_PREFERENCE_KEYS,
   loadDeliveredDesign,
@@ -45,9 +46,7 @@ export async function loadDeliveredIdentity(sources: DeliveredIdentitySources): 
   const before = currentChoices();
   const preferences = await findIdentityPreferences(`/${firstApp}`, sources);
   if (!preferences) return false;
-  // The page reads the app at /<app> of its own host, which only a tenant routed by path serves, so
-  // the look cookie is host-only, as the app's on that host.
-  storeIdentityPreferences(preferences, undefined);
+  storeIdentityPreferences(preferences, lookCookieDomain(sources.authUrl ?? ""));
   let changed = currentChoices() !== before;
 
   const design = resolveInitialDesign();

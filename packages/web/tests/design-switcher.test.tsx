@@ -6,6 +6,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { designSwitcherTexts } from "../src/components/chrome-texts";
 import { setSiteEnv } from "./site-env";
+import { DESIGN_STORAGE_KEY, LOOK_COOKIE_NAME, readLookCookie } from "@digitaplatform/theme";
 
 vi.mock("server-only", () => ({}));
 setSiteEnv();
@@ -25,6 +26,21 @@ afterEach(async () => {
 });
 
 describe("the design switcher", () => {
+  it("keeps the picked design in this browser and in the person's look cookie, which every page reads", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () =>
+      root!.render(<DesignSwitcher apps={["crm"]} authUrl={null} authCookieSuffix={null} texts={designSwitcherTexts("en")} />),
+    );
+    const minimal = [...container.querySelectorAll("button")].find((b) => b.textContent === "minimal")!;
+    await act(async () => minimal.click());
+    expect(localStorage.getItem(DESIGN_STORAGE_KEY)).toBe("minimal");
+    expect(readLookCookie().design).toBe("minimal");
+    document.cookie = `${LOOK_COOKIE_NAME}=; Path=/; Max-Age=0`;
+    localStorage.clear();
+  });
+
   it("keeps the clicked button enabled and focused while its design loads, and ignores a second click", async () => {
     const container = document.createElement("div");
     document.body.append(container);
