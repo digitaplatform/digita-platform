@@ -11,6 +11,11 @@ if (!process.env["TRANSLATIONS_DIR"]) {
 // The tests reach the engine directly, with no proxy in front of it.
 process.env["API_TRUSTED_PROXY_HOPS"] ??= "0";
 
+// The identity provider the tests' tokens name; the engine requires all three and has no default.
+process.env["AUTH_JWKS_URL"] ??= "http://localhost:3100/.well-known/jwks.json";
+process.env["AUTH_ISSUER"] ??= "https://auth.test.local";
+process.env["AUTH_AUDIENCE"] ??= "digita";
+
 export default defineConfig({
   test: {
     globals: true,
