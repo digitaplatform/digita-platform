@@ -1,3 +1,4 @@
+import type { StoragePort } from "../src/core/storage/storage-port.js";
 import { vi, describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 
 vi.mock("../src/core/config/env.js", () => {
@@ -101,7 +102,7 @@ afterAll(async () => {
   await replSet.stop();
 }, 30000);
 
-const deps = () => ({ db, registry, translationService, appDirs: [app], getDomainDirs: () => [] });
+const deps = () => ({ db, registry, translationService, storage: {} as StoragePort, appDirs: [app], getDomainDirs: () => [] });
 const outcome = (write: Promise<unknown>) =>
   write.then(
     () => "stored",
@@ -131,9 +132,9 @@ describe("a write to the app while its demo reset runs", () => {
       ]),
     );
 
-    await reseedAppData("template", deps());
+    await reseedAppData({ operation: "reset", demoTier: false, keepConfiguration: false }, deps());
 
-    const refused = "refused reseed_write_refused ResetBook template";
+    const refused = "refused reseed_write_refused ResetBook reset";
     expect(during()).toEqual([refused, refused, refused, "stored"]);
     const books = await db.find("ResetBook", {}, "app");
     expect(books.map((b) => [b["_id"], b["title"]])).toEqual([["BK-1", "Seeded"]]);
@@ -154,9 +155,9 @@ describe("a write to the app while its demo reset runs", () => {
       ]),
     );
 
-    await reseedAppData("template", deps());
+    await reseedAppData({ operation: "reset", demoTier: false, keepConfiguration: false }, deps());
 
-    const refused = "refused reseed_write_refused ResetInvoice template";
+    const refused = "refused reseed_write_refused ResetInvoice reset";
     expect(during()).toEqual([refused, refused, refused]);
   }, 60000);
 
@@ -172,10 +173,10 @@ describe("a write to the app while its demo reset runs", () => {
     try {
       const early = outcome(docService.insert("ResetBook", { _id: "BK-EARLY", title: "Started before the reset" }, admin));
       await inHook;
-      const reset = reseedAppData("template", deps());
+      const reset = reseedAppData({ operation: "reset", demoTier: false, keepConfiguration: false }, deps());
       // The reset is marked, so a new write is refused while the early one still runs.
       expect(await outcome(docService.insert("ResetBook", { _id: "BK-LATE", title: "Late" }, admin))).toBe(
-        "refused reseed_write_refused ResetBook template",
+        "refused reseed_write_refused ResetBook reset",
       );
       release();
       expect(await early).toBe("stored");
@@ -219,7 +220,7 @@ describe("an action on the app's entity while its demo reset runs", () => {
       return "done";
     }) as never);
     // The demo reset itself runs inside an action of a core entity.
-    hookRunner.registerAction("CoreNote", "reset", (async () => reseedAppData("template", deps())) as never);
+    hookRunner.registerAction("CoreNote", "reset", (async () => reseedAppData({ operation: "reset", demoTier: false, keepConfiguration: false }, deps())) as never);
   });
 
   beforeEach(async () => {
@@ -233,7 +234,7 @@ describe("an action on the app's entity while its demo reset runs", () => {
     const { release, written } = planAction("OR-1", "BK-ACTION");
     const action = docService.runAction("ResetOrder", "OR-1", "spawn", admin);
     await written;
-    const reset = reseedAppData("template", deps());
+    const reset = reseedAppData({ operation: "reset", demoTier: false, keepConfiguration: false }, deps());
     expect(await settledWithin(reset, 300)).toBe(false);
     release();
     await action;
@@ -246,7 +247,7 @@ describe("an action on the app's entity while its demo reset runs", () => {
     const { release, written } = planAction("OR-2", "BK-1");
     const action = docService.runAction("ResetOrder", "OR-2", "spawn", admin);
     await written;
-    const reset = reseedAppData("template", deps());
+    const reset = reseedAppData({ operation: "reset", demoTier: false, keepConfiguration: false }, deps());
     release();
     await action;
     await reset;
@@ -260,7 +261,7 @@ describe("an action on the app's entity while its demo reset runs", () => {
     const second = planAction("OR-B", "BK-B");
     const actions = [docService.runAction("ResetOrder", "OR-A", "spawn", admin), docService.runAction("ResetOrder", "OR-B", "spawn", admin)];
     await Promise.all([first.written, second.written]);
-    const reset = reseedAppData("template", deps());
+    const reset = reseedAppData({ operation: "reset", demoTier: false, keepConfiguration: false }, deps());
     first.release();
     await actions[0];
     expect(await settledWithin(reset, 300)).toBe(false);
@@ -274,15 +275,15 @@ describe("an action on the app's entity while its demo reset runs", () => {
     await docService.insert("ResetOrder", { _id: "OR-3", title: "Order" }, admin);
     planAction("OR-3", "BK-LATE");
     const during = duringTheWipe(() => Promise.all([outcome(docService.runAction("ResetOrder", "OR-3", "spawn", admin))]));
-    await reseedAppData("template", deps());
-    expect(during()).toEqual(["refused reseed_write_refused ResetOrder template"]);
+    await reseedAppData({ operation: "reset", demoTier: false, keepConfiguration: false }, deps());
+    expect(during()).toEqual(["refused reseed_write_refused ResetOrder reset"]);
   }, 60000);
 
   it("PLANTED INNOCENT: runs the reset from an action of a core entity without waiting for itself", async () => {
     await docService.insert("CoreNote", { _id: "N-RESET", title: "Reset" }, admin);
     const run = docService.runAction("CoreNote", "N-RESET", "reset", admin);
     expect(await settledWithin(run, 20000)).toBe(true);
-    await expect(run).resolves.toMatchObject({ mode: "template" });
+    await expect(run).resolves.toMatchObject({ operation: "reset" });
   }, 60000);
 });
 
@@ -308,7 +309,7 @@ describe("a copy or an amendment in flight when the demo reset starts", () => {
   it("PLANTED DEFECT: waits for a copy until it commits, so the wipe removes it", async () => {
     const source = await docService.insert("ResetDraft", { title: "Source" }, admin);
     const { running, release } = await holdInValidate(() => docService.copyDoc("ResetDraft", String(source._id), admin));
-    const reset = reseedAppData("template", deps());
+    const reset = reseedAppData({ operation: "reset", demoTier: false, keepConfiguration: false }, deps());
     release();
     await running;
     await reset;
@@ -320,7 +321,7 @@ describe("a copy or an amendment in flight when the demo reset starts", () => {
     await docService.submit("ResetDraft", String(source._id), admin);
     await docService.cancel("ResetDraft", String(source._id), admin);
     const { running, release } = await holdInValidate(() => docService.amend("ResetDraft", String(source._id), admin));
-    const reset = reseedAppData("template", deps());
+    const reset = reseedAppData({ operation: "reset", demoTier: false, keepConfiguration: false }, deps());
     release();
     await running;
     await reset;

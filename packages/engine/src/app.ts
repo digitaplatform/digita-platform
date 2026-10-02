@@ -1,3 +1,4 @@
+import { existsSync } from "fs";
 import { join } from "path";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
@@ -30,9 +31,9 @@ import { loadEngineI18n, engineI18n } from "./i18n.js";
 import { LocaleResolver } from "./core/i18n/locale-resolver.js";
 import { PermissionChecker } from "./core/permissions/permission-checker.js";
 import { RoleRegistry, setRoleRegistry } from "./core/permissions/role-registry.js";
-// seedAppData is invoked by the admin-reseed router and, when SEED_APP_DATA_ON_BOOT
-// is set (dev convenience), once at boot from startup() below.
-import { seedAppData } from "./core/setup/seed-app-data.js";
+// seedAppData runs at boot from startup() below, under SEED_APP_DATA_ON_BOOT and
+// SEED_DEMO_DATA_ON_BOOT, and in the demo data's operations.
+import { DEMO_SEED_DIR, seedAppData } from "./core/setup/seed-app-data.js";
 import { seedDataTranslations } from "./core/setup/seed-data-translations.js";
 import { NamingService } from "./core/document/naming-service.js";
 import { HookRunner } from "./core/hooks/hook-runner.js";
@@ -72,7 +73,7 @@ import { readdirSync } from "node:fs";
 import { registerPluginAssetRoutes } from "./core/api/plugin-assets-router.js";
 import { registerTranslationRoutes } from "./core/api/translation-router.js";
 import { registerSearchRoutes } from "./core/api/search-router.js";
-import { registerAdminReseedRoutes } from "./core/api/admin-reseed-router.js";
+import { registerDemoDataRoutes } from "./core/api/demo-data-router.js";
 import { registerAdminReloadDefinitionsRoutes } from "./core/api/admin-reload-definitions-router.js";
 import type { DomainDirectory } from "./core/database/app-db-discovery.js";
 import { registerActivityLogRoutes } from "./core/api/activity-log-router.js";
@@ -91,8 +92,14 @@ import { RelatedDocService } from "./core/related/related-doc-service.js";
 import { DocumentShareService } from "./core/permissions/document-share-service.js";
 import { generateOpenAPISpec } from "./core/api/openapi-generator.js";
 import { firstRun } from "./core/setup/first-run.js";
-import { enableDemoReset, removeDemoReset } from "./core/setup/demo-reset.js";
-import { isReseedAllowed, type ReseedDeps } from "./core/setup/reseed-app-data.js";
+import {
+  enableDemoData,
+  findDemoDataKind,
+  removeDemoData,
+  shouldBootLoadDemoTier,
+  stampBootLoad,
+} from "./core/setup/demo-data.js";
+import { type ReseedDeps } from "./core/setup/reseed-app-data.js";
 import { successResponse } from "./core/api/response-model.js";
 import { RuleEngine } from "./core/rules/rule-engine.js";
 import { seedRulesFromFiles } from "./core/rules/rule-loader.js";
@@ -183,7 +190,7 @@ export async function createApp(
   ruleEngine.setDocumentService(documentService);
   workflowEngine.setRuleEngine(ruleEngine);
 
-  // Late-bound by startup() — read by admin reseed / reload routes
+  // Late-bound by startup() — read by the demo data's operations and the reload route
   // at request time. Empty until startup discovers the app domains
   // and computes the source-dir lists.
   let discoveredDomainDirs: DomainDirectory[] = [];
@@ -193,6 +200,7 @@ export async function createApp(
     db,
     registry,
     translationService,
+    storage,
     appDirs: env.APP_DIRS,
     getDomainDirs: () => discoveredDomainDirs,
   };
@@ -455,7 +463,10 @@ export async function createApp(
     registerResourceRoutes(scope, env.API_PREFIX, registry, documentService, localeResolver, realtimeService, revalidateNotifier);
     registerTranslationRoutes(scope, env.API_PREFIX, translationService, documentService);
     registerSearchRoutes(scope, env.API_PREFIX, globalSearchService, linkSearchService);
-    registerAdminReseedRoutes(scope, env.API_PREFIX, reseedDeps);
+    registerDemoDataRoutes(scope, env.API_PREFIX, {
+      reseed: reseedDeps,
+      listPendingSetupRecords: () => documentService.listPendingSetupRecords(),
+    });
     registerAdminReloadDefinitionsRoutes(scope, env.API_PREFIX, {
       db,
       registry,
@@ -578,11 +589,20 @@ export async function createApp(
     discoveredEntityDirs = entityDirs;
     discoveredDomainDirs = domainDirs;
 
-    // 3a. The demo reset exists only where the engine may reseed its app data. It is registered
-    //     before first-run stores and migrates the definitions; everywhere else, a definition an
-    //     earlier boot stored is removed before 5 would register it again.
-    if (isReseedAllowed()) await enableDemoReset(db, registry, hookRunner, reseedDeps);
-    else await removeDemoReset(db);
+    // 3a. The demo data exists on an app engine with a demo tier, and on every app engine of a
+    //     showcase. It is registered before first-run stores and migrates the definitions;
+    //     everywhere else, a definition an earlier boot stored is removed before 5 would register
+    //     it again.
+    const hasDemoTier = [...env.APP_DIRS, ...domainDirs.map((d) => d.root)].some((d) => existsSync(join(d, DEMO_SEED_DIR)));
+    const demoDataKind = findDemoDataKind(hasDemoTier);
+    if (demoDataKind) {
+      await enableDemoData(
+        { db, registry, hookRunner, reseed: reseedDeps, listPendingSetupRecords: () => documentService.listPendingSetupRecords() },
+        demoDataKind,
+      );
+    } else {
+      await removeDemoData(db);
+    }
 
     // 3b. Domain folders contribute to the same module/locale/seed dir lists.
     //     The downstream loaders are dir-array-aware already, so a missing
@@ -600,29 +620,21 @@ export async function createApp(
     // 4. Run first-time setup (seed data, migrate schemas)
     await firstRun(db, registry, translationService);
 
-    // 4b. The canonical app-data seeder is the admin reseed endpoint, not boot.
-    //     `<appDir>/<domain>/seeds/*.seed.json` (reference/config data every
-    //     install needs — incl. any mandatory is_single config the app declares)
-    //     and `<appDir>/<domain>/seeds-demo/` (showcase records + transactional
-    //     demos) load on-demand via `POST /api/v1/admin/reseed` (modes:
-    //     `template` / `demo`). The opt-in boot seed (4b-bis) loads each tier under
-    //     its own flag (dev convenience). Boot itself produces a consistent baseline of platform
-    //     metadata + auth essentials (admin user, platform-built-in Roles,
-    //     Languages, SystemSettings, entity definitions).
-
-    // 4b-bis. DEV CONVENIENCE (opt-in): seed app data at boot so a local DB wipe +
-    //     restart self-heals. Two INDEPENDENT tiers, each with its own flag:
-    //       SEED_APP_DATA_ON_BOOT  → reference tier (`seeds/`: roles, lookups,
-    //                                fiscal calendar, nav, mandatory singles)
-    //       SEED_DEMO_DATA_ON_BOOT → demo tier (`seeds-demo/`: customers, products,
-    //                                sample documents)
-    //     Reference is loaded before demo, in one call (demo rows reference reference
-    //     data, and a demo row of an `_id` the reference tier carries updates that row
-    //     while the seed still owns it). Both
-    //     default OFF → production never auto-seeds (reseed-only). Runs before
-    //     RoleRegistry.load() so seeded app roles are present. Always auto/non-
-    //     destructive — fills an empty DB, skips other existing rows; reset = reseed API.
-    if (env.SEED_APP_DATA_ON_BOOT || env.SEED_DEMO_DATA_ON_BOOT) {
+    // 4b. The opt-in boot seed loads each tier under its own flag, in insert mode: it fills an empty
+    //     database and leaves every stored row alone.
+    //       SEED_APP_DATA_ON_BOOT  → reference tier (`seeds/`: roles, lookups, fiscal calendar,
+    //                                nav, mandatory singles)
+    //       SEED_DEMO_DATA_ON_BOOT → demo tier (`seeds-demo/`: customers, products, sample
+    //                                documents), the Manager's demo data tick box
+    //     Reference is loaded before demo, in one call: demo rows reference reference data, and a
+    //     demo row of an `_id` the reference tier carries updates that row while the seed still
+    //     owns it. Where the engine has demo data, the demo tier loads only into an app where it
+    //     was never loaded nor removed and nobody has created a record, and the load is stamped;
+    //     every later load, reset or removal is the Administrator's, on the demo data's page.
+    //     Runs before RoleRegistry.load() so seeded app roles are present.
+    const bootLoadsDemoTier =
+      env.SEED_DEMO_DATA_ON_BOOT && (!demoDataKind || (await shouldBootLoadDemoTier(db, registry)));
+    if (env.SEED_APP_DATA_ON_BOOT || bootLoadsDemoTier) {
       const seedDirs: string[] = [];
       if (env.SEED_APP_DATA_ON_BOOT) {
         seedDirs.push(
@@ -630,27 +642,22 @@ export async function createApp(
           ...domainDirs.map((d) => join(d.root, "seeds")),
         );
       }
-      if (env.SEED_DEMO_DATA_ON_BOOT) {
+      if (bootLoadsDemoTier) {
         seedDirs.push(
-          ...env.APP_DIRS.map((d) => join(d, "seeds-demo")),
-          ...domainDirs.map((d) => join(d.root, "seeds-demo")),
+          ...env.APP_DIRS.map((d) => join(d, DEMO_SEED_DIR)),
+          ...domainDirs.map((d) => join(d.root, DEMO_SEED_DIR)),
         );
       }
-      // Dev convenience — a seed problem must NEVER brick the engine. Log loudly
-      // and continue; the destructive reseed endpoint is the path that surfaces
-      // seed errors hard.
+      // A seed problem must never brick the engine: it is logged loudly and the start goes on.
       try {
         await seedAppData(db, registry, new NamingService(db), seedDirs);
         // Co-located per-document data translations (e.g. chart-of-accounts names
         // in de/fr/it/…) so seeded data follows each user's UI language.
         await seedDataTranslations(db, registry, translationService, seedDirs);
+        if (bootLoadsDemoTier && demoDataKind) await stampBootLoad(db);
         log.info(
-          {
-            reference: env.SEED_APP_DATA_ON_BOOT,
-            demo: env.SEED_DEMO_DATA_ON_BOOT,
-            dirs: seedDirs.length,
-          },
-          "App data seeded at boot — dev convenience, not for prod",
+          { reference: env.SEED_APP_DATA_ON_BOOT, demo: bootLoadsDemoTier, dirs: seedDirs.length },
+          "App data seeded at boot",
         );
       } catch (e) {
         log.error(
@@ -662,11 +669,10 @@ export async function createApp(
 
     // 4c. Load RoleRegistry from the seeded Role collection.
     //     Boot sees only platform-built-in roles (Administrator / System
-    //     User / Guest); app-specific roles (Sales
-    //     Manager, Buyer, etc.) arrive via the wizard's reseed call.
-    //     Permission validation is therefore softened: unknown roles
-    //     log warnings rather than throwing, so the system stays
-    //     bootable before the wizard runs.
+    //     User / Guest); app-specific roles (Sales Manager, Buyer, etc.)
+    //     arrive with the reference tier's seed. Permission validation is
+    //     therefore softened: unknown roles log warnings rather than
+    //     throwing, so the system stays bootable before they are seeded.
     await roleRegistry.load();
     for (const entity of registry.getAll()) {
       for (let i = 0; i < (entity.permissions ?? []).length; i++) {
@@ -674,7 +680,7 @@ export async function createApp(
         if (!roleRegistry.has(perm.role)) {
           log.warn(
             { entity: entity.name, role: perm.role, index: i },
-            "entity references role not yet seeded — run wizard reseed to populate app roles",
+            "entity references role not yet seeded — the reference tier's seed brings the app roles",
           );
         }
       }
@@ -852,9 +858,6 @@ export async function createApp(
         env.TRANSLATION_FALLBACK_LOCALE,
       );
     }
-
-    // Demo orchestrator is NOT triggered at boot — see admin reseed
-    // endpoint (registered below) which the setup wizard calls.
 
     log.info({ duration_ms: Date.now() - startTime }, "Startup completed");
   };

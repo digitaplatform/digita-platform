@@ -219,10 +219,10 @@ describe("POST /admin/reload-definitions runs every check boot runs on the defin
     expect(refused.json().error.detail).toContain("REVALIDATE_URL");
   }, 120000);
 
-  it("reloads a file that links the demo reset on an engine that may reseed, as boot loads it", async () => {
+  it("reloads a file that links the demo data on an engine that has it, as boot loads it", async () => {
     (env as { DEMO_TENANT?: boolean }).DEMO_TENANT = true;
     running = await startAdminApp();
-    await writeBook(running.root, "Author", [{ fieldname: "reset", fieldtype: "Link", label: "Reset", target: "DemoReset" }]);
+    await writeBook(running.root, "Author", [{ fieldname: "reset", fieldtype: "Link", label: "Reset", target: "DemoData" }]);
     expect((await running.reload()).statusCode).toBe(200);
   }, 120000);
 });

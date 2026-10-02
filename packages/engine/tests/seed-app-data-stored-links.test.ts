@@ -1,3 +1,4 @@
+import type { StoragePort } from "../src/core/storage/storage-port.js";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdir, mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
@@ -188,11 +189,15 @@ describe("the reseed answers a seed Link that matches no business key", () => {
 
   it("in its summary and in an error log line", async () => {
     const { db } = mockDb();
-    Object.assign(db, { listAppDatabases: vi.fn(() => [{ name: "app" }]), updateOne: vi.fn(async () => true) });
+    Object.assign(db, {
+      listAppDatabases: vi.fn(() => [{ name: "app" }]),
+      updateOne: vi.fn(async () => true),
+      collection: vi.fn(() => ({ find: () => ({ toArray: async () => [] }) })),
+    });
     const reg = registry("system");
 
-    const summary = await reseedAppData("template", {
-      db, registry: reg, translationService: {} as TranslationService, appDirs: [app], getDomainDirs: () => [],
+    const summary = await reseedAppData({ operation: "reset", demoTier: false, keepConfiguration: false }, {
+      db, registry: reg, translationService: {} as TranslationService, storage: {} as StoragePort, appDirs: [app], getDomainDirs: () => [],
     });
 
     const expected = [{ file: join(app, "seeds", "Book.seed.json"), row: 1, field: "author", value: "Frank" }];

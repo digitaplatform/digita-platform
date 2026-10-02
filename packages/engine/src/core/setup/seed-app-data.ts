@@ -39,7 +39,7 @@ interface Collected {
 }
 
 /** The demo tier's seed directory name, as the boot and the reseed join it to an app or domain dir. */
-const DEMO_SEED_DIR = "seeds-demo";
+export const DEMO_SEED_DIR = "seeds-demo";
 
 /** A seed row's Link value that names no business key of its target, and is stored as it stands. */
 export interface UnresolvedSeedLink {
@@ -752,7 +752,7 @@ async function insertRows(
  * position: a seed row knows no row ids, and a fresh id on every boot would break
  * every sub-row Link that points at the row.
  */
-function carryRowIds(replacement: Record<string, unknown>, stored: Record<string, unknown>): void {
+export function carryRowIds(replacement: Record<string, unknown>, stored: Record<string, unknown>): void {
   for (const key of Object.keys(replacement)) {
     const rows = replacement[key];
     const storedRows = stored[key];
@@ -773,7 +773,7 @@ function carryRowIds(replacement: Record<string, unknown>, stored: Record<string
  * Table row, the rows paired by position as `carryRowIds` pairs them. A stored value under a key
  * no longer listed cannot be compared, and is written anew under the active key.
  */
-function keepEqualStoredPasswords(
+export function keepEqualStoredPasswords(
   entity: EntityDefinition,
   row: Record<string, unknown>,
   serialized: Record<string, unknown>,

@@ -195,10 +195,9 @@ export const env = {
   // Set only for a website engine: it seeds `<domainDir>/sites/<SITE_ID>/` at boot
   // and scopes the public read API to that site. Empty for every other app.
   SITE_ID: getEnv("SITE_ID", ""),
-  // Marks the tenant as a demo. Only there does an app engine, never a website engine, run
-  // /admin/reseed and register the DemoReset action, which the Jobs page schedules nightly
-  // (isReseedAllowed). Both wipe the app's data, so every other engine keeps them off and cannot
-  // lose its data by accident.
+  // Marks the tenant as a showcase. There an app engine, never a website engine, offers only the
+  // demo data's total `reset`, which the Jobs page schedules nightly; every other tenant offers
+  // load, reset and remove to its Administrator, and keeps its settings records through a wipe.
   DEMO_TENANT: getEnvBool("DEMO_TENANT", false),
 
   // ─── MONGODB ──────────────────────────────────────────
@@ -415,8 +414,9 @@ export const env = {
 
   // Dev convenience (opt-in): seed app data at boot, auto/non-destructive (skip
   // rows whose _id already exists, except a demo row over a seed-owned reference
-  // row, which it updates). Two INDEPENDENT tiers, both OFF by default —
-  // production seeds ONLY via POST /api/v1/admin/reseed (destructive reset path).
+  // row, which it updates). Two INDEPENDENT tiers, both OFF by default. Where the engine has
+  // demo data, the demo tier loads at boot only into an app where it never was loaded or
+  // removed and nobody has created a record.
   //   SEED_APP_DATA_ON_BOOT  → reference tier (<appDir>/<domain>/seeds/)
   //   SEED_DEMO_DATA_ON_BOOT → demo tier      (<appDir>/<domain>/seeds-demo/)
   SEED_APP_DATA_ON_BOOT: getEnvBool("SEED_APP_DATA_ON_BOOT", false),

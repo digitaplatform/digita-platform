@@ -15,8 +15,7 @@ import { BadRequestError } from "../view/view-engine.js";
 import { createLogger } from "../logging/logger.js";
 import type { RevalidateSettings } from "./revalidate-notifier.js";
 import { assertDefinitionsServable } from "./assert-definitions.js";
-import { demoResetDefinition } from "../setup/demo-reset.js";
-import { isReseedAllowed } from "../setup/reseed-app-data.js";
+import { findEnabledDemoDataDefinition } from "../setup/demo-data.js";
 
 const log = createLogger("admin-reload-definitions-router");
 
@@ -25,10 +24,8 @@ const log = createLogger("admin-reload-definitions-router");
  * (entity schemas, rules, views, translations) from on-disk JSON
  * sources, replacing the stored versions.
  *
- * Distinct from `/admin/reseed`:
- *   - `/admin/reseed` rewrites the DATA layer (entity rows in app DBs).
- *   - `/admin/reload-definitions` rewrites the METADATA layer (entity
- *     definitions, rules, views, translations stored in admin DB).
+ * It rewrites the METADATA layer (entity definitions, rules, views,
+ * translations stored in admin DB), never the rows of the app databases.
  *
  * Use case: after an operator edits an `.entity.json` file on disk
  * (or pulls in updated app code), trigger this endpoint to push the
@@ -39,7 +36,7 @@ const log = createLogger("admin-reload-definitions-router");
  *   - Hooks (`apps/<app>/<domain>/modules/**.ts`) — module cache reload
  *     across Node's ES-module loader is unreliable; restart the
  *     backend to pick up hook changes.
- *   - Data seeds — that's `/admin/reseed`.
+ *   - Data seeds — those are the demo data's operations and the boot seed.
  */
 export interface AdminReloadDefinitionsDeps {
   db: MongoDBService;
@@ -108,14 +105,15 @@ async function performReload(deps: AdminReloadDefinitionsDeps): Promise<ReloadSu
   };
 
   // 1. Check the files in a scratch registry, which holds what boot's registry holds before its
-  //    checks, the demo reset included where the engine may reseed. A file boot would refuse is
+  //    checks, the demo data included where boot registered it. A file boot would refuse is
   //    refused here with the same message, before anything the engine serves or stores changes:
   //    `loadAll` below overwrites the live registry. Only the files are checked, as at boot, so a
   //    definition POST /meta wrote cannot refuse a reload.
   try {
     const staged = new EntityRegistry();
     await loadEntityFiles(staged);
-    if (isReseedAllowed()) staged.register(demoResetDefinition());
+    const demoData = findEnabledDemoDataDefinition();
+    if (demoData) staged.register(demoData);
     await assertDefinitionsServable(staged, deps.revalidateSettings);
   } catch (err) {
     throw new BadRequestError(err instanceof Error ? err.message : String(err));

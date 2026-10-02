@@ -24,7 +24,6 @@ vi.mock("../src/core/config/env.js", () => ({
   },
 }));
 
-import type { FastifyInstance } from "fastify";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import type { DocumentService } from "../src/core/document/document-service.js";
@@ -34,7 +33,8 @@ import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { DeleteBlockedError, NotFoundError } from "../src/core/document/document-service.js";
 import { seedAppData, seedHash } from "../src/core/setup/seed-app-data.js";
 import { readStoredRow } from "../src/core/entity/field-types.js";
-import { registerAdminReseedRoutes } from "../src/core/api/admin-reseed-router.js";
+import { reseedAppData } from "../src/core/setup/reseed-app-data.js";
+import type { StoragePort } from "../src/core/storage/storage-port.js";
 import { configurePasswordFieldKeys, decryptPassword } from "../src/core/entity/password-cipher.js";
 
 const page: EntityDefinition = {
@@ -576,21 +576,17 @@ describe("seedAppData tiers in insert mode", () => {
     expect(stored.get("shop")).toEqual(landed);
   });
 
-  it("lands the demo tier's values through the demo reseed", async () => {
+  it("lands the demo tier's values through a load of the demo data", async () => {
     const { db, stored } = mockDb([]);
-    let reseed: ((request: unknown, reply: unknown) => Promise<unknown>) | undefined;
-    const fastify = { post: (_path: string, handler: typeof reseed) => (reseed = handler) } as unknown as FastifyInstance;
-    registerAdminReseedRoutes(fastify, "/api/v1", {
+    await reseedAppData({ operation: "load", demoTier: true, keepConfiguration: false }, {
       db,
       registry: registry(),
       translationService: {} as TranslationService,
+      storage: {} as StoragePort,
       appDirs: [app],
       getDomainDirs: () => [],
     });
-    const reply = { code: vi.fn(() => reply), send: vi.fn() };
-    await reseed!({ user: { email: "admin@example.com", roles: ["Administrator"] }, body: { mode: "demo" } }, reply);
-    expect(reply.code).not.toHaveBeenCalled();
-    // The planted defect this test guards: a reseed that loads each tier on its own.
+    // The planted defect this test guards: a load that seeds each tier on its own.
     expect(stored.get("shop")).toMatchObject({ company_name: "Veloluck Velo AG", hourly_rate: 120, quote_threshold: 150 });
   });
 });
