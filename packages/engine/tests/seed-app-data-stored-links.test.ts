@@ -101,3 +101,43 @@ describe("a seed pass links a new row to the stored row of its business key (#16
     expect(inserted["Book"]?.map((b) => b["author"])).toEqual([STORED_AUTHOR._id]);
   });
 });
+
+describe("a seed pass without the target's file links to the target's stored rows", () => {
+  let dir: string;
+  beforeEach(async () => {
+    // A demo pass: only the demo file, the reference Author was stored by an earlier pass.
+    dir = await mkdtemp(join(tmpdir(), "digita-seed-demo-pass-"));
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("resolves the business key against the stored rows", async () => {
+    await writeFile(join(dir, "Book.seed.json"), JSON.stringify([{ title: "Earthsea", author: "Ursula" }]), "utf-8");
+    const { db, inserted } = mockDb();
+
+    const result = await seedAppData(db, registry("system"), {} as NamingService, [dir]);
+
+    expect(inserted["Book"]?.map((b) => b["author"])).toEqual([STORED_AUTHOR._id]);
+    expect(result.unresolved_links).toEqual([]);
+  });
+
+  it("reports a value that matches no business key by file, row, field and value, and keeps an id as it stands", async () => {
+    await writeFile(
+      join(dir, "Book.seed.json"),
+      JSON.stringify([
+        { title: "Earthsea", author: STORED_AUTHOR._id },
+        { title: "Dune", author: "Frank" },
+      ]),
+      "utf-8",
+    );
+    const { db, inserted } = mockDb();
+
+    const result = await seedAppData(db, registry("system"), {} as NamingService, [dir]);
+
+    expect(result.unresolved_links).toEqual([
+      { file: join(dir, "Book.seed.json"), row: 2, field: "author", value: "Frank" },
+    ]);
+    expect(inserted["Book"]?.map((b) => b["author"])).toEqual([STORED_AUTHOR._id, "Frank"]);
+  });
+});
