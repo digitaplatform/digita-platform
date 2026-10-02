@@ -6,6 +6,7 @@ import { LAYOUT_FIELD_TYPES, UPLOAD_FIELD_TYPES } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { createLogger } from "../logging/logger.js";
 import { isValidStoragePath, STORAGE_PATH_RULE } from "../storage/storage-path.js";
+import { workflowDefinitionProblems } from "../workflow/workflow-definition.js";
 
 const log = createLogger("entity-registry");
 
@@ -209,6 +210,10 @@ export class EntityRegistry {
       this.validatePeriodCheckConfig(entity);
       this.validateAllowOnSubmit(entity);
       this.validateDialogDefaults(entity);
+      const workflowProblems = workflowDefinitionProblems(entity);
+      if (workflowProblems.length > 0) {
+        throw new Error(`The workflow of entity "${entity.name}" is inconsistent: ${workflowProblems.join("; ")}`);
+      }
 
       // Surface a name redefined from a DIFFERENT file (silent last-write-wins
       // before). Intentional app-over-core overrides are a documented feature, so
