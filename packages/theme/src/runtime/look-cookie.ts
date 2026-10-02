@@ -27,17 +27,9 @@ export interface CookieJar {
   location?: { protocol: string };
 }
 
-/**
- * The choices the cookie holds; a value that is no valid choice is left out. A browser can hold
- * two cookies of this name: a host-only one and one for the tenant's zone, written before and
- * after the tenant moved between routing by path and by host. Both reach the page, the older one
- * first, so each entry carries the time it was written (`t`) and the newest one counts.
- */
-export function readLookCookie(jar?: CookieJar): LookChoices {
-  // A server render has no document, and no cookie of the person to read.
-  const source = jar ?? (typeof document === 'undefined' ? undefined : document);
-  if (!source) return {};
-  let newest: { written: number; params: URLSearchParams } | undefined;
+/** The newest `digita-look` entry the jar holds, with its change count; undefined without one. */
+function readNewestEntry(source: CookieJar): { count: number; params: URLSearchParams } | undefined {
+  let newest: { count: number; params: URLSearchParams } | undefined;
   for (const part of source.cookie.split(';')) {
     const entry = part.trim();
     if (!entry.startsWith(`${LOOK_COOKIE_NAME}=`)) continue;
@@ -47,11 +39,28 @@ export function readLookCookie(jar?: CookieJar): LookChoices {
     } catch {
       continue;
     }
-    // An entry without a valid time counts as the oldest.
-    const stamp = params.get('t');
-    const written = stamp && /^\d{1,15}$/.test(stamp) ? Number(stamp) : 0;
-    if (!newest || written > newest.written) newest = { written, params };
+    // An entry without a valid count counts as the oldest.
+    const written = params.get('n');
+    const count = written && /^\d{1,9}$/.test(written) ? Number(written) : 0;
+    if (!newest || count > newest.count) newest = { count, params };
   }
+  return newest;
+}
+
+/**
+ * The choices the cookie holds; a value that is no valid choice is left out. A browser can hold
+ * two cookies of this name: a host-only one and one for the tenant's zone, written before and
+ * after the tenant moved between routing by path and by host. Both reach the page, the older one
+ * first, so each write counts one up from the newest entry it sees (`n`), and the entry with the
+ * highest count is read. A count, not a time, so the cookie carries no value unique to a person.
+ * A page on another host does not see a host-only entry: after a move from path to host routing,
+ * the site at the zone can show the older choice until the person changes the look there.
+ */
+export function readLookCookie(jar?: CookieJar): LookChoices {
+  // A server render has no document, and no cookie of the person to read.
+  const source = jar ?? (typeof document === 'undefined' ? undefined : document);
+  if (!source) return {};
+  const newest = readNewestEntry(source);
   if (!newest) return {};
   const { params } = newest;
   const choices: LookChoices = {};
@@ -87,8 +96,8 @@ export function lookCookieDomain(signInUrl: string): string | undefined {
 }
 
 /**
- * Write the choices into the cookie with the time of the write, keeping the ones already there that
- * `choices` does not name.
+ * Write the choices into the cookie, one count above the newest entry, keeping the choices already
+ * there that `choices` does not name.
  */
 export function writeLookCookie(choices: LookChoices, domain: string | undefined, jar: CookieJar = document): void {
   const merged: LookChoices = { ...readLookCookie(jar), ...choices };
@@ -98,7 +107,7 @@ export function writeLookCookie(choices: LookChoices, domain: string | undefined
   if (merged.density) params.set('density', merged.density);
   // No choice, no cookie: an empty one would travel with every request of the zone for nothing.
   if (params.toString() === '') return;
-  params.set('t', String(Date.now()));
+  params.set('n', String((readNewestEntry(jar)?.count ?? 0) + 1));
   const value = params.toString();
   const attributes = [
     'Path=/',

@@ -34,7 +34,15 @@ vi.mock("../src/lib/engine-client", () => ({
   listPublishedSlugs: async () => publishedSlugs,
 }));
 
+// The light/dark button draws its Domain, so the markup shows what the layout handed it.
+vi.mock("../src/components/ThemeToggle", () => ({
+  ThemeToggle: ({ lookCookieDomain }: { lookCookieDomain: string | undefined }) => (
+    <span data-look-cookie-domain={lookCookieDomain ?? "host-only"} />
+  ),
+}));
+
 Object.assign(process.env, {
+  AUTH_URL: "https://auth.acme.example",
   ENGINE_URL: "http://engine.internal:3000",
   SITE_ID: "example",
   SITE_URL: "https://example.org",
@@ -75,6 +83,10 @@ describe("the locale layout", () => {
     expect(await render()).not.toContain('aria-label="language"');
     publishedSlugs = { en: [""], de: [""] };
     expect(await render()).toContain('aria-label="language"');
+  });
+
+  it("hands the light/dark button the Domain of the look cookie, the zone of the tenant's sign-in address", async () => {
+    expect(await render()).toContain('data-look-cookie-domain="acme.example"');
   });
 
   it("hands the header the site's enabled locales, so a site that enables one locale shows no menu", async () => {

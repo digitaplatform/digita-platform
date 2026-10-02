@@ -63,13 +63,11 @@ describe('the Domain of the look cookie', () => {
 });
 
 describe('writing the look cookie', () => {
-  it('writes the choices and the time with the Domain for a tenant routed by host, and the host alone by path', () => {
-    vi.useFakeTimers({ now: 1759400000000 });
+  it('writes the choices and the first count with the Domain for a tenant routed by host, and the host alone by path', () => {
     const byHost = recordingJar();
     writeLookCookie({ design: 'fluent', mode: 'dark', density: 'compact' }, lookCookieDomain('https://auth.show.digitacloud.app'), byHost);
-    vi.useRealTimers();
     expect(byHost.written).toEqual([
-      `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=fluent&mode=dark&density=compact&t=1759400000000')}; Path=/; Max-Age=31536000; SameSite=Lax; Domain=show.digitacloud.app; Secure`,
+      `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=fluent&mode=dark&density=compact&n=1')}; Path=/; Max-Age=31536000; SameSite=Lax; Domain=show.digitacloud.app; Secure`,
     ]);
 
     const byPath = recordingJar('http:');
@@ -92,26 +90,26 @@ describe('writing the look cookie', () => {
   it('reads the newest of two entries, a host-only one and a Domain one, in either order', () => {
     // A tenant that moved between routing by path and by host leaves both; the browser lists the
     // older one first, whichever variant it is.
-    const older = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=minimal&mode=dark&t=1759400000000')}`;
-    const newer = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=editorial&mode=light&t=1759400000001')}`;
+    const older = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=minimal&mode=dark&n=4')}`;
+    const newer = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=editorial&mode=light&n=5')}`;
     expect(readLookCookie(recordingJar('https:', `${older}; ${newer}`))).toEqual({ design: 'editorial', mode: 'light' });
     expect(readLookCookie(recordingJar('https:', `${newer}; ${older}`))).toEqual({ design: 'editorial', mode: 'light' });
   });
 
-  it('counts an entry without a valid time as the oldest', () => {
-    const untimed = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=minimal')}`;
-    const badTime = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=fluent&t=soon')}`;
-    const timed = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=editorial&t=1')}`;
-    expect(readLookCookie(recordingJar('https:', `${untimed}; ${badTime}; ${timed}`))).toEqual({ design: 'editorial' });
+  it('counts an entry without a valid count as the oldest', () => {
+    const uncounted = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=minimal')}`;
+    const badCount = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=fluent&n=soon')}`;
+    const counted = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=editorial&n=1')}`;
+    expect(readLookCookie(recordingJar('https:', `${uncounted}; ${badCount}; ${counted}`))).toEqual({ design: 'editorial' });
   });
 
-  it('merges a write into the newest entry and writes it newer than both', () => {
-    const older = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=minimal&mode=dark&t=100')}`;
-    const newer = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=editorial&mode=light&t=200')}`;
+  it('merges a write into the newest entry and counts it one above both', () => {
+    const older = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=minimal&mode=dark&n=7')}`;
+    const newer = `${LOOK_COOKIE_NAME}=${encodeURIComponent('design=editorial&mode=light&n=9')}`;
     const jar = recordingJar('https:', `${newer}; ${older}`);
     writeLookCookie({ density: 'compact' }, undefined, jar);
     const written = decodeURIComponent(jar.written[0]!.split(';')[0]!.slice(LOOK_COOKIE_NAME.length + 1));
-    expect(written).toMatch(/^design=editorial&mode=light&density=compact&t=\d+$/);
+    expect(written).toBe('design=editorial&mode=light&density=compact&n=10');
     expect(readLookCookie(recordingJar('https:', `${older}; ${newer}; ${jar.written[0]!.split(';')[0]}`))).toEqual({
       design: 'editorial',
       mode: 'light',
