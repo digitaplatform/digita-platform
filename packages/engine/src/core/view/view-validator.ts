@@ -70,16 +70,26 @@ export interface ValidationFailure {
  * non-empty — the bad view is dropped, the rest of the boot proceeds.
  */
 export function validateViewDefinition(view: unknown): ValidationFailure[] {
+  const id = view && typeof view === "object" ? (view as Record<string, unknown>)["_id"] : undefined;
+  const idErrors: ValidationFailure[] = typeof id !== "string" || !id ? [{ message: "missing or empty `_id`" }] : [];
+  const contentErrors = validateViewContent(view);
+  // A view that is no object has no `_id` to name either; the one message says so.
+  return contentErrors.length === 1 && contentErrors[0]!.message === NOT_AN_OBJECT ? contentErrors : [...idErrors, ...contentErrors];
+}
+
+const NOT_AN_OBJECT = "view definition must be an object";
+
+/** Every check of a view but its `_id`, which the save of a View row assigns after its hooks run. */
+export function validateViewContent(view: unknown): ValidationFailure[] {
   const errors: ValidationFailure[] = [];
   const fail = (m: string) => errors.push({ message: m });
 
   if (!view || typeof view !== "object") {
-    fail("view definition must be an object");
+    fail(NOT_AN_OBJECT);
     return errors;
   }
   const v = view as Record<string, unknown>;
 
-  if (typeof v["_id"] !== "string" || !v["_id"]) fail("missing or empty `_id`");
   if (typeof v["name"] !== "string" || !v["name"]) fail("missing or empty `name`");
 
   const anchored = v["anchored"] !== false; // default true

@@ -5,6 +5,10 @@
   "label": "View",
   "label_plural": "Views",
   "naming": { "strategy": "user_set" },
+  "hooks": {
+    "before_insert": "view/view.beforeSave",
+    "before_save": "view/view.beforeSave"
+  },
   "is_submittable": false,
   "track_changes": true,
   "title_field": "name",
