@@ -51,6 +51,9 @@ export class FetchFromResolver {
     entity: EntityDefinition,
     data: Record<string, unknown>,
     session?: ClientSession,
+    /** On an update, the stored document: only the header fields whose source Link changed
+     *  re-derive, as `resolveChangedRows` does for rows, and the rows are left to it. */
+    stored?: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
     const result = { ...data };
     const requests: FetchRequest[] = [];
@@ -63,12 +66,20 @@ export class FetchFromResolver {
       const linkFieldname = parts[0]!;
       const path = parts.slice(1).join(".");
 
+      if (stored && stored[linkFieldname] === data[linkFieldname]) continue;
       if (field.fetch_if_empty) {
         const current = data[field.fieldname];
-        if (current !== null && current !== undefined && current !== "") continue;
+        const isEmpty = current === null || current === undefined || current === "";
+        // Compared as JSON: a stored Date comes back from the client as its ISO string.
+        const isStoredValue = stored !== undefined && JSON.stringify(current) === JSON.stringify(stored[field.fieldname]);
+        if (!isEmpty && !isStoredValue) continue;
       }
       const linkedId = data[linkFieldname];
-      if (!linkedId) continue;
+      // A Link the update cleared keeps nothing of its old source, as an insert without one stores none.
+      if (!linkedId) {
+        if (stored) result[field.fieldname] = null;
+        continue;
+      }
 
       const linkField = entity.fields.find((f) => f.fieldname === linkFieldname);
       if (!linkField || linkField.fieldtype !== "Link" || !linkField.target) continue;
@@ -93,13 +104,15 @@ export class FetchFromResolver {
         path,
         targetPath,
         rowId,
+        // A Link the update moved to a source without this path clears the field, as on a row.
         assign: (v) => {
           if (v !== undefined) result[field.fieldname] = v;
+          else if (stored) result[field.fieldname] = null;
         },
       });
     }
 
-    for (const field of entity.fields) {
+    for (const field of stored ? [] : entity.fields) {
       if (field.fieldtype !== "Table" || !field.child_fields) continue;
       const rows = result[field.fieldname];
       if (!Array.isArray(rows)) continue;

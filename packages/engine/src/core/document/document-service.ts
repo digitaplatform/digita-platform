@@ -934,7 +934,7 @@ export class DocumentService {
       doc.merge(this.serializeFields(entity, writeData));
       const changedFields = doc.getChangedFields();
       if (entity.fields.some((f) => f.fieldtype === "Link" && changedFields.includes(f.fieldname))) {
-        doc.merge(await this.fetchFromResolver.resolve(entity, doc._data));
+        doc.merge(await this.fetchFromResolver.resolve(entity, doc._data, undefined, doc._original));
       }
       await this.fetchFromResolver.resolveChangedRows(entity, doc._data, doc._original);
     } else {
@@ -1316,7 +1316,7 @@ export class DocumentService {
       (f) => f.fieldtype === "Link" && changedFields.includes(f.fieldname),
     );
     if (hasChangedLinks) {
-      const fetched = await this.fetchFromResolver.resolve(entity, doc._data, options.sessionOverride);
+      const fetched = await this.fetchFromResolver.resolve(entity, doc._data, options.sessionOverride, doc._original);
       doc.merge(fetched);
     }
     await this.fetchFromResolver.resolveChangedRows(entity, doc._data, doc._original, options.sessionOverride);
