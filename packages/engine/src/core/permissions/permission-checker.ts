@@ -659,17 +659,16 @@ export class PermissionChecker {
     // payload may omit `owner`, which would wrongly fail if_owner and over-strip. On
     // create there is no contextDoc; the creator is the owner, so if_owner admits.
     const writableFields = this.getWritableFields(user, entityName, contextDoc);
-    // An Administrator writes every field but a read_only one, which only a hook or the engine sets.
-    if (!writableFields) return this.withoutReadOnlyFields(this.registry.get(entityName), data, contextDoc);
-
     const entity = this.registry.get(entityName);
     const tableFields = new Map(
       entity.fields.filter((f) => f.fieldtype === "Table").map((f) => [f.fieldname, f] as const),
     );
 
-    const filtered: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(data)) {
-      if (!(writableFields.has(key) || key.startsWith("_"))) continue;
+    // An Administrator writes every field but a read_only one, which only a hook or the engine
+    // sets; the read_only_depends_on locks below bind him as every other role.
+    const filtered: Record<string, unknown> = writableFields ? {} : this.withoutReadOnlyFields(entity, data, contextDoc);
+    for (const [key, value] of writableFields ? Object.entries(data) : []) {
+      if (!(writableFields?.has(key) || key.startsWith("_"))) continue;
 
       if (tableFields.has(key) && Array.isArray(value)) {
         const allowedChildKeys = this.getWritableChildFields(user, entityName, key, contextDoc);
@@ -747,7 +746,7 @@ export class PermissionChecker {
    * The patch names the fields and cells it changes, so the lock judges each of them as it is, with
    * no write filter between: a hook whose actor may not write the target is held all the same. Each
    * is judged on what the patch produces, a field on the document and a cell on its row, so a patch
-   * that releases its own lock passes, as on update; the Administrator is exempt there too. A static
+   * that releases its own lock passes, as on update; the lock binds the Administrator too. A static
    * `read_only` binds a person only, since hooks settle such fields.
    */
   assertPatchKeepsLocks(
@@ -756,7 +755,6 @@ export class PermissionChecker {
     doc: Record<string, unknown>,
     changes: readonly PatchChange[],
   ): void {
-    if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return;
     const entity = this.registry.get(entityName);
     for (const change of changes) {
       const fields = change.table
@@ -866,7 +864,7 @@ export class PermissionChecker {
   /**
    * A stored row that `rows` no longer names by `_row_id` is deleted, by a write or by a hook on
    * the patch path alike: it may not hold a cell whose condition holds on the stored row. The
-   * Administrator is exempt, as from every lock.
+   * Administrator is held as every other role.
    */
   assertNoLockedRowDropped(
     user: UserContext,
@@ -875,7 +873,6 @@ export class PermissionChecker {
     rows: unknown,
     storedRows: unknown,
   ): void {
-    if (user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) return;
     const lockable = tableField.child_fields?.filter((c) => c.read_only_depends_on) ?? [];
     if (lockable.length === 0 || !Array.isArray(storedRows)) return;
     const keptRowIds = new Set((Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : []).map((r) => r?.["_row_id"]));
