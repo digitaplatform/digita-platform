@@ -20,7 +20,6 @@ export async function seedSystemSettings(db: MongoDBService): Promise<void> {
         default_language: env.BOOTSTRAP_LOCALE,
         fallback_language: env.TRANSLATION_FALLBACK_LOCALE,
         allow_user_language: true,
-        platform_name: "Digita Platform",
         timezone: "UTC",
         owner: "system",
         modified_by: "system",
@@ -44,6 +43,21 @@ export async function removeFirstRunFlagOnce(db: MongoDBService): Promise<void> 
       await db
         .collection(DIGITA.COLLECTIONS.SETTING, DIGITA.DATABASES.CORE)
         .updateOne({ _id: "settings" as never }, { $unset: { is_first_run: "" } })
+    ).modifiedCount,
+  }));
+}
+
+/**
+ * The platform's name was seeded into every tenant's settings and read as the brand where a tenant
+ * set none. The brand is BrandingSetting.app_name alone, so nothing reads it any more: the stored
+ * value is removed, once per database.
+ */
+export async function removePlatformNameOnce(db: MongoDBService): Promise<void> {
+  await runForwardMigrationOnce(db, "remove-setting-platform-name", async () => ({
+    removed: (
+      await db
+        .collection(DIGITA.COLLECTIONS.SETTING, DIGITA.DATABASES.CORE)
+        .updateOne({ _id: "settings" as never }, { $unset: { platform_name: "" } })
     ).modifiedCount,
   }));
 }

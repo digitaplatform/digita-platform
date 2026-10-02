@@ -43,7 +43,7 @@ function enterAt(path: string, setup: BootSetup | null) {
     user: { _id: 'a', email: 'admin@digita.local', full_name: 'Admin', roles: ['Administrator'] },
     locale: { code: 'en' },
     available_languages: [],
-    system_settings: { platform_name: 'p', default_currency: null, allow_user_language: true, timezone: 'UTC' },
+    system_settings: { default_currency: null, allow_user_language: true, timezone: 'UTC' },
     setup,
   } as unknown as BootData;
   useSessionStore.setState({ status: 'authenticated', bootstrap: async () => boot });

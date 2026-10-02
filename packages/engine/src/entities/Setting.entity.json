@@ -32,7 +32,6 @@
     },
     { "fieldname": "allow_user_language", "fieldtype": "Check", "label": "Allow Users to Choose Language", "default": true, "idx": 4 },
     { "fieldname": "sb_general", "fieldtype": "SectionBreak", "label": "General", "idx": 5 },
-    { "fieldname": "platform_name", "fieldtype": "Data", "label": "Platform Name", "default": "Digita Platform", "translatable": true, "idx": 6 },
     { "fieldname": "timezone", "fieldtype": "Select", "options_source": "timezones", "label": "Timezone", "default": "UTC", "idx": 7 },
     { "fieldname": "default_currency", "fieldtype": "Select", "options_source": "currencies", "label": "Currency", "description": "ISO 4217 currency code (e.g. EUR, USD) used to format amounts that carry no own currency. Optional — when unset, such amounts render without a currency symbol (the platform bakes in no currency).", "idx": 8 }
   ],

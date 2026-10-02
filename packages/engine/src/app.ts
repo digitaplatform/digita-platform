@@ -83,7 +83,7 @@ import { createStoragePort } from "./core/storage/storage-factory.js";
 import { removeSignaturePreferencesOnce } from "./core/database/signature-preferences.js";
 import { dropGlobalSearchTextIndexOnce } from "./core/database/global-search-text-index.js";
 import { clearSeededDensityOnce } from "./core/setup/seed-branding-settings.js";
-import { removeFirstRunFlagOnce } from "./core/setup/seed-system-settings.js";
+import { removeFirstRunFlagOnce, removePlatformNameOnce } from "./core/setup/seed-system-settings.js";
 import { removeWebsiteUserRoleOnce } from "./core/setup/seed-roles.js";
 import { publishFilesOfPublicFields } from "./core/storage/public-field-files.js";
 import { registerSidebarRoutes } from "./core/api/sidebar-router.js";
@@ -686,8 +686,8 @@ export async function createApp(
     // 5a. Each start moves the files of a public attach field forward to public. Once per
     //     database, a person's former signature pick, the UserPreference ui.signature, goes,
     //     and so do the branding density the seed wrote without anybody choosing it, the text
-    //     index a field's in_global_search built, the first-run flag nothing read, and the
-    //     system role Website User nothing honored. The steps
+    //     index a field's in_global_search built, the first-run flag and the platform name
+    //     nothing reads, and the system role Website User nothing honored. The steps
     //     that read the entities read those defined in the database too, so they run after 5.
     if (env.AUTO_MIGRATE) {
       await publishFilesOfPublicFields(db, registry.getAll());
@@ -695,6 +695,7 @@ export async function createApp(
       await clearSeededDensityOnce(db);
       await dropGlobalSearchTextIndexOnce(db, registry.getAll());
       await removeFirstRunFlagOnce(db);
+      await removePlatformNameOnce(db);
       await removeWebsiteUserRoleOnce(db);
     }
 
