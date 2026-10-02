@@ -1,6 +1,6 @@
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { isFieldAllowed } from "../database/filter-builder.js";
-import type { DocumentService } from "../document/document-service.js";
+import { GatedListTooBroadError, type DocumentService } from "../document/document-service.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
 
@@ -10,6 +10,9 @@ export interface RelatedDocResult {
   /** Absent where the link filters on a field the caller may not filter on: its count would
    *  show what that field hides. */
   count?: number;
+  /** Why `count` is absent where counting the link was refused, so one refused link never
+   *  costs the other links their counts. */
+  error?: string;
   icon?: string;
 }
 
@@ -35,6 +38,7 @@ export class RelatedDocService {
         // entity, and count what `count` answers the caller: the rows a list of
         // the linked entity shows, after scope, role visibility and read condition.
         let count: number | undefined = 0;
+        let error: string | undefined;
         if (
           link.show_count &&
           user &&
@@ -44,15 +48,22 @@ export class RelatedDocService {
           // allow-list skips this count instead of refusing the whole answer.
           const filter = { [link.link_field]: documentName, ...link.filters };
           const allowed = this.permissionChecker.getFilterAllowlist(user, link.entity);
-          count = Object.keys(filter).every((field) => isFieldAllowed(field, allowed))
-            ? await this.documentService.count(link.entity, [], user, { scope: filter })
-            : undefined;
+          try {
+            count = Object.keys(filter).every((field) => isFieldAllowed(field, allowed))
+              ? await this.documentService.count(link.entity, [], user, { scope: filter })
+              : undefined;
+          } catch (err) {
+            if (!(err instanceof GatedListTooBroadError)) throw err;
+            count = undefined;
+            error = err.message;
+          }
         }
 
         return {
           label: link.label,
           entity: link.entity,
           count,
+          error,
           icon: link.icon,
         };
       }),
