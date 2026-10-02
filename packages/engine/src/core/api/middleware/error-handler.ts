@@ -9,7 +9,6 @@ import {
 } from "mongodb";
 import { ValidationFailedError } from "../../document/document-service.js";
 import { UnknownDoctypeError } from "../../entity/entity-registry.js";
-import { FilterFieldNotAllowedError, MalformedFieldsError, MalformedFilterValueError } from "../../database/filter-builder.js";
 import { PasswordKeyNotListedError } from "../../entity/password-cipher.js";
 import { EngineError } from "../../errors/engine-error.js";
 import { ReseedRunningError, ReseedSeedFailedError, ReseedWritesRunningError } from "../../setup/reseed-app-data.js";
@@ -82,42 +81,6 @@ export function globalErrorHandler(
       error: { code: error.responseCode, detail: error.code, trace_id: traceId, ...(error.field ? { field: error.field } : {}) },
     };
     reply.code(error.status).send(response);
-    return;
-  }
-
-  if (error instanceof MalformedFieldsError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 400,
-      data: null,
-      messages: [{ text: error.message, type: "error", show: true }],
-      error: { code: "MALFORMED_FIELDS", detail: error.message, trace_id: traceId },
-    };
-    reply.code(400).send(response);
-    return;
-  }
-
-  if (error instanceof MalformedFilterValueError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 400,
-      data: null,
-      messages: [{ text: error.message, type: "error", show: true }],
-      error: { code: "MALFORMED_FILTER_VALUE", detail: error.message, trace_id: traceId },
-    };
-    reply.code(400).send(response);
-    return;
-  }
-
-  if (error instanceof FilterFieldNotAllowedError) {
-    const response: ApiResponse<null> = {
-      success: false,
-      status_code: 400,
-      data: null,
-      messages: [{ text: "filter_field_not_allowed", type: "error", show: true, params: { field: error.field } }],
-      error: { code: "FILTER_FIELD_NOT_ALLOWED", detail: error.message, trace_id: traceId },
-    };
-    reply.code(400).send(response);
     return;
   }
 

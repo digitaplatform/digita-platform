@@ -17,6 +17,7 @@ const CHECKED_FILES = [
   "core/api/public-router.ts",
   "core/api/resource-router.ts",
   "core/api/search-router.ts",
+  "core/database/filter-builder.ts",
   "core/document/document-service.ts",
   "core/document/docstatus-engine.ts",
   "core/document/naming-service.ts",
