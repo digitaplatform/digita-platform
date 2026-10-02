@@ -1265,9 +1265,11 @@ export class DocumentService {
       transition: TransitionDefinition | undefined;
     } | null = null;
     if (this.workflowEngine && this.workflowEngine.hasWorkflow(entity)) {
+      // Judged on what the save writes: a workflow field the caller may not write is dropped above,
+      // and then moves no state, fires no rule and sets no side effect.
       const wf = this.workflowEngine.getWorkflowField(entity);
-      if (Object.prototype.hasOwnProperty.call(data, wf)) {
-        pendingTransition = this.workflowEngine.judgeFieldWrite(entity, doc._data, data[wf], user);
+      if (Object.prototype.hasOwnProperty.call(writeData, wf)) {
+        pendingTransition = this.workflowEngine.judgeFieldWrite(entity, doc._data, writeData[wf], user);
       }
     }
 
