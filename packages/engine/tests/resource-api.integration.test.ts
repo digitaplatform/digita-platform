@@ -693,6 +693,27 @@ describe("Resource API Integration", () => {
       expect([meta.statusCode, list.statusCode]).toEqual([404, 404]);
     });
 
+    it("validates the next write against the fields PUT /meta changed", async () => {
+      const definition = {
+        name: "MetaShape",
+        module: "test",
+        database: "app",
+        naming: { strategy: "user_set" },
+        fields: [{ fieldname: "title", fieldtype: "Data", label: "Title" }],
+        permissions: [{ role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 }],
+      };
+      await app.inject({ method: "POST", url: "/api/v1/meta", headers: authHeaders(), payload: definition });
+      const first = await app.inject({ method: "POST", url: "/api/v1/resource/MetaShape", headers: authHeaders(), payload: { _id: "MS-1", title: "a" } });
+      expect(first.statusCode).toBe(201);
+
+      const fields = [...definition.fields, { fieldname: "qty", fieldtype: "Int", label: "Qty" }];
+      const put = await app.inject({ method: "PUT", url: "/api/v1/meta/MetaShape", headers: authHeaders(), payload: { fields } });
+      expect(put.statusCode).toBe(200);
+
+      const second = await app.inject({ method: "POST", url: "/api/v1/resource/MetaShape", headers: authHeaders(), payload: { _id: "MS-2", title: "b", qty: "many" } });
+      expect(second.statusCode).toBe(400);
+    });
+
     it("refuses an entity only the app bundle defines, and keeps serving it", async () => {
       registry.register({
         name: "BundleOnly",
