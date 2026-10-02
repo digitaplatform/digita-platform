@@ -138,8 +138,15 @@ function tokenize(src: string): Token[] {
   return tokens;
 }
 
+/** The deepest nesting an expression may have: far beyond any condition a person writes. */
+const MAX_DEPTH = 64;
+/** The longest source an expression may have. */
+const MAX_LENGTH = 4096;
+
 class Parser {
   private pos = 0;
+  /** How deeply the parse is nested now, counted where the parser recurses. */
+  private depth = 0;
   constructor(
     private readonly src: string,
     private readonly tokens: Token[],
@@ -175,7 +182,22 @@ class Parser {
     return node;
   }
 
+  /** Runs one nested step, refusing a nesting so deep that the recursion would overflow the stack. */
+  private nested(step: () => ExprNode): ExprNode {
+    if (++this.depth > MAX_DEPTH) throw new ExpressionError(`the expression nests deeper than ${MAX_DEPTH} levels`);
+    try {
+      return step();
+    } finally {
+      this.depth--;
+    }
+  }
+
+  // Every parenthesis, list and nested ternary passes through here, so it counts the nesting.
   private ternary(): ExprNode {
+    return this.nested(() => this.ternaryAt());
+  }
+
+  private ternaryAt(): ExprNode {
     const test = this.or();
     if (!this.isPunct("?")) return test;
     this.pos++;
@@ -240,7 +262,7 @@ class Parser {
     const t = this.peek();
     if (t.kind === "punct" && (t.value === "!" || t.value === "-" || t.value === "+")) {
       this.pos++;
-      return { type: "Unary", operator: t.value as ExprUnaryOperator, argument: this.unary() };
+      return { type: "Unary", operator: t.value as ExprUnaryOperator, argument: this.nested(() => this.unary()) };
     }
     return this.member();
   }
@@ -305,6 +327,9 @@ class Parser {
 
 /** Parse an expression; throws `ExpressionError` on any text the grammar does not read. */
 export function parseExpression(source: string): ExprNode {
+  // A long chain of binary operators parses in a loop but nests as deeply as it is long, and the
+  // evaluators walk it recursively; the length bounds that depth.
+  if (source.length > MAX_LENGTH) throw new ExpressionError(`the expression is longer than ${MAX_LENGTH} characters`);
   return new Parser(source, tokenize(source)).parse();
 }
 
