@@ -682,6 +682,11 @@ export async function createApp(
     // 5. Reload entity definitions from MongoDB (DB is the runtime source of truth)
     await registry.loadFromDb(db);
 
+    // Storage compatibility applies to stored and file definitions, even without migrations.
+    for (const entity of registry.getAll()) {
+      if (!entity.is_virtual) await db.assertOrdinaryCollection(entity.name, entity.database);
+    }
+
     // 5a. Each start moves the files of a public attach field forward to public. Once per
     //     database, a person's former signature pick, the UserPreference ui.signature, goes,
     //     and so do the branding density the seed wrote without anybody choosing it, the text

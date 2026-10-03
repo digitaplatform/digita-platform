@@ -92,6 +92,54 @@ function authHeaders() {
   return { authorization: `Bearer ${authToken}` };
 }
 
+describe("ordinary collection boundary", () => {
+  const definition = (name: string): EntityDefinition => ({
+    name, module: "test", database: DIGITA.DATABASES.CORE, naming: { strategy: "user_set" },
+    fields: [{ fieldname: "posted_at", fieldtype: "Datetime", label: "Posted" }],
+    permissions: [{ role: "Administrator", level: 0, read: 1, write: 1, create: 1, delete: 1 }],
+  });
+
+  it("a refused POST leaves no stored definition or resource metadata", async () => {
+    const name = "NativeMetaRefusal";
+    const raw = db.getDb(DIGITA.DATABASES.CORE);
+    await raw.createCollection(name, { timeseries: { timeField: "posted_at" } });
+    try {
+      const res = await app.inject({ method: "POST", url: "/api/v1/meta", headers: authHeaders(), payload: definition(name) });
+      expect(res.statusCode).toBe(500);
+      expect(await db.findOne(DIGITA.COLLECTIONS.ENTITY, name, DIGITA.DATABASES.CORE)).toBeNull();
+      expect(registry.has(name)).toBe(false);
+      expect((await app.inject({ method: "GET", url: `/api/v1/meta/${name}`, headers: authHeaders() })).statusCode).toBe(404);
+    } finally {
+      await raw.dropCollection(name);
+      await db.deleteOne(DIGITA.COLLECTIONS.ENTITY, name, DIGITA.DATABASES.CORE);
+      registry.deleteStoredDefinition(name);
+    }
+  });
+
+  it.each(["stored", "migration-disabled"] as const)("boot refuses incompatible %s storage", async (mode) => {
+    const name = mode === "stored" ? "NativeStoredRefusal" : "NativeNoMigrationRefusal";
+    const raw = db.getDb(DIGITA.DATABASES.CORE);
+    await raw.createCollection(name, { timeseries: { timeField: "posted_at" } });
+    await raw.collection(name).insertOne({ posted_at: new Date(), value: "kept" });
+    if (mode === "stored") await db.insertOne(DIGITA.COLLECTIONS.ENTITY, { ...definition(name), _id: name }, DIGITA.DATABASES.CORE);
+    const oldAutoMigrate = env.AUTO_MIGRATE;
+    if (mode === "migration-disabled") (env as { AUTO_MIGRATE: boolean }).AUTO_MIGRATE = false;
+    const ta = await buildTestAuth();
+    const next = await createApp({ authn: ta.authn });
+    if (mode === "migration-disabled") next.registry.register(definition(name));
+    try {
+      await expect(next.startup()).rejects.toMatchObject({ code: "ordinary_collection_required" });
+      expect(await raw.collection(name).countDocuments()).toBe(1);
+    } finally {
+      (env as { AUTO_MIGRATE: boolean }).AUTO_MIGRATE = oldAutoMigrate;
+      await next.app.close();
+      await next.db.disconnect();
+      await db.deleteOne(DIGITA.COLLECTIONS.ENTITY, name, DIGITA.DATABASES.CORE);
+      await raw.dropCollection(name);
+    }
+  });
+});
+
 describe("Resource API Integration", () => {
 
   // ─── AUTH GUARD ─────────────────────────────────────────

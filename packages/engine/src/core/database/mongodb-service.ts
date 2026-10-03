@@ -542,16 +542,22 @@ export class MongoDBService {
     return this.collection(collectionName, target).createIndex(spec, options);
   }
 
-  async ensureCollection(name: string, target: DatabaseTarget): Promise<void> {
+  /** Refuse incompatible existing storage; return whether the ordinary collection exists. */
+  async assertOrdinaryCollection(name: string, target: DatabaseTarget): Promise<boolean> {
     const db = this.getDb(target);
     const collections = await db.listCollections({ name }).toArray();
     if (collections.length > 0) {
       if (collections[0]!.type !== "collection") {
         throw new ConfigurationError("ordinary_collection_required", { collection: name });
       }
-      return;
+      return true;
     }
-    await db.createCollection(name);
+    return false;
+  }
+
+  async ensureCollection(name: string, target: DatabaseTarget): Promise<void> {
+    if (await this.assertOrdinaryCollection(name, target)) return;
+    await this.getDb(target).createCollection(name);
     log.info({ collection: name, db: target }, "Collection created");
   }
 
