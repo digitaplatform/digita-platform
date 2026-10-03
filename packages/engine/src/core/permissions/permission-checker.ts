@@ -565,7 +565,7 @@ export class PermissionChecker {
       ]),
       ...IDENTITY_FIELDS,
       ...operatorFields,
-      "idx", "parent", "parenttype", "parentfield",
+      "idx", ...(entity.tree ? [] : ["parent"]), "parenttype", "parentfield",
     ]);
   }
 

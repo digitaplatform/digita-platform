@@ -409,6 +409,11 @@ describe("tree ancestry and parent permissions", () => {
       expectMasked((await docService.getDoc("TGroup", "B", reader)).toJSON());
       const list = await docService.getList("TGroup", { fields: ["*"] }, reader);
       list.data.forEach(expectMasked);
+      expect(permissionChecker.getFilterAllowlist(reader, "TGroup")).not.toContain("parent");
+      await expect(docService.getList("TGroup", { filters: [["parent", "=", "A"]] }, reader)).rejects.toThrow();
+      expect(permissionChecker.getFilterAllowlist(admin, "TGroup")).toContain("parent");
+      const allowed = await docService.getList("TGroup", { filters: [["parent", "=", "A"]] }, admin);
+      expect(allowed.data.map((row) => row["_id"])).toEqual(["B"]);
       const rows = await runAggregateSection({ key: "tree", kind: "aggregate", entity: "TGroup", pipeline: [] }, context, reader, deps);
       rows.forEach(expectMasked);
       const joined = await runAggregateSection({
