@@ -50,8 +50,8 @@ vi.mock('@/stores/session', () => ({
   useSessionStore: (sel: (s: { user: { roles: string[] } }) => unknown) => sel({ user: { roles: ['Administrator'] } }),
 }));
 vi.mock('@/stores/i18n', () => ({
-  useI18nStore: (sel: (s: { t: (k: string) => string; tEntity: (e: string, fb?: string) => string }) => unknown) =>
-    sel({ t: (k: string) => k, tEntity: (e: string, fb?: string) => fb ?? e }),
+  useI18nStore: (sel: (s: { t: (k: string) => string; tEntity: (e: string, fb?: string) => string; tField: (e: string, f: string, fb?: string) => string }) => unknown) =>
+    sel({ t: (k: string) => k, tEntity: (e: string, fb?: string) => fb ?? e, tField: (_e: string, f: string, fb?: string) => fb ?? f }),
 }));
 vi.mock('@/stores/record-title', () => ({
   useRecordTitle: (sel: (s: { publish: () => void; clear: () => void }) => unknown) =>
