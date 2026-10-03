@@ -915,7 +915,7 @@ export class EntityRegistry {
     for (const doc of docs) {
       const entity = doc as unknown as EntityDefinition;
       // Older stored definitions must not bypass the checks introduced since they were saved.
-      const problem = reservedNameProblem(entity.name) ?? expressionProblem(entity);
+      const problem = entityShapeProblem(entity) ?? reservedNameProblem(entity.name) ?? expressionProblem(entity);
       if (problem) {
         log.error({ entity: entity.name }, `stored entity definition skipped: ${problem}`);
         continue;
