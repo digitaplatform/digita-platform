@@ -1,0 +1,17 @@
+{
+  "name": "WebNavMenu",
+  "module": "web",
+  "database": "web_content",
+  "label": "Web menu",
+  "tree": { "menu": "website" },
+  "naming": { "strategy": "user_set" },
+  "fields": [
+    { "fieldname": "page", "fieldtype": "Link", "label": "Page", "target": "WebPage", "perm_level": 1 }
+  ],
+  "permissions": [
+    { "role": "Administrator", "level": 0, "select": 1, "read": 1 },
+    { "role": "Guest", "level": 0, "select": 1, "read": 1, "condition": "eval:doc.active==true" },
+    { "role": "Guest", "level": 1, "read": 1 },
+    { "role": "MenuReader", "level": 0, "select": 1, "read": 1 }
+  ]
+}

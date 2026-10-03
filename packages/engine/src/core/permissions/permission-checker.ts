@@ -6,6 +6,8 @@ import {
   PermissionAction,
   ROW_ID_FIELD,
   SYSTEM_ROLES,
+  TREE_ACTIVE_FIELD,
+  TREE_PARENT_FIELD,
   canGrantActionTo,
   opensField,
   readableChildFields,
@@ -17,6 +19,7 @@ import { docFieldsOf, evaluateExpression } from "../expression/expression-evalua
 import { permissionRowsFor, scopeValueMatches } from "./scope-filter.js";
 import type { UserContext, PermissionCheckResult } from "./types.js";
 import { createLogger } from "../logging/logger.js";
+import { TREE_KEYS } from "../tree/tree-rules.js";
 
 const log = createLogger("permission-checker");
 
@@ -561,7 +564,7 @@ export class PermissionChecker {
       ]),
       ...IDENTITY_FIELDS,
       ...operatorFields,
-      "idx", "parent", "parenttype", "parentfield",
+      "idx", ...(entity.tree ? [] : ["parent"]), "parenttype", "parentfield",
     ]);
   }
 
@@ -898,23 +901,36 @@ export class PermissionChecker {
     data: Record<string, unknown>,
     sharedForRead = false,
   ): Record<string, unknown> {
-    const readable = this.getReadableFields(user, entityName, data, sharedForRead);
+    const stored = data;
+    const readable = this.getReadableFields(user, entityName, stored, sharedForRead);
+    const entity = this.registry.get(entityName);
+    // A readable default must be distinguishable from a field the read mask removed. Evaluate
+    // permission conditions against the stored row before adding those defaults.
+    if (entity.tree) {
+      data = {
+        ...data,
+        [TREE_PARENT_FIELD]: data[TREE_PARENT_FIELD] ?? null,
+        [TREE_ACTIVE_FIELD]: data[TREE_ACTIVE_FIELD] === undefined
+          ? Boolean(entity.fields.find((field) => field.fieldname === TREE_ACTIVE_FIELD)?.default ?? 1)
+          : data[TREE_ACTIVE_FIELD],
+      };
+    }
 
     // null means all fields are readable
     if (!readable) return data;
 
-    const entity = this.registry.get(entityName);
     const tableFields = new Map(
       entity.fields.filter((f) => f.fieldtype === "Table").map((f) => [f.fieldname, f] as const),
     );
 
     const filtered: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
+      if (entity.tree && TREE_KEYS.includes(key) && !readable.has(TREE_PARENT_FIELD)) continue;
       if (!(readable.has(key) || key.startsWith("_"))) continue;
 
       // Mask child-field rows when the Table declares any gated child.
       if (tableFields.has(key) && Array.isArray(value)) {
-        const allowedChildKeys = this.getReadableChildFields(user, entityName, key, data, sharedForRead);
+        const allowedChildKeys = this.getReadableChildFields(user, entityName, key, stored, sharedForRead);
         if (allowedChildKeys === null) {
           filtered[key] = value;
         } else {

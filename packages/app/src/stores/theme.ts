@@ -87,7 +87,7 @@ interface ThemeState {
 // in. The branding follows when /boot answers (setBranding).
 //
 // The five looks the website renderer bundles (packages/web/src/lib/identity.ts)
-// ship BUNDLED into the host at build too (like usermenu), NOT network-delivered,
+// ship BUNDLED into the host at build too, NOT network-delivered,
 // so a tenant's BrandingSetting.default_signature can name any of them: digita,
 // the platform's own, simetrix, and the three Veloluck looks. They are registered
 // before the stored id is applied, so each resolves its full brand world on the

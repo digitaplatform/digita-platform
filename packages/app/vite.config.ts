@@ -172,10 +172,10 @@ export default defineConfig(({ command, mode }) => {
     // dev we let Vite pre-bundle them normally as one instance — excluding them
     // here breaks pre-bundled deps that import react/jsx-runtime. See the
     // import-map plugin note above.
-    // Dev does exclude the plugin SDK: the built-in plugins (usermenu, …) come
-    // from node_modules, so Vite pre-bundles them, and a pre-bundle would carry
-    // its own copy of the SDK. That copy's host services are never provided, so
-    // the user menu threw on its first render.
+    // Dev does exclude the plugin SDK: a premium plugin's source from the sibling
+    // repository imports it from its own node_modules, and a pre-bundle of that
+    // import would carry its own copy of the SDK, whose host services are never
+    // provided, so the plugin would throw on its first render.
     optimizeDeps: { exclude: isBuild ? SHARED_EXTERNALS : ['@digitaplatform/plugins'] },
     server: {
       port: 5174,

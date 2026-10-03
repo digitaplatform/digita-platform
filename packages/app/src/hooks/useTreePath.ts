@@ -1,3 +1,4 @@
+import { TREE_PARENT_FIELD } from '@digitaplatform/shared';
 import { useEffect, useMemo, useState } from 'react';
 import type { TreeConfig } from '@digitaplatform/shared';
 import { useList } from '@/hooks/useList';
@@ -19,7 +20,7 @@ export function useTreePath(
   const [chain, setChain] = useState<{ nodeId: string; ids: string[] }>({ nodeId: '', ids: [] });
   // The ids found for another node name nothing of this one's path.
   const ids = useMemo(() => (chain.nodeId === nodeId ? chain.ids : [nodeId]), [chain, nodeId]);
-  const parentField = tree?.parent_field ?? '';
+  const parentField = tree ? TREE_PARENT_FIELD : '';
   const list = useList(tree && nodeId ? entity : undefined, {
     filters: [['_id', 'in', ids]],
     fields: [parentField, labelField],

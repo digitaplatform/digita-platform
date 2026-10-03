@@ -1,7 +1,7 @@
 import type { ListParams } from '@/services/resource';
 
 /**
- * The URL is the ONLY contract between a nav source (the usermenu plugin) and the
+ * The URL is the ONLY contract between a nav source (the app-menu plugin) and the
  * generic ListPage. The plugin encodes a target as `?filter=<JSON object>`; the
  * engine resource-list API expects `filters=<JSON tuple array>` ([field, op, value]).
  * These pure functions reconcile the two — owned here, imported by ListPage, with

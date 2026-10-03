@@ -32,8 +32,7 @@ export function NavItemLink({
   current?: boolean;
   /** "menuitem" inside a kit Menu, whose arrow keys move focus over the items. */
   role?: AriaRole;
-  /** Closes the menu or drawer the item sits in when the item opens the contact sheet, which
-   *  would otherwise open behind it. */
+  /** Closes the menu or drawer when its item is selected. */
   onSelect?: () => void;
   /** The kit element a design restyles, as `nav-leaf` for the app's nav items. */
   "data-ui"?: string;
@@ -59,14 +58,14 @@ export function NavItemLink({
   }
   if (isExternalHref(href)) {
     return (
-      <a data-ui={ui} href={href} target="_blank" rel="noopener noreferrer" role={role} tabIndex={tabIndex} className={className}>
+      <a data-ui={ui} href={href} target="_blank" rel="noopener noreferrer" role={role} tabIndex={tabIndex} className={className} onClick={onSelect}>
         {item.label}
         <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       </a>
     );
   }
   return (
-    <Link data-ui={ui} href={href} role={role} tabIndex={tabIndex} aria-current={current ? "page" : undefined} className={className}>
+    <Link data-ui={ui} href={href} role={role} tabIndex={tabIndex} aria-current={current ? "page" : undefined} className={className} onClick={onSelect}>
       {item.label}
     </Link>
   );

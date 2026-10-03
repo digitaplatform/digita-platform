@@ -31,6 +31,7 @@ import { collectAttachFileIds, cleanupDocumentAttachments, parseFileId, FILE_FIE
 import { assertAttachFilesReadable, mayReadFile } from "../storage/file-access.js";
 import { usePublicUrlsOfPublicFiles } from "../storage/public-field-files.js";
 import { assertSetupAllowsCreate, listPendingSetupRecords, type PendingSetupRecord } from "../setup/setup-state.js";
+import { dropTreeKeys, placeTreeNode, storedTreeKeys, writeTreePlacement } from "../tree/tree-rules.js";
 import {
   buildMongoFilter,
   assertFieldAllowed,
@@ -721,7 +722,7 @@ export class DocumentService {
     // getDoc, so a filter or a sort that matched it never read a value it masks.
     const mask = (doc: Record<string, unknown>) =>
       this.permissionChecker.filterFieldsForRead(user, doctype, doc, sharedOnly.has(String(doc["_id"])));
-    docs = masksStoredRows
+    docs = masksStoredRows || entity.tree
       ? docs.map((doc) => projectFields(mask(doc), query.fields))
       : docs.map(mask);
 
@@ -1249,8 +1250,13 @@ export class DocumentService {
       // `_row_id` gets a new one on every load, so no later save could name it.
       doc.ensureRowIds();
 
+      // A node of a tree takes its place there, or the insert is refused; a client's tree keys are dropped.
+      dropTreeKeys(doc._data);
+      const treePlacement = await placeTreeNode(this.db, entity, doc._id, doc._data, undefined, session);
+
       // Store in DB
       await this.db.insertOne(entity.name, doc.toMongo(), entity.database, session);
+      if (treePlacement) Object.assign(doc._data, await writeTreePlacement(this.db, entity, doc._id, treePlacement, session));
       await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
 
       await this.hookRunner.run(doctype, "after_insert", doc, ctx, session, user);
@@ -1325,120 +1331,118 @@ export class DocumentService {
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
 
-    // Load existing — under the caller's session, so a write earlier in its
-    // transaction is visible.
-    const doc = await this.loadDocInternal(doctype, name, options.sessionOverride);
+    let doc!: BaseDocument;
+    let changedFields: string[] = [];
+    // Each transaction attempt reads and prepares its own source state before hooks or tree checks.
+    const runUpdate = async (session: import("mongodb").ClientSession) => {
+      // Load existing — under the caller's session, so a write earlier in its
+      // transaction is visible.
+      doc = await this.loadDocInternal(doctype, name, session);
 
-    // Snapshot attach-field file ids BEFORE the merge — so a save that clears or
-    // replaces a file can delete the now-orphaned File (reference-counted) once
-    // it commits.
-    const attachFilesBefore = collectAttachFileIds(entity.fields, doc._data);
+      // Snapshot attach-field file ids BEFORE the merge — so a save that clears or
+      // replaces a file can delete the now-orphaned File (reference-counted) once
+      // it commits.
+      const attachFilesBefore = collectAttachFileIds(entity.fields, doc._data);
 
-    // Permission check (skipped on transition path — see options doc above)
-    if (!options.skipWritePermCheck) {
-      await this.permissionChecker.check(user, doctype, "write", doc._data);
-    }
-
-    // Optimistic concurrency: when the caller sent the version it last saw
-    // (If-Match), reject if the stored doc has advanced since — prevents a
-    // stale edit silently clobbering a concurrent write. Opt-in: callers that
-    // omit `expectedModified` keep last-write-wins (service-to-service, tests).
-    if (options.expectedModified) {
-      const actual = doc.modified.toISOString();
-      if (actual !== options.expectedModified) {
-        throw new ConcurrentModificationError(doctype, name, options.expectedModified, actual);
+      // Permission check (skipped on transition path — see options doc above)
+      if (!options.skipWritePermCheck) {
+        await this.permissionChecker.check(user, doctype, "write", doc._data);
       }
-    }
 
-    // Write-field-level permissions: drop fields the user may not write
-    // (perm_level / read_only). Skipped on the transition path, which is gated
-    // separately by allowed_roles — filtering there would strip the status flip.
-    const permittedData = options.skipWritePermCheck
-      ? data
-      : this.permissionChecker.filterFieldsForWrite(user, doctype, data, doc._data);
-    const writeData = await this.dropEchoedTranslations(entity, name, permittedData, doc._data, options.locale);
-
-    // Check if editable
-    this.docStatusEngine.validateEdit(entity, doc);
-
-    // Time-series collections are append-only apart from limited meta_field
-    // modifications. Reject any patch that touches non-meta fields.
-    if (entity.time_series) {
-      const metaField = entity.time_series.meta_field;
-      const attempted = Object.keys(data).filter((k) => !k.startsWith("_") && k !== metaField);
-      if (attempted.length > 0) {
-        throw new TimeSeriesImmutableError(doctype, attempted, metaField);
-      }
-    }
-
-    // Workflow transition validation. Detect a change to the workflow field
-    // (default `status`). The actual side_effects + on_workflow_transition
-    // rule fire INSIDE the transaction below. We capture the from/to here
-    // so the transition is gated outside the write critical section.
-    let pendingTransition: {
-      from: string | undefined;
-      to: string;
-      transition: TransitionDefinition | undefined;
-    } | null = null;
-    if (this.workflowEngine && this.workflowEngine.hasWorkflow(entity)) {
-      // Judged on what the save writes: a workflow field the caller may not write is dropped above,
-      // and then moves no state, fires no rule and sets no side effect.
-      const wf = this.workflowEngine.getWorkflowField(entity);
-      if (Object.prototype.hasOwnProperty.call(writeData, wf)) {
-        pendingTransition = this.workflowEngine.judgeFieldWrite(entity, doc._data, writeData[wf], user);
-      }
-    }
-
-    if (entity.is_log) {
-      throw new DocStatusError("cannot_edit_log", { doctype: entity.name });
-    }
-
-    // Apply child-field defaults to NEWLY-ADDED child rows (matched by absence
-    // of their _row_id in the loaded original) — parity with insert; existing
-    // rows and header fields are left untouched. Runs before serialize so
-    // Date/Datetime child defaults serialize correctly.
-    applyNewChildRowDefaults(entity, writeData, doc._original, this.defaultContext(user));
-    this.refuseForeignPasswordValues(entity, writeData, doc._original);
-
-    // Serialize and merge changes (writeData = permission-filtered input)
-    const serialized = this.serializeFields(entity, writeData);
-    doc.merge(serialized);
-
-    // Check set_only_once fields
-    for (const field of entity.fields) {
-      if (field.set_only_once && doc.hasChanged(field.fieldname)) {
-        const originalValue = doc.getPreviousValue(field.fieldname);
-        if (originalValue !== null && originalValue !== undefined && originalValue !== "") {
-          ctx?.error("field_set_only_once", { field: field.label });
-          throw new ValidationFailedError(doctype, [
-            {
-              field: field.fieldname,
-              code: "field_set_only_once",
-              params: { field: field.label },
-            },
-          ]);
+      // Optimistic concurrency: when the caller sent the version it last saw
+      // (If-Match), reject if the stored doc has advanced since — prevents a
+      // stale edit silently clobbering a concurrent write. Opt-in: callers that
+      // omit `expectedModified` keep last-write-wins (service-to-service, tests).
+      if (options.expectedModified) {
+        const actual = doc.modified.toISOString();
+        if (actual !== options.expectedModified) {
+          throw new ConcurrentModificationError(doctype, name, options.expectedModified, actual);
         }
       }
-    }
 
-    // Fetch-from: a changed top-level Link resolves the whole document; a child
-    // row the write adds or points at another source re-derives its own fields.
-    const changedFields = doc.getChangedFields();
-    const hasChangedLinks = entity.fields.some(
-      (f) => f.fieldtype === "Link" && changedFields.includes(f.fieldname),
-    );
-    if (hasChangedLinks) {
-      const fetched = await this.fetchFromResolver.resolve(entity, doc._data, options.sessionOverride, doc._original);
-      doc.merge(fetched);
-    }
-    await this.fetchFromResolver.resolveChangedRows(entity, doc._data, doc._original, options.sessionOverride);
+      // Write-field-level permissions: drop fields the user may not write
+      // (perm_level / read_only). Skipped on the transition path, which is gated
+      // separately by allowed_roles — filtering there would strip the status flip.
+      const permittedData = options.skipWritePermCheck
+        ? data
+        : this.permissionChecker.filterFieldsForWrite(user, doctype, data, doc._data);
+      const writeData = await this.dropEchoedTranslations(entity, name, permittedData, doc._data, options.locale);
 
-    // Wrap field-change/computed/validate/Zod/link/period + before_save +
-    // write + on_update/on_change in a single transaction so any hook DB
-    // write rolls back with the parent on failure. Hooks receive `session`
-    // via merged services (`HookRunner.run/runFieldChangeHooks/runComputedHooks`).
-    // OR join the caller's existing session when supplied.
-    const runUpdate = async (session: import("mongodb").ClientSession) => {
+      // Check if editable
+      this.docStatusEngine.validateEdit(entity, doc);
+
+      // Time-series collections are append-only apart from limited meta_field
+      // modifications. Reject any patch that touches non-meta fields.
+      if (entity.time_series) {
+        const metaField = entity.time_series.meta_field;
+        const attempted = Object.keys(data).filter((k) => !k.startsWith("_") && k !== metaField);
+        if (attempted.length > 0) {
+          throw new TimeSeriesImmutableError(doctype, attempted, metaField);
+        }
+      }
+
+      // Workflow transition validation. Detect a change to the workflow field
+      // (default `status`). The actual side_effects + on_workflow_transition
+      // rule fire INSIDE the transaction below. We capture the from/to here
+      // so the transition is gated outside the write critical section.
+      let pendingTransition: {
+        from: string | undefined;
+        to: string;
+        transition: TransitionDefinition | undefined;
+      } | null = null;
+      if (this.workflowEngine && this.workflowEngine.hasWorkflow(entity)) {
+        // Judged on what the save writes: a workflow field the caller may not write is dropped above,
+        // and then moves no state, fires no rule and sets no side effect.
+        const wf = this.workflowEngine.getWorkflowField(entity);
+        if (Object.prototype.hasOwnProperty.call(writeData, wf)) {
+          pendingTransition = this.workflowEngine.judgeFieldWrite(entity, doc._data, writeData[wf], user);
+        }
+      }
+
+      if (entity.is_log) {
+        throw new DocStatusError("cannot_edit_log", { doctype: entity.name });
+      }
+
+      // Apply child-field defaults to NEWLY-ADDED child rows (matched by absence
+      // of their _row_id in the loaded original) — parity with insert; existing
+      // rows and header fields are left untouched. Runs before serialize so
+      // Date/Datetime child defaults serialize correctly.
+      applyNewChildRowDefaults(entity, writeData, doc._original, this.defaultContext(user));
+      this.refuseForeignPasswordValues(entity, writeData, doc._original);
+
+      // Serialize and merge changes (writeData = permission-filtered input)
+      const serialized = this.serializeFields(entity, writeData);
+      doc.merge(serialized);
+
+      // Check set_only_once fields
+      for (const field of entity.fields) {
+        if (field.set_only_once && doc.hasChanged(field.fieldname)) {
+          const originalValue = doc.getPreviousValue(field.fieldname);
+          if (originalValue !== null && originalValue !== undefined && originalValue !== "") {
+            ctx?.error("field_set_only_once", { field: field.label });
+            throw new ValidationFailedError(doctype, [
+              {
+                field: field.fieldname,
+                code: "field_set_only_once",
+                params: { field: field.label },
+              },
+            ]);
+          }
+        }
+      }
+
+      // Fetch-from: a changed top-level Link resolves the whole document; a child
+      // row the write adds or points at another source re-derives its own fields.
+      changedFields = doc.getChangedFields();
+      const hasChangedLinks = entity.fields.some(
+        (f) => f.fieldtype === "Link" && changedFields.includes(f.fieldname),
+      );
+      if (hasChangedLinks) {
+        const fetched = await this.fetchFromResolver.resolve(entity, doc._data, session, doc._original);
+        doc.merge(fetched);
+      }
+      await this.fetchFromResolver.resolveChangedRows(entity, doc._data, doc._original, session);
+
       // The record as the caller's input made it; what a hook or a rule changes after it is held
       // to the read_only_depends_on locks before the write.
       const afterInput = JSON.parse(JSON.stringify(doc._data)) as Record<string, unknown>;
@@ -1538,6 +1542,11 @@ export class DocumentService {
       for (const field of await usePublicUrlsOfPublicFiles(this.db, entity, doc._data, session)) doc._dirty.add(field);
       await assertAttachFilesReadable(this.fileAccess(), entity, doc._data, new Set(attachFilesBefore), user, session);
 
+      // A node of a tree that changes its parent or its tree is placed again, or the update refused.
+      dropTreeKeys(doc._data, doc._dirty);
+      if (entity.tree) Object.assign(doc._data, storedTreeKeys(doc._original));
+      const treePlacement = await placeTreeNode(this.db, entity, name, doc._data, doc._original, session);
+
       // Save to DB
       await this.db.updateOne(
         entity.name,
@@ -1550,6 +1559,7 @@ export class DocumentService {
         entity.database,
         session,
       );
+      if (treePlacement) Object.assign(doc._data, await writeTreePlacement(this.db, entity, name, treePlacement, session));
       await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
 
       await this.hookRunner.run(doctype, "on_update", doc, ctx, session, user);
@@ -2016,6 +2026,10 @@ export class DocumentService {
       }
 
       await assertAttachFilesReadable(this.fileAccess(), entity, doc._data, attachFilesBefore, user, session);
+      // A patch that moves a node of a tree, as a rule's update_document can, is held as a PUT is.
+      dropTreeKeys(doc._data, doc._dirty);
+      if (entity.tree) Object.assign(doc._data, storedTreeKeys(doc._original));
+      const treePlacement = await placeTreeNode(this.db, entity, name, doc._data, doc._original, session);
 
       // Stamp + write. modified/modified_by are class props (never in _dirty);
       // getChanges() appends them.
@@ -2028,6 +2042,7 @@ export class DocumentService {
         entity.database,
         session,
       );
+      if (treePlacement) Object.assign(doc._data, await writeTreePlacement(this.db, entity, name, treePlacement, session));
       await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
 
       await this.hookRunner.run(doctype, "on_submitted_update", doc, ctx, session, user);
@@ -2379,7 +2394,7 @@ export class DocumentService {
     const entity = this.registry.get(doctype);
     // Read-side joins the override session so a just-inserted doc in
     // the parent transaction is visible to this submit.
-    const doc = await this.loadDocInternal(doctype, name, sessionOverride);
+    let doc = await this.loadDocInternal(doctype, name, sessionOverride);
 
     // Permission check
     await this.permissionChecker.check(user, doctype, "submit", doc._data);
@@ -2403,11 +2418,9 @@ export class DocumentService {
       // the committed state under the session; the loser aborts before any side
       // effects. (Skipped for sessionOverride — that path is a single atomic op on
       // a just-inserted draft.)
-      if (!sessionOverride) {
-        this.docStatusEngine.validateSubmit(
-          entity,
-          await this.loadDocInternal(doctype, name, session),
-        );
+      if (!sessionOverride || entity.tree) {
+        doc = await this.loadDocInternal(doctype, name, session);
+        this.docStatusEngine.validateSubmit(entity, doc);
       }
 
       // Write-skew guard: touch each submittable link target's guard (collides with a
@@ -2486,6 +2499,10 @@ export class DocumentService {
         }
       }
 
+      dropTreeKeys(doc._data, doc._dirty);
+      if (entity.tree) Object.assign(doc._data, storedTreeKeys(doc._original));
+      const treePlacement = await placeTreeNode(this.db, entity, name, doc._data, doc._original, session);
+
       doc.modified = new Date();
       doc.modified_by = user.email;
 
@@ -2501,6 +2518,8 @@ export class DocumentService {
         entity.database,
         session,
       );
+
+      if (treePlacement) Object.assign(doc._data, await writeTreePlacement(this.db, entity, name, treePlacement, session));
 
       // Run on_submit hook — typically writes any derived/side-effect
       // documents that should commit atomically with the submit itself.
@@ -2558,7 +2577,7 @@ export class DocumentService {
     sessionOverride?: import("mongodb").ClientSession,
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
-    const doc = await this.loadDocInternal(doctype, name, sessionOverride);
+    let doc = await this.loadDocInternal(doctype, name, sessionOverride);
 
     // Permission check
     await this.permissionChecker.check(user, doctype, "cancel", doc._data);
@@ -2582,11 +2601,9 @@ export class DocumentService {
       // H7 idempotency (see submit): re-load + re-validate under the session so a
       // concurrent cancel or a withTransaction retry can't re-run on_cancel and
       // double-reverse. Skipped for sessionOverride (single atomic cascade op).
-      if (!sessionOverride) {
-        this.docStatusEngine.validateCancel(
-          entity,
-          await this.loadDocInternal(doctype, name, session),
-        );
+      if (!sessionOverride || entity.tree) {
+        doc = await this.loadDocInternal(doctype, name, session);
+        this.docStatusEngine.validateCancel(entity, doc);
       }
 
       // Write-skew guard: touch this doc's own guard so a concurrent submit that
@@ -2643,6 +2660,10 @@ export class DocumentService {
         }
       }
 
+      dropTreeKeys(doc._data, doc._dirty);
+      if (entity.tree) Object.assign(doc._data, storedTreeKeys(doc._original));
+      const treePlacement = await placeTreeNode(this.db, entity, name, doc._data, doc._original, session);
+
       doc.modified = new Date();
       doc.modified_by = user.email;
 
@@ -2658,6 +2679,8 @@ export class DocumentService {
         entity.database,
         session,
       );
+
+      if (treePlacement) Object.assign(doc._data, await writeTreePlacement(this.db, entity, name, treePlacement, session));
 
       await this.hookRunner.run(doctype, "on_cancel", doc, ctx, session, user);
       await this.hookRunner.run(doctype, "on_change", doc, ctx, session, user);

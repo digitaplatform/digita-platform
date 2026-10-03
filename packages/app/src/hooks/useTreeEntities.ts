@@ -15,9 +15,8 @@ export interface TreeEntity {
 
 /**
  * Every entity whose EntityDefinition declares a `tree` config — the data source
- * for the generic master-data Groups module. The catalog summary omits `tree`,
- * so this fans out to each entity's full meta (mirroring useJobTasks) and filters
- * on `!!m.tree`. Labels are localized reactively on the active locale. Purely
+ * for the generic master-data Groups module. It reads full metadata only for the tree entities
+ * the catalog names. Labels are localized reactively on the active locale. Purely
  * metadata-driven — no entity-specific code.
  */
 export function useTreeEntities(): { entities: TreeEntity[]; isLoading: boolean } {
@@ -28,7 +27,7 @@ export function useTreeEntities(): { entities: TreeEntity[]; isLoading: boolean 
     enabled: !!catalogQ.data,
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const summaries = catalogQ.data ?? [];
+      const summaries = (catalogQ.data ?? []).filter((entity) => !!entity.tree);
       const metas = await Promise.all(
         summaries.map(async (e) => {
           try {

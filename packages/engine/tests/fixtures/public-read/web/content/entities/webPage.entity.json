@@ -50,6 +50,7 @@
   "permissions": [
     { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1, "delete": 1 },
     { "role": "System User", "level": 0, "select": 1, "read": 1, "write": 1, "create": 1 },
-    { "role": "Guest", "level": 0, "select": 1, "read": 1, "condition": "eval:doc.status=='published'" }
+    { "role": "Guest", "level": 0, "select": 1, "read": 1, "condition": "eval:doc.status=='published' && doc.title!='Private page'" },
+    { "role": "MenuReader", "level": 0, "select": 1, "read": 1, "condition": "eval:doc.status=='published' && doc.title!='Private page'" }
   ]
 }

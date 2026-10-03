@@ -32,17 +32,23 @@ vi.mock('@/hooks/useMeta', () => ({
   useMeta: () => ({ data: metaState.data }),
 }));
 const TREE_ROWS = [
-  { _id: 'N-1', name: 'Root', parent: null },
-  { _id: 'N-2', name: 'Child', parent: 'N-1' },
-  { _id: 'N-3', name: 'Loose', parent: null },
+  { _id: 'N-1', label: 'Root', parent: null, active: true },
+  { _id: 'N-2', label: 'Child', parent: 'N-1', active: true },
+  { _id: 'N-3', label: 'Loose', parent: null, active: true },
 ];
 // `rows: undefined` is a list still on its way from the network.
-const listState = vi.hoisted(() => ({ rows: undefined as Array<Record<string, unknown>> | undefined }));
+const listState = vi.hoisted(() => ({
+  rows: undefined as Array<Record<string, unknown>> | undefined,
+  filters: [] as [string, string, unknown][][],
+}));
 vi.mock('@/hooks/useList', () => ({
-  useList: () => ({
-    data: listState.rows ? { rows: listState.rows } : undefined,
-    isLoading: !listState.rows,
-  }),
+  useList: (entity: string | undefined, params: { filters?: [string, string, unknown][] }) => {
+    if (entity) listState.filters.push(params.filters ?? []);
+    return {
+      data: listState.rows ? { rows: listState.rows } : undefined,
+      isLoading: !listState.rows,
+    };
+  },
 }));
 vi.mock('@/lib/chrome-i18n', () => ({
   useChrome: () => (key: string) => key,
@@ -115,6 +121,7 @@ function Host({
 }
 
 beforeEach(() => {
+  listState.filters = [];
   searchResults.data = [
     { _id: 'O-1', display: 'Alpha' },
     { _id: 'O-2', display: 'Beta' },
@@ -234,7 +241,7 @@ describe('LinkControl — tree mode', () => {
     metaState.data = {
       name: 'Folder',
       title_field: 'name',
-      tree: { parent_field: 'parent', label_field: 'name' },
+      tree: {},
       fields: [{ fieldname: 'name', fieldtype: 'Data', label: 'Name' }],
     };
     listState.rows = TREE_ROWS;
@@ -311,11 +318,11 @@ describe('LinkControl — tree mode', () => {
   });
 
   const GROUP_ROWS = [
-    { _id: 'G-1', name: 'Retail', parent: null },
-    { _id: 'G-2', name: 'Swiss', parent: 'G-1' },
-    { _id: 'G-3', name: 'Zurich', parent: 'G-2' },
-    { _id: 'G-4', name: 'Wholesale', parent: null },
-    { _id: 'G-5', name: 'Germany', parent: 'G-4' },
+    { _id: 'G-1', label: 'Retail', parent: null, active: true },
+    { _id: 'G-2', label: 'Swiss', parent: 'G-1', active: true },
+    { _id: 'G-3', label: 'Zurich', parent: 'G-2', active: true },
+    { _id: 'G-4', label: 'Wholesale', parent: null, active: true },
+    { _id: 'G-5', label: 'Germany', parent: 'G-4', active: true },
   ];
 
   it('starts collapsed with the path to the current value open, also for rows that arrive late', async () => {
@@ -381,5 +388,85 @@ describe('LinkControl — tree mode', () => {
     await user.clear(search);
     expect(within(dialog).getByRole('treeitem', { name: 'Retail' })).toHaveAttribute('aria-expanded', 'true');
     expect(within(dialog).getByText('Zurich')).toBeInTheDocument();
+  });
+
+  it('PLANTED DEFECT: offers no switched-off node, nor any node under it', async () => {
+    listState.rows = [
+      { _id: 'N-1', label: 'Root', parent: null, active: true },
+      { _id: 'N-2', label: 'Child', parent: 'N-1', active: true },
+      { _id: 'N-3', label: 'Retired', parent: null, active: 0 },
+      { _id: 'N-4', label: 'Under retired', parent: 'N-3', active: true },
+    ];
+    const user = userEvent.setup();
+    render(<Host field={makeField({ target: 'Folder' })} onChange={vi.fn()} />);
+    await user.click(screen.getByRole('combobox'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('treeitem', { name: 'Root' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('treeitem', { name: 'Retired' })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('treeitem', { name: 'Under retired' })).not.toBeInTheDocument();
+  });
+
+  it('offers no descendant whose inactive ancestor was filtered out by the engine', async () => {
+    listState.rows = [
+      { _id: 'N-1', label: 'Eligible root', parent: null, active: true },
+      { _id: 'N-4', label: 'Under filtered retired', parent: 'N-3', active: true },
+      { _id: 'N-5', label: 'Grandchild under retired', parent: 'N-4', active: true },
+    ];
+    const user = userEvent.setup();
+    render(<Host field={makeField({ target: 'Folder', target_filters: { active: true } })} />);
+    await user.click(screen.getByRole('combobox'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('treeitem', { name: 'Eligible root' })).toBeInTheDocument();
+    expect(within(dialog).queryByText('Under filtered retired')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('Grandchild under retired')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['parent', { _id: 'N-4', label: 'Masked child', active: true }],
+    ['active', { _id: 'N-4', label: 'Masked inactive node', parent: null }],
+  ])('offers no node whose %s field was masked', async (_field, maskedRow) => {
+    listState.rows = [maskedRow];
+    const user = userEvent.setup();
+    render(<Host field={makeField({ target: 'Folder' })} />);
+    await user.click(screen.getByRole('combobox'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryAllByRole('treeitem')).toHaveLength(0);
+  });
+
+  it('rejects a descendant when an ancestor active field was masked', async () => {
+    listState.rows = [
+      { _id: 'N-1', label: 'Masked ancestor', parent: null },
+      { _id: 'N-4', label: 'Child', parent: 'N-1', active: true },
+    ];
+    const user = userEvent.setup();
+    render(<Host field={makeField({ target: 'Folder' })} />);
+    await user.click(screen.getByRole('combobox'));
+    expect(within(await screen.findByRole('dialog')).queryAllByRole('treeitem')).toHaveLength(0);
+  });
+
+  it.each([
+    { entity: 'Widget', fieldname: 'group' },
+    { entity: 'Folder', fieldname: 'related' },
+  ])('does not infer the target kind for $entity.$fieldname from an unrelated kind field', async ({ entity, fieldname }) => {
+    metaState.data = { name: 'Folder', tree: { kind: true }, fields: [] };
+    listState.rows = [
+      { _id: 'S', label: 'Shelf node', parent: null, active: true, kind: 'shelf' },
+      { _id: 'V', label: 'Service node', parent: null, active: true, kind: 'service' },
+    ];
+    const user = userEvent.setup();
+    render(<LinkControl field={makeField({ target: 'Folder', fieldname })} value={null} entity={entity}
+      doc={{ kind: 'shelf' }} state={STATE} onChange={() => {}} controlId="group" labelId="group-label" />);
+    await user.click(screen.getByRole('combobox'));
+    expect(listState.filters).not.toHaveLength(0);
+    expect(listState.filters.every((filters) => !filters.some(([field]) => field === 'kind'))).toBe(true);
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Shelf node')).toBeInTheDocument();
+    expect(within(dialog).getByText('Service node')).toBeInTheDocument();
+  });
+
+  it('shows a held node that is switched off by its path, as any held node', () => {
+    listState.rows = [{ _id: 'N-3', label: 'Retired', parent: null, active: 0 }];
+    render(<Host field={makeField({ target: 'Folder' })} value="N-3" />);
+    expect((screen.getByRole('combobox') as HTMLInputElement).value).toBe('Retired');
   });
 });

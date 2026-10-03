@@ -1,9 +1,11 @@
 "use client";
 
-import { Check, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { Menu, topBarButtonClass } from "@digitaplatform/components";
 import type { NavItem } from "@/lib/types";
-import { NavItemLink } from "./NavItemLink";
+import { useSiteConfig } from "@/config/ConfigProvider";
+import { filterNavItems, isContactItem } from "@/lib/nav";
+import { NavMenuEntries } from "./NavMenuEntries";
 
 /** Whether a family item is the site the visitor is on: its link's host is the site's domain. */
 export function isCurrentSite(item: NavItem, domain: string | undefined): boolean {
@@ -15,9 +17,6 @@ export function isCurrentSite(item: NavItem, domain: string | undefined): boolea
   }
 }
 
-const ITEM =
-  "flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-textMain transition-colors duration-base ease-smooth hover:bg-bgHover focus:bg-bgHover focus:outline-none";
-
 /** The four dots of the product family, the canvas's switcher icon. */
 function FamilyIcon() {
   return (
@@ -28,10 +27,10 @@ function FamilyIcon() {
 }
 
 /**
- * The product family menu at the top right: the sites and products of the family, from the
- * WebNavMenu at location "family". The site the visitor is on is marked and links nowhere; the
- * others open in a new tab; a product without a link shows as coming. The phone shows the same
- * list inside MobileNav.
+ * The product family menu at the top right: the sites and products of the family, from the menu
+ * tree at location "family", a heading over the entries under it. The site the visitor is on is
+ * marked and links nowhere; the others open in a new tab; a product without a link shows as
+ * coming. The phone shows the same list inside MobileNav.
  */
 export function FamilySwitcher({
   locale,
@@ -46,7 +45,9 @@ export function FamilySwitcher({
   label: string;
   comingLabel: string;
 }) {
-  if (!items.length) return null;
+  const { contactEnabled } = useSiteConfig();
+  const available = filterNavItems(items, (item) => contactEnabled || !isContactItem(item));
+  if (!available.length) return null;
   return (
     <Menu
       label={label}
@@ -60,26 +61,9 @@ export function FamilySwitcher({
         </>
       }
     >
-      {(close) =>
-        items.map((item, i) =>
-          isCurrentSite(item, domain) ? (
-            <span key={`${item.label}-${i}`} role="menuitem" aria-current="true" tabIndex={-1} className={`${ITEM} font-semibold`}>
-              {item.label}
-              <Check className="ml-auto h-4 w-4 text-primaryGraphic" aria-hidden="true" />
-            </span>
-          ) : (
-            <NavItemLink
-              key={`${item.label}-${i}`}
-              locale={locale}
-              item={item}
-              comingLabel={comingLabel}
-              role="menuitem"
-              onSelect={close}
-              className={ITEM}
-            />
-          ),
-        )
-      }
+      {(close) => (
+        <NavMenuEntries locale={locale} items={available} comingLabel={comingLabel} close={close} isCurrent={(item) => isCurrentSite(item, domain)} />
+      )}
     </Menu>
   );
 }

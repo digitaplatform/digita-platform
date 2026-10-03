@@ -1,7 +1,7 @@
 // A type or function the SDK exports and nothing reads reads like part of the contract: a designer
 // who filled the sku of a plugin package after reading the SDK types expected it to matter. Every
-// export of the SDK is read by the host (app, website, theme, kit or the staging tools), by a
-// plugin as the list below names, or by another declaration of the SDK that is.
+// export of the SDK is read by the host (app, website, theme, kit or the staging tools),
+// or by another declaration of the SDK that is.
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,12 +10,6 @@ import { describe, it, expect } from 'vitest';
 const sdkSrc = fileURLToPath(new URL('../src', import.meta.url));
 const repoRoot = fileURLToPath(new URL('../../../..', import.meta.url));
 const HOST_DIRS = ['packages/app/src', 'packages/web/src', 'packages/theme/src', 'packages/components/src', 'tools'];
-
-/** The exports only a plugin reads, outside this repository, each with the plugin use that
- *  reads it. An export is added here with its use, or not at all. */
-const READ_BY_PLUGINS: Record<string, string> = {
-  useHost: 'a component plugin reads the host services with it, as the usermenu plugin does',
-};
 
 /** The lines of a source text that are code: a comment that names a thing reads nothing. */
 const codeLines = (text: string): string[] => text.split('\n').filter((line) => !/^\s*(\/\/|\/\*|\*)/.test(line));
@@ -47,7 +41,7 @@ describe('the exports of the plugin SDK', () => {
     const hostTexts = HOST_DIRS.flatMap((dir) => sourceTexts(join(repoRoot, dir)));
     expect(sdkTexts.length).toBeGreaterThan(0);
     expect(hostTexts.length).toBeGreaterThan(0);
-    expect(exportsWithoutReader(sdkTexts, hostTexts, READ_BY_PLUGINS)).toEqual([]);
+    expect(exportsWithoutReader(sdkTexts, hostTexts, {})).toEqual([]);
   });
 
   it('PLANTED DEFECT: the check names an export only its own declaration and a comment name', () => {

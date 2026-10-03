@@ -13,7 +13,7 @@ import flagFontUrl from './assets/TwemojiCountryFlags.woff2?url';
 import faviconUrl from '@digitaplatform/theme/favicon.svg?no-inline';
 import { showTabIcon } from '@digitaplatform/theme';
 import './index.css';
-// Side-effect import: registers the BUILT-IN first-party plugins (usermenu, …)
+// Side-effect import: registers the BUILT-IN first-party plugins (app-menu, …)
 // with the plugin registry at module load — before the shell renders, so the
 // layout's regions resolve without any runtime plugin fetch. See builtins.ts.
 import '@/plugins/builtins';

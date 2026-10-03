@@ -20,6 +20,7 @@ import {
   resolveLinksByBk,
 } from "../import-export/bk-resolver.js";
 import { serializeRowForStorage } from "../import-export/row-serializer.js";
+import { restampTreeNodes, storedTreeKeys } from "../tree/tree-rules.js";
 import {
   SnapshotResolver,
   entityHasAnySnapshot,
@@ -408,6 +409,8 @@ export async function seedAppData(
     }
     carriedTiers.set(entity.name, carried);
   }
+  // The seed stores rows raw, so it gives each node of a tree its place, as the document service does.
+  for (const entity of new Set(collected.map((c) => c.entity))) await restampTreeNodes(db, entity);
 
   // ── Pass 4b: retry the deletes a stored row blocked, now that the seed rewrote its rows ──
   // A link that survives comes from a row the sweep did not delete or from a carried row the
@@ -668,6 +671,8 @@ async function insertRows(
         docstatus,
         owner: existing.owner ?? SEED_IDENTITY,
         creation: existing.creation ?? now,
+        // A node of a tree keeps its place, which the seed sets after the rows are written.
+        ...storedTreeKeys(existing),
       };
       candidate[SEED_HASH_FIELD] = seedHash(candidate);
       if (sameDocument(candidate, existing)) {

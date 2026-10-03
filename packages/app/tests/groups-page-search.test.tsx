@@ -7,12 +7,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+// Siblings sort by position: the tests' keyboard starts on Retail, the first root.
 const ROWS = [
-  { _id: 'G-1', name: 'Retail', parent: null },
-  { _id: 'G-2', name: 'Swiss', parent: 'G-1' },
-  { _id: 'G-3', name: 'Wholesale', parent: null },
-  { _id: 'G-4', name: 'Germany', parent: 'G-3' },
-  { _id: 'G-5', name: 'Online', parent: null },
+  { _id: 'G-1', label: 'Retail', parent: null, position: 1 },
+  { _id: 'G-2', label: 'Swiss', parent: 'G-1', position: 1 },
+  { _id: 'G-3', label: 'Wholesale', parent: null, position: 2 },
+  { _id: 'G-4', label: 'Germany', parent: 'G-3', position: 1 },
+  { _id: 'G-5', label: 'Online', parent: null, position: 3 },
 ];
 const listState = vi.hoisted(() => ({ rows: [] as Array<Record<string, unknown>> }));
 vi.mock('@/hooks/useList', () => ({
@@ -22,7 +23,7 @@ const CUSTOMER_GROUP = vi.hoisted(() => ({
   name: 'CustomerGroup',
   title_field: 'name',
   fields: [],
-  tree: { parent_field: 'parent', label_field: 'name' },
+  tree: {},
 }));
 vi.mock('@/hooks/useTreeEntities', () => ({
   useTreeEntities: () => ({

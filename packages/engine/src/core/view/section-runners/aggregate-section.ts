@@ -1,5 +1,5 @@
 import type { AggregateSection, EntityDefinition } from "@digitaplatform/shared";
-import { IDENTITY_FIELDS, OPERATOR_FIELDS } from "@digitaplatform/shared";
+import { IDENTITY_FIELDS, OPERATOR_FIELDS, TREE_PARENT_FIELD } from "@digitaplatform/shared";
 import type { Document } from "mongodb";
 import type { MongoDBService } from "../../database/mongodb-service.js";
 import type { EntityRegistry } from "../../entity/entity-registry.js";
@@ -12,6 +12,7 @@ import { collectFieldReferences, WHOLE_DOCUMENT } from "./pipeline-field-walker.
 import { coerceMatchDates } from "../../database/filter-value-coercer.js";
 import { readStoredRow } from "../../entity/field-types.js";
 import { joinByStoredIdForms } from "./id-form-lookup.js";
+import { TREE_KEYS } from "../../tree/tree-rules.js";
 
 /** Pipeline stages after which field names / entity context change — date-match
  *  coercion (which resolves field types against the section entity) must stop here. */
@@ -109,7 +110,7 @@ export async function runAggregateSection(
     readableByEntity.set(name, deps.permissionChecker.getReadableFieldsOnEveryRow(user, name));
     const def = deps.registry.get(name);
     const fieldList = def.fields ?? [];
-    allFieldsByEntity.set(name, new Set([...fieldList.map((f) => f.fieldname), ...OPERATOR_FIELDS]));
+    allFieldsByEntity.set(name, new Set([...fieldList.map((f) => f.fieldname), ...OPERATOR_FIELDS, ...(def.tree ? TREE_KEYS : [])]));
   };
   learnEntity(section.entity);
   for (const fromEntity of lookupTargets) learnEntity(fromEntity);
@@ -124,6 +125,9 @@ export async function runAggregateSection(
     }
     const readable = readableByEntity.get(ref.entity);
     if (readable === null || readable === undefined) continue; // null = all readable (admin/missing); permissive
+    if (deps.registry.get(ref.entity).tree && TREE_KEYS.includes(ref.field) && !readable.has(TREE_PARENT_FIELD)) {
+      throw new PermissionDeniedError("aggregation_references_protected_field", { doctype: ref.entity });
+    }
     if (META_FIELDS.has(ref.field)) continue;
     if (ref.field.startsWith("_")) continue;
 
@@ -227,7 +231,7 @@ export async function runAggregateSection(
       if (!(as in r)) continue;
       const readable = readableByEntity.get(from);
       if (!readable) continue; // null = all readable (admin) → no mask
-      r[as] = maskForeignValue(r[as], readable);
+      r[as] = maskForeignValue(r[as], readable, !!deps.registry.get(from).tree);
     }
     return r;
   });
@@ -252,6 +256,7 @@ function hiddenPaths(
   const hidden = new Set(passwordFields(def));
   if (readable) {
     for (const field of OPERATOR_FIELDS) if (!readable.has(field)) hidden.add(field);
+    if (def.tree && !readable.has(TREE_PARENT_FIELD)) for (const key of TREE_KEYS) hidden.add(key);
     for (const f of def.fields ?? []) {
       if (META_FIELDS.has(f.fieldname) || f.fieldname.startsWith("_") || hidden.has(f.fieldname)) continue;
       if (!readable.has(f.fieldname)) {
@@ -343,8 +348,8 @@ function collectLookupOutputs(
 
 /** Mask a $lookup output (array of joined docs, or a single doc) through the
  *  joined entity's readable field set. */
-function maskForeignValue(value: unknown, readable: Set<string>): unknown {
-  return mapForeignValue(value, (doc) => maskForeignDoc(doc, readable) as Document);
+function maskForeignValue(value: unknown, readable: Set<string>, tree: boolean): unknown {
+  return mapForeignValue(value, (doc) => maskForeignDoc(doc, readable, tree) as Document);
 }
 
 /** A $lookup output (array of joined docs, or a single doc) with `read` applied to each doc. */
@@ -353,10 +358,11 @@ function mapForeignValue(value: unknown, read: (doc: Document) => Document): unk
   return Array.isArray(value) ? value.map(one) : one(value);
 }
 
-function maskForeignDoc(doc: unknown, readable: Set<string>): unknown {
+function maskForeignDoc(doc: unknown, readable: Set<string>, tree: boolean): unknown {
   if (!doc || typeof doc !== "object") return doc;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(doc as Record<string, unknown>)) {
+    if (tree && TREE_KEYS.includes(k) && !readable.has(TREE_PARENT_FIELD)) continue;
     if (META_FIELDS.has(k) || k.startsWith("_") || readable.has(k)) out[k] = v;
   }
   return out;
@@ -371,6 +377,7 @@ function filterAggregateRow(
 ): Document {
   const out: Document = {};
   for (const [k, v] of Object.entries(row)) {
+    if (allFields.has(k) && TREE_KEYS.includes(k) && !readable.has(TREE_PARENT_FIELD)) continue;
     if (META_FIELDS.has(k) || k.startsWith("_")) {
       out[k] = v;
       continue;

@@ -212,3 +212,16 @@ export {
   ExpressionError,
 } from "./expression.js";
 export type { ExprNode, ExprBinaryOperator, ExprUnaryOperator, ExprIdentifierResolver } from "./expression.js";
+export {
+  TREE_ACTIVE_FIELD,
+  TREE_ICON_FIELD,
+  TREE_BLOCK_SHAPE_KEYS,
+  TREE_KIND_FIELD,
+  TREE_LABEL_FIELD,
+  TREE_MAX_DEPTH_DEFAULT,
+  TREE_MENU_ROLES_FIELD,
+  TREE_PARENT_FIELD,
+  TREE_POSITION_FIELD,
+  treeBlockFields,
+  treeBlockIndexes,
+} from "./tree-block.js";

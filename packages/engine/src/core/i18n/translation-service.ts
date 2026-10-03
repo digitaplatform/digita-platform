@@ -17,6 +17,14 @@ export function translationNamespace(key: string): "entity" | "system" {
   return key.startsWith("entity.") || key.startsWith("field.") || key.startsWith("option.") ? "entity" : "system";
 }
 
+export function translationOverrideFields(stored: Record<string, unknown>, user: string): Record<string, unknown> {
+  return {
+    overridden: stored["source"] === "file",
+    overridden_by: user,
+    original_value: stored["overridden"] ? stored["original_value"] : stored["value"],
+  };
+}
+
 export class TranslationService {
   constructor(private db: MongoDBService) {}
 
@@ -225,11 +233,7 @@ export class TranslationService {
         _id,
         {
           value: params.value,
-          overridden: existingData["source"] === "file",
-          overridden_by: params.user,
-          original_value: existingData["overridden"]
-            ? existingData["original_value"]
-            : existingData["value"],
+          ...translationOverrideFields(existingData, params.user),
           modified: new Date(),
           modified_by: params.user,
         },

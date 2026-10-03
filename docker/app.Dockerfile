@@ -58,9 +58,8 @@ COPY packages/app/package.json packages/app/
 COPY packages/web/package.json packages/web/
 
 # app (host) + @digitaplatform/theme (design foundation) + @digitaplatform/components
-# (React kit) + @digitaplatform/plugins (SDK) + @digitaplatform/usermenu (BUILT-IN
-# first-party plugin — its source compiles into the host bundle) + shared — all
-# in-repo workspace members. The host stays app-agnostic; it bundles NO apps.
+# (React kit) + @digitaplatform/plugins (SDK) + shared — all in-repo workspace
+# members. The host stays app-agnostic; it bundles NO apps.
 # PREMIUM plugin bundles are built in digita-plugins and are NOT
 # installed as deps — they enter as staged static artifacts (see PLUGIN
 # DELIVERY above).
@@ -70,7 +69,6 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     --filter @digitaplatform/theme \
     --filter @digitaplatform/components \
     --filter @digitaplatform/plugins \
-    --filter @digitaplatform/usermenu \
     --filter @digitaplatform/app
 
 # ─── Stage 2: Build ──────────────────────────────────────────

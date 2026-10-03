@@ -23,7 +23,6 @@
     "@digitaplatform/shared": "workspace:*",
     "@digitaplatform/simetrix": "^0.3.12",
     "@digitaplatform/theme": "workspace:*",
-    "@digitaplatform/usermenu": "^0.3.0",
     "@digitaplatform/veloluck-lakeside": "^0.3.7",
     "@digitaplatform/veloluck-precise": "^0.3.7",
     "@digitaplatform/veloluck-workbench": "^0.3.7",

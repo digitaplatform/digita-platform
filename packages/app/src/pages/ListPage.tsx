@@ -20,7 +20,7 @@ import { useSessionStore } from '@/stores/session';
 import { SegmentedControl, ReportPreviewDialog } from '@digitaplatform/components';
 import { canGrantActionTo } from '@digitaplatform/shared';
 import { ListRenderer } from '@/components/render/ListRenderer';
-import { TreeEditor } from '@/components/render/TreeEditor';
+import { EntityTreeEditor } from '@/components/render/EntityTreeEditor';
 import { ListToolbar } from '@/components/list/ListToolbar';
 import { ImportWizard } from '@/components/list/ImportWizard';
 import { LoadingBlock, ErrorBlock } from '@/components/status';
@@ -431,7 +431,7 @@ export default function ListPage() {
       )}
 
       {treeMode ? (
-        <TreeEditor entity={entity!} meta={meta} tree={meta.tree!} />
+        <EntityTreeEditor entity={entity!} meta={meta} tree={meta.tree!} />
       ) : listQ.isLoading ? (
         <TableSkeleton columns={5} rows={10} />
       ) : listQ.isError ? (

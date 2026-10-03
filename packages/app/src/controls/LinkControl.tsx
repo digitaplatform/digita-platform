@@ -1,3 +1,4 @@
+import { TREE_ACTIVE_FIELD, TREE_KIND_FIELD, TREE_LABEL_FIELD, TREE_PARENT_FIELD } from '@digitaplatform/shared';
 import { useEffect, useState } from 'react';
 import { Input, SearchDialog, BaseDialog, TreeView, Combobox, cn } from '@digitaplatform/components';
 import type { TreeViewNode, ComboboxOption } from '@digitaplatform/components';
@@ -6,6 +7,7 @@ import { FIELD_CLASS, describedBy } from '@/controls/control-styles';
 import { useChrome } from '@/lib/chrome-i18n';
 import { useSearchLink } from '@/hooks/useSearchLink';
 import { useMeta } from '@/hooks/useMeta';
+import { treeNodeOf } from '@/lib/tree-node';
 import { resolveLinkFilters } from '@/lib/link-filters';
 import { toUiMessages } from '@/lib/api-result';
 import { useList } from '@/hooks/useList';
@@ -27,6 +29,7 @@ export default function LinkControl({
   field,
   value,
   doc,
+  entity,
   parentDoc,
   state,
   onChange,
@@ -104,10 +107,11 @@ export default function LinkControl({
   // when the picker opens only if the pointer or the focus reached the field before the open: a quick
   // tap on a touch screen sends the request as it opens the picker, which then shows its loading line
   // until the rows land. The load is scoped by the resolved filters AND auto-scoped by the tree's own
-  // partition (`tree.group_by`, e.g. `domain`): a self-referential parent field on a partitioned tree
+  // partition (the `kind` column of `tree.kind`): a self-referential parent field on a partitioned tree
   // must only offer nodes in the SAME partition (picking a "sales" group's parent shows only the sales
   // forest, not all four domains interleaved). Explicit target_filters win.
-  const treeGroupBy = treeCfg?.group_by;
+  const selfParent = field.fieldname === TREE_PARENT_FIELD && field.target === entity && !parentDoc && !field.target_path;
+  const treeGroupBy = selfParent && treeCfg?.kind ? TREE_KIND_FIELD : undefined;
   const partitionValue =
     treeGroupBy ? (doc as Record<string, unknown>)[treeGroupBy] : undefined;
   const treeFilters: Record<string, unknown> = { ...(resolvedFilters ?? {}) };
@@ -122,8 +126,8 @@ export default function LinkControl({
   const treeList = useList(treeCfg && (treeOpen || treeRowsWanted) ? field.target : undefined, {
     filters: Object.entries(treeFilters).map(([k, v]) => [k, '=', v] as [string, string, unknown]),
     page_size: 2000,
-  });
-  const treeLabelField = treeCfg?.label_field ?? targetMeta.data?.title_field ?? '_id';
+  }, { allPages: true });
+  const treeLabelField = TREE_LABEL_FIELD;
   // A tree node shows its path from the root: by its own name, groups of the same name under
   // different parents look alike.
   const treePath = useTreePath(field.target, treeCfg, treeLabelField, hasValue ? String(value) : '');
@@ -181,23 +185,19 @@ export default function LinkControl({
 
   // ---- tree mode: target entity declares a tree → pick from the hierarchy ----
   if (treeCfg) {
-    const parentField = treeCfg.parent_field;
+    const parentField = TREE_PARENT_FIELD;
     // Rows kept from the query of another partition are not this partition's nodes: offered, a
     // click would store a group of the previous partition on this record.
-    const treeRows = treeList.isPlaceholderData ? [] : (treeList.data?.rows ?? []);
-    const nodes: TreeViewNode[] = treeRows.map((r) => {
-      const parent = r[parentField];
-      return {
-        id: String(r._id),
-        label: String(r[treeLabelField] ?? r._id),
-        parentId: parent != null && parent !== '' ? String(parent) : null,
-      };
-    });
+    const loadedRows = treeList.isPlaceholderData ? [] : (treeList.data?.rows ?? []);
+    // A node that is switched off is no new choice, nor is any node under it. A record that holds
+    // one keeps it: the field shows its path, as it shows any held node.
+    const treeRows = withoutSwitchedOff(loadedRows, parentField);
+    const nodes: TreeViewNode[] = treeRows.map((r) => treeNodeOf(r, targetMeta.data));
     // Picking a PARENT for this very node: block the node itself and its whole
     // subtree so a cycle can never be selected (previously only caught at save).
     let disabledIds: Set<string> | undefined;
     const selfId = doc['_id'] != null && doc['_id'] !== '' ? String(doc['_id']) : '';
-    if (field.fieldname === parentField && selfId) {
+    if (selfParent && selfId) {
       const kids = new Map<string, string[]>();
       for (const n of nodes) {
         if (!n.parentId) continue;
@@ -290,13 +290,14 @@ export default function LinkControl({
             onChange={(e) => setTreeQuery(e.target.value)}
             className="mb-3"
           />
+          {treeList.error && <p role="alert" className="mb-3 text-sm text-textMuted">{toUiMessages(treeList.error, t)[0]?.text}</p>}
           <TreeView
             nodes={nodes}
             selectedId={hasValue ? String(value) : null}
             query={treeQuery}
             className="min-h-0 max-h-full flex-1"
             disabledIds={disabledIds}
-            emptyLabel={treeList.isLoading || treeList.isPlaceholderData ? tc('ui.link.searching') : tc('ui.select.noResults')}
+            emptyLabel={treeList.error ? '' : treeList.isLoading || treeList.isPlaceholderData ? tc('ui.link.searching') : tc('ui.select.noResults')}
             // Groups open on a tap of their name and stay pickable: the tree's own parent field picks groups.
             expandOnNameClick
             selectLabel={tc('ui.tree.select')}
@@ -456,4 +457,23 @@ function SearchIcon() {
       <path d="m13.5 13.5 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
+}
+
+/** Offer only nodes whose complete active ancestry is readable. The engine supplies readable
+ *  defaults; an absent eligibility field was masked and cannot establish an active chain. */
+function withoutSwitchedOff(rows: Record<string, unknown>[], parentField: string): Record<string, unknown>[] {
+  const byId = new Map(rows.map((r) => [String(r._id), r]));
+  const isActive = (id: string): boolean => {
+    const seen = new Set<string>();
+    while (id) {
+      const row = byId.get(id);
+      // A filtered or unreadable ancestor cannot establish that its subtree is active.
+      if (!row || seen.has(id) || !Object.hasOwn(row, parentField) || !Object.hasOwn(row, TREE_ACTIVE_FIELD)
+        || row[TREE_ACTIVE_FIELD] === 0 || row[TREE_ACTIVE_FIELD] === false) return false;
+      seen.add(id);
+      id = row[parentField] == null ? '' : String(row[parentField]);
+    }
+    return true;
+  };
+  return rows.filter((r) => isActive(String(r._id)));
 }
