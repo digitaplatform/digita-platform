@@ -136,8 +136,8 @@ export async function listPublishedSlugs(): Promise<Record<string, string[]>> {
   return slugs;
 }
 
-/** The menu of this site at `location`, as the visitor sees it in `locale`: the active nodes of its
- *  tree, with labels in that language and each page in that language (buildNavTree). */
+/** The menu of this site at `location`, as the visitor sees it in `locale`: the engine resolves
+ *  readable published page variants, and buildNavTree omits unavailable destinations. */
 export async function listNav(locale: string, location: WebNavMenu["location"]): Promise<NavItem[]> {
   const [nodes, pages] = await Promise.all([
     queryAll<WebNavMenu>("WebNavMenu", {

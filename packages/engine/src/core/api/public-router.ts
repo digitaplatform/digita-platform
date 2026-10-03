@@ -5,7 +5,7 @@ import type { MongoDBService } from "../database/mongodb-service.js";
 import { NotFoundError, type DocumentService } from "../document/document-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { LocaleResolver } from "../i18n/locale-resolver.js";
-import type { PermissionChecker } from "../permissions/permission-checker.js";
+import { PermissionDeniedError, type PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
 import { listQueryFrom } from "./list-query.js";
 import { FileNotFoundInStorageError, type StoragePort } from "../storage/storage-port.js";
@@ -136,6 +136,39 @@ export function registerPublicRoutes(
     return null;
   };
 
+  // A menu may name a draft base page whose translated sibling is public. Read only its
+  // grouping metadata internally; the existing document gate decides which page ID may replace
+  // the Link. An unresolved Link stays as stored, and the renderer omits its unavailable page.
+  const localizeMenuPages = async (doctype: string, rows: Record<string, unknown>[], u: UserContext, locale: string) => {
+    const entity = registry.get(doctype);
+    if (entity.tree?.menu !== "website") return;
+    const target = registry.getField(doctype, "page")?.target;
+    if (!target || !registry.has(target)) return;
+    for (const row of rows) {
+      // The public read mask has already run: a masked Link must never be reconstructed.
+      if (typeof row["page"] !== "string" || !row["page"]) continue;
+      const stored = await db.findOne(doctype, String(row["_id"]), entity.database);
+      if (typeof stored?.["site"] !== "string") continue;
+      const basePage = await db.findOne(target, row["page"], registry.get(target).database);
+      if (!basePage || basePage["site"] !== stored["site"]) continue;
+      const match = basePage["locale"] === locale
+        ? { _id: basePage["_id"] }
+        : typeof basePage["translation_group"] === "string" && basePage["translation_group"]
+          ? { translation_group: basePage["translation_group"] }
+          : null;
+      if (!match) continue;
+      try {
+        const pages = await documentService.getList(target, { fields: ["_id"], limit: 1, order_by: "_id asc" }, u, undefined, locale, {
+          everyRowNeedsRead: true,
+          scope: { ...match, site: stored["site"], locale, status: "published" },
+        });
+        if (pages.data[0]) row["page"] = pages.data[0]["_id"];
+      } catch (error) {
+        if (!(error instanceof PermissionDeniedError)) throw error;
+      }
+    }
+  };
+
   // ─── LIST (public, published-gated per row) ────────────
   app.get(`${base}/:doctype`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { doctype } = request.params as { doctype: string };
@@ -157,10 +190,12 @@ export function registerPublicRoutes(
     // read permission (its `condition` and any workflow-state strip), which gates
     // drafts even if a caller omits a status filter, and projects only afterwards.
     // `total` and the pages count only the rows the caller may read.
-    const result = await documentService.getList(doctype, listQuery, u, ctx, await localeOf(request), {
+    const locale = await localeOf(request);
+    const result = await documentService.getList(doctype, listQuery, u, ctx, locale, {
       everyRowNeedsRead: true,
       scope: siteScope(doctype) ?? undefined,
     });
+    await localizeMenuPages(doctype, result.data, u, locale);
 
     return reply.send(
       successResponse(result.data.map(stripInternal), ctx.getMessages(), {
@@ -176,7 +211,9 @@ export function registerPublicRoutes(
   app.get(`${base}/:doctype/:name`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { doctype, name } = request.params as { doctype: string; name: string };
     const ctx = new ResponseContext();
-    const doc = await documentService.getDoc(doctype, name, user(request), ctx, await localeOf(request));
+    const u = user(request);
+    const locale = await localeOf(request);
+    const doc = await documentService.getDoc(doctype, name, u, ctx, locale);
     // Another site's document reads as not found, so the read never reveals it. It runs after
     // getDoc's permission check, so an entity Guest may not read answers alike for any name. The
     // stored row decides, since the answer masks `site` where the Guest row does not open it.
@@ -184,7 +221,9 @@ export function registerPublicRoutes(
     if (scope && (await db.count(doctype, [{ _id: name }, scope], registry.get(doctype).database)) === 0) {
       throw new NotFoundError(doctype, name);
     }
-    return reply.send(successResponse(stripInternal(doc.toJSON()), ctx.getMessages()));
+    const row = doc.toJSON();
+    await localizeMenuPages(doctype, [row], u, locale);
+    return reply.send(successResponse(stripInternal(row), ctx.getMessages()));
   });
 
   // ─── CREATE (public, always as Guest) ──────────────────

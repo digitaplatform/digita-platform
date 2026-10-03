@@ -71,6 +71,7 @@ let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
 let db: MongoDBService;
 let adminToken: string;
+let menuReaderToken: string;
 
 const PUB = "/api/v1/public/resource/WebPage";
 const now = new Date();
@@ -94,6 +95,7 @@ beforeAll(async () => {
   adminToken = await ta.sign({
     sub: "admin@digita.local", email: "admin@digita.local", roles: ["Administrator", "System User"],
   });
+  menuReaderToken = await ta.sign({ sub: "menu-reader", email: "menu-reader", roles: ["MenuReader"] });
 
   // Seed directly (raw insert, like seed-app-data) into the web_content DB.
   await db.insertOne("WebSite", { doctype: "WebSite", docstatus: 0, owner: "system", _id: "t-site", site_name: "Test Site", status: "published", creation: now, modified: now }, "web_content");
@@ -114,6 +116,74 @@ describe("the suite's web app", () => {
 
   it("PLANTED INNOCENT: finds the fixture", () => {
     expect(() => requireApp(WEB_APP)).not.toThrow();
+  });
+});
+
+describe("public website-menu page Links", () => {
+  const menuURL = "/api/v1/public/resource/WebNavMenu";
+  const id = (locale: string, slug: string) => `nav-site::${locale}::${slug}`;
+  beforeAll(async () => {
+    await db.insertOne("WebSite", { _id: "nav-site", site_name: "Navigation", status: "published", creation: now, modified: now }, "web_content");
+    const pages = [
+      { locale: "en", slug: "about", translation_group: "about", status: "draft" },
+      { locale: "de", slug: "ueber-uns", translation_group: "about", status: "published" },
+      { locale: "en", slug: "draft-target", translation_group: "draft-target", status: "published" },
+      { locale: "de", slug: "draft-target", translation_group: "draft-target", status: "draft" },
+      { locale: "en", slug: "missing", translation_group: "missing", status: "published" },
+      { locale: "en", slug: "private", translation_group: "private", status: "draft" },
+      { locale: "de", slug: "private", translation_group: "private", status: "published", title: "Private page" },
+      { locale: "en", slug: "foreign", translation_group: "foreign", status: "draft" },
+      { locale: "de", slug: "standalone", status: "published" },
+    ];
+    for (const page of pages) {
+      await db.insertOne("WebPage", baseRow({ _id: id(page.locale, page.slug), title: page.slug, site: "nav-site", ...page }), "web_content");
+    }
+    await db.insertOne("WebPage", baseRow({ _id: "other::de::foreign", site: "other", locale: "de", slug: "foreign", title: "Foreign", translation_group: "foreign", status: "published" }), "web_content");
+    for (const slug of ["about", "draft-target", "missing", "private", "foreign", "standalone"]) {
+      await db.insertOne("WebNavMenu", {
+        _id: `nav-${slug}`, doctype: "WebNavMenu", docstatus: 0, creation: now, modified: now,
+        label: slug, parent: null, active: true, site: "nav-site", location: "header",
+        page: id(slug === "standalone" ? "de" : "en", slug),
+      }, "web_content");
+    }
+  });
+
+  it("resolves a draft base to its readable published sibling on list and single reads", async () => {
+    const headers = { "accept-language": "de" };
+    const query = new URLSearchParams({ fields: JSON.stringify(["_id", "label", "parent", "page"]) });
+    const list = await app.inject({ method: "GET", url: `${menuURL}?${query}`, headers });
+    expect(list.statusCode).toBe(200);
+    const about = list.json().data.find((row: { _id: string }) => row._id === "nav-about");
+    expect(about.page).toBe(id("de", "ueber-uns"));
+    expect(about.site).toBeUndefined(); // resolution uses stored site even when projected out
+    const one = await app.inject({ method: "GET", url: `${menuURL}/nav-about`, headers });
+    expect(one.statusCode).toBe(200);
+    expect(one.json().data.page).toBe(id("de", "ueber-uns"));
+    expect(one.json().data.translation_group).toBeUndefined();
+    const draft = await app.inject({ method: "GET", url: `${PUB}/${id("en", "about")}`, headers });
+    expect(draft.statusCode).toBe(403);
+  });
+
+  it.each(["draft-target", "missing", "private", "foreign"])("does not resolve an unavailable %s sibling", async (slug) => {
+    const one = await app.inject({ method: "GET", url: `${menuURL}/nav-${slug}`, headers: { "accept-language": "de" } });
+    expect(one.statusCode).toBe(200);
+    expect(one.json().data.page).toBe(id("en", slug));
+  });
+
+  it("preserves a published same-locale page with no translation group", async () => {
+    const one = await app.inject({ method: "GET", url: `${menuURL}/nav-standalone`, headers: { "accept-language": "de" } });
+    expect(one.statusCode).toBe(200);
+    expect(one.json().data.page).toBe(id("de", "standalone"));
+  });
+
+  it("does not reconstruct a masked page Link", async () => {
+    const headers = { authorization: `Bearer ${menuReaderToken}`, "accept-language": "de" };
+    const one = await app.inject({ method: "GET", url: `${menuURL}/nav-about`, headers });
+    expect(one.statusCode).toBe(200);
+    expect(one.json().data.page).toBeUndefined();
+    const list = await app.inject({ method: "GET", url: menuURL, headers });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().data.find((row: { _id: string }) => row._id === "nav-about").page).toBeUndefined();
   });
 });
 
