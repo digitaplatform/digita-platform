@@ -6,7 +6,7 @@ import { Menu, X } from "lucide-react";
 import { BrandMark, Drawer, NavList, navLeafClass, railButtonClass, topBarButtonClass, type BrandMarkProps } from "@digitaplatform/components";
 import { useSiteConfig } from "@/config/ConfigProvider";
 import type { NavItem } from "@/lib/types";
-import { isContactItem, menuEntries } from "@/lib/nav";
+import { filterNavItems, isContactItem, menuEntries } from "@/lib/nav";
 import { useActiveItem } from "./NavLinks";
 import { NavItemLink } from "./NavItemLink";
 import { isCurrentSite } from "./FamilySwitcher";
@@ -54,7 +54,8 @@ export function MobileNav({
   const isActive = useActiveItem(locale);
   // Without the contact sheet the family's item for it would lead nowhere, so it is left out, as the footer leaves it out.
   const { contactEnabled } = useSiteConfig();
-  const familyEntries = menuEntries(family).filter((entry) => !("item" in entry) || contactEnabled || !isContactItem(entry.item));
+  const available = (item: NavItem) => contactEnabled || !isContactItem(item);
+  const familyEntries = menuEntries(filterNavItems(family, available));
 
   // Close when the route changes (a link inside the drawer was followed).
   useEffect(() => {
@@ -77,7 +78,7 @@ export function MobileNav({
           </div>
           <nav aria-label={navLabel} className="min-h-0 flex-1 overflow-y-auto p-2">
             <NavList>
-              {menuEntries(items).map((entry, i) => {
+              {menuEntries(filterNavItems(items, available)).map((entry, i) => {
                 if ("heading" in entry) {
                   return (
                     <li key={`${entry.heading}-${i}`} className={HEADING}>

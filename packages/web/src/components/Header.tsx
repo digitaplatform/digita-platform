@@ -3,7 +3,7 @@ import { Mail, icons, type LucideIcon } from "lucide-react";
 import { BrandMark, TopBar, buttonAttributes, cn, type BrandMarkProps } from "@digitaplatform/components";
 import type { Locale } from "@/i18n/config";
 import type { NavItem, WebSite } from "@/lib/types";
-import { isContactItem, localePath, navHref } from "@/lib/nav";
+import { filterNavItems, isContactItem, localePath, menuEntries, navHref } from "@/lib/nav";
 import { t } from "@/i18n/messages";
 import { SheetButton } from "@/blocks/marketing/SheetButton";
 import { NavIconLink, NavLinks } from "./NavLinks";
@@ -73,8 +73,8 @@ export function Header({
   /** Where a signed-in visitor's account keeps the mode the button sets. */
   identity: DeliveredIdentitySources;
 }) {
-  const contact = nav.find(isContactItem);
-  const items = nav.filter((item) => item !== contact);
+  const contact = menuEntries(nav).flatMap((entry) => "item" in entry && isContactItem(entry.item) ? [entry.item] : [])[0];
+  const items = filterNavItems(nav, (item) => !isContactItem(item));
   // A link past the bar's room shows as text on a tablet, as one that names no icon does.
   const iconLinks = items
     .flatMap((item) => {

@@ -144,7 +144,7 @@ export async function listNav(locale: string, location: WebNavMenu["location"]):
       filters: [
         ["site", "=", siteId()],
         ["location", "=", location],
-        ["active", "=", 1],
+        ["active", "=", true],
       ],
       fields: ["_id", "label", "parent", "position", "icon", "page", "href"],
       locale,

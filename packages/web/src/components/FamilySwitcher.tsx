@@ -3,6 +3,8 @@
 import { ChevronDown } from "lucide-react";
 import { Menu, topBarButtonClass } from "@digitaplatform/components";
 import type { NavItem } from "@/lib/types";
+import { useSiteConfig } from "@/config/ConfigProvider";
+import { filterNavItems, isContactItem } from "@/lib/nav";
 import { NavMenuEntries } from "./NavMenuEntries";
 
 /** Whether a family item is the site the visitor is on: its link's host is the site's domain. */
@@ -43,7 +45,9 @@ export function FamilySwitcher({
   label: string;
   comingLabel: string;
 }) {
-  if (!items.length) return null;
+  const { contactEnabled } = useSiteConfig();
+  const available = filterNavItems(items, (item) => contactEnabled || !isContactItem(item));
+  if (!available.length) return null;
   return (
     <Menu
       label={label}
@@ -58,7 +62,7 @@ export function FamilySwitcher({
       }
     >
       {(close) => (
-        <NavMenuEntries locale={locale} items={items} comingLabel={comingLabel} close={close} isCurrent={(item) => isCurrentSite(item, domain)} />
+        <NavMenuEntries locale={locale} items={available} comingLabel={comingLabel} close={close} isCurrent={(item) => isCurrentSite(item, domain)} />
       )}
     </Menu>
   );

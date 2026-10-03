@@ -80,8 +80,10 @@ describe("a site's menu tree", () => {
     expect(html).toContain("Cloud <span");
   });
 
-  it("puts a heading of the header into a dropdown and the #contact node into the button, wherever it stands", () => {
-    const nav = buildNavTree(tree.map((n) => ({ ...n, location: "header" })), pages, "en");
+  it.each(["root", "nested"])("puts a heading into a dropdown and the %s #contact node into the header button", (placement) => {
+    const nav = buildNavTree(tree.map((n) => ({
+      ...n, location: "header", ...(n._id === "contact" && placement === "nested" ? { parent: "company" } : {}),
+    })), pages, "en");
     const html = renderToStaticMarkup(
       <ConfigProvider value={siteConfig}>
         <Header
@@ -102,5 +104,20 @@ describe("a site's menu tree", () => {
     );
     expect(html).toMatch(/aria-haspopup="menu"[^>]*>Company/);
     expect(html).toMatch(/aria-label="Write to us"/);
+  });
+
+  it("removes empty nested footer headings when the contact sheet is unavailable", () => {
+    const html = renderToStaticMarkup(
+      <ConfigProvider value={{ ...siteConfig, contactEnabled: false }}>
+        <Footer locale="en" site={null} brand={{ name: "example" }} contactEnabled={false} nav={[
+          { label: "Contact heading", children: [{ label: "Nested heading", children: [{ label: "Contact leaf", href: "#contact" }] }] },
+          { label: "Privacy", href: "/privacy" },
+        ]} />
+      </ConfigProvider>,
+    );
+    expect(html).not.toContain("Contact heading");
+    expect(html).not.toContain("Nested heading");
+    expect(html).not.toContain("Contact leaf");
+    expect(html).toContain('href="/privacy"');
   });
 });

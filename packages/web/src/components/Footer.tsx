@@ -1,7 +1,7 @@
 import { BrandMark, type BrandMarkProps } from "@digitaplatform/components";
 import type { Locale } from "@/i18n/config";
 import type { NavItem, WebSite } from "@/lib/types";
-import { isContactItem, menuEntries } from "@/lib/nav";
+import { filterNavItems, isContactItem, menuEntries } from "@/lib/nav";
 import { t } from "@/i18n/messages";
 import { NavItemLink } from "./NavItemLink";
 
@@ -29,7 +29,7 @@ export function Footer({
   contactEnabled: boolean;
 }) {
   // Without the sheet an item for it would lead nowhere, so it is left out.
-  const entries = menuEntries(nav).filter((entry) => !("item" in entry) || contactEnabled || !isContactItem(entry.item));
+  const entries = menuEntries(filterNavItems(nav, (item) => contactEnabled || !isContactItem(item)));
 
   return (
     <footer className="mt-auto border-t border-border">

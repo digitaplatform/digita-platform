@@ -99,6 +99,15 @@ export function menuEntries(items: NavItem[]): MenuEntry[] {
   return items.flatMap((item): MenuEntry[] => (item.children ? [{ heading: item.label }, ...menuEntries(item.children)] : [{ item }]));
 }
 
+/** Filter leaves before flattening, removing headings whose children all disappear. */
+export function filterNavItems(items: NavItem[], keep: (item: NavItem) => boolean): NavItem[] {
+  return items.flatMap((item): NavItem[] => {
+    if (!item.children) return keep(item) ? [item] : [];
+    const children = filterNavItems(item.children, keep);
+    return children.length ? [{ ...item, children }] : [];
+  });
+}
+
 /** The href of a menu item that stands for the contact sheet. No element of a page is its anchor,
  *  so as a plain link the item would lead nowhere. */
 const CONTACT_HREF = "#contact";

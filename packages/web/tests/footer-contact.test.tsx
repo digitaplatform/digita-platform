@@ -119,15 +119,15 @@ async function drawOpened(menu: React.ReactElement, contactEnabled: boolean, ope
 const familyMenus = [
   {
     name: "the family menu",
-    draw: (contactEnabled: boolean) =>
-      drawOpened(<FamilySwitcher locale="en" items={family} label="family" comingLabel="coming" />, contactEnabled, "family"),
+    draw: (contactEnabled: boolean, items = family) =>
+      drawOpened(<FamilySwitcher locale="en" items={items} label="family" comingLabel="coming" />, contactEnabled, "family"),
     items: () => [...document.querySelectorAll('[role="menu"] [role="menuitem"]')],
   },
   {
     name: "the family list of the phone menu",
-    draw: (contactEnabled: boolean) =>
+    draw: (contactEnabled: boolean, items = family) =>
       drawOpened(
-        <MobileNav locale="en" items={[]} apps={[]} family={family} brand={{ name: "example" }} label="menu" navLabel="nav" openLabel="open" closeLabel="close" comingLabel="coming" />,
+        <MobileNav locale="en" items={[]} apps={[]} family={items} brand={{ name: "example" }} label="menu" navLabel="nav" openLabel="open" closeLabel="close" comingLabel="coming" />,
         contactEnabled,
         "open",
       ),
@@ -151,8 +151,26 @@ describe.each(familyMenus)("a #contact item of $name", (menu) => {
     expect(menu.items().map((element) => element.textContent)).toEqual(["Other site"]);
   });
 
+  it("removes headings whose only nested leaf needs the unavailable contact sheet", async () => {
+    await menu.draw(false, [
+      { label: "Contact heading", children: [{ label: "Nested heading", children: [{ label: "Write to us", href: "#contact" }] }] },
+      { label: "Other site", href: "https://other.example.org" },
+    ]);
+    expect(document.body.textContent).not.toContain("Contact heading");
+    expect(document.body.textContent).not.toContain("Nested heading");
+    expect(menu.items().map((element) => element.textContent)).toEqual(["Other site"]);
+  });
+
   it("PLANTED INNOCENT: leaves the family's other sites links", async () => {
     await menu.draw(true);
     expect(document.querySelector('a[href="https://other.example.org"]')!.textContent).toBe("Other site");
   });
+});
+
+it.each(["/privacy", "https://other.example.org"])("closes a family dropdown when its normal link %s is selected", async (href) => {
+  await drawOpened(<FamilySwitcher locale="en" items={[{ label: "Ordinary link", href }]} label="family" comingLabel="coming" />, true, "family");
+  const link = document.querySelector<HTMLAnchorElement>('[role="menuitem"]')!;
+  link.addEventListener("click", (event) => event.preventDefault());
+  await act(async () => link.click());
+  expect(document.querySelector('[role="menu"]')).toBeNull();
 });
