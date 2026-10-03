@@ -23,7 +23,7 @@ describe("opensField", () => {
 });
 
 describe("opensOperatorFields", () => {
-  it("opens owner and modified_by unless every row carries `fields`", () => {
+  it("opens owner and modified_by through an admitting row without `fields`", () => {
     expect(opensOperatorFields([{ level: 0 }])).toBe(true);
     expect(opensOperatorFields([{ level: 0, fields: ["name"] }, { level: 1 }])).toBe(true);
     expect(opensOperatorFields([{ level: 0, fields: ["name"] }])).toBe(false);

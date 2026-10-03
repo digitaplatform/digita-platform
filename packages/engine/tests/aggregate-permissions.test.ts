@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { OPERATOR_FIELDS } from "@digitaplatform/shared";
 
 vi.mock("../src/core/config/env.js", () => ({
   env: {
@@ -68,6 +69,42 @@ function makeDeps(opts: {
 
 const user = { _id: "u1", email: "u@example.com", roles: ["Salesperson"] } as never;
 const rctx = { root: null, user, params: {}, now: new Date(), warnings: [] };
+
+describe("runAggregateSection — operator fields without an admitting read row", () => {
+  const clerk = { _id: "c1", email: "clerk@example.com", roles: ["Clerk"] } as never;
+  const registry = {
+    has: (name: string) => name === "Employee",
+    get: () => ({
+      name: "Employee", database: "app",
+      fields: [{ fieldname: "title", fieldtype: "Data" }],
+      permissions: [
+        { role: "Clerk", level: 0, select: 1 },
+        { role: "Clerk", level: 1, read: 1, if_owner: true },
+      ],
+    }),
+  } as never;
+  const deps = () => ({
+    registry,
+    permissionChecker: new PermissionChecker(registry),
+    db: { aggregate: vi.fn().mockResolvedValue([{ _id: "E1", owner: "other@test", modified_by: "other@test", count: 1 }]) },
+    tenantTimeZone: () => "UTC",
+  });
+  const section = (pipeline: Array<Record<string, unknown>>) => ({ key: "k", kind: "aggregate" as const, entity: "Employee", pipeline });
+
+  it.each(["owner", "modified_by"])("refuses a projection of the denied %s", async (field) => {
+    const services = deps();
+    await expect(runAggregateSection(section([{ $project: { [field]: 1 } }]), rctx, clerk, services as never))
+      .rejects.toBeInstanceOf(PermissionDeniedError);
+    expect(services.db.aggregate).not.toHaveBeenCalled();
+  });
+
+  it("removes denied operator fields before the pipeline and in the final output mask", async () => {
+    const services = deps();
+    expect(await runAggregateSection(section([]), rctx, clerk, services as never)).toEqual([{ _id: "E1", count: 1 }]);
+    const pipeline = services.db.aggregate.mock.calls[0]![1] as Array<Record<string, unknown>>;
+    expect(pipeline).toContainEqual({ $unset: expect.arrayContaining(["owner", "modified_by"]) });
+  });
+});
 
 describe("runAggregateSection — field-level perm_level enforcement", () => {
   it("rejects pipeline that references a protected field on the source entity", async () => {
@@ -412,7 +449,7 @@ describe("runAggregateSection — rows a read condition hides", () => {
 });
 
 describe("runAggregateSection — names an earlier stage produced", () => {
-  const everyField = new Set(["name", "dept", "dept_id", "salary"]);
+  const everyField = new Set(["name", "dept", "dept_id", "salary", ...OPERATOR_FIELDS]);
   const section = (pipeline: Array<Record<string, unknown>>) => ({ key: "k", kind: "aggregate" as const, entity: "Employee", pipeline });
 
   it("runs the grouped, projected and sorted pipeline for a reader of every field, not only an Administrator", async () => {

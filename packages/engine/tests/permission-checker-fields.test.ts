@@ -113,11 +113,12 @@ describe("PermissionChecker — fields on a permission row", () => {
     expect(checker.isPickerTitleVisible(clerk, "Item", "title")).toBe(false);
   });
 
-  it("keeps owner filterable where no row names fields, for a role that reads only its own rows above level 0", () => {
+  it("refuses operator filters where only a gated higher-level read opens operator fields", () => {
     const checker = checkerFor([{ role: "Clerk", level: 0, select: 1 }, { role: "Clerk", level: 1, read: 1, if_owner: true }]);
     expect(checker.getReadableFields(clerk, "Item", { _id: "I-1", owner: "other@test" })!.has("owner")).toBe(false);
     expect(checker.getReadableFields(clerk, "Item", { _id: "I-2", owner: "c@test" })!.has("owner")).toBe(true);
-    expect(checker.getFilterAllowlist(clerk, "Item").has("owner")).toBe(true);
+    const allowed = checker.getFilterAllowlist(clerk, "Item");
+    expect([allowed.has("owner"), allowed.has("modified_by")]).toEqual([false, false]);
   });
 
   it("filters every level-0 field and owner through two gated level-0 rows without fields", () => {
