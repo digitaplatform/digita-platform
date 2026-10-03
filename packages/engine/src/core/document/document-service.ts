@@ -1,5 +1,5 @@
 import type { EntityDefinition, ActionDefinition, TransitionDefinition, SubmittedPatch } from "@digitaplatform/shared";
-import { EngineError } from "../errors/engine-error.js";
+import { ConfigurationError, EngineError } from "../errors/engine-error.js";
 import { LAYOUT_FIELD_TYPES, DIGITA, DocStatus, ROW_ID_FIELD } from "@digitaplatform/shared";
 import { calculateChanges, deepEqual, type FieldChange } from "./change-tracker.js";
 import type { DocumentServiceDeps } from "./service-deps.js";
@@ -814,7 +814,8 @@ export class DocumentService {
     const merged: Record<string, unknown> = {};
     for (const f of filters ?? []) {
       assertObjectFilterAllowed(f ?? {}, allowed);
-      Object.assign(merged, f);
+      const equalities = Object.entries(f ?? {}).map(([field, value]): [string, string, unknown] => [field, "=", value]);
+      for (const [field, , value] of coerceDateFilterValues(entity, equalities, this.tenantTimeZone()) ?? []) merged[field] = value;
     }
     // Scope and role visibility narrow as in getList, or a count reveals a row the
     // list hides.
@@ -2253,7 +2254,7 @@ export class DocumentService {
     sessionOverride?: import("mongodb").ClientSession,
   ): Promise<PurgeResult> {
     const date = cutoff.deletedBefore ?? cutoff.createdBefore;
-    if (!(date instanceof Date) || !Number.isFinite(date.getTime())) throw new RangeError("Purge requires a valid cutoff");
+    if (!(date instanceof Date) || !Number.isFinite(date.getTime())) throw new EngineError("field_invalid_date", { field: cutoff.createdBefore ? "creation" : "deleted" }, 400, "BAD_REQUEST");
     const entity = this.registry.get(doctype);
     const id = toIdString(toIdStorage(name));
     return this.writeOutsideReset(doctype, "purgeDoc", async () => {
@@ -2284,7 +2285,7 @@ export class DocumentService {
         if (!stored) return empty;
         const fileIds = doctype === DIGITA.COLLECTIONS.FILE ? [] : await this.purgeFileIds(entity, id, stored, session);
         if (sessionOverride && (doctype === DIGITA.COLLECTIONS.FILE || fileIds.length > 0)) {
-          throw new Error("File purge requires its own transaction so retry pointers are committed before byte deletion");
+          throw new EngineError("purge_requires_own_transaction", {}, 400, "PURGE_TRANSACTION_REQUIRED");
         }
         if (doctype === DIGITA.COLLECTIONS.FILE) {
           if ((await fileAttachmentBlockers(this.db, id, this.registry.getAll(), session)).length > 0) return empty;
@@ -2370,7 +2371,7 @@ export class DocumentService {
 
   private async assertFileBytesPresent(file: Record<string, unknown>): Promise<void> {
     const keys = [resolveStorageKey(file), file["thumbnail_key"]].filter((key): key is string => typeof key === "string" && key.length > 0);
-    if (keys.length && !this.storage) throw new Error("Physical file operation requires storage");
+    if (keys.length && !this.storage) throw new ConfigurationError("storage_required");
     for (const key of keys) if (!(await this.storage!.exists(key))) throw new FileNotFoundInStorageError(key);
   }
 
@@ -2379,7 +2380,7 @@ export class DocumentService {
     const thumbnail = typeof file["thumbnail_key"] === "string" ? file["thumbnail_key"] : null;
     const variants = main && hasImageVariants(String(file["file_type"] ?? "")) ? allVariantKeys(main) : [];
     const keys = [...new Set([main, thumbnail, ...variants].filter((key): key is string => !!key))].sort();
-    if (keys.length && !this.storage) throw new Error("Physical file purge requires storage");
+    if (keys.length && !this.storage) throw new ConfigurationError("storage_required");
     for (const key of keys) await this.db.touchGuard(`blob:${key}`, session);
     const referenced = (key: string) => this.db.count(DIGITA.COLLECTIONS.FILE, [
       { _id: { $ne: file["_id"] } },
@@ -2437,7 +2438,7 @@ export class DocumentService {
     // Physical purge commits retry pointers per record before byte I/O; its own service owns transactions.
     if (doctype === DIGITA.COLLECTIONS.SETTING && actionName === "purge_deleted") {
       await this.permissionChecker.check(user, doctype, "write", doc._data);
-      if (sessionOverride) throw new Error("The physical purge action requires its own transactions");
+      if (sessionOverride) throw new EngineError("purge_requires_own_transaction", {}, 400, "PURGE_TRANSACTION_REQUIRED");
       if (!this.actionRunner.isShown(action, doc, user)) throw new ActionNotAvailableError(action);
       return this.hookRunner.runAction(doctype, actionName, doc, ctx, undefined, user, params, extraServices);
     }

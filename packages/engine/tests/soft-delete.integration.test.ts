@@ -23,7 +23,7 @@ vi.mock("../src/core/config/env.js", () => {
     UPLOAD_S3_BUCKET: "", UPLOAD_S3_REGION: "", UPLOAD_S3_ENDPOINT: "", UPLOAD_S3_KEY: "", UPLOAD_S3_SECRET: "",
     UPLOAD_ALLOWED_TYPES: ["image/*", "application/pdf"],
     REALTIME_ENABLED: false, WS_PATH: "/ws", WS_PING_INTERVAL_MS: 25000,
-    IMPORT_MAX_ROWS: 100, EXPORT_MAX_ROWS: 100,
+    IMPORT_MAX_ROWS: 100, EXPORT_MAX_ROWS: 100, LIST_GATED_MAX_ROWS: 5000,
     APP_DIRS: [], ENTITIES_DIR: "./src/entities", MODULES_DIR: "./src/modules", TRANSLATIONS_DIR: process.env.TRANSLATIONS_DIR,
     AUTO_MIGRATE: true,
     SEED_APP_DATA_ON_BOOT: false, SEED_DEMO_DATA_ON_BOOT: false,
@@ -320,14 +320,26 @@ describe("a deleted record", () => {
       expect((await createBook({ _id: name, title: name, code })).statusCode).toBe(201);
       expect((await deleteBook(name!)).statusCode).toBe(200);
     }
-    const ids = { _id: { $in: ["B-COUNT-YES", "B-COUNT-NO"] } };
+    const deletedAt = new Date("2026-01-10T12:00:00.000Z");
+    for (const name of ["B-COUNT-YES", "B-COUNT-NO"]) {
+      await db.updateOne("SdBook", name, { deleted: deletedAt }, "app");
+    }
     const count = (token: string, filters: Record<string, unknown>[]) => app.inject({
       method: "GET", url: `/api/v1/resource/SdBook/count?filters=${encodeURIComponent(JSON.stringify(filters))}`, headers: as(token),
     });
-    expect((await count(adminTok, [ids])).json().data.count).toBe(0);
-    expect((await count(adminTok, [ids, { deleted: { $ne: null } }])).json().data.count).toBe(2);
-    expect((await count(shelverTok, [ids, { deleted: { $ne: null } }])).json().data.count).toBe(1);
-    expect((await count(readerTok, [ids, { deleted: { $ne: null } }])).statusCode).toBe(403);
+    const active = await count(adminTok, [{ _id: "B-COUNT-YES" }]);
+    expect(active.statusCode).toBe(200);
+    expect(active.json().data.count).toBe(0);
+    const filters = [{ deleted: deletedAt.toISOString() }];
+    const deleted = await count(adminTok, filters);
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json().data.count).toBe(2);
+    const scoped = await count(shelverTok, filters);
+    expect(scoped.statusCode).toBe(200);
+    expect(scoped.json().data.count).toBe(1);
+    expect((await count(readerTok, filters)).statusCode).toBe(403);
+    expect((await count(adminTok, [{ deleted: { $ne: null } }])).statusCode).toBe(400);
+    expect((await count(adminTok, [{ _id: { $in: ["B-COUNT-YES"] } }])).statusCode).toBe(400);
   });
 
   it("keeps deleted share-only rows in the shared query path and still checks each delete grant", async () => {
