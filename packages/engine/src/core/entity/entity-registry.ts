@@ -95,6 +95,32 @@ function entityShapeProblem(value: unknown): string | undefined {
   const definition = value as Record<string, unknown>;
   if (typeof definition["name"] !== "string" || definition["name"] === "") return "the entity has no name";
   if (!Array.isArray(definition["fields"])) return `entity "${definition["name"]}" has no fields list`;
+  const fieldsProblem = fieldListShapeProblem(definition["fields"], "fields");
+  if (fieldsProblem) return fieldsProblem;
+  for (const name of ["permissions", "actions", "transitions"] as const) {
+    const rows = definition[name];
+    if (rows === undefined) continue;
+    if (!Array.isArray(rows)) return `${name} must be a list`;
+    for (const [index, row] of rows.entries()) {
+      if (row === null || typeof row !== "object" || Array.isArray(row)) return `${name}[${index}] must be an object`;
+      if (name === "actions" && row.dialog_fields !== undefined) {
+        const problem = fieldListShapeProblem(row.dialog_fields, `actions[${index}].dialog_fields`);
+        if (problem) return problem;
+      }
+    }
+  }
+  return undefined;
+}
+
+function fieldListShapeProblem(value: unknown, path: string): string | undefined {
+  if (!Array.isArray(value)) return `${path} must be a list`;
+  for (const [index, field] of value.entries()) {
+    if (field === null || typeof field !== "object" || Array.isArray(field)) return `${path}[${index}] must be an object`;
+    if (field.child_fields !== undefined) {
+      const problem = fieldListShapeProblem(field.child_fields, `${path}[${index}].child_fields`);
+      if (problem) return problem;
+    }
+  }
   return undefined;
 }
 
