@@ -235,8 +235,11 @@ export class TranslationService {
     const _id = `${params.namespace}:${params.locale}:${params.key}`;
 
     const existing = await this.db.findOne(DIGITA.COLLECTIONS.TRANSLATION, _id, DIGITA.DATABASES.CORE,
-      undefined, params.source === "file" ? { includeDeleted: true } : undefined);
-    if (params.source === "file" && existing?.["deleted"] != null) return;
+      undefined, { includeDeleted: true });
+    if (existing?.["deleted"] != null) {
+      if (params.source === "file") return;
+      throw new EngineError("not_found", { doctype: DIGITA.COLLECTIONS.TRANSLATION, name: _id }, 404, "NOT_FOUND");
+    }
 
     if (existing) {
       const existingData = existing as Record<string, unknown>;

@@ -382,7 +382,6 @@ export class MongoDBService {
     return results.map((r) => this.normalizeReadId(r as Document)) as Document[];
   }
 
-  /** Physical registry key for the time-series set. */
   async insertOne(
     collectionName: string,
     data: Record<string, unknown>,

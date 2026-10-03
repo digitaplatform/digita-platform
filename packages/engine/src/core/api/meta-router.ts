@@ -12,6 +12,7 @@ import { callerIsInternal } from "../auth/audience.js";
 import { successResponse, errorResponse } from "./response-model.js";
 import { ResponseContext } from "./response-context.js";
 import { createLogger } from "../logging/logger.js";
+import { ConfigurationError } from "../errors/engine-error.js";
 
 const log = createLogger("meta-router");
 
@@ -192,7 +193,12 @@ export function registerMetaRoutes(
     const refusal = refusalOf(() => registry.prepareDefinition(definition));
     if (refusal) return reply.code(400).send(definitionRefused(data.name, refusal, request.traceId ?? ""));
 
-    if (!definition.is_virtual) await db.assertOrdinaryCollection(definition.name, definition.database);
+    try {
+      if (!definition.is_virtual) await db.assertOrdinaryCollection(definition.name, definition.database);
+    } catch (err) {
+      if (!(err instanceof ConfigurationError)) throw err;
+      return reply.code(400).send(definitionRefused(data.name, err.message, request.traceId ?? ""));
+    }
 
     // Insert into MongoDB
     await db.insertOne(
@@ -253,7 +259,12 @@ export function registerMetaRoutes(
     const refusal = refusalOf(() => registry.prepareDefinition(merged));
     if (refusal) return reply.code(400).send(definitionRefused(doctype, refusal, request.traceId ?? ""));
 
-    if (!merged.is_virtual) await db.assertOrdinaryCollection(merged.name, merged.database);
+    try {
+      if (!merged.is_virtual) await db.assertOrdinaryCollection(merged.name, merged.database);
+    } catch (err) {
+      if (!(err instanceof ConfigurationError)) throw err;
+      return reply.code(400).send(definitionRefused(doctype, err.message, request.traceId ?? ""));
+    }
 
     // An entity whose definition only its file holds, after a DELETE of the stored one, gets its
     // row back here, so the change outlives a restart.

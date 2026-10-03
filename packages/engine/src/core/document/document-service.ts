@@ -1546,7 +1546,7 @@ export class DocumentService {
       const treePlacement = await placeTreeNode(this.db, entity, name, doc._data, doc._original, session);
 
       // Save to DB
-      await this.db.updateOne(
+      const matched = await this.db.updateOne(
         entity.name,
         name,
         {
@@ -1556,7 +1556,9 @@ export class DocumentService {
         },
         entity.database,
         session,
+        { deleted: null },
       );
+      if (!matched) throw new NotFoundError(doctype, name);
       if (treePlacement) Object.assign(doc._data, await writeTreePlacement(this.db, entity, name, treePlacement, session));
       await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
 
@@ -2032,13 +2034,15 @@ export class DocumentService {
       // getChanges() appends them.
       doc.modified = new Date();
       doc.modified_by = user.email;
-      await this.db.updateOne(
+      const matched = await this.db.updateOne(
         entity.name,
         name,
         { ...doc.getChanges(), modified: doc.modified, modified_by: doc.modified_by },
         entity.database,
         session,
+        { deleted: null },
       );
+      if (!matched) throw new NotFoundError(doctype, name);
       if (treePlacement) Object.assign(doc._data, await writeTreePlacement(this.db, entity, name, treePlacement, session));
       await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
 
@@ -2404,6 +2408,7 @@ export class DocumentService {
 
     // Physical purge commits retry pointers per record before byte I/O; its own service owns transactions.
     if (doctype === DIGITA.COLLECTIONS.SETTING && actionName === "purge_deleted") {
+      await this.permissionChecker.check(user, doctype, "write", doc._data);
       if (sessionOverride) throw new Error("The physical purge action requires its own transactions");
       if (!this.actionRunner.isShown(action, doc, user)) throw new ActionNotAvailableError(action);
       return this.hookRunner.runAction(doctype, actionName, doc, ctx, undefined, user, params, extraServices);
@@ -2681,7 +2686,7 @@ export class DocumentService {
       doc.modified = new Date();
       doc.modified_by = user.email;
 
-      await this.db.updateOne(
+      const matched = await this.db.updateOne(
         entity.name,
         name,
         {
@@ -2692,7 +2697,9 @@ export class DocumentService {
         },
         entity.database,
         session,
+        { deleted: null },
       );
+      if (!matched) throw new NotFoundError(doctype, name);
 
       if (treePlacement) Object.assign(doc._data, await writeTreePlacement(this.db, entity, name, treePlacement, session));
 
@@ -2842,7 +2849,7 @@ export class DocumentService {
       doc.modified = new Date();
       doc.modified_by = user.email;
 
-      await this.db.updateOne(
+      const matched = await this.db.updateOne(
         entity.name,
         name,
         {
@@ -2853,7 +2860,9 @@ export class DocumentService {
         },
         entity.database,
         session,
+        { deleted: null },
       );
+      if (!matched) throw new NotFoundError(doctype, name);
 
       if (treePlacement) Object.assign(doc._data, await writeTreePlacement(this.db, entity, name, treePlacement, session));
 
