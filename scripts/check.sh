@@ -25,43 +25,45 @@ done
 tmp="$(mktemp -d)" || fail "no temporary directory"
 trap 'rm -rf "$tmp"' EXIT
 
-echo "check: 1/9 pnpm build (shared, theme, components, plugins, engine, app with its vendor bundles, web)"
+echo "check: 1/10 pnpm build (shared, theme, components, plugins, engine, app with its vendor bundles, web)"
 pnpm build || fail "pnpm build"
 
-echo "check: 2/9 pnpm --filter @digitaplatform/app lint"
+echo "check: 2/10 pnpm --filter @digitaplatform/app lint"
 pnpm --filter @digitaplatform/app lint || fail "pnpm --filter @digitaplatform/app lint"
 
-echo "check: 3/9 typecheck of app, web and engine (each package's own typecheck script)"
+echo "check: 3/10 typecheck of app, web and engine (each package's own typecheck script)"
 pnpm --filter @digitaplatform/app --filter @digitaplatform/web --filter @digitaplatform/engine typecheck \
   || fail "typecheck of app, web and engine"
 
-echo "check: 4/9 pnpm --filter @digitaplatform/engine depcruise (dependency rules)"
+echo "check: 4/10 pnpm --filter @digitaplatform/engine depcruise (dependency rules)"
 pnpm --filter @digitaplatform/engine depcruise || fail "pnpm --filter @digitaplatform/engine depcruise"
 
-echo "check: 5/9 download digita-translations master"
+echo "check: 5/10 download digita-translations master"
 curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/master \
   | tar -xz -C "$tmp" --strip-components=1 \
   || fail "download digita-translations master"
 translations="$tmp/translations"
 
-echo "check: 6/9 tests of shared, theme, components and the plugin SDK"
+echo "check: 6/10 tests of shared, theme, components and the plugin SDK"
 pnpm --filter @digitaplatform/shared --filter @digitaplatform/theme --filter @digitaplatform/components \
   --filter @digitaplatform/plugins test \
   || fail "tests of shared, theme, components and the plugin SDK"
 
-echo "check: 7/9 pnpm --filter @digitaplatform/app test (texts: translations/digita-app)"
+echo "check: 7/10 pnpm --filter @digitaplatform/app test (texts: translations/digita-app)"
 TRANSLATIONS_DIR="$translations/digita-app" pnpm --filter @digitaplatform/app test \
   || fail "pnpm --filter @digitaplatform/app test"
 
-echo "check: 8/9 pnpm --filter @digitaplatform/web test (texts: translations/digita-web)"
+echo "check: 8/10 pnpm --filter @digitaplatform/web test (texts: translations/digita-web)"
 TRANSLATIONS_DIR="$translations/digita-web" pnpm --filter @digitaplatform/web test \
   || fail "pnpm --filter @digitaplatform/web test"
 
 # VITEST_MAX_WORKERS=2 is the fork count CI runs the suite with; vitest.config.ts documents the
 # isolation this mirrors.
-echo "check: 9/9 pnpm --filter @digitaplatform/engine test (texts: translations/digita-engine, 2 workers)"
+echo "check: 9/10 pnpm --filter @digitaplatform/engine test (texts: translations/digita-engine, 2 workers)"
 TRANSLATIONS_DIR="$translations/digita-engine" VITEST_MAX_WORKERS=2 pnpm --filter @digitaplatform/engine test \
   || fail "pnpm --filter @digitaplatform/engine test"
 
+echo "check: 10/10 node --test deploy/after-release.test.mjs (the translations promote after a release)"
+node --test deploy/after-release.test.mjs || fail "node --test deploy/after-release.test.mjs"
 echo "check: not covered here: the web image (docker/web.Dockerfile); CI's web-image job builds it."
 echo "check: OK — every check green"
