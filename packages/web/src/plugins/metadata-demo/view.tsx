@@ -78,6 +78,8 @@ export function MetadataDemoView(p: MetadataDemoViewProps) {
       </code>
     </pre>
   );
+  // The first state of the name is the current one, so two states of one name never both say so.
+  const current = p.states.indexOf(p.state);
   const grid = { gridTemplateColumns: `3fr ${p.columns.slice(1).map(() => "1fr").join(" ")}`.trim() };
 
   return (
@@ -152,9 +154,9 @@ export function MetadataDemoView(p: MetadataDemoViewProps) {
                     {p.states.map((name, i) => (
                       <span key={i} className="flex items-center gap-1.5">
                         <span
-                          aria-current={name === p.state ? "step" : undefined}
+                          aria-current={i === current ? "step" : undefined}
                           className={
-                            name === p.state
+                            i === current
                               ? "rounded-full bg-primary-600 px-2.5 py-1 font-medium text-onPrimary"
                               : "rounded-full border border-border px-2.5 py-1 text-textMuted"
                           }

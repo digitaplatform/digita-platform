@@ -60,4 +60,32 @@ describe("the metadata demo", () => {
     const html = renderToStaticMarkup(<MetadataDemo props={props("en")} locale="en" />);
     expect(html).not.toMatch(/sales ?order|Veloluck GmbH|Aurora Lamp/i);
   });
+
+  it("PLANTED DEFECT: markup in a prop is drawn as text, and props of the wrong shape draw nothing of theirs", () => {
+    const html = renderToStaticMarkup(
+      <MetadataDemo
+        props={{
+          definition: ['<img src=x onerror="alert(1)">', 42, null],
+          api: "not a list",
+          fields: [{ label: "<script>x</script>", value: 7 }, "not a field"],
+          columns: ["Part"],
+          rows: "not a list",
+          states: { in_repair: true },
+        }}
+        locale="en"
+      />,
+    );
+    expect(html).not.toMatch(/<img|<script/);
+    expect(html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+    expect(html).toContain("&lt;script&gt;x&lt;/script&gt;");
+    expect(html).not.toContain(">api<");
+    expect(html).not.toContain("aria-current");
+  });
+
+  it("marks only the first of two states of one name as the current one", () => {
+    const html = renderToStaticMarkup(
+      <MetadataDemo props={{ ...props("en"), states: ["Received", "In repair", "Checked", "In repair"], state: "In repair" }} locale="en" />,
+    );
+    expect(html.match(/aria-current="step"/g)).toHaveLength(1);
+  });
 });
