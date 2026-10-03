@@ -2260,11 +2260,10 @@ export class DocumentService {
           await this.db.touchGuard(`purge:${doctype}:${id}`, session);
           const stored = await this.loadPurgeRecord(entity, id, user, cutoff, session);
           if (!stored) return;
-          for (const fileId of this.attachmentIds(entity, stored)) {
+          for (const fileId of await this.purgeFileIds(entity, id, stored, session)) {
             await this.db.touchGuard(`attachment:${fileId}`, session);
             const file = await this.db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, session, { includeDeleted: true });
             if (!file || file["deleted"] != null || !this.ownsPurgeFile(entity, id, stored, file)) continue;
-            if ((await fileAttachmentBlockers(this.db, fileId, this.registry.getAll(), session, { entity: doctype, name: id })).length > 0) continue;
             const now = new Date();
             await this.db.updateOne(DIGITA.COLLECTIONS.FILE, fileId, {
               deleted: now, deleted_by: user.email, modified: now, modified_by: user.email,
@@ -2278,18 +2277,25 @@ export class DocumentService {
         if (doctype === DIGITA.COLLECTIONS.FILE) await this.db.touchGuard(`attachment:${id}`, session);
         const stored = await this.loadPurgeRecord(entity, id, user, cutoff, session);
         if (!stored) return empty;
-        if (sessionOverride && (doctype === DIGITA.COLLECTIONS.FILE || this.attachmentIds(entity, stored).length > 0)) {
+        const fileIds = doctype === DIGITA.COLLECTIONS.FILE ? [] : await this.purgeFileIds(entity, id, stored, session);
+        if (sessionOverride && (doctype === DIGITA.COLLECTIONS.FILE || fileIds.length > 0)) {
           throw new Error("File purge requires its own transaction so retry pointers are committed before byte deletion");
         }
         if (doctype === DIGITA.COLLECTIONS.FILE) {
           if ((await fileAttachmentBlockers(this.db, id, this.registry.getAll(), session)).length > 0) return empty;
           await this.deletePurgedFileBytes(stored, session);
         } else {
-          for (const fileId of this.attachmentIds(entity, stored)) {
+          for (const fileId of fileIds) {
             await this.db.touchGuard(`attachment:${fileId}`, session);
             const file = await this.db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, session, { includeDeleted: true });
             if (!file || file["deleted"] == null || !this.ownsPurgeFile(entity, id, stored, file)) continue;
-            if ((await fileAttachmentBlockers(this.db, fileId, this.registry.getAll(), session, { entity: doctype, name: id })).length > 0) continue;
+            if ((await fileAttachmentBlockers(this.db, fileId, this.registry.getAll(), session, { entity: doctype, name: id })).length > 0) {
+              // Retain its bytes for the other references, without granting a future reused parent ID.
+              await this.db.updateOne(DIGITA.COLLECTIONS.FILE, fileId, {
+                attached_to_entity: null, attached_to_name: null, attached_to_field: null,
+              }, DIGITA.DATABASES.CORE, session, { deleted: file["deleted"] });
+              continue;
+            }
             await this.deletePurgedFileBytes(file, session);
             if (!(await this.db.deleteMany(DIGITA.COLLECTIONS.FILE, { _id: toIdStorage(fileId), deleted: file["deleted"] }, DIGITA.DATABASES.CORE, session))) continue;
             const removed = await this.removePurgeDependents(DIGITA.COLLECTIONS.FILE, fileId, session);
@@ -2327,10 +2333,18 @@ export class DocumentService {
     return [...new Set(collectAttachFileIds(entity.fields, stored).map((id) => toIdString(toIdStorage(id))))].sort();
   }
 
+  private async purgeFileIds(entity: EntityDefinition, id: string, stored: Record<string, unknown>, session: import("mongodb").ClientSession): Promise<string[]> {
+    // A replaced attachment can remain bound even when the parent's current fields omit it.
+    const bound = await this.db.findManyByFilter(DIGITA.COLLECTIONS.FILE, {
+      attached_to_entity: entity.name, attached_to_name: id,
+    }, DIGITA.DATABASES.CORE, session, { includeDeleted: true });
+    return [...new Set([...this.attachmentIds(entity, stored), ...bound.map((file) => toIdString(file["_id"]))])].sort();
+  }
+
   private ownsPurgeFile(entity: EntityDefinition, id: string, parent: Record<string, unknown>, file: Record<string, unknown>): boolean {
     return file["attached_to_name"]
       ? file["attached_to_entity"] === entity.name && toIdString(toIdStorage(String(file["attached_to_name"]))) === id
-      : typeof parent["deleted_by"] === "string" && file["owner"] === parent["deleted_by"];
+      : file["deleted"] != null || (typeof parent["deleted_by"] === "string" && file["owner"] === parent["deleted_by"]);
   }
 
   private async removePurgeDependents(doctype: string, id: string, session: import("mongodb").ClientSession): Promise<PurgeResult> {

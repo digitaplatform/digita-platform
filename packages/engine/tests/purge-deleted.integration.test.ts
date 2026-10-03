@@ -56,6 +56,7 @@ import type { DocumentService } from "../src/core/document/document-service.js";
 import type { StoragePort } from "../src/core/storage/storage-port.js";
 import { allVariantKeys } from "../src/core/storage/image-variants.js";
 import { IndexManager } from "../src/core/database/index-manager.js";
+import { mayReadFile, type FileAccessDeps } from "../src/core/storage/file-access.js";
 
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
@@ -86,6 +87,7 @@ const PURGE_BOOK: EntityDefinition = {
   ],
   permissions: [
     { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
+    { role: "Bound Reader", level: 0, read: 1, if_owner: 1 },
   ],
 } as unknown as EntityDefinition;
 
@@ -346,6 +348,44 @@ describe("physical purge — storage failure, missing bytes, and retry (Priority
 });
 
 describe("physical purge — referenced File preservation across live and retained parents (Priority 2)", () => {
+  it.each([true, false])("invalidates a shared File's old parent binding and later removes its bytes (current field: %s)", async (currentField) => {
+    const suffix = currentField ? "CURRENT" : "REPLACED";
+    const fileId = `FILE-BOUND-${suffix}`;
+    const first = `B-BOUND-A-${suffix}`;
+    const last = `B-BOUND-B-${suffix}`;
+    const key = `books/bound-${suffix}.png`;
+    const fileUrl = `/api/v1/file/${fileId}/download`;
+    await storage.put(key, Buffer.from("shared original owner's bytes"), "image/png");
+    await db.insertOne(DIGITA.COLLECTIONS.FILE, {
+      _id: fileId, file_name: "shared.png", file_type: "image/png", storage_key: key,
+      file_url: fileUrl, is_private: true, attached_to_entity: "PurgeBook", attached_to_name: first,
+      owner: "original@d", creation: monthsAgo(16), modified: monthsAgo(16),
+    }, DIGITA.DATABASES.CORE);
+    for (const [id, owner] of [[first, "original@d"], [last, "other@d"]]) {
+      await db.insertOne("PurgeBook", {
+        _id: id, title: id, owner, deleted_by: owner, deleted: monthsAgo(14),
+        creation: monthsAgo(16), modified: monthsAgo(14),
+        ...(id === last || currentField ? { attachment: fileUrl } : {}),
+      }, "app");
+    }
+    const cutoff = { deletedBefore: monthsAgo(12) };
+    expect(await documentService.purgeDoc("PurgeBook", first, adminUser, cutoff)).toMatchObject({ purged: true, files_deleted: 0 });
+    const retained = await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(retained).toMatchObject({ attached_to_entity: null, attached_to_name: null, storage_key: key });
+    expect(retained?.["deleted"]).toBeInstanceOf(Date);
+    expect(await storage.exists(key)).toBe(true);
+    await db.insertOne("PurgeBook", { _id: first, title: "Reused identity", owner: "new@d" }, "app");
+    const deps = (documentService as unknown as { fileAccess(): FileAccessDeps }).fileAccess();
+    const newOwner = { _id: "new@d", email: "new@d", roles: ["System User", "Bound Reader"] };
+    // Check the underlying parent grant too: clearing only File visibility would leave the stale binding.
+    expect(await deps.permissionChecker.hasPermission(newOwner, "PurgeBook", "read", { _id: first, owner: "new@d" })).toMatchObject({ allowed: true });
+    expect(await mayReadFile(deps, newOwner, retained!)).toBe(false);
+    expect(await documentService.purgeDoc("PurgeBook", last, adminUser, cutoff)).toMatchObject({ purged: true, files_deleted: 1 });
+    expect(await storage.exists(key)).toBe(false);
+    expect(await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true })).toBeNull();
+    expect(await db.findOne("PurgeBook", first, "app")).toMatchObject({ owner: "new@d" });
+  });
+
   it("PLANTED DEFECT: retained parent reference prevents File byte and metadata purge", async () => {
     const fileId = "FILE-RETAINED-PARENT-REF";
     const key = "books/retained-parent-ref.png";
