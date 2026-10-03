@@ -63,10 +63,14 @@ function expressionProblem(entity: EntityDefinition): string | null {
   };
   visit(entity.fields, "");
   for (const t of entity.transitions ?? []) places.push([`transition ${t.from} to ${t.to} condition`, t.condition]);
-  for (const a of entity.actions ?? []) places.push([`action ${a.action} show_if`, a.show_if]);
+  for (const a of entity.actions ?? []) {
+    places.push([`action ${a.action} show_if`, a.show_if]);
+    visit(a.dialog_fields, `action ${a.action} `);
+  }
   (entity.permissions ?? []).forEach((p, i) => places.push([`permissions[${i}].condition`, p.condition]));
   for (const [place, expression] of places) {
-    if (typeof expression !== "string" || !expression) continue;
+    if (expression === undefined || expression === "") continue;
+    if (typeof expression !== "string") return `entity "${entity.name}": ${place} must be a string`;
     try {
       assertFieldExpressionParsable(expression);
     } catch (err) {
@@ -910,11 +914,10 @@ export class EntityRegistry {
 
     for (const doc of docs) {
       const entity = doc as unknown as EntityDefinition;
-      // A definition stored before /meta checked the name would take an app page at every start;
-      // it is left out, and the start goes on.
-      const reserved = reservedNameProblem(entity.name);
-      if (reserved) {
-        log.error({ entity: entity.name }, `stored entity definition skipped: ${reserved}`);
+      // Older stored definitions must not bypass the checks introduced since they were saved.
+      const problem = reservedNameProblem(entity.name) ?? expressionProblem(entity);
+      if (problem) {
+        log.error({ entity: entity.name }, `stored entity definition skipped: ${problem}`);
         continue;
       }
       this.applyDefaults(entity);
