@@ -17,7 +17,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
   getRootLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { SYSTEM_ROLES } from "@digitaplatform/shared";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
@@ -41,7 +41,7 @@ import type { BaseDocument } from "../src/core/document/base-document.js";
 import type { UserContext } from "../src/core/permissions/types.js";
 import { env } from "../src/core/config/env.js";
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let db: MongoDBService;
 let registry: EntityRegistry;
 let docService: DocumentService;
@@ -119,7 +119,7 @@ function makeEntity(): EntityDefinition {
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
   db = new MongoDBService();
   await db.connect();

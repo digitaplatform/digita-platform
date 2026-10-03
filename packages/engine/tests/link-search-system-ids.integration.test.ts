@@ -8,7 +8,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
   getRootLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import { ObjectId } from "mongodb";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { env } from "../src/core/config/env.js";
@@ -57,12 +57,12 @@ const bidIds = ["BID-1", "BID-2", "ASK-3"] as const;
 const titles = ["Zeta", "Alpha", "Beta"] as const;
 const storedOrder = [1, 2, 0] as const;
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let db: MongoDBService;
 let svc: LinkSearchService;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as any).MONGODB_URI = replSet.getUri();
   db = new MongoDBService();
   await db.connect();

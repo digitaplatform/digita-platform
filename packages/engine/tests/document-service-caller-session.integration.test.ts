@@ -8,7 +8,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
   getRootLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { PermissionChecker } from "../src/core/permissions/permission-checker.js";
@@ -36,7 +36,7 @@ import { env } from "../src/core/config/env.js";
 // gets one transaction: every write commits with the action or rolls back with it,
 // and every read sees what the action wrote before it.
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let db: MongoDBService;
 let registry: EntityRegistry;
 let hookRunner: HookRunner;
@@ -95,7 +95,7 @@ async function insertAttachedBooking(fileId: string): Promise<string> {
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as any).MONGODB_URI = replSet.getUri();
   db = new MongoDBService();
   await db.connect();

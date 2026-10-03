@@ -11,7 +11,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
 import { mkdtemp, mkdir, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { SYSTEM_ROLES } from "@digitaplatform/shared";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
@@ -46,7 +46,7 @@ const entity = (name: string, database: string, is_submittable = false) =>
     permissions: [{ ...PERMS[0], submit: 1, cancel: 1 }],
   }) as unknown as EntityDefinition;
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let db: MongoDBService;
 let registry: EntityRegistry;
 let docService: DocumentService;
@@ -55,7 +55,7 @@ let hookRunner: HookRunner;
 let app: string;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
   db = new MongoDBService();
   await db.connect();

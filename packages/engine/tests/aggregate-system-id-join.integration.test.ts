@@ -14,7 +14,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
   getRootLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import { ObjectId } from "mongodb";
 import { env } from "../src/core/config/env.js";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
@@ -41,11 +41,11 @@ const user = { _id: "u1", email: "admin@example.com", roles: ["Administrator"] }
 const rctx = { root: null, user, params: {}, now: new Date(), warnings: [] };
 const EVENT_ID = new ObjectId();
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let db: MongoDBService;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as unknown as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
   db = new MongoDBService();
   await db.connect();

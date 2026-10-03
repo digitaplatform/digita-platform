@@ -46,7 +46,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
   },
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import type { FastifyInstance } from "fastify";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { SYSTEM_ROLES } from "@digitaplatform/shared";
@@ -58,7 +58,7 @@ import type { HookRunner, HookServices } from "../src/core/hooks/hook-runner.js"
 import { readBundle } from "@digitaplatform/shared/i18n-node";
 import type { BaseDocument } from "../src/core/document/base-document.js";
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
 let authToken: string;
@@ -86,7 +86,7 @@ const PROBE: EntityDefinition = {
 } as unknown as EntityDefinition;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as any).MONGODB_URI = replSet.getUri();
 
   const ta = await buildTestAuth();

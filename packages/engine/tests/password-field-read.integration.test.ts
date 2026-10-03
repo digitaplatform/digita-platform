@@ -43,7 +43,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
   },
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import type { FastifyInstance } from "fastify";
 import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
@@ -72,14 +72,14 @@ const vault = {
   ],
 } as unknown as EntityDefinition;
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
 let authToken: string;
 let vaultId: string;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as any).MONGODB_URI = replSet.getUri();
 
   const ta = await buildTestAuth();

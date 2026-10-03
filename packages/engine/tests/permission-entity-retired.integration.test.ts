@@ -47,7 +47,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
 }));
 
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import type { FastifyInstance } from "fastify";
 import { DIGITA } from "@digitaplatform/shared";
 import { env } from "../src/core/config/env.js";
@@ -88,14 +88,14 @@ const OLD_ROW = {
   modified: new Date(),
 };
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
 let registry: EntityRegistry;
 let token: string;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
 
   const seeder = new MongoDBService();

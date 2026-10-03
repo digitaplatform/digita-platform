@@ -43,7 +43,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
   },
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import type { FastifyInstance } from "fastify";
 import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
@@ -51,13 +51,13 @@ import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { DIGITA } from "@digitaplatform/shared";
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
 let sign: Awaited<ReturnType<typeof buildTestAuth>>["sign"];
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as any).MONGODB_URI = replSet.getUri();
 
   const ta = await buildTestAuth();

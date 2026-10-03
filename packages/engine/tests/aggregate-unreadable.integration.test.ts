@@ -25,7 +25,7 @@ vi.mock("../src/core/view/section-runners/pipeline-field-walker.js", async (impo
   };
 });
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import { env } from "../src/core/config/env.js";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { runAggregateSection } from "../src/core/view/section-runners/aggregate-section.js";
@@ -87,7 +87,7 @@ const AMOUNTS = [71001, 72001, 73001];
 const COSTS = [81001, 82001];
 const join = { $lookup: { from: "Department", localField: "dept_id", foreignField: "_id", as: "d" } };
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let db: MongoDBService;
 
 /** Store the protected values; `turn` rotates them among the rows. */
@@ -112,7 +112,7 @@ async function storeValues(turn: number): Promise<void> {
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as unknown as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
   db = new MongoDBService();
   await db.connect();

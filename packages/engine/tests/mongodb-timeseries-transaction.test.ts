@@ -19,7 +19,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
   getRootLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { env } from "../src/core/config/env.js";
 
@@ -38,11 +38,11 @@ import { env } from "../src/core/config/env.js";
  * standalone — it is NOT rolled back if the surrounding txn aborts (the
  * accepted atomicity trade-off; the submitted doc is the source of truth).
  */
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let db: MongoDBService;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as unknown as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
   db = new MongoDBService();
   await db.connect();
