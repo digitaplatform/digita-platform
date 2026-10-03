@@ -9,9 +9,9 @@ import type { FieldDefinition } from '@digitaplatform/shared';
 import type { FieldControlState } from '@/controls/types';
 
 const NODES = [
-  { _id: 'shelf-ground', label: 'Ground floor', parent: null, kind: 'shelf' },
-  { _id: 'shelf-fiction', label: 'Fiction wall', parent: 'shelf-ground', kind: 'shelf' },
-  { _id: 'audience-children', label: 'Children', parent: null, kind: 'audience' },
+  { _id: 'shelf-ground', label: 'Ground floor', parent: null, active: true, kind: 'shelf' },
+  { _id: 'shelf-fiction', label: 'Fiction wall', parent: 'shelf-ground', active: true, kind: 'shelf' },
+  { _id: 'audience-children', label: 'Children', parent: null, active: true, kind: 'audience' },
 ];
 const requests = vi.hoisted(() => ({ filters: [] as Array<Array<[string, string, unknown]>> }));
 vi.mock('@/hooks/useList', () => ({
