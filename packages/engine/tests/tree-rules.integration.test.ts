@@ -37,7 +37,8 @@ import { SnapshotResolver } from "../src/core/snapshot/snapshot-resolver.js";
 import { RuleEngine } from "../src/core/rules/rule-engine.js";
 import type { UserContext } from "../src/core/permissions/types.js";
 import { env } from "../src/core/config/env.js";
-import { TreeRefusedError } from "../src/core/tree/tree-rules.js";
+import { restampTreeNodes, TreeRefusedError } from "../src/core/tree/tree-rules.js";
+import { clearRuleCache } from "../src/core/rules/rule-loader.js";
 import { seedAppData } from "../src/core/setup/seed-app-data.js";
 import { NamingService } from "../src/core/document/naming-service.js";
 import { mkdtemp, mkdir, writeFile, rm } from "fs/promises";
@@ -50,14 +51,16 @@ let replSet: MongoMemoryReplSet;
 let db: MongoDBService;
 let registry: EntityRegistry;
 let docService: DocumentService;
+let hookRunner: HookRunner;
 
 const admin: UserContext = { _id: "admin-001", email: "admin@test.local", roles: [SYSTEM_ROLES.ADMINISTRATOR], full_name: "Admin" };
-const perms = [{ role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 }];
+const perms: EntityDefinition["permissions"] = [{ role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 }];
 const tree = (name: string, config: Record<string, unknown>) =>
   ({ name, module: "test", database: "app", naming: { strategy: "user_set" }, tree: config, fields: [], permissions: perms }) as unknown as EntityDefinition;
 const groupEntity = () => tree("TGroup", {});
 const kindEntity = () => tree("TKindGroup", { kind: true });
 const shallowEntity = () => tree("TShallow", { max_depth: 3 });
+const submitEntity = (): EntityDefinition => ({ ...tree("TSubmit", {}), is_submittable: true, permissions: [{ ...perms[0]!, submit: 1, cancel: 1 }] });
 
 beforeAll(async () => {
   replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
@@ -75,7 +78,7 @@ beforeAll(async () => {
   registry = new EntityRegistry();
   await registry.loadAll("./src/entities");
   const permissionChecker = new PermissionChecker(registry);
-  const hookRunner = new HookRunner();
+  hookRunner = new HookRunner();
   const linkValidator = new LinkValidator(registry, db, permissionChecker);
   const linkTitleResolver = new LinkTitleResolver(registry, db, new TranslationService(db), permissionChecker);
   const fetchFromResolver = new FetchFromResolver(registry, db);
@@ -102,7 +105,7 @@ beforeAll(async () => {
   ruleEngine.setDocumentService(docService);
   workflowEngine.setRuleEngine(ruleEngine);
 
-  for (const entity of [groupEntity(), kindEntity(), shallowEntity()]) {
+  for (const entity of [groupEntity(), kindEntity(), shallowEntity(), submitEntity()]) {
     registry.prepareDefinition(entity);
     registry.register(entity);
     await db.ensureCollection(entity.name, "app");
@@ -117,7 +120,9 @@ afterAll(async () => {
 }, 30000);
 
 beforeEach(async () => {
-  for (const name of ["TGroup", "TKindGroup", "TShallow"]) await db.deleteMany(name, {}, "app");
+  for (const name of ["TGroup", "TKindGroup", "TShallow", "TSubmit"]) await db.deleteMany(name, {}, "app");
+  await db.deleteMany("Rule", {}, "core");
+  clearRuleCache();
 });
 
 const add = (entity: string, _id: string, parent: string | null, extra: Record<string, unknown> = {}) =>
@@ -134,6 +139,31 @@ const refusal = async (write: Promise<unknown>) => {
 };
 
 describe("a node's place", () => {
+  it.each(["insert", "move", "label"])("is returned to callers and post-write hooks after %s", async (operation) => {
+    await add("TGroup", "A", null);
+    if (operation !== "insert") await add("TGroup", "B", null);
+    const original = hookRunner.run.bind(hookRunner);
+    const seen: Record<string, unknown>[] = [];
+    const spy = vi.spyOn(hookRunner, "run").mockImplementation(async (...args) => {
+      if (args[0] === "TGroup" && ["after_insert", "on_update"].includes(args[1])) {
+        seen.push({ ...args[2]._data });
+      }
+      return original(...args);
+    });
+    try {
+      const doc = operation === "insert"
+        ? await add("TGroup", "B", "A")
+        : await docService.update("TGroup", "B", operation === "move" ? { parent: "A" } : { label: "renamed" }, admin);
+      const row = await stored("TGroup", "B");
+      for (const key of ["_ancestors", "_depth", "_tree_rev"]) {
+        expect(doc.get(key)).toEqual(row[key]);
+        expect(seen[0]![key]).toEqual(row[key]);
+      }
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("is written on insert: the ancestors from the root and the level", async () => {
     await add("TGroup", "A", null);
     await add("TGroup", "B", "A");
@@ -210,6 +240,29 @@ describe("a node's tree", () => {
 });
 
 describe("a tree's depth", () => {
+  it("uses the source depth from inside the transaction after a concurrent move", async () => {
+    await add("TShallow", "R", null);
+    await add("TShallow", "A", "R");
+    await add("TShallow", "B", "A");
+    await add("TShallow", "Q", null);
+    await add("TShallow", "P", "Q");
+    const original = db.withTransaction.bind(db);
+    let intercepted = false;
+    const spy = vi.spyOn(db, "withTransaction").mockImplementation(async (work) => {
+      if (!intercepted) {
+        intercepted = true;
+        await docService.update("TShallow", "A", { parent: null }, admin);
+      }
+      return original(work);
+    });
+    try {
+      expect(await refusal(docService.update("TShallow", "A", { parent: "P" }, admin))).toBe("TREE_TOO_DEEP");
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await place("TShallow", "B")).toEqual([["A"], 2]);
+  });
+
   it("refuses a node below the deepest level, and a move that pushes a grandchild past it", async () => {
     await add("TShallow", "A", null);
     await add("TShallow", "B", "A");
@@ -231,6 +284,37 @@ describe("a tree's depth", () => {
 });
 
 describe("a move", () => {
+  it("keeps a concurrent parent change when this update only renames the node", async () => {
+    await add("TGroup", "A", null);
+    await add("TGroup", "B", "A");
+    await add("TGroup", "C", "B");
+    const original = db.withTransaction.bind(db);
+    let intercepted = false;
+    const spy = vi.spyOn(db, "withTransaction").mockImplementation(async (work) => {
+      if (!intercepted) {
+        intercepted = true;
+        await docService.update("TGroup", "B", { parent: null }, admin);
+      }
+      return original(work);
+    });
+    try {
+      const doc = await docService.update("TGroup", "B", { label: "renamed" }, admin);
+      expect(doc.get("parent")).toBeNull();
+      expect(doc.get("_ancestors")).toEqual([]);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await place("TGroup", "C")).toEqual([["B"], 2]);
+  });
+
+  it("treats dollar-prefixed IDs as literals when rewriting descendants", async () => {
+    await add("TGroup", "$A", null);
+    await add("TGroup", "$$B", "$A");
+    await add("TGroup", "M", null);
+    await docService.update("TGroup", "$A", { parent: "M" }, admin);
+    expect(await place("TGroup", "$$B")).toEqual([["M", "$A"], 3]);
+  });
+
   it("rewrites a 20-node subtree in one update", async () => {
     await add("TGroup", "N", null);
     await add("TGroup", "M", null);
@@ -253,6 +337,16 @@ describe("a move", () => {
 });
 
 describe("a seeded tree", () => {
+  it.each([
+    { entity: "TGroup", code: "TREE_CYCLE", rows: [{ _id: "A", parent: "B" }, { _id: "B", parent: "A" }] },
+    { entity: "TShallow", code: "TREE_TOO_DEEP", rows: [{ _id: "A" }, { _id: "B", parent: "A" }, { _id: "C", parent: "B" }, { _id: "D", parent: "C" }] },
+    { entity: "TKindGroup", code: "TREE_PARTITION", rows: [{ _id: "A", kind: "sales" }, { _id: "B", parent: "A", kind: "purchase" }] },
+  ])("refuses $code before stamping any raw seed rows", async ({ entity, code, rows }) => {
+    for (const row of rows) await db.insertOne(entity, { label: row._id, ...row }, "app");
+    expect(await refusal(restampTreeNodes(db, registry.get(entity)))).toBe(code);
+    for (const row of rows) expect((await stored(entity, row._id))["_ancestors"]).toBeUndefined();
+  });
+
   it("gets its places from the seed, so a move of a middle node holds its subtree and its depth", async () => {
     const dir = await mkdtemp(join(tmpdir(), "tree-seed-"));
     await mkdir(join(dir, "seeds"));
@@ -273,5 +367,55 @@ describe("a seeded tree", () => {
     expect(await refusal(docService.update("TShallow", "B", { parent: "Z1" }, admin))).toBe("TREE_TOO_DEEP");
     await docService.update("TShallow", "B", { parent: "Z" }, admin);
     expect(await place("TShallow", "C")).toEqual([["Z", "B"], 3]);
+  });
+});
+
+describe("a submit", () => {
+  it("places a valid before_submit move and returns the stored keys", async () => {
+    await add("TSubmit", "P", null);
+    await docService.submit("TSubmit", "P", admin);
+    await add("TSubmit", "A", null);
+    await db.insertOne("Rule", {
+      _id: "move-parent", entity: "TSubmit", event: "before_submit", enabled: true,
+      condition: "doc._id == 'A'",
+      actions: [{ type: "set_value", field: "parent", value: "'P'" }],
+    }, "core");
+    clearRuleCache();
+    const doc = await docService.submit("TSubmit", "A", admin);
+    expect(await place("TSubmit", "A")).toEqual([["P"], 2]);
+    expect([doc.get("_ancestors"), doc.get("_depth")]).toEqual([["P"], 2]);
+  });
+
+  it("refuses a before_submit rule that makes the node its own parent", async () => {
+    await add("TSubmit", "A", null);
+    await db.insertOne("Rule", {
+      _id: "self-parent", entity: "TSubmit", event: "before_submit", enabled: true,
+      actions: [{ type: "set_value", field: "parent", value: "doc._id" }],
+    }, "core");
+    clearRuleCache();
+    expect(await refusal(docService.submit("TSubmit", "A", admin))).toBe("TREE_CYCLE");
+    const row = await stored("TSubmit", "A");
+    expect(row["parent"] ?? null).toBeNull();
+    expect(row["docstatus"]).toBe(0);
+  });
+});
+
+describe("a cancel", () => {
+  it("refuses a before_cancel hook that makes the node its own parent", async () => {
+    await add("TSubmit", "A", null);
+    await docService.submit("TSubmit", "A", admin);
+    const original = hookRunner.run.bind(hookRunner);
+    const spy = vi.spyOn(hookRunner, "run").mockImplementation(async (...args) => {
+      if (args[0] === "TSubmit" && args[1] === "before_cancel") args[2].set("parent", "A");
+      return original(...args);
+    });
+    try {
+      expect(await refusal(docService.cancel("TSubmit", "A", admin))).toBe("TREE_CYCLE");
+    } finally {
+      spy.mockRestore();
+    }
+    const row = await stored("TSubmit", "A");
+    expect(row["parent"] ?? null).toBeNull();
+    expect(row["docstatus"]).toBe(1);
   });
 });

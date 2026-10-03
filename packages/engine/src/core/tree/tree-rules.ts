@@ -116,13 +116,13 @@ export async function writeTreePlacement(
   id: string,
   placement: TreePlacement,
   session?: ClientSession,
-): Promise<void> {
+): Promise<Record<string, unknown>> {
   const nodes = db.collection(entity.name, entity.database);
   const byId = (nodeId: string) => ({ _id: toIdStorage(nodeId) }) as unknown as Filter<Document>;
-  await nodes.updateOne(
+  const row = await nodes.findOneAndUpdate(
     byId(id),
     { $set: { [TREE_ANCESTORS]: placement.ancestors, [TREE_DEPTH]: placement.depth }, $inc: { [TREE_REVISION]: 1 } },
-    { session },
+    { session, returnDocument: "after" },
   );
   if (placement.parent) await nodes.updateOne(byId(placement.parent), { $inc: { [TREE_REVISION]: 1 } }, { session });
   // Each node below keeps the part of its path below this node, behind this node's new path.
@@ -134,7 +134,7 @@ export async function writeTreePlacement(
       {
         $set: {
           [TREE_ANCESTORS]: {
-            $concatArrays: [path, { $slice: [`$${TREE_ANCESTORS}`, { $add: [{ $indexOfArray: [`$${TREE_ANCESTORS}`, id] }, 1] }, 1000] }],
+            $concatArrays: [{ $literal: path }, { $slice: [`$${TREE_ANCESTORS}`, { $add: [{ $indexOfArray: [`$${TREE_ANCESTORS}`, { $literal: id }] }, 1] }, 1000] }],
           },
         },
       },
@@ -143,6 +143,7 @@ export async function writeTreePlacement(
     entity.database,
     session,
   );
+  return storedTreeKeys(row!);
 }
 
 /** The tree keys a stored node carries, for a writer that replaces the node whole and keeps its place. */
@@ -152,20 +153,42 @@ export function storedTreeKeys(stored: Record<string, unknown>): Record<string, 
 
 /**
  * Sets `_ancestors` and `_depth` on every node of a tree entity whose stored ones differ from its
- * `parent` chain, for a writer that stores nodes raw, as the seed does. A chain that loops or
- * names a parent that is not stored ends there.
+ * `parent` chain, for a writer that stores nodes raw, as the seed does. Validate every chain
+ * before writing a placement, so an invalid seed never leaves a partially stamped tree.
  */
 export async function restampTreeNodes(db: MongoDBService, entity: EntityDefinition): Promise<number> {
   if (!entity.tree) return 0;
   const nodes = db.collection(entity.name, entity.database);
-  const rows = await nodes.find({}, { projection: { [TREE_PARENT_FIELD]: 1, [TREE_ANCESTORS]: 1, [TREE_DEPTH]: 1 } }).toArray();
-  const parentOf = new Map(rows.map((r) => [String(r["_id"]), idOf(r[TREE_PARENT_FIELD])]));
-  let written = 0;
-  for (const row of rows) {
+  const partitions = partitionFields(entity);
+  const projection = Object.fromEntries([TREE_PARENT_FIELD, TREE_ANCESTORS, TREE_DEPTH, ...partitions].map((key) => [key, 1]));
+  const rows = await nodes.find({}, { projection }).toArray();
+  const byId = new Map(rows.map((row) => [String(row["_id"]), row]));
+  const placements = rows.map((row) => {
     const id = String(row["_id"]);
     const ancestors: string[] = [];
-    for (let up = parentOf.get(id); up && parentOf.has(up) && up !== id && !ancestors.includes(up); up = parentOf.get(up)) ancestors.unshift(up);
+    const params = (extra: Record<string, string> = {}) => ({ doctype: entity.label ?? entity.name, name: id, ...extra });
+    for (let up = idOf(row[TREE_PARENT_FIELD]); up; ) {
+      if (up === id || ancestors.includes(up)) {
+        throw new TreeRefusedError("tree_cycle", params({ parent: up }), 409, "TREE_CYCLE");
+      }
+      const parent = byId.get(up);
+      if (!parent) throw new Error(`${entity.name} ${id}: its parent ${up} is not stored`);
+      const otherTree = partitions.find((field) => !sameValue(row[field], parent[field]));
+      if (otherTree) {
+        throw new TreeRefusedError("tree_partition", params({ parent: up, field: otherTree }), 409, "TREE_PARTITION");
+      }
+      ancestors.unshift(up);
+      up = idOf(parent[TREE_PARENT_FIELD]);
+    }
     const depth = ancestors.length + 1;
+    const max = entity.tree!.max_depth ?? TREE_MAX_DEPTH_DEFAULT;
+    if (depth > max) {
+      throw new TreeRefusedError("tree_too_deep", params({ depth: String(depth), max: String(max) }), 409, "TREE_TOO_DEEP");
+    }
+    return { row, ancestors, depth };
+  });
+  let written = 0;
+  for (const { row, ancestors, depth } of placements) {
     if (sameValue(row[TREE_ANCESTORS], ancestors) && row[TREE_DEPTH] === depth) continue;
     await nodes.updateOne({ _id: row["_id"] } as Filter<Document>, { $set: { [TREE_ANCESTORS]: ancestors, [TREE_DEPTH]: depth } });
     written++;

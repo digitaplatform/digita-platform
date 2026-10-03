@@ -54,7 +54,7 @@ import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
 let db: MongoDBService;
-let registry: { register: (e: EntityDefinition) => void };
+let registry: Awaited<ReturnType<typeof createApp>>["registry"];
 let adminTok: string;
 
 const ADMIN_PERM = { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1, export: 1, import: 1 };
@@ -75,7 +75,6 @@ const Group: EntityDefinition = {
   is_submittable: false, is_log: false, track_changes: false, track_views: false,
   fields: [
     { fieldname: "code", fieldtype: "Data", label: "Code" },
-    { fieldname: "name", fieldtype: "Data", label: "Name" },
     { fieldname: "parent", fieldtype: "Link", target: "RtGroup", label: "Parent" },
   ],
   permissions: [ADMIN_PERM],
@@ -115,9 +114,10 @@ beforeAll(async () => {
   const result = await createApp({ authn: ta.authn });
   app = result.app;
   db = result.db;
-  registry = result.registry as unknown as { register: (e: EntityDefinition) => void };
+  registry = result.registry;
   await result.startup();
   await app.ready();
+  registry.prepareDefinition(Group);
   for (const e of [Account, Group, Item]) {
     registry.register(e);
     await db.ensureCollection(e.name, "app");
@@ -126,7 +126,7 @@ beforeAll(async () => {
 
   // Seed targets + a small master-detail set via the real import pipeline.
   await imp("RtAccount", { rows: [{ acc_no: "A1", name: "Cash" }, { acc_no: "A2", name: "Bank" }], mode: "insert" });
-  await imp("RtGroup", { rows: [{ code: "PARENT", name: "Parent" }, { code: "CHILD", name: "Child", parent: "PARENT" }], mode: "insert" });
+  await imp("RtGroup", { rows: [{ code: "PARENT", label: "Parent" }, { code: "CHILD", label: "Child", parent: "PARENT" }], mode: "insert" });
   await imp("RtItem", { rows: [
     { item_no: "IT1", name: "Widget", group: "CHILD", price: 9.99, launch: "2026-01-15", lines: [{ account: "A1", amount: 100 }, { account: "A2", amount: 25.5 }] },
     { item_no: "IT2", name: "Gadget", group: "PARENT", price: 4.5, launch: "2026-02-20", lines: [{ account: "A1", amount: 7.25 }] },
