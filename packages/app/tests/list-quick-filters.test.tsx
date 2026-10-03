@@ -256,6 +256,8 @@ describe('the quick filters of a list', () => {
 
     // Letter by letter on a fake clock, so a slow machine cannot open the pause between two letters.
     const input = within(quickFilters()).getByLabelText('Tags');
+    // The visible label names the input, not only its aria-label.
+    expect(within(quickFilters()).getByText('Tags', { selector: 'label' })).toHaveProperty('control', input);
     vi.useFakeTimers();
     fireEvent.focus(input);
     const typed = 'red, blue';
