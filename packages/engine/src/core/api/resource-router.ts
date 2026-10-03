@@ -15,6 +15,7 @@ import type { HookServices } from "../hooks/hook-runner.js";
 import type { DelegationScope } from "@digitaplatform/shared";
 import { createLogger } from "../logging/logger.js";
 import { EngineError } from "../errors/engine-error.js";
+import { declaredClientMessage, findDeclaredClientError } from "../errors/declared-client-error.js";
 
 /** A row a bulk operation could not process: an engine error's code with its params, or
  *  `internal_error` for any other error, which goes to the log. */
@@ -352,8 +353,13 @@ export function registerResourceRoutes(
         if (r.status === "fulfilled") {
           ok.push(name);
         } else {
+          const declared = findDeclaredClientError(r.reason);
           if (r.reason instanceof EngineError) {
             failed.push({ name, error: r.reason.code, params: r.reason.params });
+          } else if (declared) {
+            // A hook's business rule refused the record: the person reads its reason, as a single call shows it.
+            const { text, params } = declaredClientMessage(declared);
+            failed.push({ name, error: text, ...(params ? { params } : {}) });
           } else {
             log.error({ err: r.reason, name }, "Bulk row failed");
             failed.push({ name, error: "internal_error" });

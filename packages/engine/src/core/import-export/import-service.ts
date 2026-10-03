@@ -17,6 +17,7 @@ import type { ResponseContext } from "../api/response-context.js";
 import { toIdString } from "../document/id-codec.js";
 import { isStoredFieldType } from "../entity/field-types.js";
 import { EngineError } from "../errors/engine-error.js";
+import { declaredClientMessage, findDeclaredClientError } from "../errors/declared-client-error.js";
 import { ZodSchemaBuilder } from "../entity/zod-schema-builder.js";
 import { validateEntityDataZod } from "../entity/entity-validator-zod.js";
 import { BadRequestError } from "../view/view-engine.js";
@@ -395,6 +396,12 @@ export class ImportService {
     }
     if (err instanceof EngineError) {
       return { row, ...(err.field ? { field: err.field } : {}), message: err.code, code: err.code, params: err.params };
+    }
+    // A hook's business rule refused the row: the person reads its reason, as a single save shows it.
+    const declared = findDeclaredClientError(err);
+    if (declared) {
+      const { text, params, field } = declaredClientMessage(declared);
+      return { row, ...(field ? { field } : {}), message: text, code: text, ...(params ? { params } : {}) };
     }
     log.error({ err, row }, "Import row failed");
     return { row, message: "internal_error", code: "internal_error" };

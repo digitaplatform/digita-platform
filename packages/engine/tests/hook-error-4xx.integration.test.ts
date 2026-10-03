@@ -30,8 +30,10 @@ vi.mock("../src/core/config/env.js", () => {
     AUTO_MIGRATE: true,
   } };
 });
+// Every logger's error level, so a test can say that an expected refusal raised no server alarm.
+const { logError } = vi.hoisted(() => ({ logError: vi.fn() }));
 vi.mock("../src/core/logging/logger.js", () => ({
-  createLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
+  createLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: logError, fatal: vi.fn() }),
   getRootLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
 }));
 vi.mock("../src/core/cache/redis-service.js", () => ({
@@ -100,6 +102,10 @@ beforeAll(async () => {
   await db.ensureCollection("HookProbe", "app");
 
   const probeHooks = new Map<string, unknown>();
+  // A business rule that keeps a record, as an app's guard does: a declared 409 with its own sentence.
+  probeHooks.set("before_delete", (async (doc: BaseDocument) => {
+    if (doc.get("mode") === "keep") throw Object.assign(new Error("The book is on loan."), { statusCode: 409 });
+  }) as never);
   probeHooks.set("validate", (async (doc: BaseDocument) => {
     const mode = doc.get("mode");
     if (mode === "declared422") {
@@ -141,6 +147,41 @@ afterAll(async () => {
 function authHeaders() {
   return { authorization: `Bearer ${authToken}` };
 }
+
+describe("a hook's declared refusal inside an import or a bulk call", () => {
+  it("names the refused import row with the hook's reason, translated where it is a key, and raises no alarm", async () => {
+    logError.mockClear();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/import/HookProbe",
+      headers: { ...authHeaders(), "accept-language": "de" },
+      payload: { rows: [{ mode: "declared422" }, { mode: "engineKey" }], mode: "insert" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.errors.map((e: { row: number; message: string }) => [e.row, e.message])).toEqual([
+      [1, "over_delivery_not_allowed"],
+      [2, "Place hold ist für dieses Dokument nicht verfügbar"],
+    ]);
+    expect(logError).not.toHaveBeenCalled();
+  });
+
+  it("names the record a bulk delete could not delete with the hook's reason, and raises no alarm", async () => {
+    const kept = await app.inject({ method: "POST", url: "/api/v1/resource/HookProbe", headers: authHeaders(), payload: { mode: "keep" } });
+    const name = kept.json().data._id as string;
+    logError.mockClear();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/resource/HookProbe/bulk-delete",
+      headers: authHeaders(),
+      payload: { names: [name] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.failed).toEqual([{ name, error: "The book is on loan." }]);
+    expect(logError).not.toHaveBeenCalled();
+  });
+});
 
 describe("D2 — business-rule hook errors surface as typed 4xx (HTTP)", () => {
   it("a validate hook that DECLARES statusCode 422 → POST returns 422 carrying the reason", async () => {

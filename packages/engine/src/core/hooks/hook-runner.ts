@@ -8,23 +8,11 @@ import type { ClientSession } from "mongodb";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { UserContext } from "../permissions/types.js";
+import { findDeclaredClientError } from "../errors/declared-client-error.js";
 import { env } from "../config/env.js";
 import { createLogger } from "../logging/logger.js";
 
 const log = createLogger("hook-runner");
-
-/**
- * True when a thrown value DECLARES an explicit integer 4xx `statusCode` (the
- * shared `DeclaredClientError` convention). Such a throw is an EXPECTED business-
- * rule / lifecycle rejection that the global error handler surfaces as a typed
- * 4xx — not a server fault — so it should log at `warn`, not raise the `error`-
- * level "Hook execution failed" server alarm. Mirrors the handler's own range
- * check (400–499); a bare 500 or a non-integer stays at `error`.
- */
-function declaresClientError(err: unknown): boolean {
-  const sc = (err as { statusCode?: unknown } | null | undefined)?.statusCode;
-  return typeof sc === "number" && Number.isInteger(sc) && sc >= 400 && sc <= 499;
-}
 
 /**
  * Raised when a hook declaration resolves to no function: no module file exists
@@ -322,7 +310,7 @@ export class HookRunner {
       // A declared-4xx throw is an expected client-side rejection (surfaced as a
       // typed 4xx by the global error handler), not a server fault — log it at
       // warn to avoid false server alarms. Anything else stays at error.
-      if (declaresClientError(err)) {
+      if (findDeclaredClientError(err)) {
         log.warn({ doctype, event, name: doc._id, err }, "Hook execution failed");
       } else {
         log.error({ doctype, event, name: doc._id, err }, "Hook execution failed");
@@ -390,7 +378,7 @@ export class HookRunner {
     } catch (err) {
       // Same rationale as `run`: a declared-4xx throw is an expected client-side
       // rejection, not a server fault — log warn, else error.
-      if (declaresClientError(err)) {
+      if (findDeclaredClientError(err)) {
         log.warn({ doctype, action: actionName, name: doc._id, err }, "Action execution failed");
       } else {
         log.error({ doctype, action: actionName, name: doc._id, err }, "Action execution failed");
