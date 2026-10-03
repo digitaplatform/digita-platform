@@ -58,6 +58,7 @@ let db: MongoDBService;
 let adminTok: string;
 let clerkTok: string;
 let orderId: string;
+let signToken: Awaited<ReturnType<typeof buildTestAuth>>["sign"];
 
 /** A change-tracked order whose line cost only level 1 reads; the Clerk reads level 0 alone. */
 const ORDER: EntityDefinition = {
@@ -103,6 +104,7 @@ beforeAll(async () => {
   (env as unknown as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
 
   const ta = await buildTestAuth();
+  signToken = ta.sign;
   const result = await createApp({ authn: ta.authn });
   app = result.app;
   db = result.db;
@@ -149,5 +151,18 @@ describe("GET /resource/:doctype/:name/versions masks the Table cells a reader m
     const lines = (await changes(adminTok)).find((c) => c.field === "lines")!;
     expect(lines.old).toEqual([expect.objectContaining({ item: "Bolt", cost: 5 })]);
     expect(lines.new).toEqual([expect.objectContaining({ item: "Bolt M6", cost: 7 })]);
+  });
+
+  it("shows a share-only reader the level-0 Table cells and hides level-1 cells", async () => {
+    const shared = await app.inject({
+      method: "POST", url: "/api/v1/resource/DocShare", headers: bearer(adminTok),
+      payload: { entity: ORDER.name, document_name: orderId, shared_with: "guest@d", can_read: true, notify: false },
+    });
+    expect(shared.statusCode).toBe(201);
+    const guest = await signToken({ sub: "guest@d", email: "guest@d", roles: ["System User"] });
+    const lines = (await changes(guest)).find((change) => change.field === "lines")!;
+    expect(lines.old).toEqual([expect.objectContaining({ item: "Bolt" })]);
+    expect(lines.new).toEqual([expect.objectContaining({ item: "Bolt M6" })]);
+    expect(JSON.stringify([lines.old, lines.new])).not.toContain("cost");
   });
 });

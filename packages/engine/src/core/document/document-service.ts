@@ -449,7 +449,9 @@ export class DocumentService {
 
   /** Whether only a share admits the user to the row, which then shows its level-0 fields. */
   async isSharedForReadOnly(user: UserContext, doctype: string, data: Record<string, unknown>): Promise<boolean> {
-    return !(await this.permissionChecker.hasPermission(user, doctype, "read", data)).allowed;
+    if ((await this.permissionChecker.hasPermission(user, doctype, "read", data)).allowed || !user.email ||
+      !isRoleVisible(this.registry.get(doctype), user, data)) return false;
+    return this.documentShareService.hasShare(doctype, String(data["_id"]), user.email, "read");
   }
 
   /** The stored document, for a user who may read it, as `getDoc` checks that. */

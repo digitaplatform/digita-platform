@@ -52,6 +52,9 @@ import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
+import { DocumentService } from "../src/core/document/document-service.js";
+import { PermissionChecker } from "../src/core/permissions/permission-checker.js";
+import { VersionService } from "../src/core/version/version-service.js";
 
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
@@ -120,6 +123,11 @@ beforeAll(async () => {
 
   adminDocId = await createAndRaiseSalary(adminTok);
   clerkDocId = await createAndRaiseSalary(clerkTok);
+  const share = await app.inject({
+    method: "POST", url: "/api/v1/resource/DocShare", headers: bearer(adminTok),
+    payload: { entity: PAY.name, document_name: adminDocId, shared_with: "guest@d", can_read: true, notify: false },
+  });
+  expect(share.statusCode).toBe(201);
 }, 90000);
 
 afterAll(async () => {
@@ -143,15 +151,26 @@ describe("GET /resource/:doctype/:name/versions for a reader whom only a share a
   it("shows the level-0 change and hides the level-1 change, as the record read does", async () => {
     const renamed = await app.inject({ method: "PUT", url: `/api/v1/resource/VersionMaskPay/${adminDocId}`, headers: bearer(adminTok), payload: { title: "Renewed contract" } });
     expect(renamed.statusCode).toBe(200);
-    const share = await app.inject({
-      method: "POST",
-      url: "/api/v1/resource/DocShare",
-      headers: bearer(adminTok),
-      payload: { entity: "VersionMaskPay", document_name: adminDocId, shared_with: "guest@d", can_read: true, notify: false },
-    });
-    expect(share.statusCode).toBe(201);
+    await new VersionService(db).createVersionFromChanges("VersionMaskPay", adminDocId, [
+      { field: "owner", old: "former@d", new: "admin@d" },
+      { field: "modified_by", old: "former@d", new: "admin@d" },
+    ], "admin@d");
     const guestTok = await signToken({ sub: "guest@d", email: "guest@d", roles: ["System User"] });
     const fields = await changedFields(guestTok, adminDocId);
-    expect([fields.includes("title"), fields.includes("salary")]).toEqual([true, false]);
+    expect([fields.includes("title"), fields.includes("owner"), fields.includes("modified_by"), fields.includes("salary")])
+      .toEqual([true, true, true, false]);
+  });
+
+  it("answers shared-only read only for an actual admitting share", async () => {
+    const registry = { get: () => PAY } as never;
+    const service = new DocumentService({ db, registry, permissionChecker: new PermissionChecker(registry) } as never);
+    const guest = { _id: "guest@d", email: "guest@d", roles: ["System User"] } as never;
+    expect(await service.isSharedForReadOnly(guest, PAY.name, { _id: clerkDocId })).toBe(false);
+    expect(await service.isSharedForReadOnly(guest, PAY.name, { _id: adminDocId })).toBe(true);
+    const admin = { _id: "admin@d", email: "admin@d", roles: ["Administrator"] } as never;
+    expect(await service.isSharedForReadOnly(admin, PAY.name, { _id: adminDocId })).toBe(false);
+    const token = await signToken({ sub: "guest@d", email: "guest@d", roles: ["System User"] });
+    const denied = await app.inject({ method: "GET", url: `/api/v1/resource/VersionMaskPay/${clerkDocId}/versions`, headers: bearer(token) });
+    expect(denied.statusCode).toBe(403);
   });
 });
