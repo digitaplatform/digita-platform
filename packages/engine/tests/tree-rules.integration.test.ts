@@ -142,6 +142,41 @@ const refusal = async (write: Promise<unknown>) => {
 };
 
 describe("a node's place", () => {
+  it("restores its placement and still refuses a cycle through a later child", async () => {
+    await add("TGroup", "A", null);
+    await add("TGroup", "B", "A");
+    const before = await stored("TGroup", "B");
+    await docService.deleteDoc("TGroup", "B", admin);
+    const restored = await docService.restoreDoc("TGroup", "B", admin);
+    expect(await place("TGroup", "B")).toEqual([["A"], 2]);
+    expect(restored.get("_ancestors")).toEqual(["A"]);
+    expect(restored.get("_tree_rev")).toBeGreaterThan(before["_tree_rev"] as number);
+    await add("TGroup", "C", "B");
+    expect(await place("TGroup", "C")).toEqual([["A", "B"], 3]);
+    expect(await refusal(docService.update("TGroup", "A", { parent: "C" }, admin))).toBe("TREE_CYCLE");
+    expect((await stored("TGroup", "A"))["parent"] ?? null).toBeNull();
+  });
+
+  it("does not count deleted children when changing a root partition", async () => {
+    await add("TKindGroup", "A", null, { kind: "old" });
+    await add("TKindGroup", "B", "A", { kind: "old" });
+    expect(await refusal(docService.update("TKindGroup", "A", { kind: "new" }, admin))).toBe("TREE_PARTITION");
+    await docService.deleteDoc("TKindGroup", "B", admin);
+    await docService.update("TKindGroup", "A", { kind: "new" }, admin);
+    expect((await stored("TKindGroup", "A"))["kind"]).toBe("new");
+  });
+
+  it("does not count deleted descendants against a move's depth limit", async () => {
+    await add("TShallow", "X", null);
+    await add("TShallow", "Y", "X");
+    await add("TShallow", "A", null);
+    await add("TShallow", "B", "A");
+    expect(await refusal(docService.update("TShallow", "A", { parent: "Y" }, admin))).toBe("TREE_TOO_DEEP");
+    await docService.deleteDoc("TShallow", "B", admin);
+    await docService.update("TShallow", "A", { parent: "Y" }, admin);
+    expect(await place("TShallow", "A")).toEqual([["X", "Y"], 3]);
+  });
+
   it.each(["insert", "move", "label"])("is returned to callers and post-write hooks after %s", async (operation) => {
     await add("TGroup", "A", null);
     if (operation !== "insert") await add("TGroup", "B", null);

@@ -105,7 +105,8 @@ describe("ordinary collection boundary", () => {
     await raw.createCollection(name, { timeseries: { timeField: "posted_at" } });
     try {
       const res = await app.inject({ method: "POST", url: "/api/v1/meta", headers: authHeaders(), payload: definition(name) });
-      expect(res.statusCode).toBe(500);
+      expect(res.statusCode).toBe(400);
+      expect(res.json().messages[0].text).toBe("ordinary_collection_required");
       expect(await db.findOne(DIGITA.COLLECTIONS.ENTITY, name, DIGITA.DATABASES.CORE)).toBeNull();
       expect(registry.has(name)).toBe(false);
       expect((await app.inject({ method: "GET", url: `/api/v1/meta/${name}`, headers: authHeaders() })).statusCode).toBe(404);

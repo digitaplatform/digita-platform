@@ -101,9 +101,9 @@ export async function seedDataTranslations(
           const _id = `data:${locale}:${entityName}.${docName}.${field}`;
           const existing = await db.findOne(DIGITA.COLLECTIONS.TRANSLATION, _id, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
           if (existing) {
-            if (existing["source"] === "file" && !existing["overridden"] && existing["value"] !== value) {
+            if (existing["deleted"] == null && existing["source"] === "file" && !existing["overridden"] && existing["value"] !== value) {
               const result = await db.collection(DIGITA.COLLECTIONS.TRANSLATION, DIGITA.DATABASES.CORE).updateOne(
-                { _id, source: "file", overridden: { $ne: true }, value: existing["value"] } as unknown as Filter<Document>,
+                { _id, deleted: null, source: "file", overridden: { $ne: true }, value: existing["value"] } as unknown as Filter<Document>,
                 { $set: { value, modified: new Date() } },
               );
               if (result.modifiedCount) updated++;

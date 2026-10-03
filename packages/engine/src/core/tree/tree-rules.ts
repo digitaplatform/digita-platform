@@ -1,5 +1,5 @@
 import type { ClientSession, Document, Filter } from "mongodb";
-import { TREE_KIND_FIELD, TREE_MAX_DEPTH_DEFAULT, TREE_PARENT_FIELD, type EntityDefinition } from "@digitaplatform/shared";
+import { activeRecordsFilter, TREE_KIND_FIELD, TREE_MAX_DEPTH_DEFAULT, TREE_PARENT_FIELD, type EntityDefinition } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { toIdStorage } from "../document/id-codec.js";
 import { EngineError } from "../errors/engine-error.js";
@@ -77,7 +77,7 @@ export async function placeTreeNode(
 
   const nodes = db.collection(entity.name, entity.database);
   if (movedPartition) {
-    const hasChildren = (await nodes.countDocuments({ [TREE_PARENT_FIELD]: id }, { session, limit: 1 })) > 0;
+    const hasChildren = (await nodes.countDocuments(activeRecordsFilter({ [TREE_PARENT_FIELD]: id }), { session, limit: 1 })) > 0;
     if (parentId || hasChildren) {
       throw new TreeRefusedError("tree_partition_root", params({ field: movedPartition }), 409, "TREE_PARTITION");
     }
@@ -103,7 +103,7 @@ export async function placeTreeNode(
   let below = 0;
   if (stored) {
     const [deepest] = await nodes
-      .find({ [TREE_ANCESTORS]: id }, { session, projection: { [TREE_DEPTH]: 1 } })
+      .find(activeRecordsFilter({ [TREE_ANCESTORS]: id }), { session, projection: { [TREE_DEPTH]: 1 } })
       .sort({ [TREE_DEPTH]: -1 })
       .limit(1)
       .toArray();

@@ -2219,13 +2219,17 @@ export class DocumentService {
       }
       if (this.periodCloseValidator) await this.periodCloseValidator.assertPeriodOpen(entity, doc._data, "insert", session);
       await this.hookRunner.run(doctype, "before_insert", doc, ctx, session, user);
+      const treePlacement = await placeTreeNode(this.db, entity, id, doc._data, undefined, session);
       doc.ensureRowIds();
       await assertAttachFilesReadable(this.fileAccess(), entity, doc._data, new Set(collectAttachFileIds(entity.fields, stored)), user, session);
       await this.attachFilesToDocument(entity, id, doc._data, user, session);
       doc.modified_by = user.email;
       doc.modified = new Date();
       // Replacement clears the two deletion markers and still enforces all unique indexes.
-      await this.db.upsertOne(entity.name, id, this.serializeFields(entity, doc.toMongo()), entity.database, session);
+      const restored = this.serializeFields(entity, doc.toMongo());
+      if (entity.tree) Object.assign(restored, storedTreeKeys(stored));
+      await this.db.upsertOne(entity.name, id, restored, entity.database, session);
+      if (treePlacement) Object.assign(doc._data, await writeTreePlacement(this.db, entity, id, treePlacement, session));
       await this.hookRunner.run(doctype, "after_insert", doc, ctx, session, user);
       await this.hookRunner.run(doctype, "on_change", doc, ctx, session, user);
       await this.activityLogService.log({

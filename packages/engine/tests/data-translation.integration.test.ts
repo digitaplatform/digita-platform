@@ -424,6 +424,38 @@ describe("seedDataTranslations (co-located *.translations.json)", () => {
     }
   };
 
+  it.each(["already marked", "marked after probe"])("retains the file translation unchanged when %s", async (when) => {
+    const id = "data:fr:GlAcct.1200.name";
+    await db.deleteMany(DIGITA.COLLECTIONS.TRANSLATION, { _id: id }, DIGITA.DATABASES.CORE);
+    await seedFile([{ _id: "1200", field: "name", fr: "Retained file value" }]);
+    const initial = await db.findOne(DIGITA.COLLECTIONS.TRANSLATION, id, DIGITA.DATABASES.CORE);
+    const deletedAt = new Date("2026-03-01T10:00:00Z");
+    const mark = () => db.updateOne(DIGITA.COLLECTIONS.TRANSLATION, id, {
+      deleted: deletedAt, deleted_by: "admin@digita.local",
+    }, DIGITA.DATABASES.CORE);
+    if (when === "already marked") await mark();
+    const original = db.findOne.bind(db);
+    let intercepted = false;
+    const spy = vi.spyOn(db, "findOne").mockImplementation(async (...args) => {
+      const row = await original(...args);
+      if (when === "marked after probe" && !intercepted && args[0] === DIGITA.COLLECTIONS.TRANSLATION && args[1] === id) {
+        intercepted = true;
+        await mark();
+      }
+      return row;
+    });
+    try {
+      await seedFile([{ _id: "1200", field: "name", fr: "New seed value" }]);
+    } finally {
+      spy.mockRestore();
+    }
+    const retained = await db.findOne(DIGITA.COLLECTIONS.TRANSLATION, id, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(retained).toMatchObject({ value: "Retained file value", deleted: deletedAt, modified: initial?.["modified"] });
+    expect(await db.findOne(DIGITA.COLLECTIONS.TRANSLATION, id, DIGITA.DATABASES.CORE)).toBeNull();
+    if (when === "marked after probe") expect(intercepted).toBe(true);
+    await db.deleteMany(DIGITA.COLLECTIONS.TRANSLATION, { _id: id }, DIGITA.DATABASES.CORE);
+  });
+
   it("preserves a seeded translation edited through the resource API", async () => {
     const id = "data:fr:GlAcct.1200.name";
     await db.deleteMany(DIGITA.COLLECTIONS.TRANSLATION, { _id: id }, DIGITA.DATABASES.CORE);
