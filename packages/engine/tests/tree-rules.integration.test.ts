@@ -407,7 +407,7 @@ describe("tree ancestry and parent permissions", () => {
     };
     try {
       expectMasked((await docService.getDoc("TGroup", "B", reader)).toJSON());
-      const list = await docService.getList("TGroup", { fields: ["*"] }, reader);
+      const list = await docService.getList("TGroup", {}, reader);
       list.data.forEach(expectMasked);
       expect(permissionChecker.getFilterAllowlist(reader, "TGroup")).not.toContain("parent");
       await expect(docService.getList("TGroup", { filters: [["parent", "=", "A"]] }, reader)).rejects.toThrow();
