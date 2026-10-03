@@ -44,7 +44,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
   },
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import type { FastifyInstance } from "fastify";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { SYSTEM_ROLES } from "@digitaplatform/shared";
@@ -57,7 +57,7 @@ import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 // writes level 0 only must get back what getDoc shows them: no level-1 field,
 // whether an Administrator stored it or a default filled it, and no title of a
 // level-1 Link.
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
 let adminToken: string;
@@ -101,7 +101,7 @@ const ORDER = {
 } as unknown as EntityDefinition;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as any).MONGODB_URI = replSet.getUri();
   const ta = await buildTestAuth();
   const result = await createApp({ authn: ta.authn });

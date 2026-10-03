@@ -47,7 +47,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
   },
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import { ObjectId } from "mongodb";
 import type { FastifyInstance } from "fastify";
 import { mkdir, mkdtemp, writeFile, rm } from "fs/promises";
@@ -83,14 +83,14 @@ const entity = (name: string, fields: unknown[], guest: Record<string, unknown>,
 const INQUIRY = "65b000000000000000000001";
 const EVENTS = { own: "65a000000000000000000001", other: "65a000000000000000000002" };
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
 let portalToken: string;
 let adminToken: string;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
   fixtureRoot = await mkdtemp(join(tmpdir(), "digita-public-fields-fixture-"));
   DB = `${basename(fixtureRoot)}_shop`;

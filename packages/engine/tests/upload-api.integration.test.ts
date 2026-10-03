@@ -49,7 +49,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
   },
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import type { FastifyInstance } from "fastify";
 import Jimp from "jimp";
 import { access, readdir, readFile, rm, mkdir, writeFile } from "fs/promises";
@@ -65,7 +65,7 @@ import type { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import sharp from "sharp";
 import { IMAGE_VARIANT_WIDTHS } from "../src/core/storage/image-variants.js";
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
 let registry: EntityRegistry;
@@ -79,7 +79,7 @@ let ownerToken: string;
 const uploadDir = env.UPLOAD_LOCAL_PATH;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as any).MONGODB_URI = replSet.getUri();
 
   ta = await buildTestAuth();

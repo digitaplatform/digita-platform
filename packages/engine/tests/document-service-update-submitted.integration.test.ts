@@ -8,7 +8,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
   getRootLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { PermissionChecker, PermissionDeniedError } from "../src/core/permissions/permission-checker.js";
@@ -35,7 +35,7 @@ import { env } from "../src/core/config/env.js";
 import type { StoragePort } from "../src/core/storage/storage-port.js";
 import { mayReadFile } from "../src/core/storage/file-access.js";
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let db: MongoDBService;
 let registry: EntityRegistry;
 let docService: DocumentService;
@@ -100,7 +100,7 @@ async function insertSubmitted(
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as any).MONGODB_URI = replSet.getUri();
   db = new MongoDBService();
   await db.connect();

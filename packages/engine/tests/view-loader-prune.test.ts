@@ -33,13 +33,13 @@ vi.mock("../src/core/logging/logger.js", () => ({
 import { mkdtemp, mkdir, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import { DIGITA } from "@digitaplatform/shared";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
 import { seedViewsFromFiles } from "../src/core/view/view-loader.js";
 import { env } from "../src/core/config/env.js";
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let db: MongoDBService;
 let appDir: string;
 
@@ -51,7 +51,7 @@ const KEPT_VIEW = {
 };
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
   db = new MongoDBService();
   await db.connect();

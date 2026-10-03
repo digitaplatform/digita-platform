@@ -48,7 +48,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
   },
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import type { FastifyInstance } from "fastify";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -106,7 +106,7 @@ async function writeFixture(): Promise<string> {
  *  at that moment, which shows whether the post came after the commit. */
 type Purge = { secret: string | undefined; tags: string[]; storedTitle: unknown };
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let renderer: Server;
 let rendererStatus = 200;
 /** How long the stand-in renderer takes before it records a purge and answers. */
@@ -143,7 +143,7 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => renderer.listen(0, "127.0.0.1", resolve));
   (env as { REVALIDATE_URL: string }).REVALIDATE_URL = `http://127.0.0.1:${(renderer.address() as AddressInfo).port}/api/revalidate`;
 
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
   fixtureRoot = await writeFixture();
   (env as { APP_DIRS: string[] }).APP_DIRS = [fixtureRoot];

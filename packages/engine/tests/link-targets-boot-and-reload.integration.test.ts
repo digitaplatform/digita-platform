@@ -49,7 +49,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
   },
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import { mkdir, mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -63,7 +63,7 @@ const DB = "digita-link-targets-fixture_library";
 const ADMIN = { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 };
 const MISTYPED = 'Book.author links to "Autor", which no loaded entity has';
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 const dirs: string[] = [];
 
 const writeJson = (path: string, data: unknown) => writeFile(path, JSON.stringify(data), "utf-8");
@@ -96,7 +96,7 @@ async function writeApp(authorTarget: string): Promise<string> {
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
 }, 60000);
 

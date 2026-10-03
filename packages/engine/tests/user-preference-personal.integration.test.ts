@@ -42,7 +42,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
     del() { return Promise.resolve(); }
   },
 }));
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import type { FastifyInstance } from "fastify";
 import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
@@ -51,7 +51,7 @@ import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 
 // A person's preferences are theirs alone: a look, a mode or a density another person picked is
 // never read or changed through someone else's session, an Administrator's included.
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
 let clerkTok: string;
@@ -61,7 +61,7 @@ const RES = "/api/v1/resource/UserPreference";
 const bearer = (tok: string) => ({ authorization: `Bearer ${tok}` });
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as unknown as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
   const ta = await buildTestAuth();
   const result = await createApp({ authn: ta.authn });

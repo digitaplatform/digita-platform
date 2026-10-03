@@ -49,7 +49,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
   },
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import type { FastifyInstance } from "fastify";
 import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
@@ -69,7 +69,7 @@ import { publishFilesOfPublicFields } from "../src/core/storage/public-field-fil
 // holds, a file of a private field that shares its name with a public one, a file that another row
 // than its own copies into a public field, a colleague's upload that names no row, and a file its
 // row holds in a Table value that is not a list stay private.
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
 let registry: EntityRegistry;
@@ -107,7 +107,7 @@ const shop = (isPublic: boolean): EntityDefinition =>
   }) as unknown as EntityDefinition;
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
   ta = await buildTestAuth();
   appDir = await mkdtemp(join(tmpdir(), "digita-public-field-files-app-"));

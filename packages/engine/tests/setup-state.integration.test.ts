@@ -51,7 +51,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
 }));
 
 import { MongoClient } from "mongodb";
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import { mkdir, mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -87,7 +87,7 @@ interface SettingsExtra {
   fields?: object[];
   permissions?: object[];
 }
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 
 const writeJson = (path: string, data: unknown) => writeFile(path, JSON.stringify(data), "utf-8");
 
@@ -166,7 +166,7 @@ async function startApp(name: string, seededSettings?: object, settingsExtra: Se
 }
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
 }, 60000);
 

@@ -47,7 +47,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
   },
 }));
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import type { FastifyInstance } from "fastify";
 import { mkdir, mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
@@ -133,7 +133,7 @@ async function writeFixture(): Promise<string> {
   return appDir;
 }
 
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
 let adminToken: string;
@@ -150,7 +150,7 @@ const leads = () => db.count("Lead", [], DB);
 const valid = { email: "visitor@example.com", message: "Please call me back." };
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
   fixtureRoot = await writeFixture();
   (env as { APP_DIRS: string[] }).APP_DIRS = [fixtureRoot];

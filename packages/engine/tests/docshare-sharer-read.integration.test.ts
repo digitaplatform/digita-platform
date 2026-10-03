@@ -45,7 +45,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
 }));
 
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { createReplicaFixture, type ReplicaFixture } from "./cloud-mongo.js";
 import type { FastifyInstance } from "fastify";
 import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
@@ -54,7 +54,7 @@ import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 
 // File grants System User read only `if_owner`, so a System User who does not own a File
 // cannot read it. A DocShare must not hand that user the read that RBAC denies.
-let replSet: MongoMemoryReplSet;
+let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
 let adminTok: string;
@@ -65,7 +65,7 @@ let sign: Awaited<ReturnType<typeof buildTestAuth>>["sign"];
 const bearer = (tok: string) => ({ authorization: `Bearer ${tok}` });
 
 beforeAll(async () => {
-  replSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
+  replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as unknown as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
 
   const ta = await buildTestAuth();

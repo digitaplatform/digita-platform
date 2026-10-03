@@ -1,0 +1,124 @@
+{
+  "apiVersion": "hostyour.cloud/v1",
+  "kind": "TestRecipe",
+  "packageManager": "pnpm@11.7.0",
+  "runtime": "node",
+  "fixtures": [
+    "mongo-replica"
+  ],
+  "prepare": [
+    {
+      "command": [
+        "pnpm",
+        "build"
+      ]
+    }
+  ],
+  "suites": [
+    {
+      "name": "shared",
+      "kind": "test",
+      "command": [
+        "pnpm",
+        "--filter",
+        "@digitaplatform/shared",
+        "test",
+        "--maxWorkers=1",
+        "--no-file-parallelism"
+      ],
+      "covers": [
+        "packages/shared/package.json"
+      ]
+    },
+    {
+      "name": "theme",
+      "kind": "test",
+      "command": [
+        "pnpm",
+        "--filter",
+        "@digitaplatform/theme",
+        "test",
+        "--maxWorkers=1",
+        "--no-file-parallelism"
+      ],
+      "covers": [
+        "packages/theme/package.json"
+      ]
+    },
+    {
+      "name": "components",
+      "kind": "test",
+      "command": [
+        "pnpm",
+        "--filter",
+        "@digitaplatform/components",
+        "test",
+        "--maxWorkers=1",
+        "--no-file-parallelism"
+      ],
+      "covers": [
+        "packages/components/package.json"
+      ]
+    },
+    {
+      "name": "plugins",
+      "kind": "test",
+      "command": [
+        "pnpm",
+        "--filter",
+        "@digitaplatform/plugins",
+        "test",
+        "--maxWorkers=1",
+        "--no-file-parallelism"
+      ],
+      "covers": [
+        "packages/plugins/sdk/package.json"
+      ]
+    },
+    {
+      "name": "engine",
+      "kind": "test",
+      "command": [
+        "pnpm",
+        "--filter",
+        "@digitaplatform/engine",
+        "test",
+        "--maxWorkers=1",
+        "--no-file-parallelism"
+      ],
+      "covers": [
+        "packages/engine/package.json"
+      ]
+    },
+    {
+      "name": "app",
+      "kind": "test",
+      "command": [
+        "pnpm",
+        "--filter",
+        "@digitaplatform/app",
+        "test",
+        "--maxWorkers=1",
+        "--no-file-parallelism"
+      ],
+      "covers": [
+        "packages/app/package.json"
+      ]
+    },
+    {
+      "name": "web",
+      "kind": "test",
+      "command": [
+        "pnpm",
+        "--filter",
+        "@digitaplatform/web",
+        "test",
+        "--maxWorkers=1",
+        "--no-file-parallelism"
+      ],
+      "covers": [
+        "packages/web/package.json"
+      ]
+    }
+  ]
+}
