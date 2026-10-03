@@ -66,17 +66,11 @@ export function collectAttachFileIds(
     // Recurse into Table child rows — child-row Attach/AttachImage files leaked
     // on delete/replace because this collector only scanned top-level fields.
     if (f.fieldtype === "Table" && f.child_fields) {
-      const attachChildFields = f.child_fields.filter((cf) => FILE_FIELD_TYPES.has(cf.fieldtype));
-      if (attachChildFields.length === 0) continue;
       const rows = data[f.fieldname];
       if (!Array.isArray(rows)) continue;
       for (const row of rows) {
         if (!row || typeof row !== "object") continue;
-        const r = row as Record<string, unknown>;
-        for (const cf of attachChildFields) {
-          const id = parseFileId(r[cf.fieldname]);
-          if (id) ids.push(id);
-        }
+        ids.push(...collectAttachFileIds(f.child_fields, row as Record<string, unknown>));
       }
     }
   }

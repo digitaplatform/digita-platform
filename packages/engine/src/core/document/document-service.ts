@@ -2188,7 +2188,7 @@ export class DocumentService {
       const stored = await this.db.findOne(entity.name, id, entity.database, session, { includeDeleted: true });
       if (!stored || stored["deleted"] == null) throw new NotFoundError(doctype, name);
       const readable = readStoredRow(entity, stored);
-      if (!isRoleVisible(entity, user, readable)) throw new NotFoundError(doctype, name);
+      await this.assertRowReadable(entity, doctype, id, user, readable);
       await this.permissionChecker.check(user, doctype, "delete", readable);
       if (doctype === DIGITA.COLLECTIONS.FILE) await this.assertFileBytesPresent(stored);
       doc = new BaseDocument(doctype, stored);
@@ -2227,11 +2227,11 @@ export class DocumentService {
       await this.activityLogService.log({
         entity: doctype, document_name: id, action: "Restored", user: user.email, user_name: user.full_name ?? user.email,
       }, session);
+      // Check the hooks' final stored row and derive response fields through the ordinary reader.
+      doc = await this.getDoc(doctype, id, user, undefined, ctx?.locale, session);
     });
     ctx?.success("doc_restored", { doctype: entity.label ?? doctype, name: id });
     log.info({ doctype, name: id, user: user.email }, "Document restored");
-    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user, ctx?.locale);
-    doc._data = readStoredRow(entity, doc._data);
     return doc;
   }
 
