@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 // stores/session.ts pulls in stores/theme.ts, which calls bootIdentity() (needs
 // `document`) at module scope — the default 'node' suite environment has none.
-import { describe, it, expect, afterEach } from 'vitest';
-import { resolveBootLocale, pickBootLocale, LOCALE_STORAGE_KEY } from '@/stores/session';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { getBrowserLocale, resolveBootLocale, pickBootLocale, LOCALE_STORAGE_KEY } from '@/stores/session';
 import type { BootData } from '@/types';
 
 afterEach(() => {
   localStorage.clear();
+  vi.unstubAllGlobals();
 });
 
 describe('resolveBootLocale', () => {
@@ -27,6 +28,16 @@ describe('resolveBootLocale', () => {
 // call: this exercises the actual code path App() calls, not just resolveBootLocale in
 // isolation, so reordering pickBootLocale's own priority turns this red too.
 describe('pickBootLocale', () => {
+  it('sends the full Mexican browser tag before boot and retains it when boot agrees', async () => {
+    vi.stubGlobal('navigator', { languages: ['es-MX', 'es'], language: 'es-MX' });
+    expect(getBrowserLocale()).toBe('es-MX');
+    const { resolved } = await pickBootLocale(async () => {
+      expect(document.documentElement.lang).toBe('es-MX');
+      return { locale: { code: 'es-MX' } } as BootData;
+    });
+    expect(resolved).toBe('es-MX');
+  });
+
   it('a German profile from boot wins over both a stored English choice and the browser', async () => {
     localStorage.setItem(LOCALE_STORAGE_KEY, 'en');
     Object.defineProperty(navigator, 'language', { value: 'en-US', configurable: true });

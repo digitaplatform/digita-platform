@@ -9,7 +9,7 @@ import type { FieldControlProps } from '@/controls/types';
 import CurrencyControl from '@/controls/CurrencyControl';
 import { CellValue } from '@/components/render/cells';
 import { useSessionStore } from '@/stores/session';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatDate, formatNumber } from '@/lib/format';
 
 afterEach(() => {
   useSessionStore.setState({ settings: null, locale: null });
@@ -19,6 +19,15 @@ afterEach(() => {
 const spaced = (text: string) => text.replace(/\s/g, ' ');
 
 describe('formatCurrency', () => {
+  it('uses Mexican dates and number separators without changing the amount currency or Spanish', () => {
+    expect(formatDate('2026-12-31', 'es-MX')).toBe('31/12/2026');
+    expect(formatNumber(1234.56, 'es-MX')).toBe('1,234.56');
+    expect(formatCurrency(1234.56, 'es-MX', 'MXN')).toBe('$1,234.56');
+    expect(formatCurrency(1234.56, 'es-MX', 'EUR')).toBe(new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'EUR' }).format(1234.56));
+    expect(formatNumber(1234.56, 'es')).toBe('1234,56');
+    expect(formatNumber(1234.56, 'es-ES')).toBe('1234,56');
+  });
+
   it('shows two fraction digits without a currency', () => {
     expect(formatCurrency(440.9, 'en', undefined)).toBe('440.90');
     expect(formatCurrency(120, 'en', undefined)).toBe('120.00');

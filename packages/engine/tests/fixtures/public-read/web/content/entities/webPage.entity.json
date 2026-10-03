@@ -15,7 +15,7 @@
   "fields": [
     { "fieldname": "sb_identity", "fieldtype": "SectionBreak", "label": "Identity", "idx": 1 },
     { "fieldname": "site", "fieldtype": "Link", "label": "Site", "target": "WebSite", "target_display": "site_name", "required": true, "in_list_view": true, "in_standard_filter": true, "idx": 2 },
-    { "fieldname": "locale", "fieldtype": "Select", "label": "Locale", "options": ["en", "de", "it", "fr", "es", "tr"], "required": true, "in_list_view": true, "in_standard_filter": true, "idx": 3 },
+    { "fieldname": "locale", "fieldtype": "Select", "label": "Locale", "options": ["en", "de", "it", "fr", "es", "es-MX", "tr"], "required": true, "in_list_view": true, "in_standard_filter": true, "idx": 3 },
     { "fieldname": "slug", "fieldtype": "Data", "label": "Slug", "description": "URL path; empty for the home page. Lowercase letters, digits, hyphens, slashes.", "regex": "^[a-z0-9-/]*$", "regex_message": "Slug must be lowercase letters, digits, hyphens or slashes", "in_list_view": true, "in_standard_filter": true, "idx": 4 },
     { "fieldname": "title", "fieldtype": "Data", "label": "Title", "required": true, "in_list_view": true, "idx": 5 },
     { "fieldname": "translation_group", "fieldtype": "Data", "label": "Translation Group", "description": "Shared id linking the locale variants of one logical page (drives hreflang).", "in_standard_filter": true, "idx": 7 },

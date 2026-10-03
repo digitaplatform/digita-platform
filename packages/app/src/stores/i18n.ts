@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { FALLBACK_LANGUAGE } from '@digitaplatform/shared';
 import { getTranslations } from '@/services/translations';
 import { humanize } from '@/lib/localize-meta';
 
@@ -13,7 +14,7 @@ interface I18nState {
   loaded: boolean;
   /** Loads a language's texts and makes it the current one. Rejects with a
    *  TranslationsLoadError, keeping the texts it had, when they do not load. */
-  load: (locale: string) => Promise<void>;
+  load: (locale: string, fallback?: string) => Promise<void>;
   t: (key: string, params?: Record<string, string | number>) => string;
   tField: (entity: string, field: string, fallback?: string) => string;
   tOption: (entity: string, field: string, value: string) => string;
@@ -47,13 +48,18 @@ export const useI18nStore = create<I18nState>((set, get) => ({
   translations: {},
   loaded: false,
 
-  load: async (locale) => {
-    const res = await getTranslations(locale).catch((error: unknown) => {
-      throw new TranslationsLoadError(locale, error);
-    });
-    if (!res.success || !res.data) throw new TranslationsLoadError(locale, res.error?.detail ?? 'the engine answered without texts');
+  load: async (locale, fallback = FALLBACK_LANGUAGE) => {
+    const base = locale.split('-')[0]!;
+    const languages = base === locale ? [locale] : [...new Set([locale, base, fallback])].reverse();
+    const dictionaries = await Promise.all(languages.map(async (language) => {
+      const res = await getTranslations(language).catch((error: unknown) => {
+        throw new TranslationsLoadError(locale, error);
+      });
+      if (!res.success || !res.data) throw new TranslationsLoadError(locale, res.error?.detail ?? 'the engine answered without texts');
+      return res.data;
+    }));
     document.documentElement.lang = locale;
-    set({ locale, translations: res.data, loaded: true });
+    set({ locale, translations: Object.assign({}, ...dictionaries), loaded: true });
   },
 
   t: (key, params) => {

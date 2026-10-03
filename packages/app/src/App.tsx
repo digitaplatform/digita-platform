@@ -130,7 +130,7 @@ export default function App() {
           // Then the app's plugin composition + layout. A sign-in comes back from
           // the IdP as a full page load, so this boot is the only place that runs
           // both. Fail loud on an unknown template id (→ the error screen).
-          await loadI18n(resolved);
+          await loadI18n(resolved, data.locale?.fallback);
           // Active audience is `internal` today (the only wired SPA runtime).
           await loadAppComposition('internal', data.branding?.default_template);
           // A user who can complete a pending setup starts on its page. Only an entry at the

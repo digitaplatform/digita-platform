@@ -34,7 +34,8 @@ export function englishText(code: string, params?: Record<string, string>): stri
  *  it, else the best match of the request's Accept-Language. */
 export function messageLocale(userLanguage: string | undefined, acceptLanguage: string | undefined): string {
   const i18n = engineI18n();
-  return userLanguage && i18n.supported.includes(userLanguage) ? userLanguage : i18n.resolveLocale(acceptLanguage);
+  const exact = i18n.supported.find((code) => code.toLowerCase() === userLanguage?.toLowerCase());
+  return exact ?? i18n.resolveLocale(acceptLanguage);
 }
 
 /** The boot-loaded translator; throws until loadEngineI18n() has run. */

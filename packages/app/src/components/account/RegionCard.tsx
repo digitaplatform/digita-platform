@@ -25,6 +25,7 @@ const REGION_OPTIONS: { value: string; label: string }[] = [
   { value: 'en-US', label: 'English — United States (en-US)' },
   { value: 'en-GB', label: 'English — United Kingdom (en-GB)' },
   { value: 'es-ES', label: 'Español — España (es-ES)' },
+  { value: 'es-MX', label: 'Español — México (es-MX)' },
   { value: 'tr-TR', label: 'Türkçe — Türkiye (tr-TR)' },
 ];
 
@@ -74,7 +75,7 @@ export function RegionCard({ formatLocale, timezone, currency, onSave, saving, e
 
   const zones = useMemo(timezoneList, []);
 
-  // A bare language (e.g. "de") is "follow language" → maps to the default ('').
+  // AccountPage passes only an explicit region; following the language stays the default.
   const initialRegion = formatLocale && REGION_OPTIONS.some((o) => o.value === formatLocale) ? formatLocale : '';
   const initialTz = timezone ?? '';
 

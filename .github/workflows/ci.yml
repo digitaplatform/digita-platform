@@ -89,12 +89,12 @@ jobs:
       - name: Typecheck the app
         run: pnpm --filter '@digitaplatform/app' typecheck
       # The tests read the build's texts as its pod does, from TRANSLATIONS_DIR: its folder of
-      # digitaplatform/digita-translations master, never a copy kept here. A literal key the code
+      # the exact reviewed digita-translations commit, never a copy kept here. A literal key the code
       # names and that folder's en.json lacks turns the tests red.
-      - name: Download digitaplatform/digita-translations master
+      - name: Download digitaplatform/digita-translations pinned for es-MX
         run: |
           mkdir -p "$RUNNER_TEMP/digita-translations"
-          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/master \
+          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/b1bcb261c69f3879618f51d171460453d4f0fb06 \
             | tar -xz -C "$RUNNER_TEMP/digita-translations" --strip-components=1
       - name: Test the app
         run: pnpm --filter '@digitaplatform/app' test
@@ -133,12 +133,12 @@ jobs:
       - name: Typecheck the web site
         run: pnpm --filter '@digitaplatform/web' typecheck
       # The tests read the build's texts as its pod does, from TRANSLATIONS_DIR: its folder of
-      # digitaplatform/digita-translations master, never a copy kept here. A literal key the code
+      # the exact reviewed digita-translations commit, never a copy kept here. A literal key the code
       # names and that folder's en.json lacks turns the tests red.
-      - name: Download digitaplatform/digita-translations master
+      - name: Download digitaplatform/digita-translations pinned for es-MX
         run: |
           mkdir -p "$RUNNER_TEMP/digita-translations"
-          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/master \
+          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/b1bcb261c69f3879618f51d171460453d4f0fb06 \
             | tar -xz -C "$RUNNER_TEMP/digita-translations" --strip-components=1
       - name: Test the web site
         run: pnpm --filter '@digitaplatform/web' test
@@ -192,12 +192,12 @@ jobs:
       - name: Build the engine
         run: pnpm --filter '@digitaplatform/engine' build
       # The tests read the build's texts as its pod does, from TRANSLATIONS_DIR: its folder of
-      # digitaplatform/digita-translations master, never a copy kept here. A literal key the code
+      # the exact reviewed digita-translations commit, never a copy kept here. A literal key the code
       # names and that folder's en.json lacks turns the tests red.
-      - name: Download digitaplatform/digita-translations master
+      - name: Download digitaplatform/digita-translations pinned for es-MX
         run: |
           mkdir -p "$RUNNER_TEMP/digita-translations"
-          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/master \
+          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/b1bcb261c69f3879618f51d171460453d4f0fb06 \
             | tar -xz -C "$RUNNER_TEMP/digita-translations" --strip-components=1
       - name: Engine test suite
         run: pnpm --filter '@digitaplatform/engine' test

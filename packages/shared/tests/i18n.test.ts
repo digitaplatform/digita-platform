@@ -19,6 +19,25 @@ afterEach(() => {
 });
 
 describe("the translator", () => {
+  it("keeps Mexican Spanish and falls missing keys through Spanish before the configured fallback", () => {
+    const regional = createTranslator({
+      "es-MX": { greeting: "Hola {name}", "rows.one": "{count} fila" },
+      es: { greeting: "Hola de España", base: "Español", "rows.other": "{count} filas" },
+      de: { base: "Deutsch", last: "Fallback" },
+    }, "de");
+    expect(regional.resolveLocale("ES-mx;Q=0.9,de;q=0.5")).toBe("es-MX");
+    expect(regional.resolveLocale("es-MX;q=0,de;q=0.5")).toBe("de");
+    expect(regional.resolveLocale("de;q=0.9,es-MX;q=0.5")).toBe("de");
+    expect(regional.resolveLocale("es-ES")).toBe("es");
+    expect(regional.t("greeting", { name: "Ana" }, "es-MX")).toBe("Hola Ana");
+    expect(regional.t("base", undefined, "es-MX")).toBe("Español");
+    expect(regional.t("last", undefined, "es-MX")).toBe("Fallback");
+    expect(regional.t("unknown", undefined, "es-MX")).toBe("unknown");
+    expect(regional.tPlural("rows", 2, undefined, "es-MX")).toBe("2 filas");
+    expect(regional.t("greeting", undefined, "es")).toBe("Hola de España");
+    expect(createTranslator({ es: { base: "Español" }, de: {} }, "de").resolveLocale("es-MX")).toBe("es");
+  });
+
   it("reads the asked language, falls back to en, and returns an unknown key as itself", () => {
     expect(i18n.t("greeting", { name: "Ada" }, "de")).toBe("Hallo Ada");
     expect(i18n.t("greeting", { name: "Ada" }, "fr")).toBe("Hello Ada");
@@ -49,6 +68,7 @@ describe("the loaders of digita-translations", () => {
     const bundle = await fetchBundle("/auth/translations/");
     expect(Object.keys(bundle)).toEqual([...SUPPORTED_LANGUAGES]);
     expect(urls).toContain("/auth/translations/tr.json");
+    expect(urls).toContain("/auth/translations/es-MX.json");
   });
 
   it("fails the fetch when a language file is not delivered, naming it", async () => {
@@ -62,6 +82,7 @@ describe("the loaders of digita-translations", () => {
     const dir = mkdtempSync(join(tmpdir(), "translations-"));
     for (const language of SUPPORTED_LANGUAGES) writeFileSync(join(dir, `${language}.json`), `{"title":"${language}"}`);
     expect(readBundle(dir).tr).toEqual({ title: "tr" });
+    expect(readBundle(dir)["es-MX"]).toEqual({ title: "es-MX" });
     const partial = mkdtempSync(join(tmpdir(), "translations-"));
     writeFileSync(join(partial, "en.json"), "{}");
     expect(() => readBundle(partial)).toThrow(/de\.json/);

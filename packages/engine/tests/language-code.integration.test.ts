@@ -27,7 +27,7 @@ import { TranslationService } from "../src/core/i18n/translation-service.js";
 import { DocumentService } from "../src/core/document/document-service.js";
 import { DIGITA } from "@digitaplatform/shared";
 import { IndexManager } from "../src/core/database/index-manager.js";
-import { seedLanguages, fillLanguageCodesOnce } from "../src/core/setup/seed-languages.js";
+import { seedLanguages, fillLanguageCodesOnce, DEFAULT_LANGUAGES } from "../src/core/setup/seed-languages.js";
 import type { UserContext } from "../src/core/permissions/types.js";
 import { env } from "../src/core/config/env.js";
 
@@ -111,8 +111,8 @@ describe("a seeded Language", () => {
   it("gets its code at the first start of a database a seed before this release wrote", async () => {
     await seedLegacyDatabase();
     await seedLanguages(db);
-    for (const id of ["en", "tr", "de", "es", "fr", "it"]) expect(await codeOf(id)).toBe(id);
-    expect(await fillReport()).toMatchObject({ filled: 6, unfilled: [] });
+    for (const { _id } of DEFAULT_LANGUAGES) expect(await codeOf(_id)).toBe(_id);
+    expect(await fillReport()).toMatchObject({ filled: DEFAULT_LANGUAGES.length, unfilled: [] });
   });
 
   it("fills a code that is null or empty, once per database", async () => {
@@ -139,7 +139,7 @@ describe("a seeded Language", () => {
     await languages().insertOne({ _id: "pt" as never, name: "Portuguese", code: "de" });
     await expect(seedLanguages(db)).resolves.toBeUndefined();
     expect([await codeOf("de"), await codeOf("pt"), await codeOf("fr")]).toEqual([undefined, "de", "fr"]);
-    expect(await fillReport()).toMatchObject({ filled: 5, unfilled: [{ language: "de", code_held_by: "pt" }] });
+    expect(await fillReport()).toMatchObject({ filled: DEFAULT_LANGUAGES.length - 1, unfilled: [{ language: "de", code_held_by: "pt" }] });
   });
 
   it("seeds a deleted default language without the code another language took meanwhile", async () => {

@@ -41,10 +41,14 @@ export interface BootLanguage {
 /** Locale resolved by the engine (mirrors the engine LocaleResolver output). */
 export interface BootLocale {
   code: string;
+  /** Configured translation fallback already carried by the engine boot response. */
+  fallback?: string;
   direction?: 'ltr' | 'rtl';
   /** BCP-47 formatting locale (e.g. "de-CH") — drives Intl number/date/currency.
    *  Region-aware, independent of `code` (the UI language). */
   format_locale?: string;
+  /** Distinguishes an explicit region equal to the UI language from following that language. */
+  has_format_locale_preference?: boolean;
   /** IANA timezone for datetime display (e.g. "Europe/Zurich"). */
   timezone?: string | null;
 }
