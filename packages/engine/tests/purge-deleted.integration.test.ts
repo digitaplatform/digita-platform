@@ -348,8 +348,8 @@ describe("physical purge — storage failure, missing bytes, and retry (Priority
 });
 
 describe("physical purge — referenced File preservation across live and retained parents (Priority 2)", () => {
-  it.each([true, false])("invalidates a shared File's old parent binding and later removes its bytes (current field: %s)", async (currentField) => {
-    const suffix = currentField ? "CURRENT" : "REPLACED";
+  it.each([[true, true], [false, true], [true, false]])("invalidates a shared File's old binding without blocking its existing reference (field: %s, retained: %s)", async (currentField, retainedParent) => {
+    const suffix = `${currentField ? "CURRENT" : "REPLACED"}-${retainedParent ? "RETAINED" : "LIVE"}`;
     const fileId = `FILE-BOUND-${suffix}`;
     const first = `B-BOUND-A-${suffix}`;
     const last = `B-BOUND-B-${suffix}`;
@@ -363,7 +363,8 @@ describe("physical purge — referenced File preservation across live and retain
     }, DIGITA.DATABASES.CORE);
     for (const [id, owner] of [[first, "original@d"], [last, "other@d"]]) {
       await db.insertOne("PurgeBook", {
-        _id: id, title: id, owner, deleted_by: owner, deleted: monthsAgo(14),
+        _id: id, title: id, owner,
+        ...(id === first || retainedParent ? { deleted_by: owner, deleted: monthsAgo(14) } : {}),
         creation: monthsAgo(16), modified: monthsAgo(14),
         ...(id === last || currentField ? { attachment: fileUrl } : {}),
       }, "app");
@@ -380,6 +381,14 @@ describe("physical purge — referenced File preservation across live and retain
     // Check the underlying parent grant too: clearing only File visibility would leave the stale binding.
     expect(await deps.permissionChecker.hasPermission(newOwner, "PurgeBook", "read", { _id: first, owner: "new@d" })).toMatchObject({ allowed: true });
     expect(await mayReadFile(deps, newOwner, retained!)).toBe(false);
+    if (retainedParent) await documentService.restoreDoc("PurgeBook", last, adminUser);
+    await documentService.update("PurgeBook", last, { title: "Editable existing reference" }, adminUser);
+    expect(await db.findOne("PurgeBook", last, "app")).toMatchObject({ title: "Editable existing reference", attachment: fileUrl });
+    await expect(documentService.insert("PurgeBook", {
+      _id: `B-NEW-REFERENCE-${suffix}`, title: "Cannot add a marked File", attachment: fileUrl,
+    }, adminUser)).rejects.toMatchObject({ responseCode: "PERMISSION_DENIED" });
+    expect(await storage.exists(key)).toBe(true);
+    await db.updateOne("PurgeBook", last, { deleted: monthsAgo(14), deleted_by: "other@d" }, "app");
     expect(await documentService.purgeDoc("PurgeBook", last, adminUser, cutoff)).toMatchObject({ purged: true, files_deleted: 1 });
     expect(await storage.exists(key)).toBe(false);
     expect(await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true })).toBeNull();

@@ -1560,7 +1560,7 @@ export class DocumentService {
       );
       if (!matched) throw new NotFoundError(doctype, name);
       if (treePlacement) Object.assign(doc._data, await writeTreePlacement(this.db, entity, name, treePlacement, session));
-      await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
+      await this.attachFilesToDocument(entity, doc._id, doc._data, user, session, doc._original);
 
       await this.hookRunner.run(doctype, "on_update", doc, ctx, session, user);
       if (this.ruleEngine) {
@@ -2044,7 +2044,7 @@ export class DocumentService {
       );
       if (!matched) throw new NotFoundError(doctype, name);
       if (treePlacement) Object.assign(doc._data, await writeTreePlacement(this.db, entity, name, treePlacement, session));
-      await this.attachFilesToDocument(entity, doc._id, doc._data, user, session);
+      await this.attachFilesToDocument(entity, doc._id, doc._data, user, session, doc._original);
 
       await this.hookRunner.run(doctype, "on_submitted_update", doc, ctx, session, user);
 
@@ -2222,7 +2222,11 @@ export class DocumentService {
       const treePlacement = await placeTreeNode(this.db, entity, id, doc._data, undefined, session);
       doc.ensureRowIds();
       await assertAttachFilesReadable(this.fileAccess(), entity, doc._data, new Set(collectAttachFileIds(entity.fields, stored)), user, session);
-      await this.attachFilesToDocument(entity, id, doc._data, user, session);
+      for (const fileId of this.attachmentIds(entity, stored)) {
+        const file = await this.db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, session, { includeDeleted: true });
+        if (file?.["deleted"] != null) await this.assertFileBytesPresent(file);
+      }
+      await this.attachFilesToDocument(entity, id, doc._data, user, session, stored);
       doc.modified_by = user.email;
       doc.modified = new Date();
       // Replacement clears the two deletion markers and still enforces all unique indexes.
@@ -3191,14 +3195,19 @@ export class DocumentService {
     data: Record<string, unknown>,
     user: UserContext,
     session: import("mongodb").ClientSession,
+    before: Record<string, unknown> = {},
   ): Promise<void> {
     if (entity.name === DIGITA.COLLECTIONS.FILE) await this.assertFileBytesPresent(data);
     const fileIds = [...new Set(collectAttachFileIds(entity.fields, data).map((id) => toIdString(toIdStorage(id))))].sort();
     if (fileIds.length === 0) return;
     // Reference writers and purge/delete share the existing transaction guard, closing write-skew.
     for (const id of fileIds) await this.db.touchGuard(`attachment:${id}`, session);
-    const present = await this.db.find(DIGITA.COLLECTIONS.FILE, { filters: [{ _id: { $in: fileIds } }], fields: ["_id"] }, DIGITA.DATABASES.CORE, session);
-    if (present.length < fileIds.length) throw PermissionDeniedError.forAction(DIGITA.COLLECTIONS.FILE, "read");
+    const previous = new Set(this.attachmentIds(entity, before));
+    const present = await this.db.findManyByFilter(DIGITA.COLLECTIONS.FILE, { _id: { $in: fileIds.map(toIdStorage) } } as never, DIGITA.DATABASES.CORE, session, { includeDeleted: true });
+    // Retention can mark a shared File. An unchanged reference stays editable; a new one cannot name it.
+    if (present.length < fileIds.length || present.some((file) => file["deleted"] != null && !previous.has(toIdString(file["_id"])))) {
+      throw PermissionDeniedError.forAction(DIGITA.COLLECTIONS.FILE, "read");
+    }
     const unattached = await this.db.find(
       DIGITA.COLLECTIONS.FILE,
       { filters: [{ _id: { $in: fileIds }, attached_to_entity: entity.name, attached_to_name: null }] },
