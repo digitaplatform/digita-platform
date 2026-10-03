@@ -2267,7 +2267,8 @@ export class DocumentService {
           for (const fileId of await this.purgeFileIds(entity, id, stored, session)) {
             await this.db.touchGuard(`attachment:${fileId}`, session);
             const file = await this.db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, session, { includeDeleted: true });
-            if (!file || file["deleted"] != null || !this.ownsPurgeFile(entity, id, stored, file)) continue;
+            if (!file || file["deleted"] != null || !(await this.ownsPurgeFile(entity, id, stored, file, user))) continue;
+            if ((await fileAttachmentBlockers(this.db, fileId, this.registry.getAll(), session, { entity: doctype, name: id })).length > 0) continue;
             const now = new Date();
             await this.db.updateOne(DIGITA.COLLECTIONS.FILE, fileId, {
               deleted: now, deleted_by: user.email, modified: now, modified_by: user.email,
@@ -2292,14 +2293,16 @@ export class DocumentService {
           for (const fileId of fileIds) {
             await this.db.touchGuard(`attachment:${fileId}`, session);
             const file = await this.db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, session, { includeDeleted: true });
-            if (!file || file["deleted"] == null || !this.ownsPurgeFile(entity, id, stored, file)) continue;
-            if ((await fileAttachmentBlockers(this.db, fileId, this.registry.getAll(), session, { entity: doctype, name: id })).length > 0) {
-              // Retain its bytes for the other references, without granting a future reused parent ID.
+            if (!file) continue;
+            const owned = await this.ownsPurgeFile(entity, id, stored, file, user);
+            // A File can be restored between the phases. Always remove its obsolete parent grant.
+            if (file["attached_to_entity"] === doctype && file["attached_to_name"] === id) {
               await this.db.updateOne(DIGITA.COLLECTIONS.FILE, fileId, {
-                attached_to_entity: null, attached_to_name: null, attached_to_field: null,
-              }, DIGITA.DATABASES.CORE, session, { deleted: file["deleted"] });
-              continue;
+                attached_to_name: null,
+              }, DIGITA.DATABASES.CORE, session, { attached_to_entity: doctype, attached_to_name: id });
             }
+            if (file["deleted"] == null || !owned) continue;
+            if ((await fileAttachmentBlockers(this.db, fileId, this.registry.getAll(), session, { entity: doctype, name: id })).length > 0) continue;
             await this.deletePurgedFileBytes(file, session);
             if (!(await this.db.deleteMany(DIGITA.COLLECTIONS.FILE, { _id: toIdStorage(fileId), deleted: file["deleted"] }, DIGITA.DATABASES.CORE, session))) continue;
             const removed = await this.removePurgeDependents(DIGITA.COLLECTIONS.FILE, fileId, session);
@@ -2345,10 +2348,13 @@ export class DocumentService {
     return [...new Set([...this.attachmentIds(entity, stored), ...bound.map((file) => toIdString(file["_id"]))])].sort();
   }
 
-  private ownsPurgeFile(entity: EntityDefinition, id: string, parent: Record<string, unknown>, file: Record<string, unknown>): boolean {
-    return file["attached_to_name"]
-      ? file["attached_to_entity"] === entity.name && toIdString(toIdStorage(String(file["attached_to_name"]))) === id
-      : file["deleted"] != null || (typeof parent["deleted_by"] === "string" && file["owner"] === parent["deleted_by"]);
+  private async ownsPurgeFile(entity: EntityDefinition, id: string, parent: Record<string, unknown>, file: Record<string, unknown>, user: UserContext): Promise<boolean> {
+    if (file["attached_to_name"]) return file["attached_to_entity"] === entity.name && toIdString(toIdStorage(String(file["attached_to_name"]))) === id;
+    if (typeof parent["deleted_by"] === "string" && file["owner"] === parent["deleted_by"]) return true;
+    // The last reference may belong to another owner. Its cleanup uses the existing File delete grant.
+    const definition = this.registry.get(DIGITA.COLLECTIONS.FILE);
+    const readable = readStoredRow(definition, file);
+    return isRoleVisible(definition, user, readable) && (await this.permissionChecker.hasPermission(user, DIGITA.COLLECTIONS.FILE, "delete", readable)).allowed;
   }
 
   private async removePurgeDependents(doctype: string, id: string, session: import("mongodb").ClientSession): Promise<PurgeResult> {

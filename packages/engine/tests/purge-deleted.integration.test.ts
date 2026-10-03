@@ -87,7 +87,7 @@ const PURGE_BOOK: EntityDefinition = {
   ],
   permissions: [
     { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
-    { role: "Bound Reader", level: 0, read: 1, if_owner: 1 },
+    { role: "Bound Reader", level: 0, read: 1, create: 1, if_owner: 1 },
   ],
 } as unknown as EntityDefinition;
 
@@ -372,8 +372,8 @@ describe("physical purge — referenced File preservation across live and retain
     const cutoff = { deletedBefore: monthsAgo(12) };
     expect(await documentService.purgeDoc("PurgeBook", first, adminUser, cutoff)).toMatchObject({ purged: true, files_deleted: 0 });
     const retained = await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
-    expect(retained).toMatchObject({ attached_to_entity: null, attached_to_name: null, storage_key: key });
-    expect(retained?.["deleted"]).toBeInstanceOf(Date);
+    expect(retained).toMatchObject({ attached_to_entity: "PurgeBook", attached_to_name: null, storage_key: key });
+    expect(retained?.["deleted"] ?? null).toBeNull();
     expect(await storage.exists(key)).toBe(true);
     await db.insertOne("PurgeBook", { _id: first, title: "Reused identity", owner: "new@d" }, "app");
     const deps = (documentService as unknown as { fileAccess(): FileAccessDeps }).fileAccess();
@@ -386,7 +386,7 @@ describe("physical purge — referenced File preservation across live and retain
     expect(await db.findOne("PurgeBook", last, "app")).toMatchObject({ title: "Editable existing reference", attachment: fileUrl });
     await expect(documentService.insert("PurgeBook", {
       _id: `B-NEW-REFERENCE-${suffix}`, title: "Cannot add a marked File", attachment: fileUrl,
-    }, adminUser)).rejects.toMatchObject({ responseCode: "PERMISSION_DENIED" });
+    }, newOwner)).rejects.toMatchObject({ responseCode: "PERMISSION_DENIED", params: { doctype: "File" } });
     expect(await storage.exists(key)).toBe(true);
     await db.updateOne("PurgeBook", last, { deleted: monthsAgo(14), deleted_by: "other@d" }, "app");
     expect(await documentService.purgeDoc("PurgeBook", last, adminUser, cutoff)).toMatchObject({ purged: true, files_deleted: 1 });
