@@ -146,7 +146,13 @@ describe("PermissionChecker — readable tree defaults", () => {
     const entity = {
       name: "Group", module: "test", database: "app", tree: {},
       naming: { strategy: "user_set" },
-      fields: [{ fieldname: "active", fieldtype: "Check", label: "Active", default: defaultActive }],
+      fields: [
+        { fieldname: "active", fieldtype: "Check", label: "Active", default: defaultActive },
+        { fieldname: "lines", fieldtype: "Table", label: "Lines", child_fields: [
+          { fieldname: "qty", fieldtype: "Int", label: "Quantity" },
+          { fieldname: "cost_price", fieldtype: "Currency", label: "Cost price", perm_level: 2 },
+        ] },
+      ],
       permissions,
     } as EntityDefinition;
     registry.prepareDefinition(entity);
@@ -173,6 +179,19 @@ describe("PermissionChecker — readable tree defaults", () => {
     const checker = treeChecker([{ role: "Clerk", level: 0, read: 1, select: 1, fields: fields as string[] }]);
     expect(checker.filterFieldsForRead(clerk, "Group", { _id: "G-1", label: "Root" }))
       .not.toHaveProperty(masked as string);
+  });
+
+  it("never lets a display default satisfy a Table child permission condition", () => {
+    const checker = treeChecker([
+      { role: "Clerk", level: 0, read: 1, select: 1 },
+      { role: "Clerk", level: 2, read: 1, condition: "eval:doc.active==true", fields: ["lines"] },
+    ]);
+    const stored = { _id: "G-1", label: "Root", lines: [{ qty: 1, cost_price: 99 }] };
+    expect(checker.filterFieldsForRead(clerk, "Group", stored)).toMatchObject({ active: true, lines: [{ qty: 1 }] });
+    expect((checker.filterFieldsForRead(clerk, "Group", stored).lines as Record<string, unknown>[])[0])
+      .not.toHaveProperty("cost_price");
+    expect(checker.filterFieldsForRead(clerk, "Group", { ...stored, active: true }).lines)
+      .toEqual([{ qty: 1, cost_price: 99 }]);
   });
 
   it("decides conditional field visibility against the stored row", () => {

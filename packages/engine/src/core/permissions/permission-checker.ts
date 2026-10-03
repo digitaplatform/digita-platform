@@ -903,7 +903,8 @@ export class PermissionChecker {
     data: Record<string, unknown>,
     sharedForRead = false,
   ): Record<string, unknown> {
-    const readable = this.getReadableFields(user, entityName, data, sharedForRead);
+    const stored = data;
+    const readable = this.getReadableFields(user, entityName, stored, sharedForRead);
     const entity = this.registry.get(entityName);
     // A readable default must be distinguishable from a field the read mask removed. Evaluate
     // permission conditions against the stored row before adding those defaults.
@@ -931,7 +932,7 @@ export class PermissionChecker {
 
       // Mask child-field rows when the Table declares any gated child.
       if (tableFields.has(key) && Array.isArray(value)) {
-        const allowedChildKeys = this.getReadableChildFields(user, entityName, key, data, sharedForRead);
+        const allowedChildKeys = this.getReadableChildFields(user, entityName, key, stored, sharedForRead);
         if (allowedChildKeys === null) {
           filtered[key] = value;
         } else {
