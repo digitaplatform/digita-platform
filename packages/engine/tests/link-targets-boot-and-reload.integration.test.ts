@@ -263,7 +263,7 @@ describe("POST /admin/reload-definitions runs every check boot runs on the defin
     await writeJson(join(running.root, "rules", "retained.rule.json"), {
       _id: "rule-file-retained",
       entity: "Book",
-      event: "before_save",
+      event: "validate",
       actions: [{ type: "set_value", field: "title", value: "'Retained Rule Value'" }],
     });
 
@@ -288,7 +288,7 @@ describe("POST /admin/reload-definitions runs every check boot runs on the defin
     ]);
 
     await writeJson(join(running.root, "rules", "active.rule.json"), {
-      _id: "rule-file-active", entity: "Book", event: "before_save", condition: "false",
+      _id: "rule-file-active", entity: "Book", event: "validate", condition: "false",
       actions: [{ type: "set_value", field: "title", value: "'Active Rule'" }],
     });
 
@@ -298,7 +298,7 @@ describe("POST /admin/reload-definitions runs every check boot runs on the defin
     const customRule = {
       _id: "rule-custom-retained",
       entity: "Book",
-      event: "before_save",
+      event: "validate",
       actions: [{ type: "set_value", field: "title", value: "'Custom Rule Value'" }],
       deleted: deletedAt,
       deleted_by: "admin@digita.local",
@@ -311,7 +311,7 @@ describe("POST /admin/reload-definitions runs every check boot runs on the defin
     const fileRule = {
       _id: "rule-file-retained",
       entity: "Book",
-      event: "before_save",
+      event: "validate",
       actions: [{ type: "set_value", field: "title", value: "'Retained Rule Value'" }],
       deleted: deletedAt,
       deleted_by: "admin@digita.local",
@@ -404,7 +404,7 @@ describe("POST /admin/reload-definitions runs every check boot runs on the defin
     });
 
     const reloadRes = await running.reload();
-    expect(reloadRes.statusCode).toBe(200);
+    expect(reloadRes.statusCode, reloadRes.body).toBe(200);
 
     const storedCustomRule = await running.db.findOne(DIGITA.COLLECTIONS.RULE, "rule-custom-retained", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
     expect(storedCustomRule).toMatchObject(customRule);

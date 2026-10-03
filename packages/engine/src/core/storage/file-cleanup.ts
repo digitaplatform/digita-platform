@@ -6,6 +6,10 @@ import { deleteImageVariants, hasImageVariants } from "./image-variants.js";
 import { createLogger } from "../logging/logger.js";
 import { fileAttachmentBlockers } from "../link/delete-protection.js";
 import { toIdStorage, toIdString } from "../document/id-codec.js";
+import type { UserContext } from "../permissions/types.js";
+import type { PermissionChecker } from "../permissions/permission-checker.js";
+import { isRoleVisible } from "../permissions/scope-filter.js";
+import { readStoredRow } from "../entity/field-types.js";
 
 const log = createLogger("file-cleanup");
 
@@ -83,12 +87,13 @@ export async function softDeleteFile(
   fileId: string,
   user: { email: string },
   entities: readonly EntityDefinition[],
+  mayDelete?: (file: Record<string, unknown>) => Promise<boolean>,
 ): Promise<void> {
   const id = toIdString(toIdStorage(fileId));
   await db.withTransaction(async (session) => {
     await db.touchGuard(`attachment:${id}`, session);
     const doc = await db.findOne(FILE, id, CORE, session);
-    if (!doc || (await fileAttachmentBlockers(db, id, entities, session)).length > 0) return;
+    if (!doc || (mayDelete && !(await mayDelete(doc))) || (await fileAttachmentBlockers(db, id, entities, session)).length > 0) return;
     const deleted = new Date();
     await db.updateOne(FILE, id, { deleted, deleted_by: user.email, modified: deleted, modified_by: user.email }, CORE, session, { deleted: null });
   });
@@ -123,26 +128,36 @@ export async function deleteBlobIfUnreferenced(
 
 /**
  * Delete the files a document stopped naming, by its update or its delete. Only a file the
- * document owns goes: one bound to it, or the user's own loose upload. A record can name a file
- * it does not own, a colleague's or one bound to another record; that file stays. Never throws,
- * because a cleanup must not fail the operation that owns it; a failure is logged. Its File row
- * is marked deleted in place, and its bytes wait for purge.
+ * document owns goes: one bound to it, or the user's own loose upload, or a detached file
+ * the user has permission to delete. A record can name a file it does not own, a colleague's
+ * or one bound to another record; that file stays. Never throws, because a cleanup must not
+ * fail the operation that owns it; a failure is logged. Its File row is marked deleted in
+ * place, and its bytes wait for purge.
  */
 export async function cleanupDocumentAttachments(
   db: MongoDBService,
   fileIds: ReadonlyArray<string>,
   document: { entity: string; name: string },
-  user: { _id: string; email: string },
+  user: UserContext,
   entities: readonly EntityDefinition[],
+  permissionChecker: PermissionChecker,
 ): Promise<void> {
+  const canonicalDocName = toIdString(toIdStorage(document.name));
+  const fileDef = entities.find((e) => e.name === FILE);
   for (const fileId of fileIds) {
     try {
-      const file = (await db.findOne(FILE, fileId, CORE)) as Record<string, unknown> | null;
-      if (!file) continue;
-      const isOwned = file["attached_to_name"]
-        ? file["attached_to_entity"] === document.entity && file["attached_to_name"] === document.name
-        : file["owner"] === user.email;
-      if (isOwned) await softDeleteFile(db, fileId, user, entities);
+      await softDeleteFile(db, fileId, user, entities, async (file) => {
+        const attachedName = file["attached_to_name"];
+        if (attachedName) {
+          return file["attached_to_entity"] === document.entity &&
+            toIdString(toIdStorage(String(attachedName))) === canonicalDocName;
+        }
+        if (file["owner"] === user.email) return true;
+        if (!fileDef) return false;
+        const readable = readStoredRow(fileDef, file);
+        return isRoleVisible(fileDef, user, readable) &&
+          (await permissionChecker.hasPermission(user, FILE, "delete", readable)).allowed;
+      });
     } catch (err) {
       log.warn({ fileId, ...document, err }, "Attachment cleanup failed for one file");
     }

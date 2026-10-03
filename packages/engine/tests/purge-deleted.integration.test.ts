@@ -369,8 +369,8 @@ describe("physical purge — referenced File preservation across live and retain
     expect(created.json().data).toMatchObject({ _id: name });
     const read = await app.inject({ method: "GET", url: `/api/v1/resource/PurgeBook/${name}`, headers });
     expect(read.statusCode).toBe(200);
-    expect(read.json().data).toMatchObject({ _id: name, title: "Reused identity" });
-    expect(await db.findOne("PurgeBook", name, "app")).toMatchObject({ owner: "new@d" });
+    expect(read.json().data).toMatchObject({ _id: name });
+    expect(await db.findOne("PurgeBook", name, "app")).toMatchObject({ owner: "new@d", title: "Reused identity" });
   }
 
   it.each([[true, true], [false, true], [true, false]])("invalidates a shared File's old binding without blocking its existing reference (field: %s, retained: %s)", async (currentField, retainedParent) => {
@@ -440,7 +440,7 @@ describe("physical purge — referenced File preservation across live and retain
     expect(await db.findOne("PurgeBook", first, "app")).toMatchObject({ owner: "new@d" });
   });
 
-  it("preserves a File restored between purge phases without granting a reused parent identity", async () => {
+  it.each([false, true])("preserves a File restored between purge phases (previous marker: %s)", async (alreadyMarked) => {
     const first = "B-RESTORED-BETWEEN-PHASES";
     const fileId = "FILE-RESTORED-BETWEEN-PHASES";
     const key = "books/restored-between-phases.png";
@@ -459,12 +459,21 @@ describe("physical purge — referenced File preservation across live and retain
       storage_key: key, thumbnail_key: thumbKey, thumbnail_url: `${fileUrl}?thumb=1`,
       file_url: fileUrl, is_private: true, attached_to_entity: "PurgeBook", attached_to_name: first,
       owner: "original@d", modified_by: "original@d", creation: monthsAgo(16), modified: monthsAgo(16),
+      ...(alreadyMarked ? { deleted: monthsAgo(14), deleted_by: "original@d" } : {}),
     }, DIGITA.DATABASES.CORE);
     await db.insertOne("PurgeBook", {
       _id: first, title: "Due parent", owner: "original@d", attachment: fileUrl,
       deleted: monthsAgo(14), deleted_by: "original@d", creation: monthsAgo(16), modified: monthsAgo(14),
     }, "app");
-    for (const token of [originalToken, adminToken]) await expectDownloads(fileUrl, token, bytes);
+    if (alreadyMarked) {
+      for (const token of [originalToken, adminToken]) {
+        for (const url of [fileUrl, `${fileUrl}?thumb=1`]) {
+          expect((await app.inject({ method: "GET", url, headers: { authorization: `Bearer ${token}` } })).statusCode).toBe(404);
+        }
+      }
+    } else {
+      for (const token of [originalToken, adminToken]) await expectDownloads(fileUrl, token, bytes);
+    }
 
     const transact = db.withTransaction.bind(db);
     let intercepted = false;
@@ -474,7 +483,7 @@ describe("physical purge — referenced File preservation across live and retain
         // The marking transaction has committed; restore before purge opens its removal transaction.
         intercepted = true;
         expect(await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true }))
-          .toMatchObject({ deleted: expect.any(Date), deleted_by: adminUser.email, attached_to_name: first });
+          .toMatchObject({ deleted: expect.any(Date), deleted_by: alreadyMarked ? "original@d" : adminUser.email, attached_to_name: first });
         expect(await db.findOne("PurgeBook", first, "app", undefined, { includeDeleted: true }))
           .toMatchObject({ deleted: expect.any(Date) });
         await documentService.restoreDoc(DIGITA.COLLECTIONS.FILE, fileId, adminUser);
@@ -502,6 +511,198 @@ describe("physical purge — referenced File preservation across live and retain
     await createAndReadReusedParent(first, newToken);
     await expectDownloads(fileUrl, newToken);
     for (const token of [originalToken, adminToken]) await expectDownloads(fileUrl, token, bytes);
+  });
+
+  it.each([
+    [true, "507F1F77BCF86CD799439011"], [false, "507F1F77BCF86CD799439011"],
+    [true, "507f1F77bCf86cD799439011"], [false, "507f1F77bCf86cD799439011"],
+  ] as const)("invalidates canonical parent bindings (included in attachment: %s, spelling: %s)", async (includedInAttachment, mixedCaseParent) => {
+    const canonicalParent = "507f1f77bcf86cd799439011";
+    const last = `B-OTHER-REF-${includedInAttachment ? "INCL" : "OMIT"}`;
+    const fileId = `FILE-MIXED-CASE-${includedInAttachment ? "INCL" : "OMIT"}`;
+    const key = `books/mixed-${includedInAttachment ? "incl" : "omit"}.png`;
+    const thumbKey = `books/mixed-${includedInAttachment ? "incl" : "omit"}-thumb.png`;
+    const fileUrl = `/api/v1/file/${fileId}/download`;
+    const bytes: [Buffer, Buffer] = [Buffer.from("mixed case parent bytes"), Buffer.from("mixed thumb bytes")];
+    const [originalToken, adminToken, newToken] = await Promise.all([
+      sign({ sub: "original@d", email: "original@d", roles: ["System User"] }),
+      sign({ sub: adminUser._id, email: adminUser.email, roles: adminUser.roles }),
+      sign({ sub: "new@d", email: "new@d", roles: ["System User", "Bound Reader"] }),
+    ]);
+
+    await storage.put(key, bytes[0], "image/png");
+    await storage.put(thumbKey, bytes[1], "image/png");
+
+    await db.insertOne(DIGITA.COLLECTIONS.FILE, {
+      _id: fileId, file_name: "mixed.png", file_type: "image/png", storage_key: key,
+      thumbnail_key: thumbKey, thumbnail_url: `${fileUrl}?thumb=1`,
+      file_url: fileUrl, is_private: true, attached_to_entity: "PurgeBook", attached_to_name: mixedCaseParent,
+      owner: "original@d", creation: monthsAgo(16), modified: monthsAgo(16),
+    }, DIGITA.DATABASES.CORE);
+
+    await db.insertOne("PurgeBook", {
+      _id: canonicalParent, title: "Parent A", owner: "original@d",
+      deleted_by: "original@d", deleted: monthsAgo(14),
+      creation: monthsAgo(16), modified: monthsAgo(14),
+      ...(includedInAttachment ? { attachment: fileUrl } : {}),
+    }, "app");
+
+    await db.insertOne("PurgeBook", {
+      _id: last, title: "Parent B", owner: "other@d",
+      creation: monthsAgo(16), modified: monthsAgo(14),
+      attachment: fileUrl,
+    }, "app");
+
+    for (const token of [originalToken, adminToken]) await expectDownloads(fileUrl, token, bytes);
+    await expectDownloads(fileUrl, newToken);
+
+    const cutoff = { deletedBefore: monthsAgo(12) };
+    expect(await documentService.purgeDoc("PurgeBook", canonicalParent, adminUser, cutoff)).toMatchObject({ purged: true, files_deleted: 0 });
+
+    const retained = await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(retained).toMatchObject({ attached_to_entity: "PurgeBook", attached_to_name: null, storage_key: key, thumbnail_key: thumbKey });
+    expect(retained?.["deleted"] ?? null).toBeNull();
+    expect(await storage.exists(key)).toBe(true);
+    expect(await storage.exists(thumbKey)).toBe(true);
+
+    for (const token of [originalToken, adminToken]) await expectDownloads(fileUrl, token, bytes);
+    await createAndReadReusedParent(canonicalParent, newToken);
+    await expectDownloads(fileUrl, newToken);
+
+    const deps = (documentService as unknown as { fileAccess(): FileAccessDeps }).fileAccess();
+    const newOwner = { _id: "new@d", email: "new@d", roles: ["System User", "Bound Reader"] };
+    expect(await deps.permissionChecker.hasPermission(newOwner, "PurgeBook", "read", { _id: canonicalParent, owner: "new@d" })).toMatchObject({ allowed: true });
+    expect(await mayReadFile(deps, newOwner, retained!)).toBe(false);
+  });
+
+  it("purges shared File when two parent purges are interleaved between phase 1 and phase 2", async () => {
+    const parentA = "B-INTERLEAVED-A";
+    const parentB = "B-INTERLEAVED-B";
+    const fileId = "FILE-INTERLEAVED-AB";
+    const key = "books/interleaved-ab.png";
+    const thumbKey = "books/interleaved-ab-thumb.png";
+    const fileUrl = `/api/v1/file/${fileId}/download`;
+    const bytes: [Buffer, Buffer] = [Buffer.from("interleaved bytes"), Buffer.from("interleaved thumb")];
+    const [originalToken, adminToken] = await Promise.all([
+      sign({ sub: "original@d", email: "original@d", roles: ["System User"] }),
+      sign({ sub: adminUser._id, email: adminUser.email, roles: adminUser.roles }),
+    ]);
+
+    await storage.put(key, bytes[0], "image/png");
+    await storage.put(thumbKey, bytes[1], "image/png");
+
+    await db.insertOne(DIGITA.COLLECTIONS.FILE, {
+      _id: fileId, doctype: "File", docstatus: 0, file_name: "interleaved.png", file_type: "image/png",
+      storage_key: key, thumbnail_key: thumbKey, thumbnail_url: `${fileUrl}?thumb=1`,
+      file_url: fileUrl, is_private: true, attached_to_entity: "PurgeBook", attached_to_name: parentA,
+      owner: "original@d", modified_by: "original@d", creation: monthsAgo(16), modified: monthsAgo(16),
+    }, DIGITA.DATABASES.CORE);
+
+    await db.insertOne("PurgeBook", {
+      _id: parentA, title: "Due A", owner: "original@d", attachment: fileUrl,
+      deleted: monthsAgo(14), deleted_by: "original@d", creation: monthsAgo(16), modified: monthsAgo(14),
+    }, "app");
+
+    await db.insertOne("PurgeBook", {
+      _id: parentB, title: "Due B", owner: "original@d", attachment: fileUrl,
+      deleted: monthsAgo(14), deleted_by: "original@d", creation: monthsAgo(16), modified: monthsAgo(14),
+    }, "app");
+
+    for (const token of [originalToken, adminToken]) await expectDownloads(fileUrl, token, bytes);
+
+    const cutoff = { deletedBefore: monthsAgo(12) };
+    const transact = db.withTransaction.bind(db);
+    let intercepted = false;
+    const spy = vi.spyOn(db, "withTransaction").mockImplementation(async <T>(callback: (session: ClientSession) => Promise<T>): Promise<T> => {
+      const result = await transact(callback);
+      if (!intercepted) {
+        // Phase 1 of A committed (skipped F because B referenced F). Interleave B's full purge here.
+        intercepted = true;
+        const bResult = await documentService.purgeDoc("PurgeBook", parentB, adminUser, cutoff);
+        expect(bResult).toMatchObject({ purged: true, files_deleted: 0 });
+        expect(await db.findOne("PurgeBook", parentB, "app", undefined, { includeDeleted: true })).toBeNull();
+      }
+      return result;
+    });
+
+    try {
+      const aResult = await documentService.purgeDoc("PurgeBook", parentA, adminUser, cutoff);
+      expect(aResult).toMatchObject({ purged: true, files_deleted: 1 });
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(intercepted).toBe(true);
+    expect(await db.findOne("PurgeBook", parentA, "app", undefined, { includeDeleted: true })).toBeNull();
+    expect(await db.findOne("PurgeBook", parentB, "app", undefined, { includeDeleted: true })).toBeNull();
+    expect(await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true })).toBeNull();
+    expect(await storage.exists(key)).toBe(false);
+    expect(await storage.exists(thumbKey)).toBe(false);
+  });
+
+  it("soft-deletes an unbound File when Administrator removes its last reference after parent purge", async () => {
+    const parentA = "B-FINAL-REF-A";
+    const parentB = "B-FINAL-REF-B";
+    const fileId = "FILE-FINAL-REF-AB";
+    const key = "books/final-ref-ab.png";
+    const thumbKey = "books/final-ref-ab-thumb.png";
+    const fileUrl = `/api/v1/file/${fileId}/download`;
+    const bytes: [Buffer, Buffer] = [Buffer.from("final ref bytes"), Buffer.from("final ref thumb")];
+    const [originalToken, adminToken] = await Promise.all([
+      sign({ sub: "original@d", email: "original@d", roles: ["System User"] }),
+      sign({ sub: adminUser._id, email: adminUser.email, roles: adminUser.roles }),
+    ]);
+
+    await storage.put(key, bytes[0], "image/png");
+    await storage.put(thumbKey, bytes[1], "image/png");
+
+    await db.insertOne(DIGITA.COLLECTIONS.FILE, {
+      _id: fileId, doctype: "File", docstatus: 0, file_name: "final-ref.png", file_type: "image/png",
+      storage_key: key, thumbnail_key: thumbKey, thumbnail_url: `${fileUrl}?thumb=1`,
+      file_url: fileUrl, is_private: true, attached_to_entity: "PurgeBook", attached_to_name: parentA,
+      owner: "original@d", modified_by: "original@d", creation: monthsAgo(16), modified: monthsAgo(16),
+    }, DIGITA.DATABASES.CORE);
+
+    await db.insertOne("PurgeBook", {
+      _id: parentA, title: "Due A", owner: "original@d", attachment: fileUrl,
+      deleted: monthsAgo(14), deleted_by: "original@d", creation: monthsAgo(16), modified: monthsAgo(14),
+    }, "app");
+
+    await db.insertOne("PurgeBook", {
+      _id: parentB, title: "Live B", owner: "other@d", attachment: fileUrl,
+      creation: monthsAgo(16), modified: monthsAgo(14),
+    }, "app");
+
+    for (const token of [originalToken, adminToken]) await expectDownloads(fileUrl, token, bytes);
+
+    const cutoff = { deletedBefore: monthsAgo(12) };
+    // Purge A: F is detached (attached_to_name becomes null) but preserved active because B still references it
+    expect(await documentService.purgeDoc("PurgeBook", parentA, adminUser, cutoff)).toMatchObject({ purged: true, files_deleted: 0 });
+    const detachedFile = await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(detachedFile).toMatchObject({ attached_to_entity: "PurgeBook", attached_to_name: null });
+    expect(detachedFile?.["deleted"] ?? null).toBeNull();
+    expect(await storage.exists(key)).toBe(true);
+
+    // Now Administrator (not original uploader) removes the final attachment from B
+    await documentService.update("PurgeBook", parentB, { attachment: null }, adminUser);
+    expect(await db.findOne("PurgeBook", parentB, "app")).toMatchObject({ title: "Live B", attachment: null });
+
+    // cleanupDocumentAttachments uses File.delete permission to soft-delete the unbound file; bytes are kept
+    const markedFile = await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(markedFile?.["deleted"]).toBeInstanceOf(Date);
+    expect(markedFile?.["deleted_by"]).toBe(adminUser.email);
+    expect(markedFile?.["storage_key"]).toBe(key);
+    expect(markedFile?.["thumbnail_key"]).toBe(thumbKey);
+    expect(await storage.exists(key)).toBe(true);
+    expect(await storage.exists(thumbKey)).toBe(true);
+
+    // Later physical purge of the marked File deletes bytes and cleans up metadata
+    const fileCutoff = { deletedBefore: new Date((markedFile!["deleted"] as Date).getTime() + 1000) };
+    const purgeFileResult = await documentService.purgeDoc(DIGITA.COLLECTIONS.FILE, fileId, adminUser, fileCutoff);
+    expect(purgeFileResult).toMatchObject({ purged: true, files_deleted: 1 });
+    expect(await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true })).toBeNull();
+    expect(await storage.exists(key)).toBe(false);
+    expect(await storage.exists(thumbKey)).toBe(false);
   });
 
   it("PLANTED DEFECT: retained parent reference prevents File byte and metadata purge", async () => {

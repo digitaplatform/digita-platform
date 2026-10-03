@@ -1597,7 +1597,7 @@ export class DocumentService {
       const after = new Set(collectAttachFileIds(entity.fields, doc._data));
       const orphans = attachFilesBefore.filter((fileId) => !after.has(fileId));
       if (orphans.length > 0) {
-        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, orphans, { entity: entity.name, name: doc._id }, user, this.registry.getAll()));
+        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, orphans, { entity: entity.name, name: doc._id }, user, this.registry.getAll(), this.permissionChecker));
       }
     };
     if (options.sessionOverride) {
@@ -2092,7 +2092,7 @@ export class DocumentService {
       const after = new Set(collectAttachFileIds(entity.fields, doc._data));
       const orphans = [...attachFilesBefore].filter((fileId) => !after.has(fileId));
       if (orphans.length > 0) {
-        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, orphans, { entity: entity.name, name: doc._id }, user, this.registry.getAll()));
+        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, orphans, { entity: entity.name, name: doc._id }, user, this.registry.getAll(), this.permissionChecker));
       }
     };
 
@@ -2260,66 +2260,91 @@ export class DocumentService {
     return this.writeOutsideReset(doctype, "purgeDoc", async () => {
       // Keep the marked parent and File rows as durable retry pointers until byte deletion succeeds.
       // This commits File markers before irreversible storage I/O, without another collection.
-      if (!sessionOverride && doctype !== DIGITA.COLLECTIONS.FILE) {
-        await this.db.withTransaction(async (session) => {
-          await this.db.touchGuard(`purge:${doctype}:${id}`, session);
-          const stored = await this.loadPurgeRecord(entity, id, user, cutoff, session);
-          if (!stored) return;
-          for (const fileId of await this.purgeFileIds(entity, id, stored, session)) {
-            await this.db.touchGuard(`attachment:${fileId}`, session);
-            const file = await this.db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, session, { includeDeleted: true });
-            if (!file || file["deleted"] != null || !(await this.ownsPurgeFile(entity, id, stored, file, user))) continue;
-            if ((await fileAttachmentBlockers(this.db, fileId, this.registry.getAll(), session, { entity: doctype, name: id })).length > 0) continue;
-            const now = new Date();
-            await this.db.updateOne(DIGITA.COLLECTIONS.FILE, fileId, {
-              deleted: now, deleted_by: user.email, modified: now, modified_by: user.email,
-            }, DIGITA.DATABASES.CORE, session, { deleted: null });
-          }
-        });
-      }
-      return this.inTransaction(sessionOverride, async (session) => {
-        const empty: PurgeResult = { purged: false, versions_deleted: 0, translations_deleted: 0, files_deleted: 0 };
-        await this.db.touchGuard(`purge:${doctype}:${id}`, session);
-        if (doctype === DIGITA.COLLECTIONS.FILE) await this.db.touchGuard(`attachment:${id}`, session);
-        const stored = await this.loadPurgeRecord(entity, id, user, cutoff, session);
-        if (!stored) return empty;
-        const fileIds = doctype === DIGITA.COLLECTIONS.FILE ? [] : await this.purgeFileIds(entity, id, stored, session);
-        if (sessionOverride && (doctype === DIGITA.COLLECTIONS.FILE || fileIds.length > 0)) {
-          throw new EngineError("purge_requires_own_transaction", {}, 400, "PURGE_TRANSACTION_REQUIRED");
-        }
-        if (doctype === DIGITA.COLLECTIONS.FILE) {
-          if ((await fileAttachmentBlockers(this.db, id, this.registry.getAll(), session)).length > 0) return empty;
-          await this.deletePurgedFileBytes(stored, session);
-        } else {
-          for (const fileId of fileIds) {
-            await this.db.touchGuard(`attachment:${fileId}`, session);
-            const file = await this.db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, session, { includeDeleted: true });
-            if (!file) continue;
-            const owned = await this.ownsPurgeFile(entity, id, stored, file, user);
-            // A File can be restored between the phases. Always remove its obsolete parent grant.
-            if (file["attached_to_entity"] === doctype && file["attached_to_name"] === id) {
-              await this.db.updateOne(DIGITA.COLLECTIONS.FILE, fileId, {
-                attached_to_name: null,
-              }, DIGITA.DATABASES.CORE, session, { attached_to_entity: doctype, attached_to_name: id });
+      const observedMarkedFiles = new Set<string>();
+      for (;;) {
+        if (!sessionOverride && doctype !== DIGITA.COLLECTIONS.FILE) {
+          const marked = await this.db.withTransaction(async (session) => {
+            // Keep retry state local to this callback: Mongo may roll it back and run it again.
+            const committedMarkers: string[] = [];
+            await this.db.touchGuard(`purge:${doctype}:${id}`, session);
+            const stored = await this.loadPurgeRecord(entity, id, user, cutoff, session);
+            if (!stored) return committedMarkers;
+            for (const fileId of await this.purgeFileIds(entity, id, stored, session)) {
+              await this.db.touchGuard(`attachment:${fileId}`, session);
+              const file = await this.db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, session, { includeDeleted: true });
+              if (!file) continue;
+              if (file["deleted"] != null) {
+                committedMarkers.push(fileId);
+                continue;
+              }
+              // A File seen marked in a committed phase may have been explicitly restored.
+              if (observedMarkedFiles.has(fileId) || !(await this.ownsPurgeFile(entity, id, stored, file, user))) continue;
+              if ((await fileAttachmentBlockers(this.db, fileId, this.registry.getAll(), session, { entity: doctype, name: id })).length > 0) continue;
+              const now = new Date();
+              if (await this.db.updateOne(DIGITA.COLLECTIONS.FILE, fileId, {
+                deleted: now, deleted_by: user.email, modified: now, modified_by: user.email,
+              }, DIGITA.DATABASES.CORE, session, { deleted: null })) committedMarkers.push(fileId);
             }
-            if (file["deleted"] == null || !owned) continue;
-            if ((await fileAttachmentBlockers(this.db, fileId, this.registry.getAll(), session, { entity: doctype, name: id })).length > 0) continue;
-            await this.deletePurgedFileBytes(file, session);
-            if (!(await this.db.deleteMany(DIGITA.COLLECTIONS.FILE, { _id: toIdStorage(fileId), deleted: file["deleted"] }, DIGITA.DATABASES.CORE, session))) continue;
-            const removed = await this.removePurgeDependents(DIGITA.COLLECTIONS.FILE, fileId, session);
-            empty.files_deleted++;
-            empty.versions_deleted += removed.versions_deleted;
-            empty.translations_deleted += removed.translations_deleted;
-          }
+            return committedMarkers;
+          });
+          for (const fileId of marked) observedMarkedFiles.add(fileId);
         }
-        // Restore writes this same row. A concurrent restore retries this transaction with a live row.
-        const deleted = await this.db.deleteMany(entity.name, { _id: toIdStorage(id), deleted: stored["deleted"] }, entity.database, session);
-        if (!deleted) return empty;
-        const result = await this.removePurgeDependents(doctype, id, session);
-        return { purged: true, files_deleted: empty.files_deleted + (doctype === DIGITA.COLLECTIONS.FILE ? 1 : 0),
-          versions_deleted: result.versions_deleted + empty.versions_deleted,
-          translations_deleted: result.translations_deleted + empty.translations_deleted };
-      });
+        const result = await this.inTransaction(sessionOverride, async (session) => {
+          const empty: PurgeResult = { purged: false, versions_deleted: 0, translations_deleted: 0, files_deleted: 0 };
+          await this.db.touchGuard(`purge:${doctype}:${id}`, session);
+          if (doctype === DIGITA.COLLECTIONS.FILE) await this.db.touchGuard(`attachment:${id}`, session);
+          const stored = await this.loadPurgeRecord(entity, id, user, cutoff, session);
+          if (!stored) return empty;
+          const fileIds = doctype === DIGITA.COLLECTIONS.FILE ? [] : await this.purgeFileIds(entity, id, stored, session);
+          if (sessionOverride && (doctype === DIGITA.COLLECTIONS.FILE || fileIds.length > 0)) {
+            throw new EngineError("purge_requires_own_transaction", {}, 400, "PURGE_TRANSACTION_REQUIRED");
+          }
+          if (doctype === DIGITA.COLLECTIONS.FILE) {
+            if ((await fileAttachmentBlockers(this.db, id, this.registry.getAll(), session)).length > 0) return empty;
+            await this.deletePurgedFileBytes(stored, session);
+          } else {
+            const files: { id: string; doc: Record<string, unknown>; owned: boolean; referenced: boolean }[] = [];
+            // Check every File before byte deletion or metadata removal, so a retry loses no counts.
+            for (const fileId of fileIds) {
+              await this.db.touchGuard(`attachment:${fileId}`, session);
+              const file = await this.db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, session, { includeDeleted: true });
+              if (!file) continue;
+              const owned = await this.ownsPurgeFile(entity, id, stored, file, user);
+              const referenced = (await fileAttachmentBlockers(this.db, fileId, this.registry.getAll(), session, { entity: doctype, name: id })).length > 0;
+              if (file["deleted"] == null && owned && !referenced && !observedMarkedFiles.has(fileId)) {
+                // The last other parent disappeared after phase one. Commit a marker in a fresh
+                // phase before deleting bytes; the marked parent still owns this retry pointer.
+                return null;
+              }
+              files.push({ id: fileId, doc: file, owned, referenced });
+            }
+            for (const { id: fileId, doc: file, owned, referenced } of files) {
+              // A File can be restored between phases. Always remove its obsolete parent grant.
+              const attachedName = file["attached_to_name"];
+              if (file["attached_to_entity"] === doctype && attachedName != null && toIdString(toIdStorage(String(attachedName))) === id) {
+                await this.db.updateOne(DIGITA.COLLECTIONS.FILE, fileId, {
+                  attached_to_name: null,
+                }, DIGITA.DATABASES.CORE, session, { attached_to_entity: doctype, attached_to_name: attachedName });
+              }
+              if (file["deleted"] == null || !owned || referenced) continue;
+              await this.deletePurgedFileBytes(file, session);
+              if (!(await this.db.deleteMany(DIGITA.COLLECTIONS.FILE, { _id: toIdStorage(fileId), deleted: file["deleted"] }, DIGITA.DATABASES.CORE, session))) continue;
+              const removed = await this.removePurgeDependents(DIGITA.COLLECTIONS.FILE, fileId, session);
+              empty.files_deleted++;
+              empty.versions_deleted += removed.versions_deleted;
+              empty.translations_deleted += removed.translations_deleted;
+            }
+          }
+          // Restore writes this same row. A concurrent restore retries this transaction with a live row.
+          const deleted = await this.db.deleteMany(entity.name, { _id: toIdStorage(id), deleted: stored["deleted"] }, entity.database, session);
+          if (!deleted) return empty;
+          const result = await this.removePurgeDependents(doctype, id, session);
+          return { purged: true, files_deleted: empty.files_deleted + (doctype === DIGITA.COLLECTIONS.FILE ? 1 : 0),
+            versions_deleted: result.versions_deleted + empty.versions_deleted,
+            translations_deleted: result.translations_deleted + empty.translations_deleted };
+        });
+        if (result !== null) return result;
+      }
     });
   }
 
@@ -2343,8 +2368,10 @@ export class DocumentService {
 
   private async purgeFileIds(entity: EntityDefinition, id: string, stored: Record<string, unknown>, session: import("mongodb").ClientSession): Promise<string[]> {
     // A replaced attachment can remain bound even when the parent's current fields omit it.
+    const isHex24 = /^[0-9a-f]{24}$/i.test(id);
     const bound = await this.db.findManyByFilter(DIGITA.COLLECTIONS.FILE, {
-      attached_to_entity: entity.name, attached_to_name: id,
+      attached_to_entity: entity.name,
+      attached_to_name: isHex24 ? { $regex: `^${id}$`, $options: "i" } : id,
     }, DIGITA.DATABASES.CORE, session, { includeDeleted: true });
     return [...new Set([...this.attachmentIds(entity, stored), ...bound.map((file) => toIdString(file["_id"]))])].sort();
   }
