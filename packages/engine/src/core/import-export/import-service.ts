@@ -21,6 +21,7 @@ import { declaredClientMessage, findDeclaredClientError } from "../errors/declar
 import { ZodSchemaBuilder } from "../entity/zod-schema-builder.js";
 import { validateEntityDataZod } from "../entity/entity-validator-zod.js";
 import { BadRequestError } from "../view/view-engine.js";
+import { engineI18n } from "../../i18n.js";
 import {
   BkResolver,
   businessKeyFields,
@@ -202,6 +203,10 @@ export class ImportService {
       ctx?.success("import_success", { count: String(succeeded) });
     }
     for (const e of report.errors) {
+      if (ctx && e.code) {
+        const translated = engineI18n().t(e.code, e.params, ctx.locale);
+        if (translated !== e.code) e.message = translated;
+      }
       ctx?.error("import_failed_row", { row: String(e.row), error: e.message });
     }
 
@@ -401,7 +406,7 @@ export class ImportService {
     const declared = findDeclaredClientError(err);
     if (declared) {
       const { text, params, field } = declaredClientMessage(declared);
-      return { row, ...(field ? { field } : {}), message: text, code: text, ...(params ? { params } : {}) };
+      return { row, ...(field ? { field } : {}), message: declared.message, code: text, ...(params ? { params } : {}) };
     }
     log.error({ err, row }, "Import row failed");
     return { row, message: "internal_error", code: "internal_error" };

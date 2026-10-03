@@ -169,7 +169,25 @@ describe("a hook's declared refusal inside an import or a bulk call", () => {
       [1, "over_delivery_not_allowed"],
       [2, "Place hold ist für dieses Dokument nicht verfügbar"],
     ]);
+    expect(res.json().messages.filter((m: { type: string }) => m.type === "error").map((m: { text: string }) => m.text)).toEqual([
+      "Zeile 1: over_delivery_not_allowed",
+      "Zeile 2: Place hold ist für dieses Dokument nicht verfügbar",
+    ]);
     expect(logError).not.toHaveBeenCalled();
+  });
+
+  it("keeps an app-owned import error's readable fallback in the report and response messages", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/import/HookProbe",
+      headers: { ...authHeaders(), "accept-language": "de" },
+      payload: { rows: [{ mode: "appKey" }], mode: "insert" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.errors).toEqual([{
+      row: 1, field: "mode", message: "Pick the bike of Anna", code: "workshop.pick_bike", params: { customer: "Anna" },
+    }]);
+    expect(res.json().messages[0].text).toBe("Zeile 1: Pick the bike of Anna");
   });
 
   it("names the record a bulk delete could not delete with the hook's reason, and raises no alarm", async () => {

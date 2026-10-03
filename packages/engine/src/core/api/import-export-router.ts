@@ -15,7 +15,7 @@ import { env } from "../config/env.js";
 import { ResponseContext } from "./response-context.js";
 import { successResponse } from "./response-model.js";
 import { listQueryFrom } from "./list-query.js";
-import { engineI18n, messageLocale } from "../../i18n.js";
+import { messageLocale } from "../../i18n.js";
 
 const GUEST_USER: UserContext = { _id: "Guest", email: "Guest", roles: ["Guest"] };
 
@@ -81,15 +81,12 @@ export function registerImportExportRoutes(
     }
 
     const user = request.user ?? GUEST_USER;
-    const ctx = new ResponseContext();
+    const ctx = new ResponseContext(messageLocale(user.language, request.headers["accept-language"]));
 
     await permissionChecker.check(user, doctype, "import");
 
     const report = await importService.importData(doctype, rows, user, mode, ctx);
     if (!report.dry_run && report.inserted + report.updated > 0) revalidateNotifier.notify(doctype);
-    // The report lists a row's problem as a code; the person reads its text in their language.
-    const locale = messageLocale(user.language, request.headers["accept-language"]);
-    for (const e of report.errors) if (e.code) e.message = engineI18n().t(e.code, e.params, locale);
     return reply.send(successResponse(report, ctx.getMessages()));
   });
 
