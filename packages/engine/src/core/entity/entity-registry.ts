@@ -867,6 +867,8 @@ export class EntityRegistry {
             `with another ${differs.join(" and ")}; rename the field`,
         );
       }
+      if (block.translatable) own.translatable = true;
+      if (own.default === undefined && block.default !== undefined) own.default = block.default;
     }
     entity.title_field = entity.title_field ?? TREE_LABEL_FIELD;
     if (tree.menu === "app") {

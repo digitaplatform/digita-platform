@@ -96,8 +96,26 @@ describe("the tree block", () => {
 
   it("keeps a block field the entity writes with the block's shape, under its own label", async () => {
     const own = { fieldname: "label", fieldtype: "Data", label: "Group name", required: true };
-    const entity = (await load(group({ fields: [own] }))).registry.get("CustomerGroup");
+    const { registry } = await load(group({ fields: [own] }));
+    const entity = registry.get("CustomerGroup");
     expect(entity.fields.filter((f) => f.fieldname === "label")).toEqual([expect.objectContaining({ label: "Group name" })]);
+    expect(entity.fields.find((f) => f.fieldname === "label")?.translatable).toBe(true);
+    expect(registry.getTranslatableFields("CustomerGroup")).toContain("label");
+  });
+
+  it("preserves the block's semantics on stored custom-caption fields", async () => {
+    const stored = group({
+      fields: [
+        { fieldname: "label", fieldtype: "Data", label: "Stored caption", required: true, translatable: false },
+        { fieldname: "active", fieldtype: "Check", label: "Available" },
+      ],
+    });
+    const db = { find: vi.fn(async () => [stored]) } as unknown as MongoDBService;
+    const registry = new EntityRegistry();
+    await registry.loadFromDb(db);
+    expect(registry.getTranslatableFields("CustomerGroup")).toContain("label");
+    expect(registry.get("CustomerGroup").fields.find((f) => f.fieldname === "active"))
+      .toMatchObject({ label: "Available", default: 1 });
   });
 
   it("refuses a field of another shape under a block field's name, naming the entity and the field", async () => {
