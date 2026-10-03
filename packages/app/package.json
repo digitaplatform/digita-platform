@@ -18,10 +18,10 @@
   },
   "dependencies": {
     "@digitaplatform/components": "workspace:*",
-    "@digitaplatform/digita": "^0.3.0",
+    "@digitaplatform/digita": "^0.3.12",
     "@digitaplatform/plugins": "workspace:*",
     "@digitaplatform/shared": "workspace:*",
-    "@digitaplatform/simetrix": "^0.3.0",
+    "@digitaplatform/simetrix": "^0.3.12",
     "@digitaplatform/theme": "workspace:*",
     "@digitaplatform/usermenu": "^0.3.0",
     "@digitaplatform/veloluck-lakeside": "^0.3.7",

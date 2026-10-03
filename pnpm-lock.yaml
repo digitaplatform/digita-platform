@@ -14,8 +14,8 @@ importers:
         specifier: workspace:*
         version: link:../components
       '@digitaplatform/digita':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^0.3.12
+        version: 0.3.12
       '@digitaplatform/plugins':
         specifier: workspace:*
         version: link:../plugins/sdk
@@ -23,8 +23,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@digitaplatform/simetrix':
-        specifier: ^0.3.0
-        version: 0.3.2
+        specifier: ^0.3.12
+        version: 0.3.12
       '@digitaplatform/theme':
         specifier: workspace:*
         version: link:../theme
@@ -362,8 +362,8 @@ importers:
         specifier: workspace:*
         version: link:../components
       '@digitaplatform/digita':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^0.3.12
+        version: 0.3.12
       '@digitaplatform/plugins':
         specifier: workspace:*
         version: link:../plugins/sdk
@@ -371,8 +371,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@digitaplatform/simetrix':
-        specifier: ^0.3.0
-        version: 0.3.2
+        specifier: ^0.3.12
+        version: 0.3.12
       '@digitaplatform/theme':
         specifier: workspace:*
         version: link:../theme
@@ -652,15 +652,15 @@ packages:
     resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
     engines: {node: '>=20.19.0'}
 
-  '@digitaplatform/digita@0.3.0':
-    resolution: {integrity: sha512-OG3YNe9kevwXSIhF6/HVBz3e0RlPvgNoiBhKbUhD1v+YB1P/a6TEn8zboA8ylNumZOxNnnC2Vjjy3Vn5y/sOPw==, tarball: https://npm.pkg.github.com/download/@digitaplatform/digita/0.3.0/d43793af6fd3ee3d461dd2c61da32df34e10f30c}
+  '@digitaplatform/digita@0.3.12':
+    resolution: {integrity: sha512-ibT7O3Zj1427+0Crbse0BtyzHDSOmRAiIqr2i+POh7uHk53NKkj4dpCXMAXBfkH212Aqx143zKZ2++zu2lc7Gg==, tarball: https://npm.pkg.github.com/download/@digitaplatform/digita/0.3.12/d140c1b3fcb4d2227d2984a7eccfb30798aa34a4}
 
   '@digitaplatform/minimal@0.3.9':
     resolution: {integrity: sha512-S7iCOX9IHxIwHZFuCOPNRz9uh2Z0tFFF/Ya6jRmI2aAS1hEwyUSVz1QB26cyqiMy94SrI2iFW0pNejmqM7Jolw==, tarball: https://npm.pkg.github.com/download/@digitaplatform/minimal/0.3.9/79680bed6c676cf58b1012d2223ed7c7c709564d}
     engines: {node: '>=22.0.0', pnpm: '>=11.0.0'}
 
-  '@digitaplatform/simetrix@0.3.2':
-    resolution: {integrity: sha512-bq7r5eB/n2yb4LLdWXrNN36rvqcb3+8BHo1K9g/C/xOSiCGLMylrEsuenuxn7/BXuT2xQJcZ7zsI9yp8C4ggeA==, tarball: https://npm.pkg.github.com/download/@digitaplatform/simetrix/0.3.2/c2aedd104f90325232e1a117d44c26b7db7897fc}
+  '@digitaplatform/simetrix@0.3.12':
+    resolution: {integrity: sha512-fEd/QvZwKcDzFQyeaVQlMeO9YdKhWV+z6a75/E7E4Reg+tVfFdKQzfOwpsn7lkSlewbwYaYFLSqJHzDV6pXgPQ==, tarball: https://npm.pkg.github.com/download/@digitaplatform/simetrix/0.3.12/96da9a388724ae712588e9b1beebe32c87c15ee6}
 
   '@digitaplatform/usermenu@0.3.0':
     resolution: {integrity: sha512-pzsFJp8wj7fXAUHwhOIEuM57Q2zZYXeZwmxzudK9XTjMtzelXs6l82J10Y9hvCGjCYhyRpGbzK3U96qmXJHq9g==, tarball: https://npm.pkg.github.com/download/@digitaplatform/usermenu/0.3.0/9ac9d1f0f47146ea44533c1d5c43a6bf958b8311}
@@ -4336,11 +4336,11 @@ snapshots:
 
   '@csstools/css-tokenizer@4.0.0': {}
 
-  '@digitaplatform/digita@0.3.0': {}
+  '@digitaplatform/digita@0.3.12': {}
 
   '@digitaplatform/minimal@0.3.9': {}
 
-  '@digitaplatform/simetrix@0.3.2': {}
+  '@digitaplatform/simetrix@0.3.12': {}
 
   '@digitaplatform/usermenu@0.3.0(@digitaplatform/components@packages+components)(@digitaplatform/plugins@packages+plugins+sdk)(lucide-react@0.562.0(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react-router-dom@7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-router@7.18.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)':
     dependencies:

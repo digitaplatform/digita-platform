@@ -17,6 +17,12 @@ async function loadThemeStore() {
 
 const root = () => document.documentElement;
 const iconHref = () => document.head.querySelector('link[rel="icon"]')?.getAttribute('href');
+/** A signature that names no tab icon, so the tab falls back to the platform's favicon. */
+const NO_TAB_ICON = 'tab-icon-none';
+async function registerSignatureWithoutIcon() {
+  const { registerSignature } = await import('@digitaplatform/theme');
+  registerSignature({ id: NO_TAB_ICON, name: 'No tab icon', accent: '#112233' });
+}
 
 beforeEach(() => {
   localStorage.clear();
@@ -45,11 +51,12 @@ describe('the branding a tenant sets', () => {
     expect(root().getAttribute('data-density')).toBe('spacious');
   });
 
-  it("shows the tenant's favicon, and the platform's when the tenant sets none", async () => {
+  it("shows the tenant's favicon, and the platform's when neither the tenant nor its signature names one", async () => {
     const store = await loadThemeStore();
-    store.getState().setBranding({ favicon: '/files/favicon.png' });
+    await registerSignatureWithoutIcon();
+    store.getState().setBranding({ default_signature: NO_TAB_ICON, favicon: '/files/favicon.png' });
     expect(iconHref()).toBe('/files/favicon.png');
-    store.getState().setBranding({});
+    store.getState().setBranding({ default_signature: NO_TAB_ICON });
     expect(iconHref()).toContain('favicon.svg');
     expect(document.head.querySelectorAll('link[rel="icon"]')).toHaveLength(1);
   });
@@ -65,11 +72,21 @@ describe('the branding a tenant sets', () => {
     expect(iconHref()).toBe('/files/favicon.png');
   });
 
+  it("shows digita's own app icon on the tab of a tenant that wears digita and sets no favicon", async () => {
+    const store = await loadThemeStore();
+    const { signature: digita } = await import('@digitaplatform/digita');
+    // A bundled digita package from before its signature named an icon goes red here.
+    expect(digita.icon).toContain('<svg');
+    store.getState().setBranding({ default_signature: 'digita' });
+    expect(iconHref()).toBe(`data:image/svg+xml,${encodeURIComponent(digita.icon!)}`);
+  });
+
   it("PLANTED DEFECT: shows the platform's favicon, not one the branding names on another host", async () => {
     const store = await loadThemeStore();
-    store.getState().setBranding({ favicon: 'https://evil.example/favicon.png' });
+    await registerSignatureWithoutIcon();
+    store.getState().setBranding({ default_signature: NO_TAB_ICON, favicon: 'https://evil.example/favicon.png' });
     expect(iconHref()).toContain('favicon.svg');
-    store.getState().setBranding({ favicon: '//evil.example/favicon.png' });
+    store.getState().setBranding({ default_signature: NO_TAB_ICON, favicon: '//evil.example/favicon.png' });
     expect(iconHref()).toContain('favicon.svg');
   });
 

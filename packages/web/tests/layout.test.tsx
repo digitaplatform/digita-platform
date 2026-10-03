@@ -4,6 +4,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { WebSite } from "../src/lib/types";
+import { signature as simetrixSignature } from "@digitaplatform/simetrix";
 
 vi.mock("server-only", () => ({}));
 // Next imports an svg as a static image; the test stands in for it with the address.
@@ -228,6 +229,13 @@ describe("the tab icon of a site", () => {
       url: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>')}`,
       type: "image/svg+xml",
     });
+  });
+
+  it("shows simetrix's own icon on the tab of simetrix.ch, from the bundled package", async () => {
+    // A bundled simetrix package from before its signature named an icon goes red here.
+    expect(simetrixSignature.icon).toContain("<svg");
+    site = { ...site, theme: "simetrix" };
+    expect(await tabIcon()).toEqual({ url: `data:image/svg+xml,${encodeURIComponent(simetrixSignature.icon!)}`, type: "image/svg+xml" });
   });
 
   it("PLANTED INNOCENT: shows the platform's icon where the signature names none", async () => {
