@@ -1,5 +1,6 @@
 import { readdir, readFile } from "fs/promises";
 import { basename, join } from "path";
+import type { Document, Filter } from "mongodb";
 import { DIGITA } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
@@ -31,10 +32,11 @@ interface TranslationRow {
  * per locale (only declared-`translatable` fields are accepted):
  *   [{ "_id": "1200", "field": "name", "de": "Forderungen…", "fr": "Créances…" }]
  *
- * Always NON-DESTRUCTIVE: a translation whose id already exists is skipped, so
- * admin edits survive. Seeds are written with `source: "file"`; the admin
- * reload-definitions path drops `source:"file"` rows then re-seeds (file-
- * authoritative there). Never throws fatally — a bad file logs and is skipped.
+ * A translation that came from a file and that nobody overrode follows the file, so a corrected
+ * text reaches a running tenant at its next start; one an Administrator edited, or one that did
+ * not come from a file, is left as it is. Seeds are written with `source: "file"`; the admin
+ * reload-definitions path drops `source:"file"` rows then re-seeds (file-authoritative there).
+ * Never throws fatally — a bad file logs and is skipped.
  */
 export async function seedDataTranslations(
   db: MongoDBService,
@@ -75,6 +77,7 @@ export async function seedDataTranslations(
 
       const translatable = new Set(registry.getTranslatableFields(entityName));
       let inserted = 0;
+      let updated = 0;
       let skipped = 0;
 
       for (const row of rows) {
@@ -98,7 +101,16 @@ export async function seedDataTranslations(
           const _id = `data:${locale}:${entityName}.${docName}.${field}`;
           const existing = await db.findOne(DIGITA.COLLECTIONS.TRANSLATION, _id, DIGITA.DATABASES.CORE);
           if (existing) {
-            skipped++;
+            if (existing["source"] === "file" && !existing["overridden"] && existing["value"] !== value) {
+              const result = await db.collection(DIGITA.COLLECTIONS.TRANSLATION, DIGITA.DATABASES.CORE).updateOne(
+                { _id, source: "file", overridden: { $ne: true }, value: existing["value"] } as unknown as Filter<Document>,
+                { $set: { value, modified: new Date() } },
+              );
+              if (result.modifiedCount) updated++;
+              else skipped++;
+            } else {
+              skipped++;
+            }
             continue;
           }
           await translationService.setTranslation({
@@ -116,7 +128,7 @@ export async function seedDataTranslations(
         }
       }
 
-      log.info({ entity: entityName, inserted, skipped }, "seed-data-translations");
+      log.info({ entity: entityName, inserted, updated, skipped }, "seed-data-translations");
     }
   }
 }

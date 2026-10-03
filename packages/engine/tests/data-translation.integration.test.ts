@@ -48,7 +48,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import type { FastifyInstance } from "fastify";
 import WebSocket from "ws";
-import { mkdtemp, writeFile } from "fs/promises";
+import { mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { DIGITA } from "@digitaplatform/shared";
@@ -413,18 +413,81 @@ describe("seedDataTranslations (co-located *.translations.json)", () => {
     expect(es.json().data.name).toBe("Banco");
   });
 
-  it("is non-destructive: an existing translation is not overwritten by a re-seed", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "digita-dt-seed2-"));
-    // 1200 already has a de translation seeded in beforeAll — a re-seed must skip it.
-    await writeFile(
-      join(dir, "GlAcct.translations.json"),
-      JSON.stringify([{ _id: "1200", field: "name", de: "OVERWRITE ATTEMPT" }]),
-      "utf-8",
-    );
-    await seedDataTranslations(db, registry, new TranslationService(db), [dir]);
+  /** Seeds one GlAcct translation file holding `rows`. */
+  const seedFile = async (rows: Record<string, unknown>[]) => {
+    const dir = await mkdtemp(join(tmpdir(), "digita-dt-reseed-"));
+    try {
+      await writeFile(join(dir, "GlAcct.translations.json"), JSON.stringify(rows), "utf-8");
+      await seedDataTranslations(db, registry, new TranslationService(db), [dir]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  };
 
+  it("preserves a seeded translation edited through the resource API", async () => {
+    const id = "data:fr:GlAcct.1200.name";
+    await db.deleteMany(DIGITA.COLLECTIONS.TRANSLATION, { _id: id }, DIGITA.DATABASES.CORE);
+    await seedFile([{ _id: "1200", field: "name", fr: "File value" }]);
+    const response = await app.inject({
+      method: "PUT", url: `/api/v1/resource/Translation/${encodeURIComponent(id)}`,
+      headers: { authorization: `Bearer ${token}` }, payload: { value: "Administrator value" },
+    });
+    expect(response.statusCode).toBe(200);
+    await seedFile([{ _id: "1200", field: "name", fr: "Corrected file value" }]);
+    const row = await db.findOne(DIGITA.COLLECTIONS.TRANSLATION, id, DIGITA.DATABASES.CORE);
+    expect(row).toMatchObject({ value: "Administrator value", overridden: true, overridden_by: "admin@digita.local", original_value: "File value" });
+  });
+
+  it("preserves an Administrator edit made after the seed eligibility read", async () => {
+    const id = "data:tr:GlAcct.1200.name";
+    await db.deleteMany(DIGITA.COLLECTIONS.TRANSLATION, { _id: id }, DIGITA.DATABASES.CORE);
+    await seedFile([{ _id: "1200", field: "name", tr: "File value" }]);
+    const original = db.findOne.bind(db);
+    let intercepted = false;
+    const spy = vi.spyOn(db, "findOne").mockImplementation(async (...args) => {
+      const row = await original(...args);
+      if (!intercepted && args[0] === DIGITA.COLLECTIONS.TRANSLATION && args[1] === id) {
+        intercepted = true;
+        await new TranslationService(db).setTranslation({
+          namespace: "data", locale: "tr", key: "GlAcct.1200.name", value: "Administrator value", user: "admin@digita.local",
+        });
+      }
+      return row;
+    });
+    try {
+      await seedFile([{ _id: "1200", field: "name", tr: "Corrected file value" }]);
+    } finally {
+      spy.mockRestore();
+    }
+    const row = await db.findOne(DIGITA.COLLECTIONS.TRANSLATION, id, DIGITA.DATABASES.CORE);
+    expect(row).toMatchObject({ value: "Administrator value", overridden: true, overridden_by: "admin@digita.local", original_value: "File value" });
+  });
+
+  it("PLANTED DEFECT: brings a corrected file value to a seeded translation nobody changed", async () => {
+    // 1200's de row came from a file in beforeAll and nobody overrode it.
+    await seedFile([{ _id: "1200", field: "name", de: "Forderungen (berichtigt)" }]);
     const de = await get("/api/v1/resource/GlAcct/1200", "de");
-    expect(de.json().data.name).toBe("Forderungen aus Lieferungen und Leistungen");
+    expect(de.json().data.name).toBe("Forderungen (berichtigt)");
+  });
+
+  it("keeps an Administrator's edit when the file's value changes", async () => {
+    await new TranslationService(db).setTranslation({
+      namespace: "data", locale: "it", key: "GlAcct.1200.name", value: "Crediti (admin)", user: "admin@digita.local",
+      entity: "GlAcct", document_name: "1200", fieldname: "name",
+    });
+    await seedFile([{ _id: "1200", field: "name", it: "Crediti (file nuovo)" }]);
+    const it = await get("/api/v1/resource/GlAcct/1200", "it");
+    expect(it.json().data.name).toBe("Crediti (admin)");
+  });
+
+  it("keeps a translation that did not come from a file", async () => {
+    await new TranslationService(db).setTranslation({
+      namespace: "data", locale: "es", key: "GlAcct.1100.name", value: "Banco", user: "admin@digita.local",
+      entity: "GlAcct", document_name: "1100", fieldname: "name",
+    });
+    await seedFile([{ _id: "1100", field: "name", es: "Banco (file)" }]);
+    const es = await get("/api/v1/resource/GlAcct/1100", "es");
+    expect(es.json().data.name).toBe("Banco");
   });
 });
 
