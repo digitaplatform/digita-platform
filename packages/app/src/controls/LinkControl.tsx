@@ -125,7 +125,7 @@ export default function LinkControl({
   const treeList = useList(treeCfg && (treeOpen || treeRowsWanted) ? field.target : undefined, {
     filters: Object.entries(treeFilters).map(([k, v]) => [k, '=', v] as [string, string, unknown]),
     page_size: 2000,
-  });
+  }, { allPages: true });
   const treeLabelField = TREE_LABEL_FIELD;
   // A tree node shows its path from the root: by its own name, groups of the same name under
   // different parents look alike.
@@ -296,13 +296,14 @@ export default function LinkControl({
             onChange={(e) => setTreeQuery(e.target.value)}
             className="mb-3"
           />
+          {treeList.error && <p role="alert" className="mb-3 text-sm text-textMuted">{toUiMessages(treeList.error, t)[0]?.text}</p>}
           <TreeView
             nodes={nodes}
             selectedId={hasValue ? String(value) : null}
             query={treeQuery}
             className="min-h-0 max-h-full flex-1"
             disabledIds={disabledIds}
-            emptyLabel={treeList.isLoading || treeList.isPlaceholderData ? tc('ui.link.searching') : tc('ui.select.noResults')}
+            emptyLabel={treeList.error ? '' : treeList.isLoading || treeList.isPlaceholderData ? tc('ui.link.searching') : tc('ui.select.noResults')}
             // Groups open on a tap of their name and stay pickable: the tree's own parent field picks groups.
             expandOnNameClick
             selectLabel={tc('ui.tree.select')}
