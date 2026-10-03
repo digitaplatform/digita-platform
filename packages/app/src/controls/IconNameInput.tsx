@@ -6,7 +6,7 @@ import type { FieldControlProps } from '@/controls/types';
 import { describedBy } from '@/controls/control-styles';
 
 // Every lucide icon by the kebab name a person types, such as "layout-dashboard".
-const ICON_NAMES = Object.keys(icons).map((name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase());
+const ICON_NAMES = Object.keys(icons).map((name) => name.replace(/[A-Z]/g, (letter, index) => `${index ? '-' : ''}${letter.toLowerCase()}`));
 
 /** A Data field of format "Icon": the name of a lucide icon, offered from the full list as a person
  *  types, with the icon it names beside it. */

@@ -149,7 +149,7 @@ export function TreeEditor({
     onAdd({ parentId: null, kind: name, ancestry: [] });
   };
 
-  const idle = busy || !!movingId;
+  const disabled = busy || !!movingId;
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -164,12 +164,12 @@ export function TreeEditor({
           </div>
         )}
         {canCreate && (!hasKinds || kind) && (
-          <Button variant="secondary" disabled={idle} onClick={() => add(null)}>
+          <Button variant="secondary" disabled={disabled} onClick={() => add(null)}>
             + {labels.addRoot}
           </Button>
         )}
         {canCreate && hasKinds && newKindName === null && (
-          <Button variant="ghost" disabled={idle} onClick={() => setNewKindName('')}>
+          <Button variant="ghost" disabled={disabled} onClick={() => setNewKindName('')}>
             + {labels.newKind}
           </Button>
         )}
@@ -242,7 +242,7 @@ export function TreeEditor({
                 <IconButton
                   label={labels.addChild}
                   size="sm"
-                  disabled={idle}
+                  disabled={disabled}
                   onClick={() => add(node.id)}
                   icon={<span aria-hidden>＋</span>}
                 />
@@ -251,7 +251,7 @@ export function TreeEditor({
                 <IconButton
                   label={labels.move}
                   size="sm"
-                  disabled={idle}
+                  disabled={disabled}
                   onClick={() => setMovingId(node.id)}
                   icon={<span aria-hidden>↕</span>}
                 />
@@ -261,7 +261,7 @@ export function TreeEditor({
                   label={labels.delete}
                   size="sm"
                   variant="danger"
-                  disabled={idle}
+                  disabled={disabled}
                   onClick={() => void run(() => onDelete(own))}
                   icon={<span aria-hidden>🗑</span>}
                 />

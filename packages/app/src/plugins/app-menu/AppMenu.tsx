@@ -63,7 +63,7 @@ export function AppMenu() {
   const { t, closeMobileNav } = useHost();
   const catalog = useMetaCatalog();
   const entity = catalog.data?.find((e) => e.tree?.menu === 'app')?.name;
-  const listQ = useList(entity, { page_size: 2000 });
+  const listQ = useList(entity, { page_size: 2000 }, { allPages: true });
   const menu = useMemo(() => buildAppMenu(listQ.data?.rows ?? []), [listQ.data]);
 
   if (catalog.isLoading || (entity && listQ.isLoading)) {

@@ -238,11 +238,11 @@ export function TreeView({
     } else if (e.key === 'ArrowRight') {
       e.preventDefault();
       if (hasChildren(node.id) && !isExpanded(node.id)) toggle(node.id);
-      else if (hasChildren(node.id)) setActiveId((childrenOf.get(node.id) ?? [])[0]!.id);
+      else if (flat[cur + 1]?.depth === flat[cur]!.depth + 1) setActiveId(flat[cur + 1]!.node.id);
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
-      if (hasChildren(node.id) && isExpanded(node.id)) toggle(node.id);
-      else if (node.parentId) setActiveId(node.parentId);
+      if (!q && hasChildren(node.id) && isExpanded(node.id)) toggle(node.id);
+      else if (node.parentId && flat.some((row) => row.node.id === node.parentId)) setActiveId(node.parentId);
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (!disabledIds?.has(node.id)) onSelect?.(node.id);

@@ -58,7 +58,7 @@ export function EntityTreeEditor({
     setTreeEditorCollapsedIds(entity, ids);
   };
 
-  const listQ = useList<Row>(entity, { page_size: 2000 });
+  const listQ = useList<Row>(entity, { page_size: 2000 }, { allPages: true });
   const rows = useMemo(() => listQ.data?.rows ?? [], [listQ.data]);
   const rowById = useMemo(() => new Map(rows.map((r) => [String(r._id), r])), [rows]);
 

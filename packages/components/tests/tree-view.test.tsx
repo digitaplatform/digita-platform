@@ -79,6 +79,33 @@ describe('TreeView drag source (getNodeDragData)', () => {
   });
 });
 
+describe('TreeView keyboard navigation in a filtered tree', () => {
+  it('moves right to the visible matching child instead of a hidden sibling', () => {
+    const onSelect = vi.fn();
+    const { container } = render(<TreeView nodes={nodes} query="total" onSelect={onSelect} />);
+    const tree = container.querySelector('[role="tree"]') as HTMLElement;
+    fireEvent.keyDown(tree, { key: 'ArrowRight' });
+    fireEvent.keyDown(tree, { key: 'Enter' });
+    expect(onSelect).toHaveBeenLastCalledWith('f2');
+    expect(row(container, 'f1')).toBeNull();
+  });
+
+  it('moves left to the visible parent while search keeps an expanded group open', () => {
+    const onSelect = vi.fn();
+    const onExpandedChange = vi.fn();
+    const { container } = render(
+      <TreeView nodes={groups} query="Leaf" onSelect={onSelect} onExpandedChange={onExpandedChange} />,
+    );
+    const tree = container.querySelector('[role="tree"]') as HTMLElement;
+    fireEvent.keyDown(tree, { key: 'ArrowDown' });
+    fireEvent.keyDown(tree, { key: 'ArrowLeft' });
+    fireEvent.keyDown(tree, { key: 'Enter' });
+    expect(onSelect).toHaveBeenLastCalledWith('main');
+    expect(onExpandedChange).not.toHaveBeenCalled();
+    expect(row(container, 'leaf')).toBeTruthy();
+  });
+});
+
 describe('TreeView empty label', () => {
   it('says so when a query hides every row', () => {
     render(<TreeView nodes={nodes} query="zzz" emptyLabel="No results" />);

@@ -23,6 +23,19 @@ describe('the Icon format of a Data field', () => {
     expect(container.querySelector('[data-component="icon-preview"] svg.lucide-shopping-cart')).not.toBeNull();
   });
 
+  it.each([
+    ['a-arrow-down', 'lucide-a-arrow-down'],
+    ['arrow-down-a-z', 'lucide-arrow-down-a-z'],
+    ['ArrowDownAZ', 'lucide-arrow-down-a-z'],
+  ])('renders the icon with consecutive capitals named %s', async (value, iconClass) => {
+    const { container } = renderField('Icon', value);
+    const input = await screen.findByRole('combobox');
+    const list = container.querySelector(`datalist#${CSS.escape(input.getAttribute('list')!)}`);
+    expect(list?.querySelector('option[value="a-arrow-down"]')).not.toBeNull();
+    expect(list?.querySelector('option[value="arrow-down-a-z"]')).not.toBeNull();
+    expect(container.querySelector(`[data-component="icon-preview"] svg.${iconClass}`)).not.toBeNull();
+  });
+
   it('PLANTED INNOCENT: a plain Data field stays a text input without a list', () => {
     const { container } = renderField(undefined, 'shopping-cart');
     expect(container.querySelector('datalist')).toBeNull();

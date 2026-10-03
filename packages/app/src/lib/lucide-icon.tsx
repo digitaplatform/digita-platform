@@ -1,15 +1,7 @@
 import { createElement, type ReactNode } from 'react';
 import { icons } from 'lucide-react';
 
-/** Convert a lucide icon name (kebab "layout-dashboard" or pascal "LayoutDashboard")
- *  to the PascalCase key used by lucide-react's `icons` record. */
-function toPascal(name: string): string {
-  return name
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join('');
-}
+const ICON_BY_NAME = new Map(Object.entries(icons).map(([name, icon]) => [name.toLowerCase(), icon]));
 
 /**
  * Resolve a metadata-declared lucide icon name to a rendered icon node. App data
@@ -19,7 +11,7 @@ function toPascal(name: string): string {
  */
 export function lucideIcon(name: string | undefined, size = 16): ReactNode {
   if (!name) return undefined;
-  const Comp = icons[toPascal(name) as keyof typeof icons];
+  const Comp = ICON_BY_NAME.get(name.replace(/[-_\s]+/g, '').toLowerCase());
   if (!Comp) {
     if (import.meta.env.DEV) console.warn(`[icon] unknown lucide icon "${name}"`);
     return undefined;
