@@ -80,6 +80,15 @@ describe("a site's menu tree", () => {
     expect(buildNavTree([masked, descendant, readable], [], "en")).toEqual([{ label: "Readable", href: "/ok" }]);
   });
 
+  it("prunes a known heading whose only child's label was masked", () => {
+    const child = node({ _id: "child", label: "Hidden", parent: "heading", href: "/hidden" });
+    delete (child as Partial<WebNavMenu>).label;
+    expect(buildNavTree([
+      node({ _id: "heading", label: "Heading" }), child,
+      node({ _id: "readable", label: "Readable", href: "/ok" }),
+    ], [], "en")).toEqual([{ label: "Readable", href: "/ok" }]);
+  });
+
   it("draws a node with children as a heading, and keeps the rules of #contact, a web link and a node with no link", () => {
     const html = footer("en");
     expect(html).toMatch(/<li[^>]*>Company<\/li>/);

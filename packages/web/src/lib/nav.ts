@@ -71,13 +71,13 @@ export function buildNavTree(
   };
   const childrenOf = new Map<string | null, WebNavMenu[]>();
   for (const node of nodes) {
-    if (!Object.hasOwn(node, "parent") || typeof node.label !== "string") continue;
+    if (!Object.hasOwn(node, "parent")) continue;
     const parent = node.parent || null;
     childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), node]);
   }
   const siblingOrder = (a: WebNavMenu, b: WebNavMenu) => (a.position ?? 0) - (b.position ?? 0) || a.label.localeCompare(b.label);
   const build = (parent: string | null): NavItem[] =>
-    [...(childrenOf.get(parent) ?? [])].sort(siblingOrder).flatMap((node): NavItem[] => {
+    [...(childrenOf.get(parent) ?? [])].filter((node) => typeof node.label === "string").sort(siblingOrder).flatMap((node): NavItem[] => {
       const children = build(node._id);
       if (childrenOf.has(node._id)) return children.length ? [{ label: node.label, ...(node.icon ? { icon: node.icon } : {}), children }] : [];
       const item: NavItem = { label: node.label };
