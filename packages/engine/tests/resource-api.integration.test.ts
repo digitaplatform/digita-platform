@@ -51,7 +51,7 @@ import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import type { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { DIGITA } from "@digitaplatform/shared";
-import { mkdtemp, writeFile, rm } from "fs/promises";
+import { mkdir, mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 
@@ -123,19 +123,35 @@ describe("ordinary collection boundary", () => {
     await raw.collection(name).insertOne({ posted_at: new Date(), value: "kept" });
     if (mode === "stored") await db.insertOne(DIGITA.COLLECTIONS.ENTITY, { ...definition(name), _id: name }, DIGITA.DATABASES.CORE);
     const oldAutoMigrate = env.AUTO_MIGRATE;
-    if (mode === "migration-disabled") (env as { AUTO_MIGRATE: boolean }).AUTO_MIGRATE = false;
+    const oldAppDirs = env.APP_DIRS;
+    const oldSeedOnBoot = env.SEED_APP_DATA_ON_BOOT;
+    let root: string | undefined;
+    if (mode === "migration-disabled") {
+      root = await mkdtemp(join(tmpdir(), "native-boot-seed-"));
+      await mkdir(join(root, "seeds"));
+      await writeFile(join(root, "seeds", `${name}.seed.json`), JSON.stringify([
+        { _id: "new-seed", posted_at: "2026-01-01T00:00:00.000Z" },
+      ]));
+      (env as { AUTO_MIGRATE: boolean }).AUTO_MIGRATE = false;
+      (env as { APP_DIRS: string[] }).APP_DIRS = [root];
+      (env as { SEED_APP_DATA_ON_BOOT: boolean }).SEED_APP_DATA_ON_BOOT = true;
+    }
     const ta = await buildTestAuth();
     const next = await createApp({ authn: ta.authn });
     if (mode === "migration-disabled") next.registry.register(definition(name));
     try {
       await expect(next.startup()).rejects.toMatchObject({ code: "ordinary_collection_required" });
       expect(await raw.collection(name).countDocuments()).toBe(1);
+      expect(await raw.collection(name).findOne({ _id: "new-seed" } as any)).toBeNull();
     } finally {
       (env as { AUTO_MIGRATE: boolean }).AUTO_MIGRATE = oldAutoMigrate;
+      (env as { APP_DIRS: string[] }).APP_DIRS = oldAppDirs;
+      (env as { SEED_APP_DATA_ON_BOOT: boolean }).SEED_APP_DATA_ON_BOOT = oldSeedOnBoot;
       await next.app.close();
       await next.db.disconnect();
       await db.deleteOne(DIGITA.COLLECTIONS.ENTITY, name, DIGITA.DATABASES.CORE);
       await raw.dropCollection(name);
+      if (root) await rm(root, { recursive: true, force: true });
     }
   });
 });

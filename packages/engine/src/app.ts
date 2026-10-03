@@ -596,6 +596,11 @@ export async function createApp(
     //     wrote reaches the registry at 5, and refusing it would lock its tenant out of the engine.
     await assertDefinitionsServable(registry, env);
 
+    // Refuse incompatible file-defined storage before setup or boot seeding writes.
+    for (const entity of registry.getAll()) {
+      if (!entity.is_virtual) await db.assertOrdinaryCollection(entity.name, entity.database);
+    }
+
     // 4. Run first-time setup (seed data, migrate schemas)
     await firstRun(db, registry, translationService);
 

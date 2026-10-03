@@ -118,6 +118,9 @@ async function performReload(deps: AdminReloadDefinitionsDeps): Promise<ReloadSu
     await loadEntityFiles(staged);
     if (isReseedAllowed()) staged.register(demoResetDefinition());
     await assertDefinitionsServable(staged, deps.revalidateSettings);
+    for (const entity of staged.getAll()) {
+      if (!entity.is_virtual) await db.assertOrdinaryCollection(entity.name, entity.database);
+    }
   } catch (err) {
     // A refusal that carries its own code keeps it, answered as the reload's 400.
     if (err instanceof EngineError) throw new BadRequestError(err.code, err.params);
