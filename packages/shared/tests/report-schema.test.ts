@@ -41,6 +41,12 @@ describe("validateReportDefinition", () => {
     expect(paths).toContain("data.collections.orders.joins.0.local_field");
     expect(paths).toContain("bands.0.objects.1.symbology");
   });
+
+  it("takes the QR code of a Swiss QR bill, which bwip-js draws with its cross", () => {
+    const bill = structuredClone(valid) as typeof valid;
+    (bill.bands[0]!.objects[1] as { symbology: string }).symbology = "swissqrcode";
+    expect(validateReportDefinition(bill)).toEqual([]);
+  });
 });
 
 describe("isSafeField", () => {
