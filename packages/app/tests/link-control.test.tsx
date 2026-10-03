@@ -399,6 +399,21 @@ describe('LinkControl — tree mode', () => {
     expect(within(dialog).queryByRole('treeitem', { name: 'Under retired' })).not.toBeInTheDocument();
   });
 
+  it('offers no descendant whose inactive ancestor was filtered out by the engine', async () => {
+    listState.rows = [
+      { _id: 'N-1', label: 'Eligible root', parent: null, active: true },
+      { _id: 'N-4', label: 'Under filtered retired', parent: 'N-3', active: true },
+      { _id: 'N-5', label: 'Grandchild under retired', parent: 'N-4', active: true },
+    ];
+    const user = userEvent.setup();
+    render(<Host field={makeField({ target: 'Folder', target_filters: { active: true } })} />);
+    await user.click(screen.getByRole('combobox'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('treeitem', { name: 'Eligible root' })).toBeInTheDocument();
+    expect(within(dialog).queryByText('Under filtered retired')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('Grandchild under retired')).not.toBeInTheDocument();
+  });
+
   it('shows a held node that is switched off by its path, as any held node', () => {
     listState.rows = [{ _id: 'N-3', label: 'Retired', parent: null, active: 0 }];
     render(<Host field={makeField({ target: 'Folder' })} value="N-3" />);

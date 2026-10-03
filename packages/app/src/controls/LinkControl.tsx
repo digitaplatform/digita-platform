@@ -465,17 +465,17 @@ function SearchIcon() {
 /** `rows` without every node whose `active` is off and every node under one. A node without the
  *  field is on, as the block's default is. */
 function withoutSwitchedOff(rows: Record<string, unknown>[], parentField: string): Record<string, unknown>[] {
-  const off = new Set(
-    rows.filter((r) => r[TREE_ACTIVE_FIELD] === 0 || r[TREE_ACTIVE_FIELD] === false).map((r) => String(r._id)),
-  );
-  if (off.size === 0) return rows;
-  const parentOf = new Map(rows.map((r) => [String(r._id), r[parentField] == null ? '' : String(r[parentField])]));
-  const isOff = (id: string, seen = new Set<string>()): boolean => {
-    if (off.has(id)) return true;
-    const parent = parentOf.get(id);
-    if (!parent || seen.has(parent)) return false;
-    seen.add(id);
-    return isOff(parent, seen);
+  const byId = new Map(rows.map((r) => [String(r._id), r]));
+  const isActive = (id: string): boolean => {
+    const seen = new Set<string>();
+    while (id) {
+      const row = byId.get(id);
+      // A filtered or unreadable ancestor cannot establish that its subtree is active.
+      if (!row || seen.has(id) || row[TREE_ACTIVE_FIELD] === 0 || row[TREE_ACTIVE_FIELD] === false) return false;
+      seen.add(id);
+      id = row[parentField] == null ? '' : String(row[parentField]);
+    }
+    return true;
   };
-  return rows.filter((r) => !isOff(String(r._id)));
+  return rows.filter((r) => isActive(String(r._id)));
 }
