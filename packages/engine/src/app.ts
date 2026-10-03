@@ -9,7 +9,7 @@ import multipart from "@fastify/multipart";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { env } from "./core/config/env.js";
-import { BUILD_VERSION } from "./core/config/build-version.js";
+import { BUILD_VERSION, getBuildInfo } from "./core/config/build-version.js";
 import { createLogger } from "./core/logging/logger.js";
 import { MongoDBService } from "./core/database/mongodb-service.js";
 import { loadAppEntityFiles } from "./core/setup/load-app-entity-files.js";
@@ -357,8 +357,8 @@ export async function createApp(
 
   // ─── Public Routes (no auth) ──────────────────────────
 
-  app.get("/health", async (_req, reply) => {
-    return reply.send(successResponse({ status: "ok", version: BUILD_VERSION }));
+  app.get("/health", { config: { cors: false } }, async (_req, reply) => {
+    return reply.header("Cache-Control", "no-store").header("Access-Control-Allow-Origin", "*").send(getBuildInfo());
   });
 
   // Login / refresh / logout / 2FA are served by digita-auth, not the engine.

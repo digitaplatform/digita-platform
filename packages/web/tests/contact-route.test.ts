@@ -7,6 +7,7 @@ vi.mock("server-only", () => ({}));
 
 const ENV = {
   ENGINE_URL: "http://engine.internal:3000",
+  VERSION_ENDPOINTS: "https://example.org/health",
   SITE_ID: "simetrix",
   SITE_URL: "https://example.org",
   PUBLIC_ENGINE_URL: "",

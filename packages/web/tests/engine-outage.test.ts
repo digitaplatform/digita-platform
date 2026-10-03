@@ -20,6 +20,7 @@ vi.mock("next/headers", () => ({
 
 Object.assign(process.env, {
   ENGINE_URL: "http://engine.internal:3000",
+  VERSION_ENDPOINTS: "https://example.org/health",
   SITE_ID: "example",
   SITE_URL: "https://example.org",
   PUBLIC_ENGINE_URL: "",

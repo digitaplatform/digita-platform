@@ -8,6 +8,7 @@ vi.mock("server-only", () => ({}));
 
 const ENV = {
   ENGINE_URL: "http://engine.internal:3000",
+  VERSION_ENDPOINTS: "https://example.org/health",
   ENGINE_URLS: JSON.stringify({ workshop: "http://workshop.internal:3000" }),
   SITE_ID: "veloluck",
   SITE_URL: "https://example.org",

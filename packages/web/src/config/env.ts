@@ -100,6 +100,7 @@ export function getConfig(): ServerConfig {
   if (cached) return cached;
   cached = {
     engineUrl: noTrailing(req("ENGINE_URL")),
+    versionEndpoints: req("VERSION_ENDPOINTS").split(","),
     engineUrls: parseEngineUrls(process.env.ENGINE_URLS),
     siteId: req("SITE_ID"),
     siteUrl: noTrailing(req("SITE_URL")),
@@ -135,6 +136,7 @@ export function publicConfig(site: WebSite | null, notFound: PublicSiteConfig["n
     notFound,
     siteId: c.siteId,
     siteUrl: c.siteUrl,
+    versionEndpoints: c.versionEndpoints,
     publicEngineUrl: c.publicEngineUrl,
     locales: c.locales,
     defaultLocale: c.defaultLocale,

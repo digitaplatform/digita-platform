@@ -106,3 +106,6 @@ export type { LanguageMenuProps } from './composites/LanguageMenu.js';
 export { ModeButton, MODE_CYCLE, nextMode } from './composites/ModeButton.js';
 export { Drawer } from './composites/Drawer.js';
 export type { DrawerProps } from './composites/Drawer.js';
+
+export { VersionFooter } from "./composites/VersionFooter.js";
+export { parseBuildInfo, type BuildInfo } from "./lib/build-info.js";

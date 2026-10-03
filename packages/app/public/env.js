@@ -9,3 +9,5 @@ window.__AUTH_URL__ = '';
 window.__AUTH_COOKIE_SUFFIX__ = '';
 window.__JOBS_URL__ = '';
 window.__REPORT_URL__ = '';
+
+window.__VERSION_ENDPOINTS__ = "";

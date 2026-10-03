@@ -10,6 +10,7 @@ beforeEach(() => {
   process.env.LOCALES = "en,de";
   process.env.DEFAULT_LOCALE = "en";
   process.env.SITE_URL = "https://example.com";
+  delete process.env.VERSION_ENDPOINTS;
   delete process.env.AUTH_URL;
   delete process.env.CONTENT_SECURITY_POLICY_HOSTS;
 });

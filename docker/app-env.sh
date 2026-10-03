@@ -13,10 +13,11 @@
 #                       on the platform.
 #   JOBS_URL            the jobs service (packages/app/src/services/jobs.ts).
 #   REPORT_URL          the report service (packages/app/src/lib/report-link.ts).
+#   VERSION_ENDPOINTS   comma-separated public health URLs for this tenant.
 #
 # Every one but AUTH_COOKIE_SUFFIX is required: a missing one stops the start and
 # is named, rather than serving a page that calls the wrong place. The CSP in
-# nginx.conf allows exactly the origins of AUTH_URL, JOBS_URL and REPORT_URL. The
+# nginx.conf allows exactly the service and public metadata origins. The
 # three targets ship with the image and are chowned to the nginx user, which may
 # not create files where they stand, only rewrite what it owns: env.js,
 # index.html and nginx.conf. Their places are fixed in the image; the test
@@ -26,7 +27,7 @@ set -eu
 html="${APP_ENV_HTML:-/usr/share/nginx/html}"
 conf="${APP_ENV_NGINX_CONF:-/etc/nginx/nginx.conf}"
 
-for name in APP_BASE_PATH AUTH_URL JOBS_URL REPORT_URL; do
+for name in APP_BASE_PATH AUTH_URL JOBS_URL REPORT_URL VERSION_ENDPOINTS; do
   eval "value=\${$name:-}"
   [ -n "$value" ] || { echo "app-env: missing required env var: $name" >&2; exit 1; }
 done
@@ -43,11 +44,27 @@ base_href="${APP_BASE_PATH%/}/"
 origins=""
 for name in AUTH_URL JOBS_URL REPORT_URL; do
   eval "value=\${$name}"
+  case "$value" in *[[:space:]]*) echo "app-env: $name must be a plain http(s) URL (no whitespace)" >&2; exit 1 ;; esac
   printf '%s' "$value" | grep -Eq '^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~/-]*)?$' \
     || { echo "app-env: $name must be a plain http(s) URL, got: $value" >&2; exit 1; }
   origin=$(printf '%s' "$value" | sed -E 's#^(https?://[^/]+).*$#\1#')
   case " $origins " in *" $origin "*) ;; *) origins="${origins:+$origins }$origin" ;; esac
 done
+
+# Public metadata targets extend connections only; they never grant framing.
+version_origins=""
+case "$VERSION_ENDPOINTS" in ,*|*,|*,,*) echo "app-env: VERSION_ENDPOINTS must be a comma-separated URL list" >&2; exit 1 ;; esac
+set -f
+metadata_ifs="$IFS"
+IFS=,
+for value in $VERSION_ENDPOINTS; do
+  case "$value" in *[[:space:]]*) echo "app-env: VERSION_ENDPOINTS must contain plain URLs (no whitespace)" >&2; exit 1 ;; esac
+  printf '%s' "$value" | grep -Eq '^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~/-]*)?$' \
+    || { echo "app-env: VERSION_ENDPOINTS must contain plain http(s) URLs" >&2; exit 1; }
+  origin=$(printf '%s' "$value" | sed -E 's#^(https?://[^/]+).*$#\1#')
+  case " $origins $version_origins " in *" $origin "*) ;; *) version_origins="${version_origins:+$version_origins }$origin" ;; esac
+done
+IFS="$metadata_ifs"
 
 # Backslash and double quote would end the JS string literal early.
 js() { printf '%s' "$1" | sed 's/[\\"]/\\&/g'; }
@@ -57,6 +74,7 @@ js() { printf '%s' "$1" | sed 's/[\\"]/\\&/g'; }
   printf 'window.__AUTH_COOKIE_SUFFIX__="%s";\n' "$(js "${AUTH_COOKIE_SUFFIX:-}")"
   printf 'window.__JOBS_URL__="%s";\n' "$(js "$JOBS_URL")"
   printf 'window.__REPORT_URL__="%s";\n' "$(js "$REPORT_URL")"
+  printf 'window.__VERSION_ENDPOINTS__="%s";\n' "$(js "$VERSION_ENDPOINTS")"
 } > "$html/env.js"
 
 # Rewritten through a temp file because `sed -i` renames its output into the web
@@ -68,9 +86,10 @@ rm -f /tmp/index.html
 
 # Filled on a container's first start; a restart of the same container finds it
 # filled with the same origins, which the check below accepts.
-if grep -q __SERVICE_ORIGINS__ "$conf"; then
-  sed "s|__SERVICE_ORIGINS__|$origins|g" "$conf" > /tmp/nginx.conf
+if grep -Eq '__(SERVICE|VERSION)_ORIGINS__' "$conf"; then
+  sed -e "s|__SERVICE_ORIGINS__|$origins|g" \
+      -e "s| __VERSION_ORIGINS__|${version_origins:+ $version_origins}|g" "$conf" > /tmp/nginx.conf
   cat /tmp/nginx.conf > "$conf"
   rm -f /tmp/nginx.conf
 fi
-grep -qF "connect-src 'self' $origins;" "$conf" || { echo "app-env: nginx.conf carries no __SERVICE_ORIGINS__ to fill" >&2; exit 1; }
+grep -qF "connect-src 'self' $origins${version_origins:+ $version_origins};" "$conf" || { echo "app-env: nginx.conf carries no __SERVICE_ORIGINS__ to fill" >&2; exit 1; }

@@ -7,6 +7,8 @@
 export interface PublicSiteConfig {
   siteId: string;
   siteUrl: string;
+  /** Public metadata URLs derived by the tenant chart; never internal service addresses. */
+  versionEndpoints: string[];
   /** Engine origin the BROWSER uses for public media; "" = same-origin via ingress. */
   publicEngineUrl: string;
   locales: string[];

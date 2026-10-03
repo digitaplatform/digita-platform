@@ -47,6 +47,8 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
 
 # ─── Stage 2: Build ──────────────────────────────────────────
 FROM deps AS build
+ARG BUILD_VERSION
+COPY docker/build-info.mjs docker/
 
 COPY packages/shared/ packages/shared/
 COPY packages/engine/ packages/engine/
@@ -70,8 +72,12 @@ COPY tools/plugin-mock/ tools/plugin-mock/
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     node tools/plugin-mock/stage-plugins.mjs --registry
 
+RUN node docker/build-info.mjs digita-platform packages/engine/package.json packages/engine/build-info.json packages/app/public/plugins/index.json premium
+
 # ─── Stage 3: Production image ──────────────────────────────
 FROM node:24-alpine AS production
+ARG BUILD_VERSION
+ENV BUILD_VERSION=$BUILD_VERSION
 
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 
@@ -99,6 +105,7 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
 # .ts hook files back in the image and the hook-loader prefers .ts over .js.
 COPY --from=build /app/packages/shared/dist/ packages/shared/dist/
 COPY --from=build /app/packages/engine/dist/ packages/engine/dist/
+COPY --from=build /app/packages/engine/build-info.json packages/engine/build-info.json
 
 # TEMPORARY (until the plugin store ships): the staged premium plugin bytes,
 # served by the engine's /api/v1/plugin-assets route (ungated for now via

@@ -43,6 +43,12 @@ export function contentSecurityPolicy(nonce: string, env: Record<string, string 
     "'self'",
     ...(env.AUTH_URL ? [originOf("AUTH_URL", env.AUTH_URL)] : []),
     ...listSettingOrigins(env[HOSTS_SETTING]),
+    ...(env.VERSION_ENDPOINTS ? env.VERSION_ENDPOINTS.split(",").map((value) => {
+      if (!/^https?:\/\/[A-Za-z0-9.-]+(:[0-9]+)?(\/[A-Za-z0-9._~/-]*)?$/.test(value)) {
+        throw new Error("[digita-web] VERSION_ENDPOINTS must contain plain http(s) URLs");
+      }
+      return originOf("VERSION_ENDPOINTS", value);
+    }) : []),
   ];
   return [
     "default-src 'self'",
@@ -50,7 +56,7 @@ export function contentSecurityPolicy(nonce: string, env: Record<string, string 
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' https: data:",
     "frame-src 'self' https:",
-    `connect-src ${connectSources.join(" ")}`,
+    `connect-src ${[...new Set(connectSources)].join(" ")}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

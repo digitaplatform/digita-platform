@@ -1,3 +1,4 @@
+import { getEngineBuildInfo } from "@/lib/versions";
 import type { CSSProperties, ReactNode } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -47,7 +48,7 @@ export default async function LocaleLayout({
   const config = getConfig();
   if (!isLocale(locale, config.locales)) notFound();
 
-  const [site, headerNav, footerNav, familyNav, branding, websiteLook, publishedSlugs] = await Promise.all([
+  const [site, headerNav, footerNav, familyNav, branding, websiteLook, publishedSlugs, engineVersion] = await Promise.all([
     getSite(),
     listNav(locale, "header"),
     listNav(locale, "footer"),
@@ -55,6 +56,7 @@ export default async function LocaleLayout({
     getBranding(),
     findWebsiteSignature(),
     listPublishedSlugs(),
+    getEngineBuildInfo(),
   ]);
 
   // The identity rendered on the server: the site's signature (its own `theme`, else the website
@@ -131,7 +133,7 @@ export default async function LocaleLayout({
               {children}
             </main>
             {site?.design_switcher && <DesignSwitcher {...identitySources} texts={designSwitcherTexts(locale)} />}
-            <Footer locale={locale as Locale} site={site} nav={footerNav} brand={brand} contactEnabled={siteConfig.contactEnabled} />
+            <Footer locale={locale as Locale} site={site} nav={footerNav} brand={brand} contactEnabled={siteConfig.contactEnabled} versionEndpoints={siteConfig.versionEndpoints} engineVersion={engineVersion} />
             {siteConfig.contactEnabled && site?.contact_email && (
               <ContactSheet
                 locale={locale}

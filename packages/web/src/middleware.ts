@@ -55,7 +55,7 @@ export function middleware(req: NextRequest): NextResponse {
   const answer = secure(headers);
   // The API and files with an extension (sitemap.xml, robots.txt) are no locale's pages.
   const { pathname, search } = req.nextUrl;
-  const isPage = !/^\/(api(\/|$)|.*\.)/.test(pathname);
+  const isPage = pathname !== "/health" && !/^\/(api(\/|$)|.*\.)/.test(pathname);
   const hasLocale = getLocales().some((l) => pathname === `/${l}` || pathname.startsWith(`/${l}/`));
   if (!isPage || hasLocale) return NextResponse.next({ request: { headers }, headers: answer });
 

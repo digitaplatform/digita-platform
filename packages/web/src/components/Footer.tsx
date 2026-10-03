@@ -1,4 +1,4 @@
-import { BrandMark, type BrandMarkProps } from "@digitaplatform/components";
+import { BrandMark, VersionFooter, type BrandMarkProps } from "@digitaplatform/components";
 import type { Locale } from "@/i18n/config";
 import type { NavItem, WebSite } from "@/lib/types";
 import { filterNavItems, isContactItem, menuEntries } from "@/lib/nav";
@@ -19,6 +19,8 @@ export function Footer({
   nav,
   brand,
   contactEnabled,
+  versionEndpoints = [],
+  engineVersion,
 }: {
   locale: Locale;
   site: WebSite | null;
@@ -27,6 +29,8 @@ export function Footer({
   /** Whether the page offers the contact sheet, by the layout's rule the header and the drawer
    *  read too (publicConfig): a server component cannot read the site config's context. */
   contactEnabled: boolean;
+  versionEndpoints?: readonly string[];
+  engineVersion?: unknown;
 }) {
   // Without the sheet an item for it would lead nowhere, so it is left out.
   const entries = menuEntries(filterNavItems(nav, (item) => contactEnabled || !isContactItem(item)));
@@ -65,6 +69,7 @@ export function Footer({
         </div>
         {site?.footer_text && <p className="text-sm text-textMuted">{site.footer_text}</p>}
       </div>
+      <VersionFooter endpoints={versionEndpoints} initialImages={engineVersion ? [engineVersion] : []} engineSource="server:0" />
     </footer>
   );
 }

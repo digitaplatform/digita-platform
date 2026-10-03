@@ -73,6 +73,8 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
 
 # ─── Stage 2: Build ──────────────────────────────────────────
 FROM deps AS build
+ARG BUILD_VERSION
+COPY docker/build-info.mjs docker/
 
 COPY packages/shared/ packages/shared/
 COPY packages/theme/ packages/theme/
@@ -183,8 +185,12 @@ RUN set -eu; \
       echo "ERROR: dev JSX runtime leaked into the host/plugin bundle (NODE_ENV not production in a lib build)"; exit 1; \
     fi
 
+RUN node docker/build-info.mjs digita-platform packages/app/package.json packages/app/build-info.json packages/app/dist/plugins/index.json free
+
 # ─── Stage 3: nginx static serving ──────────────────────────
 FROM nginx:alpine AS production
+ARG BUILD_VERSION
+ENV BUILD_VERSION=$BUILD_VERSION
 
 # Operator-frontend nginx config (NOT the shared nginx-spa.conf the other SPA
 # images use): adds the /vendor + /plugins locations + an enforced CSP.
@@ -192,6 +198,7 @@ FROM nginx:alpine AS production
 # path routing).
 COPY docker/nginx-app.conf /etc/nginx/nginx.conf
 COPY --from=build /app/packages/app/dist/ /usr/share/nginx/html/
+COPY --from=build /app/packages/app/build-info.json /etc/digita/build-info.json
 
 # Pin the inline import-map's CSP sha256 (emitted by the vite build into
 # dist/csp-importmap-sha256.txt) into the nginx CSP `script-src`, replacing the

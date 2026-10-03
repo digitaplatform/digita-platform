@@ -20,6 +20,7 @@ const siteConfig: PublicSiteConfig = {
   siteId: "example",
   siteUrl: "https://example.org",
   publicEngineUrl: "",
+  versionEndpoints: [],
   locales: ["en"],
   defaultLocale: "en",
   contactEnabled: true,

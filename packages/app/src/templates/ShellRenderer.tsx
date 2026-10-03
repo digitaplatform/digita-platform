@@ -13,9 +13,10 @@ import { tid } from '@/lib/testid';
 import { usePluginLayoutStore } from '@/stores/plugin-state';
 import { resolveTemplate } from '@/templates/template-registry';
 import { useRealtimeConnection } from '@/hooks/useRealtime';
-import { cn, Drawer, SignatureBackdrop } from '@digitaplatform/components';
+import { cn, Drawer, SignatureBackdrop, VersionFooter } from '@digitaplatform/components';
 import { getSignature } from '@digitaplatform/theme';
 import { useThemeStore } from '@/stores/theme';
+import { versionEndpoints } from '@/lib/version-endpoints';
 
 /**
  * A region is painted only if it's the main outlet, has a placed plugin, or
@@ -214,6 +215,8 @@ export function ShellRenderer() {
       {bottom.map((r) => (
         <Bar key={r.id} region={r} />
       ))}
+
+      <footer className="shrink-0 border-t border-border"><VersionFooter endpoints={versionEndpoints()} /></footer>
 
       <MobileDrawer rail={drawerRail} />
       <CommandPalette />

@@ -1,3 +1,4 @@
+vi.mock("../src/lib/versions", () => ({ getEngineBuildInfo: async () => null }));
 // The locale layout leaves the bare URL's language negotiation to the pages, links the
 // tenant's apps in the header unless the site turns them off, so a WebSite row written before
 // `link_apps` existed keeps the apps it linked, and hands the pre-paint boot the site's signature.
@@ -50,6 +51,7 @@ vi.mock("../src/components/ThemeToggle", () => ({
 Object.assign(process.env, {
   AUTH_URL: "https://auth.acme.example",
   ENGINE_URL: "http://engine.internal:3000",
+  VERSION_ENDPOINTS: "https://example.org/health",
   SITE_ID: "example",
   SITE_URL: "https://example.org",
   PUBLIC_ENGINE_URL: "",

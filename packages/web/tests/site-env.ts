@@ -8,6 +8,7 @@ import { TEST_FORM_KEY } from "./signed-form";
 export function setSiteEnv(): void {
   Object.assign(process.env, {
     ENGINE_URL: "http://engine.internal:3000",
+    VERSION_ENDPOINTS: "https://example.org/health",
     SITE_ID: "example",
     SITE_URL: "https://example.org",
     PUBLIC_ENGINE_URL: "",

@@ -64,6 +64,8 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
 
 # ─── Stage 2: Build ──────────────────────────────────────────
 FROM deps AS build
+ARG BUILD_VERSION
+COPY docker/build-info.mjs docker/
 
 COPY packages/shared/ packages/shared/
 COPY packages/theme/ packages/theme/
@@ -81,8 +83,12 @@ RUN pnpm --filter @digitaplatform/shared build && \
     pnpm --filter @digitaplatform/plugins build && \
     pnpm --filter @digitaplatform/web build
 
+RUN node docker/build-info.mjs digita-platform packages/web/package.json packages/web/build-info.json
+
 # ─── Stage 3: Production image ──────────────────────────────
 FROM node:24-alpine AS production
+ARG BUILD_VERSION
+ENV BUILD_VERSION=$BUILD_VERSION
 
 RUN addgroup -S digita && adduser -S digita -G digita
 
@@ -97,6 +103,7 @@ ENV NODE_ENV=production \
 # and the app live under packages/web/ inside the standalone tree.
 COPY --from=build /app/packages/web/.next/standalone ./
 COPY --from=build /app/packages/web/.next/static ./packages/web/.next/static
+COPY --from=build /app/packages/web/build-info.json ./packages/web/build-info.json
 
 RUN chown -R digita:digita /app
 USER digita

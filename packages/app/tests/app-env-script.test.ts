@@ -23,7 +23,7 @@ function stage() {
 
 function run(dir: string, env: Record<string, string>) {
   return spawnSync('sh', [slash(script)], {
-    env: { ...process.env, APP_ENV_HTML: slash(dir), APP_ENV_NGINX_CONF: slash(join(dir, 'nginx.conf')), AUTH_COOKIE_SUFFIX: 'g1', ...env },
+    env: { ...process.env, APP_ENV_HTML: slash(dir), APP_ENV_NGINX_CONF: slash(join(dir, 'nginx.conf')), AUTH_COOKIE_SUFFIX: 'g1', VERSION_ENDPOINTS: `${env.AUTH_URL}/health`, ...env },
     encoding: 'utf8',
   });
 }
@@ -83,6 +83,44 @@ describe('docker/app-env.sh', { timeout: 30_000 }, () => {
     });
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('AUTH_URL must be a plain http(s) URL');
-    expect(csp(dir, 'connect-src')).toBe("'self' __SERVICE_ORIGINS__");
+    expect(csp(dir, 'connect-src')).toBe("'self' __SERVICE_ORIGINS__ __VERSION_ORIGINS__");
+  });
+});
+
+
+describe('version endpoint runtime config', () => {
+it('allows metadata-only origins for connections, preserves explicit frames and restart', () => {
+  const dir = stage();
+  const env = {
+    APP_BASE_PATH: '/',
+    AUTH_URL: 'https://auth.acme.example',
+    JOBS_URL: 'https://jobs.acme.example',
+    REPORT_URL: 'https://report.acme.example',
+    VERSION_ENDPOINTS: 'https://web.acme.example/health,https://web.acme.example/health/frontend,https://auth.acme.example/health',
+  };
+  const services = "'self' https://auth.acme.example https://jobs.acme.example https://report.acme.example";
+  for (let start = 0; start < 2; start++) {
+    const r = run(dir, env);
+    expect(r.status, r.stderr).toBe(0);
+    expect(csp(dir, 'connect-src')).toBe(`${services} https://web.acme.example`);
+    expect(csp(dir, 'frame-src')).toBe(services);
+    expect(cspHeader(dir)).not.toMatch(/__(SERVICE|VERSION)_ORIGINS__/);
+  }
+});
+
+  it('injects only the declared metadata targets and adds their origins to CSP', () => {
+    const dir = stage();
+    const endpoints = 'https://web.acme.example/health,https://auth.acme.example/health';
+    const r = run(dir, { APP_BASE_PATH: '/', AUTH_URL: 'https://auth.acme.example', JOBS_URL: 'https://jobs.acme.example', REPORT_URL: 'https://report.acme.example', VERSION_ENDPOINTS: endpoints });
+    expect(r.status, r.stderr).toBe(0);
+    expect(readFileSync(join(dir, 'env.js'), 'utf8')).toContain(`window.__VERSION_ENDPOINTS__="${endpoints}";`);
+    expect(csp(dir, 'connect-src')).toBe("'self' https://auth.acme.example https://jobs.acme.example https://report.acme.example https://web.acme.example");
+  });
+  it.each(['', 'https://ok.example/health,', 'https://ok.example/health; script-src unsafe-inline', 'https://ok.example/health,https://bad.example/health\nX-Extra: bad'])('refuses invalid endpoint config %s before writing it', (endpoints) => {
+    const dir = stage();
+    const r = run(dir, { APP_BASE_PATH: '/', AUTH_URL: 'https://auth.acme.example', JOBS_URL: 'https://jobs.acme.example', REPORT_URL: 'https://report.acme.example', VERSION_ENDPOINTS: endpoints });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('VERSION_ENDPOINTS');
+    expect(readFileSync(join(dir, 'env.js'), 'utf8')).toBe('');
   });
 });

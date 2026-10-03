@@ -1,5 +1,8 @@
 import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
-import { readFileSync } from "node:fs";
+vi.mock("../src/core/config/build-version.js", () => ({
+  BUILD_VERSION: "0.4.1",
+  getBuildInfo: () => ({ name: "digita-platform", version: "0.4.001-stable-20261003220000-abcdef0", subpackages: [{ name: "@digitaplatform/engine", version: "0.4.1" }] }),
+}));
 
 vi.mock("../src/core/config/env.js", () => {
   return { env: {
@@ -287,7 +290,7 @@ describe("Boot API Integration", () => {
   });
 
   describe("GET /health", () => {
-    it("returns health status with the version a release stamped into the engine's manifest", async () => {
+    it("returns only public metadata from the image, without requiring login", async () => {
       const res = await app.inject({
         method: "GET",
         url: "/health",
@@ -295,10 +298,8 @@ describe("Boot API Integration", () => {
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
-      expect(body.success).toBe(true);
-      expect(body.data.status).toBe("ok");
-      const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
-      expect(body.data.version).toBe(manifest.version);
+      expect(body).toEqual({ name: "digita-platform", version: "0.4.001-stable-20261003220000-abcdef0", subpackages: [{ name: "@digitaplatform/engine", version: "0.4.1" }] });
+      expect(res.headers["cache-control"]).toBe("no-store");
     });
   });
 
