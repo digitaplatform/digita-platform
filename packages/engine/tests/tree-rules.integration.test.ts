@@ -41,6 +41,8 @@ import { restampTreeNodes, TreeRefusedError } from "../src/core/tree/tree-rules.
 import { clearRuleCache } from "../src/core/rules/rule-loader.js";
 import { seedAppData } from "../src/core/setup/seed-app-data.js";
 import { NamingService } from "../src/core/document/naming-service.js";
+import { runAggregateSection } from "../src/core/view/section-runners/aggregate-section.js";
+import { PermissionDeniedError } from "../src/core/permissions/permission-checker.js";
 import { mkdtemp, mkdir, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -52,6 +54,7 @@ let db: MongoDBService;
 let registry: EntityRegistry;
 let docService: DocumentService;
 let hookRunner: HookRunner;
+let permissionChecker: PermissionChecker;
 
 const admin: UserContext = { _id: "admin-001", email: "admin@test.local", roles: [SYSTEM_ROLES.ADMINISTRATOR], full_name: "Admin" };
 const perms: EntityDefinition["permissions"] = [{ role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 }];
@@ -77,7 +80,7 @@ beforeAll(async () => {
 
   registry = new EntityRegistry();
   await registry.loadAll("./src/entities");
-  const permissionChecker = new PermissionChecker(registry);
+  permissionChecker = new PermissionChecker(registry);
   hookRunner = new HookRunner();
   const linkValidator = new LinkValidator(registry, db, permissionChecker);
   const linkTitleResolver = new LinkTitleResolver(registry, db, new TranslationService(db), permissionChecker);
@@ -240,6 +243,36 @@ describe("a node's tree", () => {
 });
 
 describe("a tree's depth", () => {
+  it("refuses excess depth after a prewrite hook moves an ancestor in the same transaction", async () => {
+    const config = registry.get("TShallow").tree!;
+    config.max_depth = 4;
+    const original = hookRunner.run.bind(hookRunner);
+    let intercepted = false;
+    let armed = false;
+    const spy = vi.spyOn(hookRunner, "run").mockImplementation(async (...args) => {
+      if (armed && !intercepted && args[0] === "TShallow" && args[1] === "before_save" && args[2]._id === "B") {
+        intercepted = true;
+        await docService.update("TShallow", "A", { parent: null }, admin, undefined, { sessionOverride: args[4] });
+      }
+      return original(...args);
+    });
+    try {
+      await add("TShallow", "R", null);
+      await add("TShallow", "A", "R");
+      await add("TShallow", "B", "A");
+      await add("TShallow", "C", "B");
+      await add("TShallow", "Q", null);
+      await add("TShallow", "Q1", "Q");
+      await add("TShallow", "P", "Q1");
+      armed = true;
+      expect(await refusal(docService.update("TShallow", "B", { parent: "P" }, admin))).toBe("TREE_TOO_DEEP");
+      expect(await place("TShallow", "C")).toEqual([["R", "A", "B"], 4]);
+    } finally {
+      spy.mockRestore();
+      config.max_depth = 3;
+    }
+  });
+
   it("uses the source depth from inside the transaction after a concurrent move", async () => {
     await add("TShallow", "R", null);
     await add("TShallow", "A", "R");
@@ -284,6 +317,28 @@ describe("a tree's depth", () => {
 });
 
 describe("a move", () => {
+  it("returns fresh placement after a prewrite hook moves an ancestor during a label update", async () => {
+    await add("TGroup", "R", null);
+    await add("TGroup", "A", "R");
+    await add("TGroup", "B", "A");
+    const original = hookRunner.run.bind(hookRunner);
+    let intercepted = false;
+    const spy = vi.spyOn(hookRunner, "run").mockImplementation(async (...args) => {
+      if (!intercepted && args[0] === "TGroup" && args[1] === "before_save" && args[2]._id === "B") {
+        intercepted = true;
+        await docService.update("TGroup", "A", { parent: null }, admin, undefined, { sessionOverride: args[4] });
+      }
+      return original(...args);
+    });
+    try {
+      const doc = await docService.update("TGroup", "B", { label: "Renamed" }, admin);
+      expect([doc.get("_ancestors"), doc.get("_depth")]).toEqual([["A"], 2]);
+      expect(await place("TGroup", "B")).toEqual([["A"], 2]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("keeps a concurrent parent change when this update only renames the node", async () => {
     await add("TGroup", "A", null);
     await add("TGroup", "B", "A");
@@ -333,6 +388,47 @@ describe("a move", () => {
       spy.mockRestore();
     }
     for (let i = 1; i <= 20; i++) expect(((await stored("TGroup", `N${i}`))["_ancestors"] as string[]).slice(0, 2)).toEqual(["M", "N"]);
+  });
+});
+
+describe("tree ancestry and parent permissions", () => {
+  it("masks placement on document, list and aggregate reads when parent is unreadable", async () => {
+    await add("TGroup", "A", null);
+    await add("TGroup", "B", "A");
+    const entity = registry.get("TGroup");
+    const previous = entity.permissions;
+    entity.permissions = [...previous, { role: "Tree reader", level: 0, read: 1, select: 1, fields: ["label"] }];
+    const reader: UserContext = { _id: "reader", email: "reader@test.local", roles: ["Tree reader"] };
+    const context = { root: null, user: reader, params: {}, now: new Date(), warnings: [] };
+    const deps = { db, registry, permissionChecker, tenantTimeZone: () => "UTC" };
+    const expectMasked = (row: Record<string, unknown>) => {
+      expect(row).toHaveProperty("label");
+      for (const field of ["parent", "_ancestors", "_depth", "_tree_rev"]) expect(row).not.toHaveProperty(field);
+    };
+    try {
+      expectMasked((await docService.getDoc("TGroup", "B", reader)).toJSON());
+      const list = await docService.getList("TGroup", { fields: ["*"] }, reader);
+      list.data.forEach(expectMasked);
+      const rows = await runAggregateSection({ key: "tree", kind: "aggregate", entity: "TGroup", pipeline: [] }, context, reader, deps);
+      rows.forEach(expectMasked);
+      const joined = await runAggregateSection({
+        key: "tree", kind: "aggregate", entity: "TGroup",
+        pipeline: [{ $lookup: { from: "TGroup", localField: "_id", foreignField: "_id", as: "related" } }],
+      }, context, reader, deps);
+      for (const row of joined) {
+        expectMasked(row);
+        (row["related"] as Record<string, unknown>[]).forEach(expectMasked);
+      }
+      for (const field of ["_ancestors", "_depth", "_tree_rev"]) {
+        await expect(runAggregateSection({
+          key: "tree", kind: "aggregate", entity: "TGroup",
+          pipeline: [{ $project: { leaked: `$${field}` } }],
+        }, context, reader, deps)).rejects.toBeInstanceOf(PermissionDeniedError);
+      }
+      expect((await docService.getDoc("TGroup", "B", admin)).get("_ancestors")).toEqual(["A"]);
+    } finally {
+      entity.permissions = previous;
+    }
   });
 });
 

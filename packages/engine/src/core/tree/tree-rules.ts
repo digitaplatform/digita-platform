@@ -14,7 +14,7 @@ import { EngineError } from "../errors/engine-error.js";
 export const TREE_ANCESTORS = "_ancestors";
 export const TREE_DEPTH = "_depth";
 export const TREE_REVISION = "_tree_rev";
-const TREE_KEYS = [TREE_ANCESTORS, TREE_DEPTH, TREE_REVISION];
+export const TREE_KEYS = [TREE_ANCESTORS, TREE_DEPTH, TREE_REVISION];
 
 /** A write that would break the tree: a cycle, a parent of another tree, or a node too deep. */
 export class TreeRefusedError extends EngineError {}
@@ -59,6 +59,17 @@ export async function placeTreeNode(
   session?: ClientSession,
 ): Promise<TreePlacement | undefined> {
   if (!entity.tree) return undefined;
+  if (stored) {
+    // A prewrite hook may move this node or its ancestors in the same transaction.
+    const latest = await db.findOne(entity.name, id, entity.database, session) as Record<string, unknown> | null;
+    if (!latest) throw new Error(`${entity.name} ${id}: its node is not stored`);
+    for (const field of [TREE_PARENT_FIELD, ...partitionFields(entity)]) {
+      if (sameValue(values[field], stored[field])) values[field] = latest[field];
+      stored[field] = latest[field];
+    }
+    Object.assign(stored, storedTreeKeys(latest));
+    Object.assign(values, storedTreeKeys(latest));
+  }
   const params = (extra: Record<string, string> = {}) => ({ doctype: entity.label ?? entity.name, name: id, ...extra });
   const parentId = idOf(values[TREE_PARENT_FIELD]);
   const movedPartition = stored ? partitionFields(entity).find((f) => !sameValue(stored[f], values[f])) : undefined;
