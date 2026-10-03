@@ -60,6 +60,7 @@ describe("the tree block", () => {
     ]);
     expect(entity.fields.find((f) => f.fieldname === "label")?.translatable).toBe(true);
     expect(entity.fields.find((f) => f.fieldname === "active")?.default).toBe(1);
+    expect(entity.fields.find((f) => f.fieldname === "icon")?.options).toBe("Icon");
     expect(entity.title_field).toBe("label");
     expect(entity.indexes?.map((i) => [i.name, i.fields])).toEqual([
       ["idx_tree_parent", ["parent"]],

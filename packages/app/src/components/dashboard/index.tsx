@@ -10,7 +10,7 @@ import { ChartCard } from './ChartCard';
 import { ListCard } from './ListCard';
 import { ShortcutCard } from './ShortcutCard';
 import { LinksCard } from './LinksCard';
-import { cardIcon } from './card-icon';
+import { lucideIcon } from '@/lib/lucide-icon';
 
 export { CardShell } from './CardShell';
 export type { CardStatus } from './CardShell';
@@ -88,7 +88,7 @@ export function renderCard(
   resolve: CardResolve,
   navigate: (to: string) => void,
 ): ReactNode {
-  const icon = cardIcon(card.icon, 20);
+  const icon = lucideIcon(card.icon, 20);
 
   switch (card.kind) {
     case 'number': {

@@ -722,7 +722,7 @@ export class DocumentService {
     // getDoc, so a filter or a sort that matched it never read a value it masks.
     const mask = (doc: Record<string, unknown>) =>
       this.permissionChecker.filterFieldsForRead(user, doctype, doc, sharedOnly.has(String(doc["_id"])));
-    docs = masksStoredRows
+    docs = masksStoredRows || entity.tree
       ? docs.map((doc) => projectFields(mask(doc), query.fields))
       : docs.map(mask);
 

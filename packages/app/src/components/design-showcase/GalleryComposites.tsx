@@ -62,6 +62,7 @@ import {
   ToastHost,
   TopBar,
   TreeView,
+  TreeEditor,
   Watermark,
   navLeafClass,
   railButtonClass,
@@ -122,6 +123,30 @@ const PRODUCT_GROUPS = [
   { id: 'apparel', label: 'Apparel', parentId: 'all', subtitle: '112 products' },
   { id: 'retired', label: 'Retired lines', parentId: 'all' },
 ];
+
+const TREE_EDITOR_LABELS = {
+  kind: 'Kind',
+  newKind: 'New kind',
+  kindName: 'Name of the new kind',
+  create: 'Create',
+  addRoot: 'Top level',
+  addChild: 'Add child',
+  move: 'Move',
+  moveToRoot: 'To top level',
+  movingHint: 'Choose the new parent…',
+  cancel: 'Cancel',
+  delete: 'Delete',
+  search: 'Search',
+  noResults: 'No results',
+  select: 'Select',
+};
+
+const PRODUCT_GROUP_KINDS = [
+  ...PRODUCT_GROUPS.map((n) => ({ ...n, kind: 'Products' })),
+  { id: 'north', label: 'North', parentId: null, kind: 'Regions' },
+];
+
+const asyncNoop = async () => {};
 
 const NAV_ITEMS = [
   { key: 'home', label: 'Home', icon: <Home className="h-6 w-6" /> },
@@ -585,6 +610,24 @@ function NavigationGroup() {
         <ShowcaseState state="selected · disabled node · expanded">
           <div className="w-64">
             <TreeView nodes={PRODUCT_GROUPS} selectedId="trail" onSelect={noop} disabledIds={new Set(['retired'])} />
+          </div>
+        </ShowcaseState>
+      </ShowcaseGroup>
+      <ShowcaseGroup title="TreeEditor" exports={['TreeEditor']}>
+        <ShowcaseState state="kinds · add, move and delete per node">
+          <div className="w-96">
+            <TreeEditor
+              nodes={PRODUCT_GROUP_KINDS}
+              hasKinds
+              canCreate
+              canMove={() => true}
+              canDelete={(node) => node.id !== 'all'}
+              labels={TREE_EDITOR_LABELS}
+              onAdd={noop}
+              onEdit={noop}
+              onMove={asyncNoop}
+              onDelete={asyncNoop}
+            />
           </div>
         </ShowcaseState>
       </ShowcaseGroup>

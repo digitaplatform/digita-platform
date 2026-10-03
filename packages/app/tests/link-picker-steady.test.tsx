@@ -78,16 +78,19 @@ const CUSTOMER_FIELD = {
   search_columns: ['name'],
 } as FieldDefinition;
 const GROUP_FIELD = { fieldname: 'group', fieldtype: 'Link', label: 'Customer group', target: 'CustomerGroup' } as FieldDefinition;
-const SERVICE_GROUP_FIELD = { fieldname: 'group', fieldtype: 'Link', label: 'Group', target: 'ServiceGroup' } as FieldDefinition;
+const SERVICE_GROUP_FIELD = {
+  fieldname: 'group', fieldtype: 'Link', label: 'Group', target: 'ServiceGroup',
+  target_filters: { kind: '$doc.kind' },
+} as FieldDefinition;
 const FIRST_ANSWER: SearchAnswer = [
   { _id: 'C-1', display: 'Alpine Hotel', fields: { name: 'Alpine Hotel' } },
   { _id: 'C-2', display: 'Bergbahn AG', fields: { name: 'Bergbahn AG' } },
 ];
 const ZUG_ANSWER: SearchAnswer = [{ _id: 'C-3', display: 'Zug Pharma', fields: { name: 'Zug Pharma' } }];
 const GROUP_ROWS = [
-  { _id: 'G-1', label: 'Business customers', parent: null },
-  { _id: 'G-2', label: 'Hotels', parent: 'G-1' },
-  { _id: 'G-3', label: 'Private customers', parent: null },
+  { _id: 'G-1', label: 'Business customers', parent: null, active: true },
+  { _id: 'G-2', label: 'Hotels', parent: 'G-1', active: true },
+  { _id: 'G-3', label: 'Private customers', parent: null, active: true },
 ];
 const SIZE_OF_SCREEN = ['h-dvh', 'sm:h-[90vh]'];
 
@@ -324,7 +327,7 @@ describe('the tree picker of a Link field', () => {
     const onChange = vi.fn();
     const view = renderField(SERVICE_GROUP_FIELD, { kind: 'sales' }, onChange);
     await user.hover(screen.getByRole('combobox'));
-    await landLists([{ _id: 'G-S1', label: 'Sales key accounts', parent: null, kind: 'sales' }]);
+    await landLists([{ _id: 'G-S1', label: 'Sales key accounts', parent: null, active: true, kind: 'sales' }]);
 
     view.rerender(buildField(SERVICE_GROUP_FIELD, { kind: 'service' }, onChange));
     await waitFor(() => expect(engine.lists).toHaveLength(1));
@@ -333,7 +336,7 @@ describe('the tree picker of a Link field', () => {
     expect(within(panel).queryByRole('treeitem', { name: 'Sales key accounts' })).toBeNull();
     expect(within(panel).getByText('ui.link.searching')).toBeInTheDocument();
 
-    await landLists([{ _id: 'G-V1', label: 'Service contracts', parent: null, kind: 'service' }]);
+    await landLists([{ _id: 'G-V1', label: 'Service contracts', parent: null, active: true, kind: 'service' }]);
     expect(await within(panel).findByRole('treeitem', { name: 'Service contracts' })).toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
   });

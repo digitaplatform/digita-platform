@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { cn, EmptyState } from '@digitaplatform/components';
 import { useTreeEntities } from '@/hooks/useTreeEntities';
-import { TreeEditor } from '@/components/render/TreeEditor';
+import { EntityTreeEditor } from '@/components/render/EntityTreeEditor';
 import { LoadingBlock } from '@/components/status';
 import { useChrome } from '@/lib/chrome-i18n';
 
@@ -11,7 +11,7 @@ import { useChrome } from '@/lib/chrome-i18n';
  * chart of accounts, …) as a manageable hierarchy in ONE place, so it gets its
  * own menu point + permission gate instead of being buried in each entity's list
  * view. Zero entity-specific code: it enumerates tree entities and hands each to
- * the generic TreeEditor (which itself edits nodes in a modal, so the tree stays
+ * the generic EntityTreeEditor (which itself edits nodes in a modal, so the tree stays
  * in view).
  */
 export default function GroupsPage() {
@@ -67,7 +67,7 @@ export default function GroupsPage() {
           {(() => {
             const active = entities.find((e) => e.entity === selected) ?? entities[0]!;
             return (
-              <TreeEditor
+              <EntityTreeEditor
                 key={active.entity}
                 entity={active.entity}
                 meta={active.meta}

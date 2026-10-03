@@ -30,6 +30,12 @@ export function recordImageUrl(meta: EntityDefinition, row: Row): string | null 
   return typeof value === 'string' && value ? value : null;
 }
 
+/** The address of the record's picture at the size of a list row, or null without one. */
+export function recordThumbnailUrl(meta: EntityDefinition, row: Row): string | null {
+  const url = recordImageUrl(meta, row);
+  return url ? thumbSrc(url) : null;
+}
+
 /** The record's picture beside its title in a list row, a card and the record header. Nothing
  *  without one, so such a record keeps its plain title. */
 export function RecordImage({
@@ -41,11 +47,11 @@ export function RecordImage({
   row: Row;
   className: string;
 }) {
-  const url = recordImageUrl(meta, row);
+  const url = recordThumbnailUrl(meta, row);
   if (!url) return null;
   return (
     <img
-      src={thumbSrc(url)}
+      src={url}
       alt=""
       loading="lazy"
       data-component="record-image"
