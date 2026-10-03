@@ -72,7 +72,7 @@ const GENERIC_FONT_FAMILIES: ReadonlySet<string> = new Set([
  */
 const ALLOWED_BARCODE_SYMBOLOGIES: ReadonlySet<string> = new Set([
   "code128", "code39", "ean13", "ean8", "upca", "upce",
-  "qrcode", "datamatrix", "pdf417", "azteccode",
+  "qrcode", "swissqrcode", "datamatrix", "pdf417", "azteccode",
   "interleaved2of5", "itf14", "gs1-128",
 ]);
 
