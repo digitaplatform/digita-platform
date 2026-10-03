@@ -6,7 +6,7 @@ import { useList } from '@/hooks/useList';
 
 const getList = vi.hoisted(() => vi.fn());
 vi.mock('@/services/resource', () => ({ getList }));
-beforeEach(() => getList.mockReset());
+beforeEach(() => { getList.mockReset(); });
 
 describe('a complete tree list', () => {
   it('includes later-page kinds and parents before offering the forest', async () => {
