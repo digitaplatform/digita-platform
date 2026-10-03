@@ -94,12 +94,6 @@ export class IndexManager {
   ): Array<{ spec: IndexSpecification; options?: CreateIndexesOptions }> {
     const indexes: Array<{ spec: IndexSpecification; options?: CreateIndexesOptions }> = [];
 
-    // Time-series collections in MongoDB don't support unique indexes (the
-    // server rejects them at create time). Skip any field-level
-    // `unique: true` for those entities — uniqueness makes little sense
-    // for append-only event streams anyway.
-    const isTimeSeries = !!entity.time_series;
-
     // 1. Standard indexes (every collection)
     indexes.push(
       { spec: { creation: -1 }, options: { name: "idx_creation" } },
@@ -120,8 +114,8 @@ export class IndexManager {
         });
       }
 
-      // Unique fields (skipped on time-series collections — Mongo rejects)
-      if (!isTimeSeries && field.unique && !LAYOUT_FIELD_TYPES.includes(field.fieldtype)) {
+      // Unique values remain reserved for all stored rows.
+      if (field.unique && !LAYOUT_FIELD_TYPES.includes(field.fieldtype)) {
         indexes.push({
           spec: { [field.fieldname]: 1 },
           options: { name: `idx_uniq_${field.fieldname}`, unique: true, sparse: true },

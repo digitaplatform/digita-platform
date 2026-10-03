@@ -118,14 +118,5 @@ describe("entity-registry — period_check validation", () => {
     ).rejects.toThrow(refusal("require_period must be a boolean"));
   });
 
-  it("refuses the load when the entity also declares time_series (mutually exclusive)", async () => {
-    await expect(
-      loadEntity(
-        baseJournal({
-          period_check: { date_field: "posting_date", period_entity: "fiscalPeriod" },
-          time_series: { time_field: "posting_date" },
-        }),
-      ),
-    ).rejects.toThrow(refusal("incompatible with time_series"));
-  });
+
 });

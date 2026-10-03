@@ -539,37 +539,6 @@ export interface FreezeSpec {
   flatten?: FlattenSpec[];
 }
 
-// ─── Time-Series Collection Config ───────────────────────
-
-/**
- * Native MongoDB time-series collection support (Mongo 5.0+).
- *
- * When set, the engine creates the entity's collection as a time-series
- * collection. Time-series collections are append-optimised: documents are
- * INSERT-ONLY apart from limited modifications to the meta field. The
- * platform enforces this at the application layer too — `update()` rejects
- * patches that touch any field other than `meta_field`.
- *
- * Fit:
- *   ✓ append-only ledgers, audit trails, sensor / metric streams,
- *     event histories — anything whose rows are written once.
- *   ✗ entities that mutate after insert (status transitions, line edits,
- *     re-submits) — Mongo time-series rejects such updates by design.
- *
- * Boot rules:
- *   `is_submittable` must be false
- *   `track_changes` must be false (a time-series doc is never updated)
- *   cannot coexist with `period_check`
- *   `time_field` must reference an existing `Date` / `Datetime` field
- *   `meta_field` (if set) must reference an existing `Data` / `Link` field
- */
-export interface TimeSeriesConfig {
-  time_field: string;
-  meta_field?: string;
-  granularity?: "seconds" | "minutes" | "hours";
-  expire_after_seconds?: number;
-}
-
 // ─── Period Close ────────────────────────────────────────
 
 /**
@@ -1086,8 +1055,6 @@ export interface EntityDefinition {
    */
   snapshot_fields?: string[];
 
-  /** Native MongoDB time-series collection. See `TimeSeriesConfig`. */
-  time_series?: TimeSeriesConfig;
 
   /** Period-close enforcement. See `PeriodCheckConfig`. */
   period_check?: PeriodCheckConfig;

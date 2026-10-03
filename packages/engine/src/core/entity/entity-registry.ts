@@ -245,7 +245,6 @@ export class EntityRegistry {
     this.validateFieldDefinitions(entity);
     this.validateHooks(entity);
     this.validateSnapshotManifest(entity);
-    this.validateTimeSeriesConfig(entity);
     this.validatePeriodCheckConfig(entity);
     this.validateAllowOnSubmit(entity);
     this.validateDialogDefaults(entity);
@@ -728,51 +727,6 @@ export class EntityRegistry {
   }
 
   /**
-   * Validate `entity.time_series` config against the entity's other flags.
-   * Mongo time-series collections are append-optimised: docs are insert-only
-   * apart from limited modifications to the `meta_field`. Combinations that
-   * imply mutability (`is_submittable`, `track_changes`) or period-close
-   * enforcement (which only makes sense when updates can be rejected on the
-   * basis of a period flag flipped post-insert) are forbidden.
-   *
-   * "Warn, don't fail" — invalid `time_series` is stripped; the entity loads
-   * as a regular collection so boot completes.
-   */
-  private validateTimeSeriesConfig(entity: EntityDefinition): void {
-    const ts = entity.time_series;
-    if (!ts) return;
-    const reasons: string[] = [];
-
-    if (entity.is_submittable) reasons.push("is_submittable=true incompatible");
-    if (entity.track_changes) reasons.push("track_changes=true incompatible");
-    if (!ts.time_field) {
-      reasons.push("time_field required");
-    } else {
-      const tf = entity.fields.find((f) => f.fieldname === ts.time_field);
-      if (!tf) {
-        reasons.push(`time_field "${ts.time_field}" not declared`);
-      } else if (tf.fieldtype !== "Date" && tf.fieldtype !== "Datetime") {
-        reasons.push(`time_field must be Date/Datetime (got ${tf.fieldtype})`);
-      }
-    }
-    if (ts.meta_field) {
-      const mf = entity.fields.find((f) => f.fieldname === ts.meta_field);
-      if (!mf) {
-        reasons.push(`meta_field "${ts.meta_field}" not declared`);
-      } else if (mf.fieldtype !== "Data" && mf.fieldtype !== "Link") {
-        reasons.push(`meta_field must be Data or Link (got ${mf.fieldtype})`);
-      }
-    }
-    if (reasons.length) {
-      log.warn(
-        { entity: entity.name, reasons },
-        "time_series config invalid — disabled for this entity",
-      );
-      delete entity.time_series;
-    }
-  }
-
-  /**
    * Validate `entity.period_check`, the guard that refuses a posting into a closed period. A
    * config with a fault refuses the file, naming each fault, instead of loading the entity
    * without its guard. A fault is:
@@ -780,9 +734,6 @@ export class EntityRegistry {
    *   the period_field (if set) isn't a Link
    *   block_on entries are unknown phases
    *   require_period is set but not a boolean
-   *   the entity also declares time_series (the two are mutually exclusive
-   *     time-series collections never update so period-close on update has
-   *     no surface)
    *
    * Note: the period_entity may not be loaded yet at validation time (entity
    * load order is filesystem-dependent), so we don't fail on its absence.
@@ -794,7 +745,6 @@ export class EntityRegistry {
     if (!pc) return;
     const reasons: string[] = [];
 
-    if (entity.time_series) reasons.push("incompatible with time_series");
     if (!pc.date_field) {
       reasons.push("date_field required");
     } else {
@@ -838,13 +788,7 @@ export class EntityRegistry {
     entity.is_single = entity.is_single ?? false;
     entity.is_virtual = entity.is_virtual ?? false;
     entity.is_log = entity.is_log ?? false;
-    // Time-series collections are insert-only — versioning makes no sense.
-    // Default `track_changes` accordingly so authors don't have to remember.
-    if (entity.time_series) {
-      entity.track_changes = entity.track_changes ?? false;
-    } else {
-      entity.track_changes = entity.track_changes ?? true;
-    }
+    entity.track_changes = entity.track_changes ?? true;
     entity.track_views = entity.track_views ?? false;
     entity.in_global_search = entity.in_global_search ?? false;
   }

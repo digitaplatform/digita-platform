@@ -58,24 +58,12 @@ export class SchemaMigrator {
       return result;
     }
 
-    // Ensure collection exists. When the entity declares `time_series`,
-    // the collection is created as a native MongoDB time-series collection.
-    // (Mongo cannot convert in place — `ensureCollection` throws clearly if
-    // a non-timeseries collection of the same name already exists.)
     const dbTarget = entity.database;
     const existingCollections = await this.db.listCollections(dbTarget);
-
+    await this.db.ensureCollection(entity.name, dbTarget);
     if (!existingCollections.includes(entity.name)) {
-      await this.db.ensureCollection(entity.name, dbTarget, {
-        timeseries: entity.time_series,
-      });
       result.collection_created = true;
       log.info({ entity: entity.name }, "Collection created");
-    } else if (entity.time_series) {
-      // Verify the existing collection is actually time-series; throws if not.
-      await this.db.ensureCollection(entity.name, dbTarget, {
-        timeseries: entity.time_series,
-      });
     }
 
     // Apply indexes

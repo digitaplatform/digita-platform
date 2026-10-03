@@ -12,7 +12,7 @@ import {
   type OptionalUnlessRequiredId,
   type ClientSession,
 } from "mongodb";
-import type { DatabaseTarget, TimeSeriesConfig } from "@digitaplatform/shared";
+import type { DatabaseTarget } from "@digitaplatform/shared";
 import { DIGITA } from "@digitaplatform/shared";
 import { env } from "../config/env.js";
 import { dbName } from "../config/db-names.js";
@@ -95,13 +95,6 @@ export class MongoDBService {
   private databases = new Map<DatabaseTarget, Db>();
   /** Registered application databases (logical name → physical Mongo DB name). */
   private appDatabases = new Map<string, AppDatabaseDefinition>();
-  /**
-   * Physical keys (`<target>::<collection>`) of collections ensured as native
-   * MongoDB time-series collections. Populated by `ensureCollection` at boot.
-   * A time-series collection CANNOT be written inside a multi-document
-   * transaction (server code 263), so writes to these drop the txn session.
-   */
-  private timeSeriesCollections = new Set<string>();
   /** The work `afterCommit` queued, per session of a running `withTransaction`. */
   private commitWork = new WeakMap<ClientSession, Array<() => Promise<void>>>();
   private connected = false;
@@ -382,42 +375,6 @@ export class MongoDBService {
   }
 
   /** Physical registry key for the time-series set. */
-  private tsKey(name: string, target: DatabaseTarget): string {
-    return `${target}::${name}`;
-  }
-
-  /** True if `name` in `target` was ensured as a native time-series collection. */
-  isTimeSeries(name: string, target: DatabaseTarget): boolean {
-    return this.timeSeriesCollections.has(this.tsKey(name, target));
-  }
-
-  /**
-   * Pick the session to write with. A native MongoDB time-series collection
-   * CANNOT be written inside a multi-document transaction — the server rejects
-   * it with code 263 (OperationNotSupportedInTransaction), even at FCV 8.0. So
-   * a time-series insert that lands inside an active transaction (stock/ledger
-   * rows written from `on_submit` hooks that run in the submit txn) drops the
-   * session and runs as a STANDALONE write, committing immediately outside the
-   * txn. Trade-off (accepted): if the surrounding txn later aborts, that
-   * append-only row is orphaned rather than rolled back — the submitted
-   * document is the source of truth and the ledger row can be reconciled.
-   * Every non-time-series write keeps the caller's session unchanged.
-   */
-  private sessionForWrite(
-    name: string,
-    target: DatabaseTarget,
-    session?: ClientSession,
-  ): ClientSession | undefined {
-    if (session?.inTransaction() && this.isTimeSeries(name, target)) {
-      log.debug(
-        { collection: name, db: target },
-        "Time-series write routed outside the active transaction",
-      );
-      return undefined;
-    }
-    return session;
-  }
-
   async insertOne(
     collectionName: string,
     data: Record<string, unknown>,
@@ -426,7 +383,7 @@ export class MongoDBService {
   ): Promise<void> {
     await this.collection(collectionName, target).insertOne(
       data as OptionalUnlessRequiredId<Document>,
-      { session: this.sessionForWrite(collectionName, target, session) },
+      { session },
     );
     log.debug({ collection: collectionName, db: target, id: data["_id"] }, "Document inserted");
   }
@@ -440,7 +397,7 @@ export class MongoDBService {
     if (docs.length === 0) return;
     await this.collection(collectionName, target).insertMany(
       docs as OptionalUnlessRequiredId<Document>[],
-      { session: this.sessionForWrite(collectionName, target, session), ordered: false },
+      { session, ordered: false },
     );
     log.debug(
       { collection: collectionName, db: target, count: docs.length },
@@ -585,43 +542,13 @@ export class MongoDBService {
     return this.collection(collectionName, target).createIndex(spec, options);
   }
 
-  async ensureCollection(
-    name: string,
-    target: DatabaseTarget,
-    options?: { timeseries?: TimeSeriesConfig },
-  ): Promise<void> {
+  async ensureCollection(name: string, target: DatabaseTarget): Promise<void> {
     const db = this.getDb(target);
     const collections = await db.listCollections({ name }).toArray();
     if (collections.length > 0) {
-      // If a time-series flag is requested but the existing collection isn't
-      // time-series, fail loud — Mongo doesn't support in-place conversion.
-      if (options?.timeseries) {
-        const info = collections[0] as { type?: string };
-        if (info.type !== "timeseries") {
-          // Time-series cannot be applied in place: the collection is dropped and created again.
-          throw new ConfigurationError("collection_not_time_series", { collection: name });
-        }
-        this.timeSeriesCollections.add(this.tsKey(name, target));
+      if (collections[0]!.type !== "collection") {
+        throw new ConfigurationError("ordinary_collection_required", { collection: name });
       }
-      return;
-    }
-    if (options?.timeseries) {
-      const ts = options.timeseries;
-      const tsOpts: Record<string, unknown> = {
-        timeField: ts.time_field,
-      };
-      if (ts.meta_field) tsOpts["metaField"] = ts.meta_field;
-      if (ts.granularity) tsOpts["granularity"] = ts.granularity;
-      const createOpts: Record<string, unknown> = { timeseries: tsOpts };
-      if (ts.expire_after_seconds !== undefined) {
-        createOpts["expireAfterSeconds"] = ts.expire_after_seconds;
-      }
-      await db.createCollection(name, createOpts as never);
-      this.timeSeriesCollections.add(this.tsKey(name, target));
-      log.info(
-        { collection: name, db: target, timeseries: tsOpts },
-        "Time-series collection created",
-      );
       return;
     }
     await db.createCollection(name);

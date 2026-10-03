@@ -124,21 +124,6 @@ export class ConcurrentModificationError extends EngineError {
   }
 }
 
-export class TimeSeriesImmutableError extends EngineError {
-  constructor(
-    public doctype: string,
-    public attempted_fields: string[],
-    public meta_field: string | undefined,
-  ) {
-    super(
-      "time_series_immutable",
-      { doctype, fields: attempted_fields.join(", "), meta_field: meta_field ?? "" },
-      400,
-      "TIME_SERIES_IMMUTABLE",
-    );
-  }
-}
-
 /** The records of other entities that point to a document, which keep it from being deleted or cancelled. */
 export interface Blocker {
   entity: string;
@@ -1312,16 +1297,6 @@ export class DocumentService {
 
     // Check if editable
     this.docStatusEngine.validateEdit(entity, doc);
-
-    // Time-series collections are append-only apart from limited meta_field
-    // modifications. Reject any patch that touches non-meta fields.
-    if (entity.time_series) {
-      const metaField = entity.time_series.meta_field;
-      const attempted = Object.keys(data).filter((k) => !k.startsWith("_") && k !== metaField);
-      if (attempted.length > 0) {
-        throw new TimeSeriesImmutableError(doctype, attempted, metaField);
-      }
-    }
 
     // Workflow transition validation. Detect a change to the workflow field
     // (default `status`). The actual side_effects + on_workflow_transition

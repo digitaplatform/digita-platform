@@ -48,7 +48,7 @@ export {
 
 export { DocStatus } from "./types/docstatus.js";
 
-export type { TimeSeriesConfig, PeriodCheckConfig, TreeConfig, SubmittedPatch, FormLayoutConfig } from "./types/entity.js";
+export type { PeriodCheckConfig, TreeConfig, SubmittedPatch, FormLayoutConfig } from "./types/entity.js";
 
 // Cross-service authentication contract (digita-auth ⇄ digita-core / digita-post)
 export type {
