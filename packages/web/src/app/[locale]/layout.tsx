@@ -76,7 +76,7 @@ export default async function LocaleLayout({
   const brand = {
     name: site?.site_name || branding?.app_name || signature.name,
     logoUrl: brandingImageUrl(branding?.logo),
-    nameIsCustom: Boolean(site?.site_name ?? branding?.app_name),
+    nameIsCustom: Boolean(site?.site_name || branding?.app_name),
     signature,
   };
   // The middleware makes a nonce per request; without it the boot script would not run under the

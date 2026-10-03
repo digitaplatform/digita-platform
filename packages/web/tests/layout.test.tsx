@@ -165,12 +165,19 @@ describe("the locale layout", () => {
       const html = await render();
       // PLANTED INNOCENT: the look is drawn, so a missing name means the brand was looked for.
       expect(html).toContain('data-signature="simetrix"');
-      expect(html).toContain("simetrix");
+      expect(html).toContain('aria-label="simetrix"');
       expect(html).not.toMatch(/>Digita</);
       expect(html).not.toContain('aria-label="Digita"');
     } finally {
       websiteLook = undefined;
     }
+  });
+
+  it("PLANTED DEFECT: writes the app name as text where the site's name is empty, not under the look's wordmark", async () => {
+    site = { ...site, site_name: "", theme: "simetrix" };
+    branding = { app_name: "Acme" };
+    const html = await render();
+    expect([/>Acme</.test(html), html.includes('aria-label="Acme"')]).toEqual([true, false]);
   });
 
   it("draws a site without a theme in the website look the tenant's settings name", async () => {
