@@ -7,7 +7,6 @@ name: ci
 # build, and its image from docker/web.Dockerfile).
 on:
   push:
-    branches: [master]
   pull_request:
     branches: [master]
   # The Release workflow commits a release with GITHUB_TOKEN, and GitHub starts no workflow from such
