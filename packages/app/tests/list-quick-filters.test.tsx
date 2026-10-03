@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
@@ -250,12 +250,22 @@ describe('the quick filters of a list', () => {
   it('filter a Tag field by its typed list once typing pauses, under its own label', async () => {
     const tags = { fieldname: 'tags', fieldtype: 'Tag', label: 'Tags', in_standard_filter: true };
     shown.meta = { ...BOOK, fields: [...BOOK.fields, tags] };
-    const user = userEvent.setup();
     const router = renderList('/Book');
     await waitFor(() => expect(getList).toHaveBeenCalled());
     const before = getList.mock.calls.length;
 
-    await user.type(within(quickFilters()).getByLabelText('Tags'), 'red, blue');
+    // Letter by letter on a fake clock, so a slow machine cannot open the pause between two letters.
+    const input = within(quickFilters()).getByLabelText('Tags');
+    // The visible label names the input, not only its aria-label.
+    expect(within(quickFilters()).getByText('Tags', { selector: 'label' })).toHaveProperty('control', input);
+    vi.useFakeTimers();
+    fireEvent.focus(input);
+    const typed = 'red, blue';
+    for (let end = 1; end <= typed.length; end++) fireEvent.change(input, { target: { value: typed.slice(0, end) } });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    vi.useRealTimers();
 
     await waitFor(() => expect(urlFilters(router)).toEqual([['tags', 'in', ['red', 'blue']]]));
     await waitFor(() => expect(lastRequestedFilters()).toEqual([['tags', 'in', ['red', 'blue']]]));
