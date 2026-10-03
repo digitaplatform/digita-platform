@@ -11,8 +11,8 @@ import { CardShell, type CardStatus } from './CardShell';
 /** recharts lives ONLY behind this lazy boundary (code-split off the dashboard). */
 const ChartCanvas = lazy(() => import('./ChartCanvas'));
 
-/** CSS variables read off the chart host → resolved hex passed to recharts (SVG fill/stroke
- *  does not inherit CSS vars). Safe fallbacks if a variable is missing. */
+/** CSS variables read off the chart host → resolved palette passed to recharts.
+ *  Safe fallbacks if a variable is missing. */
 const PALETTE_VARS = [
   '--color-primary-600',
   '--color-accent-500',
@@ -68,7 +68,7 @@ export function ChartCard({ card, icon, status, error, data, entity }: ChartCard
   const [compact, setCompact] = useState(false);
 
   // Re-resolve the theme hex whenever the mode flips — recharts gets concrete
-  // colors (SVG can't inherit CSS vars), so a live light/dark toggle must refresh.
+  // colors, so a live light/dark toggle must refresh the series palette.
   useEffect(() => {
     if (!host) return;
     setColors(resolvePalette(host));

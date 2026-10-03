@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import {
   Area,
   AreaChart,
@@ -21,8 +22,7 @@ import { NEUTRAL } from '@digitaplatform/theme';
 /**
  * The ONLY module that imports `recharts`. Loaded lazily by ChartCard via
  * React.lazy so the (large) charting bundle is code-split off the dashboard.
- * RESOLVED theme hex colors are passed in (recharts SVG fill/stroke does NOT
- * inherit CSS vars) — never `var(--…)` strings.
+ * Resolved series and grid colors are passed in; hover UI uses live theme variables.
  */
 
 export interface ChartCanvasProps {
@@ -30,7 +30,7 @@ export interface ChartCanvasProps {
   rows: Array<Record<string, unknown>>;
   /** Resolved palette (hex), one per series, cycled if there are more series. */
   colors: string[];
-  /** Resolved grid/axis line color (hex) — SVG stroke does not inherit CSS vars. */
+  /** Resolved grid/axis line color (hex). */
   gridColor: string;
   /** Narrow widths drop the legend/axis chrome. */
   compact: boolean;
@@ -42,6 +42,21 @@ function colorAt(colors: string[], i: number): string {
   // Same neutral the theme uses for muted strokes — token-sourced, not an
   // off-system gray (only reachable if `colors` is empty, which it never is).
   return colors[i % colors.length] ?? NEUTRAL[400]!;
+}
+
+const TOOLTIP_PROPS = {
+  contentStyle: {
+    backgroundColor: 'var(--color-surface)',
+    borderColor: 'var(--color-border)',
+    color: 'var(--color-text-main)',
+  },
+  // Series colors distinguish marks, but cannot guarantee readable text on the tooltip surface.
+  itemStyle: { color: 'var(--color-text-main)' },
+  cursor: { fill: 'var(--color-bg-hover)', stroke: 'var(--color-border)' },
+};
+
+function formatLegendLabel(value: ReactNode) {
+  return <span style={{ color: 'var(--color-text-main)' }}>{value}</span>;
 }
 
 export default function ChartCanvas({ card, rows, colors, gridColor, compact, seriesLabel }: ChartCanvasProps) {
@@ -65,8 +80,8 @@ export default function ChartCanvas({ card, rows, colors, gridColor, compact, se
               <Cell key={i} fill={colorAt(colors, i)} />
             ))}
           </Pie>
-          <Tooltip />
-          {!compact && <Legend />}
+          <Tooltip {...TOOLTIP_PROPS} />
+          {!compact && <Legend formatter={formatLegendLabel} />}
         </PieChart>
       </ResponsiveContainer>
     );
@@ -77,10 +92,10 @@ export default function ChartCanvas({ card, rows, colors, gridColor, compact, se
   // array reaches recharts as plain children.
   const axes = [
     <CartesianGrid key="grid" strokeDasharray="3 3" stroke={gridColor} />,
-    <XAxis key="x" dataKey={x_field} hide={compact} tick={{ fontSize: 11 }} />,
-    <YAxis key="y" hide={compact} tick={{ fontSize: 11 }} width={40} />,
-    <Tooltip key="tooltip" />,
-    !compact && <Legend key="legend" />,
+    <XAxis key="x" dataKey={x_field} hide={compact} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} />,
+    <YAxis key="y" hide={compact} tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} width={40} />,
+    <Tooltip key="tooltip" {...TOOLTIP_PROPS} />,
+    !compact && <Legend key="legend" formatter={formatLegendLabel} />,
   ];
 
   if (chart_type === 'line') {

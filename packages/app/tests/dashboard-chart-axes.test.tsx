@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useI18nStore } from '@/stores/i18n';
 
@@ -21,6 +21,8 @@ const fixtures = vi.hoisted(() => ({
       { id: 'sales-bars', kind: 'chart', label: 'Sales in bars', section: 'monthly_sales', chart_type: 'bar', x_field: 'month', y_fields: ['revenue', 'units', 'returns'] },
       { id: 'sales-lines', kind: 'chart', label: 'Sales in lines', section: 'monthly_sales', chart_type: 'line', x_field: 'month', y_fields: ['revenue', 'units', 'returns'] },
       { id: 'sales-areas', kind: 'chart', label: 'Sales in areas', section: 'monthly_sales', chart_type: 'area', x_field: 'month', y_fields: ['revenue', 'units', 'returns'] },
+      { id: 'sales-pie', kind: 'chart', label: 'Sales in a pie', section: 'monthly_sales', chart_type: 'pie', x_field: 'month', y_fields: ['revenue'] },
+      { id: 'sales-donut', kind: 'chart', label: 'Sales in a donut', section: 'monthly_sales', chart_type: 'donut', x_field: 'month', y_fields: ['revenue'] },
     ],
   },
   entities: { order_count: 'Order', monthly_sales: 'Order' },
@@ -124,6 +126,55 @@ const CHARTS = [
 ] as const;
 
 describe('a dashboard chart', () => {
+  it.each([
+    ...CHARTS,
+    ['Sales in a pie', '.recharts-pie'],
+    ['Sales in a donut', '.recharts-pie'],
+  ] as const)('keeps %s hover text on the theme surface instead of the series color', async (label, series) => {
+    // Recharts maps the pointer through real element bounds; jsdom has no layout.
+    const originalBounds = HTMLElement.prototype.getBoundingClientRect;
+    const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        // Do not resize Recharts' text-measurement span: it caches tick widths across tests.
+        return this.classList.contains('recharts-wrapper')
+          ? new DOMRect(0, 0, 600, 192)
+          : originalBounds.call(this);
+      });
+    const width = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(600);
+    try {
+      renderDashboard({});
+      await screen.findByRole('heading', { name: label });
+      const chart = card(label);
+      await waitFor(() => expect(chart.querySelector(series)).not.toBeNull());
+      if (series === '.recharts-pie') {
+        fireEvent.mouseEnter(chart.querySelector('.recharts-pie-sector')!);
+      } else {
+        fireEvent.mouseMove(chart.querySelector('.recharts-wrapper')!, { clientX: 150, clientY: 80 });
+      }
+      await waitFor(() => {
+        const tooltip = chart.querySelector<HTMLElement>('.recharts-default-tooltip');
+        expect(chart.querySelector('.recharts-tooltip-wrapper')).toHaveStyle({ visibility: 'visible' });
+        expect(tooltip).not.toBeNull();
+        // Assert the mounted token bindings; computed styles resolve variables differently in jsdom.
+        expect(tooltip!.style.backgroundColor).toBe('var(--color-surface)');
+        expect(tooltip!.style.borderColor).toBe('var(--color-border)');
+        expect(tooltip!.style.color).toBe('var(--color-text-main)');
+        const items = tooltip!.querySelectorAll<HTMLElement>('.recharts-tooltip-item');
+        expect(items.length).toBeGreaterThan(0);
+        for (const item of items) expect(item.style.color).toBe('var(--color-text-main)');
+      });
+      const legendLabels = chart.querySelectorAll<HTMLElement>('.recharts-legend-item-text > span');
+      expect(legendLabels.length).toBeGreaterThan(0);
+      for (const legendLabel of legendLabels) expect(legendLabel.style.color).toBe('var(--color-text-main)');
+      if (label === 'Sales in bars') {
+        expect(chart.querySelector('.recharts-tooltip-cursor')).toHaveAttribute('fill', 'var(--color-bg-hover)');
+      }
+    } finally {
+      bounds.mockRestore();
+      width.mockRestore();
+    }
+  });
+
   it('draws its grid, axes, tooltip and legend around the series', async () => {
     renderDashboard({});
 
@@ -135,6 +186,9 @@ describe('a dashboard chart', () => {
       const xAxis = chart.querySelector('.recharts-xAxis');
       expect(xAxis, label).not.toBeNull();
       expect(texts(xAxis!, '.recharts-cartesian-axis-tick-value')).toEqual(['Jan', 'Feb']);
+      for (const tick of chart.querySelectorAll('.recharts-cartesian-axis-tick-value')) {
+        expect(tick).toHaveAttribute('fill', 'var(--color-text-muted)');
+      }
       expect(chart.querySelector('.recharts-yAxis'), label).not.toBeNull();
       expect(chart.querySelector('.recharts-cartesian-grid'), label).not.toBeNull();
       expect(chart.querySelector('.recharts-tooltip-wrapper'), label).not.toBeNull();
