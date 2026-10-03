@@ -78,6 +78,14 @@ describe("expression validation at definition boundaries", () => {
     expect(noFile.has("Shelf")).toBe(true);
   });
 
+  it.each([{ name: undefined }, { name: 7 }, { fields: undefined }])("PLANTED DEFECT: skips a malformed stored entity shape %j", async (invalid) => {
+    const registry = new EntityRegistry();
+    const valid = definition();
+    const db = { find: vi.fn().mockResolvedValue([definition(invalid), valid]) } as unknown as MongoDBService;
+    await registry.loadFromDb(db);
+    expect(registry.get("Book")).toBe(valid);
+  });
+
   it("PLANTED INNOCENT: accepts valid dialog expressions, omitted and empty conditions, and stored definitions", async () => {
     const valid = definition({
       actions: [{ action: "lend", label: "Lend", opens_dialog: true, dialog_fields: [{ fieldname: "reason", fieldtype: "Data", label: "Reason", read_only_depends_on: "eval:doc.locked == 1" }] }],
