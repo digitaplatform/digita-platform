@@ -118,6 +118,9 @@ async function performReload(deps: AdminReloadDefinitionsDeps): Promise<ReloadSu
     await loadEntityFiles(staged);
     if (isReseedAllowed()) staged.register(demoResetDefinition());
     await assertDefinitionsServable(staged, deps.revalidateSettings);
+    for (const entity of staged.getAll()) {
+      if (!entity.is_virtual) await db.assertOrdinaryCollection(entity.name, entity.database);
+    }
   } catch (err) {
     // A refusal that carries its own code keeps it, answered as the reload's 400.
     if (err instanceof EngineError) throw new BadRequestError(err.code, err.params);
@@ -132,9 +135,11 @@ async function performReload(deps: AdminReloadDefinitionsDeps): Promise<ReloadSu
 
   // 2. Wipe the admin-side `entities` collection and re-write
   //    every loaded entity. This drops any DB-only overrides.
-  await db.deleteMany(DIGITA.COLLECTIONS.ENTITY, {}, DIGITA.DATABASES.CORE);
+  await db.deleteMany(DIGITA.COLLECTIONS.ENTITY, { deleted: null }, DIGITA.DATABASES.CORE);
   let entitiesReloaded = 0;
   for (const entity of registry.getAll()) {
+    const reserved = await db.findOne(DIGITA.COLLECTIONS.ENTITY, entity.name, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    if (reserved?.["deleted"] != null) continue;
     await db.insertOne(
       DIGITA.COLLECTIONS.ENTITY,
       {
@@ -156,7 +161,7 @@ async function performReload(deps: AdminReloadDefinitionsDeps): Promise<ReloadSu
   await registry.loadFromDb(db);
 
   // 4. Wipe + re-seed DocumentActionRule from `<appDir>/rules/*.rule.json`.
-  const rulesBefore = await db.deleteMany(DIGITA.COLLECTIONS.RULE, {}, DIGITA.DATABASES.CORE);
+  const rulesBefore = await db.deleteMany(DIGITA.COLLECTIONS.RULE, { deleted: null }, DIGITA.DATABASES.CORE);
   const ruleDirs = [...deps.appDirs, ...domainDirs.map((d) => d.root)];
   await seedRulesFromFiles(db, ruleDirs, registry);
   clearRuleCache();
@@ -164,7 +169,7 @@ async function performReload(deps: AdminReloadDefinitionsDeps): Promise<ReloadSu
 
   // 5. Wipe + re-seed DocumentView from `<appDir>/views/**.view.json`.
   // Only the rows the seed took from files are replaced; a View saved through the API stays.
-  const viewsBefore = await db.deleteMany(DIGITA.COLLECTIONS.VIEW, { owner: VIEW_FILE_OWNER }, DIGITA.DATABASES.CORE);
+  const viewsBefore = await db.deleteMany(DIGITA.COLLECTIONS.VIEW, { owner: VIEW_FILE_OWNER, deleted: null }, DIGITA.DATABASES.CORE);
   const viewDirs = [...deps.appDirs, ...domainDirs.map((d) => d.root)];
   await seedViewsFromFiles(db, viewDirs, viewRegistry, new Set(["*"]));
   await viewRegistry.loadFromDb(db);
@@ -174,7 +179,7 @@ async function performReload(deps: AdminReloadDefinitionsDeps): Promise<ReloadSu
   //    delete platform-internal entries (those with `source: "file"`); leave
   //    operator-edited entries alone — translations are heavily curated and
   //    overrides are valuable.
-  const translationsBefore = await db.deleteMany(DIGITA.COLLECTIONS.TRANSLATION, { source: "file" }, DIGITA.DATABASES.CORE);
+  const translationsBefore = await db.deleteMany(DIGITA.COLLECTIONS.TRANSLATION, { source: "file", deleted: null }, DIGITA.DATABASES.CORE);
   for (const dir of localeDirs) {
     await translationService.seedFromFiles(dir);
   }

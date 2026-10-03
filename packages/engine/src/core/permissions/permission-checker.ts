@@ -734,6 +734,8 @@ export class PermissionChecker {
       }
     }
 
+    delete filtered["deleted"];
+    delete filtered["deleted_by"];
     return filtered;
   }
 

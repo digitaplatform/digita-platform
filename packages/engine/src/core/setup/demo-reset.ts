@@ -50,7 +50,7 @@ export async function enableDemoReset(
   registry.register(demoResetDefinition());
 
   await db.ensureCollection(DEMO_RESET, DIGITA.DATABASES.CORE);
-  if (!(await db.findOne(DEMO_RESET, DEMO_RESET_ROW, DIGITA.DATABASES.CORE))) {
+  if (!(await db.findOne(DEMO_RESET, DEMO_RESET_ROW, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true }))) {
     const now = new Date();
     await db.insertOne(
       DEMO_RESET,

@@ -85,10 +85,14 @@ export async function seedViewsFromFiles(
 
         registry?.cacheFileVersion(view);
 
-        const existingRow = (await db.findOne(DIGITA.COLLECTIONS.VIEW, view._id, DIGITA.DATABASES.CORE)) as Record<
+        const existingRow = (await db.findOne(DIGITA.COLLECTIONS.VIEW, view._id, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true })) as Record<
           string,
           unknown
         > | null;
+        if (existingRow?.["deleted"] != null) {
+          skipped++;
+          continue;
+        }
         if (
           existingRow &&
           existingRow["overridden"] === true &&
@@ -111,7 +115,12 @@ export async function seedViewsFromFiles(
           docstatus: 0,
         };
         if (existingRow) {
-          await db.updateOne(DIGITA.COLLECTIONS.VIEW, view._id, payload, DIGITA.DATABASES.CORE);
+          const updated = await db.updateOne(DIGITA.COLLECTIONS.VIEW, view._id, payload, DIGITA.DATABASES.CORE,
+            undefined, { deleted: null, modified: existingRow["modified"] ?? null });
+          if (!updated) {
+            skipped++;
+            continue;
+          }
         } else {
           await db.insertOne(
             DIGITA.COLLECTIONS.VIEW,
@@ -178,7 +187,7 @@ async function pruneOrphanViews(
 
   await db.deleteMany(
     DIGITA.COLLECTIONS.VIEW,
-    { _id: normalizeIdFilterValue({ $in: orphanIds }) },
+    { _id: normalizeIdFilterValue({ $in: orphanIds }), deleted: null },
     DIGITA.DATABASES.CORE,
   );
   log.warn({ ids: orphanIds }, "pruned orphaned view rows — backing file removed or renamed");

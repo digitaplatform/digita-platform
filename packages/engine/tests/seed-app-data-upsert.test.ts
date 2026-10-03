@@ -123,11 +123,15 @@ function mockDb(initial: Record<string, unknown>[]) {
     }
   };
   const db = {
-    findOne: vi.fn(async (_coll: string, id: string) => stored.get(id) ?? null),
+    findOne: vi.fn(async (_coll: string, id: string, _target: string, _session?: unknown, options: { includeDeleted?: boolean } = {}) => {
+      const doc = stored.get(id);
+      return doc && (options.includeDeleted || doc.deleted == null) ? doc : null;
+    }),
     // Reads one collection and honors `{ field: value }` filters and the projection, as the real find does.
-    find: vi.fn(async (coll: string, options: { filters?: Record<string, unknown>[]; fields?: string[] }) =>
+    find: vi.fn(async (coll: string, options: { filters?: Record<string, unknown>[]; fields?: string[]; includeDeleted?: boolean }) =>
       [...stored.values()]
         .filter((doc) => doc.doctype === coll)
+        .filter((doc) => options.includeDeleted || doc.deleted == null)
         .filter((doc) => (options.filters ?? []).every((f) => Object.entries(f).every(([k, v]) => doc[k] === v)))
         .map((doc) => Object.fromEntries((options.fields ?? Object.keys(doc)).map((f) => [f, doc[f]]))),
     ),
@@ -139,17 +143,20 @@ function mockDb(initial: Record<string, unknown>[]) {
       }
     }),
     // replaceOne keeps the stored _id; the written document carries none.
-    upsertOne: vi.fn(async (_coll: string, id: string, data: Record<string, unknown>) => {
+    upsertOne: vi.fn(async (_coll: string, id: string, data: Record<string, unknown>, _target: string, _session?: unknown, expected?: Record<string, unknown>) => {
       expect(data).not.toHaveProperty("_id");
+      const old = stored.get(id);
+      if (expected && (!old || !Object.entries(expected).every(([k, v]) => v === null ? old[k] == null : JSON.stringify(old[k]) === JSON.stringify(v)))) return false;
       refuseDuplicateSlug(id, data);
       stored.set(id, { ...data, _id: stored.get(id)?._id ?? id });
+      return true;
     }),
     // $set, and only while the stored row still holds `expected`, as the real updateOne does.
     updateOne: vi.fn(
       async (_coll: string, id: string, changes: Record<string, unknown>, _target: string, _session: unknown, expected: Record<string, unknown> = {}) => {
         const doc = stored.get(id);
         // Compared by value, as Mongo compares a stored Date with the one the filter names.
-        if (!doc || !Object.entries(expected).every(([k, v]) => JSON.stringify(doc[k]) === JSON.stringify(v))) return false;
+        if (!doc || !Object.entries(expected).every(([k, v]) => v === null ? doc[k] == null : JSON.stringify(doc[k]) === JSON.stringify(v))) return false;
         stored.set(id, { ...doc, ...changes });
         return true;
       },
@@ -181,10 +188,10 @@ function mockDocumentService(stored: Map<string, Record<string, unknown>>) {
   return {
     deleteDoc: vi.fn(async (doctype: string, id: string) => {
       const linking = [...stored.values()].filter((doc) =>
-        ((doc.items as Array<{ page?: string }> | undefined) ?? []).some((item) => item.page === id),
+        doc.deleted == null && ((doc.items as Array<{ page?: string }> | undefined) ?? []).some((item) => item.page === id),
       );
       if (linking.length > 0) throw new DeleteBlockedError(doctype, id, [{ entity: "WebNavMenu", count: linking.length }]);
-      stored.delete(id);
+      stored.set(id, { ...stored.get(id)!, deleted: new Date(), deleted_by: "system", modified: new Date(), modified_by: "system" });
     }),
   } as unknown as DocumentService;
 }
@@ -203,6 +210,44 @@ afterEach(async () => {
 });
 
 describe("seedAppData modes", () => {
+  it("does not allocate or advertise a new identity for a deleted business key", async () => {
+    const deleted = { ...storedHome, _id: "PAGE-00001", slug: "home", deleted: new Date(), deleted_by: "admin@example.com" };
+    const { _id: _omit, ...seed } = seedHome;
+    void _omit;
+    await seedFile([{ ...seed, slug: "home" }, { ...seedConcept, slug: "concept" }]);
+    const { db, stored } = mockDb([deleted]);
+    const reg = registry();
+    reg.register({ ...page, business_key: ["site", "slug"], naming: { strategy: "auto_increment", prefix: "PAGE-" } });
+    await seedAppData(db, reg, {} as NamingService, [dir]);
+    expect(stored.get("PAGE-00001")).toEqual(deleted);
+    expect(db.getNextSequence).not.toHaveBeenCalled();
+    expect(db.upsertOne).not.toHaveBeenCalled();
+    expect(stored.get("site::en::concept")?.slug).toBe("concept");
+    expect([...stored.values()].filter((doc) => doc.slug === "home")).toHaveLength(1);
+  });
+
+  it.each(["insert", "upsert-delete"] as const)("%s never restores an already-deleted seed row", async (mode) => {
+    const deleted = { ...storedHome, deleted: new Date("2026-02-01T00:00:00Z"), deleted_by: "admin@example.com" };
+    const { db, stored } = mockDb([deleted]);
+    await seedAppData(db, registry(), {} as NamingService, [dir], {
+      mode, site: "site", documentService: mockDocumentService(stored),
+    });
+    expect(stored.get(String(deleted._id))).toEqual(deleted);
+    expect(db.upsertOne).not.toHaveBeenCalled();
+    expect(stored.get("site::en::concept")?.title).toBe("The concept");
+  });
+
+  it("does not replace a row deleted after the seed read", async () => {
+    const { db, stored } = mockDb([storedHome]);
+    const replace = db.upsertOne.bind(db);
+    vi.mocked(db.upsertOne).mockImplementationOnce(async (...args) => {
+      stored.set(args[1], { ...stored.get(args[1])!, deleted: new Date(), deleted_by: "admin@example.com" });
+      return replace(...args);
+    });
+    await seedSite(db, mockDocumentService(stored));
+    expect(stored.get(String(storedHome._id))).toMatchObject({ title: "Old home", deleted: expect.any(Date), deleted_by: "admin@example.com" });
+    expect(stored.get("site::en::concept")?.title).toBe("The concept");
+  });
   it("insert mode (the default) skips an existing row and inserts a new one", async () => {
     const { db, stored } = mockDb([storedHome]);
     await seedAppData(db, registry(), {} as NamingService, [dir]);
@@ -268,7 +313,7 @@ describe("seedAppData upsert-delete mode", () => {
       "site::en::dropped",
       expect.objectContaining({ email: "system", roles: ["Administrator"] }),
     );
-    expect(stored.has("site::en::dropped")).toBe(false);
+    expect(stored.get("site::en::dropped")?.deleted).toBeInstanceOf(Date);
     expect(stored.get("site::en::")?.title).toBe("New home");
     const logged = logSpy.info.mock.calls.find(([, msg]) => String(msg).includes("deleted rows"));
     expect(logged?.[0]).toMatchObject({ entity: "WebPage", site: "site", deleted: 1, ids: ["site::en::dropped"] });
@@ -293,7 +338,7 @@ describe("seedAppData upsert-delete mode", () => {
     // The planted defect this test guards: a sweep that reads `owner` alone.
     expect(documentService.deleteDoc).not.toHaveBeenCalledWith("WebPage", "site::en::mine", expect.anything());
     expect(stored.get("site::en::mine")?.title).toBe("Mine");
-    expect(stored.has("site::en::dropped")).toBe(false);
+    expect(stored.get("site::en::dropped")?.deleted).toBeInstanceOf(Date);
     const kept = logSpy.warn.mock.calls.find(([, msg]) => String(msg).includes("a person created or changed"));
     expect(kept?.[0]).toMatchObject({ entity: "WebPage", site: "site", kept: 1, ids: ["site::en::mine"] });
   });
@@ -317,7 +362,7 @@ describe("seedAppData upsert-delete mode", () => {
     }
   });
 
-  it("deletes a stale row before the seed writes, so a carried row can take its unique key", async () => {
+  it("keeps a deleted stale row's unique key reserved against another seed row", async () => {
     // The catalog renamed the slug of `plans` to `pricing` and dropped the page that held it.
     // Each as the seed wrote it, its slug among the values it stamped.
     const stamped = (values: Record<string, unknown>) => ({ ...values, _seed_hash: seedHash(values) });
@@ -327,11 +372,11 @@ describe("seedAppData upsert-delete mode", () => {
     const { db, stored } = mockDb([storedHome, stalePricing, storedPlans]);
     const documentService = mockDocumentService(stored);
     // The planted defect this test guards: a sweep that runs after the write, which then
-    // fails on the stale row's key at every boot, so the stale row is never deleted.
-    await seedSite(db, documentService);
+    // used to release the stale row's unique key by physically deleting it.
+    await expect(seedSite(db, documentService)).rejects.toMatchObject({ code: 11000 });
     expect(documentService.deleteDoc).toHaveBeenCalledWith("WebPage", "site::en::pricing", expect.anything());
-    expect(stored.has("site::en::pricing")).toBe(false);
-    expect(stored.get("site::en::plans")?.slug).toBe("pricing");
+    expect(stored.get("site::en::pricing")?.deleted).toBeInstanceOf(Date);
+    expect(stored.get("site::en::plans")?.slug).toBe("plans");
   });
 
   it("deletes a dropped page a carried menu linked once the seed has rewritten the menu", async () => {
@@ -346,7 +391,7 @@ describe("seedAppData upsert-delete mode", () => {
     await seedSite(db, documentService);
     // The planted defect this test guards: one sweep before the write, which leaves the page
     // published until the next boot.
-    expect(stored.has("site::en::dropped")).toBe(false);
+    expect(stored.get("site::en::dropped")?.deleted).toBeInstanceOf(Date);
     expect((stored.get("site::main")!.items as Array<Record<string, unknown>>)[0]?.page).toBe("site::en::");
     expect(logSpy.error).not.toHaveBeenCalled();
   });
@@ -631,7 +676,7 @@ describe("the seed's stamp", () => {
     await seedAppData(db, registryOf(grown(page), menu, shopSetting), {} as NamingService, [dir], {
       mode: "upsert-delete", site: "site", documentService: mockDocumentService(stored),
     });
-    expect(stored.has("site::en::dropped")).toBe(false);
+    expect(stored.get("site::en::dropped")?.deleted).toBeInstanceOf(Date);
   });
 
   it("still lands a later tier after a release adds a field", async () => {

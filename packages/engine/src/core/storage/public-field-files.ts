@@ -1,9 +1,9 @@
-import { DIGITA } from "@digitaplatform/shared";
+import { activeRecordsFilter, DIGITA } from "@digitaplatform/shared";
 import type { EntityDefinition, FieldDefinition } from "@digitaplatform/shared";
 import type { AnyBulkWriteOperation, ClientSession, Document, Filter } from "mongodb";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { env } from "../config/env.js";
-import { toIdStorage, toIdString } from "../document/id-codec.js";
+import { toIdStorage } from "../document/id-codec.js";
 import { createLogger } from "../logging/logger.js";
 import { FILE_FIELD_TYPES, parseFileId } from "./file-cleanup.js";
 
@@ -22,7 +22,7 @@ const BATCH = 1000;
  * refuses (`assertAttachFilesReadable`) but a row written before that check may hold, and a field
  * of the same name elsewhere in the entity may be private. A file that names no row stays private.
  * The URLs are derived from the id, never read from the `File`, whose `file_url` its owner may
- * rewrite. The row moves first and gets a new `modified`, so a form loaded before the move gets a
+ * rewrite. Each batch moves its rows and files in one transaction with a new `modified`, so a form loaded before the move gets a
  * conflict instead of saving the private URL back; a row holding the public URL counts, so a start
  * stopped in between completes the move. Every start reads again the private files that name a
  * row, and their rows, in one query per thousand, so a tenant with thousands of files starts in
@@ -68,10 +68,11 @@ export async function usePublicUrlsOfPublicFiles(
     }
   }
   if (holders.length === 0) return [];
-  const publicFiles = await db
-    .collection(DIGITA.COLLECTIONS.FILE, DIGITA.DATABASES.CORE)
-    .find({ _id: { $in: [...new Set(holders.map((h) => h.id))] }, is_private: false } as unknown as Filter<Document>, { projection: { _id: 1 }, session })
-    .toArray();
+  const publicFiles = await db.find(
+    DIGITA.COLLECTIONS.FILE,
+    { filters: [{ _id: { $in: [...new Set(holders.map((h) => h.id))] }, is_private: false }], fields: ["_id"] },
+    DIGITA.DATABASES.CORE, session,
+  );
   const isPublic = new Set(publicFiles.map((file) => String(file["_id"])));
   const changed = new Set<string>();
   for (const { holder, fieldname, top, id } of holders) {
@@ -85,76 +86,71 @@ export async function usePublicUrlsOfPublicFiles(
 async function publishFilesOfEntity(db: MongoDBService, entity: EntityDefinition): Promise<void> {
   const paths = publicFilePaths(entity);
   if (paths.length === 0) return;
-
-  const files = await db
-    .collection(DIGITA.COLLECTIONS.FILE, DIGITA.DATABASES.CORE)
-    .find(
-      {
-        attached_to_entity: entity.name,
-        attached_to_name: { $type: "string" },
-        attached_to_field: { $in: [...new Set(paths.map((p) => p.fieldname))] },
-        is_private: { $ne: false },
-      },
-      { projection: { attached_to_name: 1, attached_to_field: 1, thumbnail_key: 1 } },
-    )
-    .toArray();
-  if (files.length === 0) return;
-
-  // One read of the named rows per batch, instead of queries per file and path.
-  const rows = db.collection(entity.name, entity.database);
-  const rowOf = new Map<string, Document>();
+  const candidateFilter = { attached_to_entity: entity.name, attached_to_name: { $type: "string" },
+    attached_to_field: { $in: [...new Set(paths.map((p) => p.fieldname))] }, is_private: { $ne: false } };
+  const candidates = await db.find(DIGITA.COLLECTIONS.FILE, {
+    filters: [candidateFilter],
+    fields: ["_id"],
+  }, DIGITA.DATABASES.CORE);
   const tops = [...new Set(paths.map((p) => p.table ?? p.fieldname))];
-  const rowIds = [...new Set(files.map((file) => toIdString(toIdStorage(file["attached_to_name"] as string))))];
-  for (let i = 0; i < rowIds.length; i += BATCH) {
-    const batch = rowIds.slice(i, i + BATCH).map((id) => toIdStorage(id));
-    const found = await rows.find({ _id: { $in: batch } } as unknown as Filter<Document>, { projection: Object.fromEntries(tops.map((top) => [top, 1])) }).toArray();
-    for (const row of found) rowOf.set(toIdString(row["_id"]), row);
-  }
-
-  const rowMoves: AnyBulkWriteOperation<Document>[] = [];
-  const fileMoves: AnyBulkWriteOperation<Document>[] = [];
-  for (const file of files) {
-    const id = file["_id"] as unknown as string;
-    const rowId = toIdString(toIdStorage(file["attached_to_name"] as string));
-    const row = rowOf.get(rowId);
-    if (!row) continue;
-    const privateUrl = `${env.API_PREFIX}/file/${id}/download`;
-    const publicUrl = `${env.API_PREFIX}/public/file/${id}`;
-    let isHeld = false;
-    for (const { fieldname, table } of paths.filter((p) => p.fieldname === file["attached_to_field"])) {
-      // A Table value that is not a list holds no rows, and an update of its cells would throw.
-      const values = table ? (Array.isArray(row[table]) ? (row[table] as unknown[]).map((cell) => (cell as Record<string, unknown> | null)?.[fieldname]) : []) : [row[fieldname]];
-      if (values.includes(privateUrl)) {
-        const path = table ? `${table}.${fieldname}` : fieldname;
-        // The filter holds the private URL, so a row that changed since the read is left as it is.
-        const filter = { _id: toIdStorage(rowId), [path]: privateUrl, ...(table ? { [table]: { $type: "array" } } : {}) } as unknown as Filter<Document>;
-        rowMoves.push({
-          updateOne: table
-            ? { filter, update: { $set: { [`${table}.$[cell].${fieldname}`]: publicUrl, modified: new Date() } }, arrayFilters: [{ [`cell.${fieldname}`]: privateUrl }] }
-            : { filter, update: { $set: { [path]: publicUrl, modified: new Date() } } },
-        });
+  let published = 0;
+  for (let i = 0; i < candidates.length; i += BATCH) {
+    published += await db.withTransaction(async (session) => {
+      const files = await db.findManyByFilter(DIGITA.COLLECTIONS.FILE, {
+        ...candidateFilter,
+        _id: { $in: candidates.slice(i, i + BATCH).map((file) => toIdStorage(String(file._id))) },
+      } as unknown as Filter<Document>, DIGITA.DATABASES.CORE, session);
+      if (files.length === 0) return 0;
+      const rowIds = [...new Set(files.map((file) => String(file.attached_to_name)))];
+      const found = await db.find(entity.name, {
+        filters: [{ _id: { $in: rowIds } }], fields: tops,
+      }, entity.database, session);
+      const rowOf = new Map(found.map((row) => [String(row._id), row]));
+      const rowMoves: AnyBulkWriteOperation<Document>[] = [];
+      const fileMoves: AnyBulkWriteOperation<Document>[] = [];
+      const touched = new Set<string>();
+      for (const file of files) {
+        const id = String(file._id);
+        const rowId = String(file.attached_to_name);
+        const row = rowOf.get(rowId);
+        if (!row) continue;
+        const privateUrl = `${env.API_PREFIX}/file/${id}/download`;
+        const publicUrl = `${env.API_PREFIX}/public/file/${id}`;
+        let isHeld = false;
+        for (const { fieldname, table } of paths.filter((p) => p.fieldname === file.attached_to_field)) {
+          const values = table ? (Array.isArray(row[table]) ? (row[table] as unknown[]).map((cell) => (cell as Record<string, unknown> | null)?.[fieldname]) : []) : [row[fieldname]];
+          if (values.includes(privateUrl)) {
+            const path = table ? `${table}.${fieldname}` : fieldname;
+            const filter = activeRecordsFilter({ _id: toIdStorage(rowId), [path]: privateUrl, ...(table ? { [table]: { $type: "array" } } : {}) }) as Filter<Document>;
+            rowMoves.push({ updateOne: table
+              ? { filter, update: { $set: { [`${table}.$[cell].${fieldname}`]: publicUrl } }, arrayFilters: [{ [`cell.${fieldname}`]: privateUrl }] }
+              : { filter, update: { $set: { [path]: publicUrl } } },
+            });
+          }
+          isHeld ||= values.includes(privateUrl) || values.includes(publicUrl);
+        }
+        if (!isHeld) continue;
+        // Write the parent even if its URL already moved, so a concurrent deletion
+        // conflicts with this transaction before its retained attachment becomes public.
+        if (!touched.has(rowId)) {
+          touched.add(rowId);
+          rowMoves.push({ updateOne: {
+            filter: activeRecordsFilter({ _id: toIdStorage(rowId) }) as Filter<Document>,
+            update: { $set: { modified: new Date(), modified_by: "system" } },
+          } });
+        }
+        fileMoves.push({ updateOne: {
+          filter: activeRecordsFilter({ _id: toIdStorage(id) }) as Filter<Document>,
+          update: { $set: { is_private: false, file_url: publicUrl,
+            ...(typeof file.thumbnail_key === "string" ? { thumbnail_url: `${publicUrl}?thumb=1` } : {}),
+            modified: new Date(), modified_by: "system",
+          } },
+        } });
       }
-      isHeld ||= values.includes(privateUrl) || values.includes(publicUrl);
-    }
-    if (!isHeld) continue;
-    fileMoves.push({
-      updateOne: {
-        filter: { _id: id } as unknown as Filter<Document>,
-        update: {
-          $set: {
-            is_private: false,
-            file_url: publicUrl,
-            ...(typeof file["thumbnail_key"] === "string" ? { thumbnail_url: `${publicUrl}?thumb=1` } : {}),
-          },
-        },
-      },
+      if (rowMoves.length) await db.collection(entity.name, entity.database).bulkWrite(rowMoves, { ordered: false, session });
+      if (fileMoves.length) await db.collection(DIGITA.COLLECTIONS.FILE, DIGITA.DATABASES.CORE).bulkWrite(fileMoves, { ordered: false, session });
+      return fileMoves.length;
     });
   }
-  // The rows move before their files, so a start stopped in between finds a row holding the
-  // public URL and completes the move.
-  for (let i = 0; i < rowMoves.length; i += BATCH) await rows.bulkWrite(rowMoves.slice(i, i + BATCH), { ordered: false });
-  const fileRows = db.collection(DIGITA.COLLECTIONS.FILE, DIGITA.DATABASES.CORE);
-  for (let i = 0; i < fileMoves.length; i += BATCH) await fileRows.bulkWrite(fileMoves.slice(i, i + BATCH), { ordered: false });
-  const published = fileMoves.length;
   if (published) log.info({ entity: entity.name, files: published }, "Files of public fields made public");
 }

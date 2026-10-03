@@ -177,6 +177,26 @@ async function bootWithPublicFields(): Promise<void> {
 const fileRow = (id: string) => db.findOne(DIGITA.COLLECTIONS.FILE, id, DIGITA.DATABASES.CORE) as Promise<Record<string, unknown>>;
 
 describe("Files of a field that became public", () => {
+  it("keeps a deleted row's retained private attachment private while publishing a live row", async () => {
+    const kept = await upload("image", "kept.pdf", "retained private bytes", "ITEM-DELETED");
+    const live = await upload("image", "live.pdf", "live public bytes", "ITEM-LIVE");
+    await db.insertOne("TestShopItem", {
+      _id: "ITEM-DELETED", doctype: "TestShopItem", docstatus: 0, image: kept.file_url,
+      deleted: new Date(), deleted_by: "admin@example.com",
+    }, DIGITA.DATABASES.CORE);
+    await db.insertOne("TestShopItem", {
+      _id: "ITEM-LIVE", doctype: "TestShopItem", docstatus: 0, image: live.file_url,
+    }, DIGITA.DATABASES.CORE);
+    registry.register(shop(true));
+    await publishFilesOfPublicFields(db, registry.getAll());
+    expect((await publicFile(kept._id)).statusCode).toBe(404);
+    expect((await fileRow(kept._id)).is_private).toBe(true);
+    const retained = await db.findOne("TestShopItem", "ITEM-DELETED", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(retained?.image).toBe(kept.file_url);
+    expect(retained?.deleted).toBeInstanceOf(Date);
+    expect((await publicFile(live._id)).body).toBe("live public bytes");
+  });
+
   it("are public after the boot step, with the public URL in the File, the row and the Table cell", async () => {
     const main = await upload("image", "main.pdf", "main picture", "ITEM-1");
     const gallery = await upload("picture", "gallery.pdf", "gallery picture", "ITEM-1");

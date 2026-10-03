@@ -292,6 +292,24 @@ export async function seedAppData(
     const isExpression = entity.naming?.strategy === "expression";
 
     const bkFields = businessKeyFields(entity);
+    // Deleted identities remain reserved, but must never enter the active Link index.
+    const deletedKeys = new Set<string>();
+    if (bkFields.length) {
+      for (const stored of await db.find(entity.name, { fields: ["_id", "deleted", ...bkFields], includeDeleted: true }, entity.database)) {
+        const bk = businessKeyOf(stored, bkFields);
+        if (stored.deleted != null && bk !== undefined) deletedKeys.add(bk);
+      }
+    }
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const row = rows[i]!;
+      const bk = businessKeyOf(row, bkFields);
+      const id = row["_id"];
+      const existing = id == null ? null : await db.findOne(entity.name, String(id), entity.database, undefined, { includeDeleted: true });
+      if (existing?.deleted != null || (bk !== undefined && deletedKeys.has(bk))) {
+        log.info({ entity: entity.name, id, business_key: bk }, "seed-app-data: kept deleted identity reserved; skipped seed row");
+        rows.splice(i, 1);
+      }
+    }
     let idx: Map<string, string> | undefined;
     if (bkFields.length) {
       idx = bkIndex.get(entity.name);
@@ -380,10 +398,9 @@ export async function seedAppData(
   }
 
   // ── Pass 3c: in upsert-delete mode, delete the site's rows the seed no longer carries ──
-  // Before Pass 4: a stale row can hold a unique key (WebPage's site, locale, slug) that
-  // a carried row now needs, and the write would fail on it at every boot. One sweep per
-  // entity over the ids of every seed dir: two dirs may each carry a file of the same
-  // entity, and a sweep per file would delete what the other seeded. A delete the document
+  // One sweep per entity over the ids of every seed dir: two dirs may each carry a file of the same
+  // entity, and a sweep per file would delete what the other seeded. Deleted rows retain
+  // their ids and unique values; a seed cannot transfer those values to another row. A delete the document
   // service refuses because a stored row still links the row is retried after Pass 4.
   const blocked: Array<{ entity: EntityDefinition; ids: string[] }> = [];
   if (options.mode === "upsert-delete") {
@@ -620,7 +637,12 @@ async function insertRows(
     // mode, replaced only when the seed differs from what is stored. A native
     // ObjectId just minted for `system` naming never collides, so both are no-ops
     // there.
-    const existing = await db.findOne(entity.name, idString, target);
+    const existing = await db.findOne(entity.name, idString, target, undefined, { includeDeleted: true });
+    // A seed never restores a deleted row or releases its reserved identity.
+    if (existing?.deleted != null) {
+      skipped++;
+      continue;
+    }
     if (existing && mode === "insert") {
       if (!carriedByEarlierTiers.has(idString) || !seedWrote(existing)) {
         if (carriedByEarlierTiers.has(idString)) {
@@ -649,7 +671,7 @@ async function insertRows(
         { ...changes, [SEED_HASH_FIELD]: seedHash({ ...existing, ...changes }), modified_by: SEED_IDENTITY, modified: now },
         target,
         undefined,
-        { modified: existing.modified },
+        { modified: existing.modified, deleted: null },
       );
       if (written) updated++;
       else skipped++;
@@ -683,8 +705,12 @@ async function insertRows(
       // matters for an entity whose ids are ObjectIds (findOne hands them back as strings).
       const { _id: _compared, ...body } = candidate;
       void _compared;
-      await db.upsertOne(entity.name, idString, { ...body, modified_by: SEED_IDENTITY, modified: now }, target);
-      updated++;
+      const written = await db.upsertOne(
+        entity.name, idString, { ...body, modified_by: SEED_IDENTITY, modified: now }, target,
+        undefined, { modified: existing.modified, deleted: null },
+      );
+      if (written) updated++;
+      else skipped++;
       continue;
     }
 

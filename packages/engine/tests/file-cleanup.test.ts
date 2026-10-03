@@ -20,57 +20,43 @@ vi.mock("../src/core/logging/logger.js", () => ({
 }));
 
 import { FILE_FIELD_TYPES } from "@digitaplatform/shared";
-import { deleteFileRefCounted, parseFileId, collectAttachFileIds } from "../src/core/storage/file-cleanup.js";
-import type { FieldDefinition } from "@digitaplatform/shared";
+import { softDeleteFile, parseFileId, collectAttachFileIds } from "../src/core/storage/file-cleanup.js";
+import { DeleteProtection } from "../src/core/link/delete-protection.js";
+import type { EntityDefinition, FieldDefinition } from "@digitaplatform/shared";
 
-// Mock db.count keyed by "<field>:<key>" → ref count; storage.delete records keys.
-function harness(fileDoc: Record<string, unknown>, counts: Record<string, number> = {}) {
-  const deleted: string[] = [];
-  const db = {
-    findOne: vi.fn(async () => fileDoc),
-    count: vi.fn(async (_coll: string, filter: Array<[string, string, string]>) => {
-      const [field, , key] = filter[0]!;
-      return counts[`${field}:${key}`] ?? 0;
-    }),
-    deleteOne: vi.fn(async () => {}),
-  };
-  const storage = {
-    delete: vi.fn(async (key: string) => {
-      deleted.push(key);
-    }),
-  };
-  return { db, storage, deleted };
-}
-
-describe("deleteFileRefCounted — thumbnail cleanup (audit 362)", () => {
-  it("removes the thumbnail blob when this is the last File owning it", async () => {
-    const doc = { _id: "FILE-1", storage_key: "p/main", thumbnail_key: "p/thumb" };
-    const { db, storage, deleted } = harness(doc, {
-      "storage_key:p/main": 1,
-      "thumbnail_key:p/thumb": 1,
-    });
-    await deleteFileRefCounted(db as never, storage as never, "FILE-1");
-    expect(deleted).toContain("p/main");
-    expect(deleted).toContain("p/thumb"); // previously leaked
-    expect(db.deleteOne).toHaveBeenCalledOnce();
+describe("File records retained until purge", () => {
+  it("PLANTED DEFECT: marks the File in place and keeps its blob and thumbnail keys", async () => {
+    const file = { _id: "FILE-1", storage_key: "p/main", thumbnail_key: "p/thumb" };
+    const db = {
+      findOne: vi.fn(async () => file),
+      updateOne: vi.fn(async (_name, _id, changes) => { Object.assign(file, changes); return true; }),
+      deleteOne: vi.fn(),
+    };
+    await softDeleteFile(db as never, "FILE-1", { email: "operator" }, []);
+    expect(file).toMatchObject({ storage_key: "p/main", thumbnail_key: "p/thumb", deleted: expect.any(Date), deleted_by: "operator" });
+    expect(db.deleteOne).not.toHaveBeenCalled();
   });
 
-  it("keeps a thumbnail blob still shared by another File doc", async () => {
-    const doc = { _id: "FILE-1", storage_key: "p/main", thumbnail_key: "p/thumb" };
-    const { db, storage, deleted } = harness(doc, {
-      "storage_key:p/main": 1,
-      "thumbnail_key:p/thumb": 2, // dedup'd — another File still points at it
-    });
-    await deleteFileRefCounted(db as never, storage as never, "FILE-1");
-    expect(deleted).toContain("p/main");
-    expect(deleted).not.toContain("p/thumb");
+  it.each([true, false])("PLANTED DEFECT / INNOCENT: a retained row holds its attachment %s", async (held) => {
+    const db = {
+      findOne: vi.fn(async () => ({ _id: "FILE-1", storage_key: "p/main" })),
+      count: vi.fn(async () => held ? 1 : 0),
+      updateOne: vi.fn(async () => true),
+    };
+    const entity = { name: "Book", database: "app", fields: [{ fieldname: "lines", fieldtype: "Table", child_fields: [{ fieldname: "attachment", fieldtype: "Attach" }] }] } as unknown as EntityDefinition;
+    await softDeleteFile(db as never, "FILE-1", { email: "operator" }, [entity]);
+    expect(db.updateOne.mock.calls).toHaveLength(held ? 0 : 1);
+    expect(db.count).toHaveBeenCalledWith("Book", [{ $or: [{ "lines.attachment": { $regex: expect.stringContaining("FILE-1") } }] }], "app", undefined, { includeDeleted: true });
   });
 
-  it("no-ops the thumbnail step for a File without a thumbnail", async () => {
-    const doc = { _id: "FILE-1", storage_key: "p/main" };
-    const { db, storage, deleted } = harness(doc, { "storage_key:p/main": 1 });
-    await deleteFileRefCounted(db as never, storage as never, "FILE-1");
-    expect(deleted).toEqual(["p/main"]);
+  it("PLANTED DEFECT: ordinary File deletion uses the same guard in the caller's transaction", async () => {
+    const entity = { name: "Book", database: "app", fields: [{ fieldname: "attachment", fieldtype: "Attach" }] } as unknown as EntityDefinition;
+    const db = { count: vi.fn(async () => 1) };
+    const registry = { getIncomingLinks: () => [], getAll: () => [entity] };
+    const session = { transaction: "same caller" };
+    const blockers = await new DeleteProtection(registry as never, db as never).check("File", "FILE-1", session as never);
+    expect(blockers).toEqual([{ entity: "Book", fieldname: "attachment", count: 1 }]);
+    expect(db.count).toHaveBeenCalledWith("Book", [{ $or: [{ attachment: { $regex: expect.stringContaining("FILE-1") } }] }], "app", session, { includeDeleted: true });
   });
 });
 

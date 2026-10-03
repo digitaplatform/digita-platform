@@ -468,7 +468,7 @@ export async function createApp(
     registerActivityLogRoutes(scope, env.API_PREFIX, activityLogService, documentService);
     registerAuditLogRoutes(scope, env.API_PREFIX, versionService, registry);
     registerImportExportRoutes(scope, env.API_PREFIX, importService, exportService, permissionChecker, registry, revalidateNotifier);
-    registerUploadRoutes(scope, env.API_PREFIX, db, storage, registry, permissionChecker);
+    registerUploadRoutes(scope, env.API_PREFIX, db, storage, registry, permissionChecker, documentService);
     registerSidebarRoutes(
       scope,
       env.API_PREFIX,
@@ -596,6 +596,11 @@ export async function createApp(
     //     wrote reaches the registry at 5, and refusing it would lock its tenant out of the engine.
     await assertDefinitionsServable(registry, env);
 
+    // Refuse incompatible file-defined storage before setup or boot seeding writes.
+    for (const entity of registry.getAll()) {
+      if (!entity.is_virtual) await db.assertOrdinaryCollection(entity.name, entity.database);
+    }
+
     // 4. Run first-time setup (seed data, migrate schemas)
     await firstRun(db, registry, translationService);
 
@@ -681,6 +686,11 @@ export async function createApp(
 
     // 5. Reload entity definitions from MongoDB (DB is the runtime source of truth)
     await registry.loadFromDb(db);
+
+    // Storage compatibility applies to stored and file definitions, even without migrations.
+    for (const entity of registry.getAll()) {
+      if (!entity.is_virtual) await db.assertOrdinaryCollection(entity.name, entity.database);
+    }
 
     // 5a. Each start moves the files of a public attach field forward to public. Once per
     //     database, a person's former signature pick, the UserPreference ui.signature, goes,

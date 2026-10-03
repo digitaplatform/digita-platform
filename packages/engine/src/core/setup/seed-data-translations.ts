@@ -99,7 +99,7 @@ export async function seedDataTranslations(
           if (RESERVED.has(locale)) continue;
           if (typeof value !== "string" || !value.trim()) continue;
           const _id = `data:${locale}:${entityName}.${docName}.${field}`;
-          const existing = await db.findOne(DIGITA.COLLECTIONS.TRANSLATION, _id, DIGITA.DATABASES.CORE);
+          const existing = await db.findOne(DIGITA.COLLECTIONS.TRANSLATION, _id, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
           if (existing) {
             if (existing["source"] === "file" && !existing["overridden"] && existing["value"] !== value) {
               const result = await db.collection(DIGITA.COLLECTIONS.TRANSLATION, DIGITA.DATABASES.CORE).updateOne(

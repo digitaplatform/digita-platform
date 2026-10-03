@@ -7,13 +7,13 @@ import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
+import type { DocumentService } from "../document/document-service.js";
 import { env } from "../config/env.js";
 import { successResponse, errorResponse } from "./response-model.js";
 import { createLogger } from "../logging/logger.js";
 import { FileNotFoundInStorageError, type StoragePort } from "../storage/storage-port.js";
 import {
   resolveStorageKey,
-  deleteFileRefCounted,
   deleteBlobIfUnreferenced,
 } from "../storage/file-cleanup.js";
 import { isValidStoragePath, STORAGE_PATH_RULE } from "../storage/storage-path.js";
@@ -271,6 +271,7 @@ export function registerUploadRoutes(
   storage: StoragePort,
   registry: EntityRegistry,
   permissionChecker: PermissionChecker,
+  documentService: DocumentService,
 ): void {
   // Upload file. The attachment context is REQUIRED — every upload must be
   // attributable to an entity that declares a storage_path. Context fields
@@ -704,7 +705,7 @@ export function registerUploadRoutes(
     return reply.send(result.stream);
   });
 
-  // Delete file — removes the stored blob (tolerating already-missing), then the doc.
+  // Delete file — mark the File record in place; its stored bytes wait for purge.
   app.delete(`${prefix}/file/:id`, async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     const doc = await db.findOne(DIGITA.COLLECTIONS.FILE, id, DIGITA.DATABASES.CORE);
@@ -730,9 +731,7 @@ export function registerUploadRoutes(
       doc as Record<string, unknown>,
     );
 
-    // Reference-counted: removes the blob only when this is the LAST File doc
-    // pointing at it (a dedup'd shared object survives), then deletes the doc.
-    await deleteFileRefCounted(db, storage, id);
+    await documentService.deleteDoc(FILE_ENTITY, id, request.user ?? GUEST_USER);
     log.info({ id, backend: storage.backend }, "File deleted");
     return reply.send(
       successResponse(null, [{ text: "file_deleted", type: "success", show: true }]),

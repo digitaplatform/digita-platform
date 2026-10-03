@@ -46,6 +46,8 @@ export class BaseDocument {
   modified_by: string = "";
   creation: Date = new Date();
   modified: Date = new Date();
+  deleted?: Date;
+  deleted_by?: string;
 
   // Internal state
   _data: Record<string, unknown> = {};
@@ -85,6 +87,8 @@ export class BaseDocument {
     this.docstatus = (data["docstatus"] as DocStatus) ?? 0;
     this.owner = (data["owner"] as string) ?? "";
     this.modified_by = (data["modified_by"] as string) ?? "";
+    this.deleted = data["deleted"] == null ? undefined : new Date(data["deleted"] as string | Date);
+    this.deleted_by = data["deleted_by"] as string | undefined;
     this.creation =
       data["creation"] instanceof Date
         ? data["creation"]
@@ -278,9 +282,10 @@ export class BaseDocument {
       _id: this._id,
       doctype: this.doctype,
       docstatus: this.docstatus,
-      ...(this._hidesOperatorFields ? {} : { owner: this.owner, modified_by: this.modified_by }),
+      ...(this._hidesOperatorFields ? {} : { owner: this.owner, modified_by: this.modified_by, deleted_by: this.deleted_by }),
       creation: this.creation.toISOString(),
       modified: this.modified.toISOString(),
+      ...(this.deleted ? { deleted: this.deleted.toISOString() } : {}),
       _link_titles: Object.keys(this._link_titles).length > 0 ? this._link_titles : undefined,
       _status_indicator: this._status_indicator,
     };
@@ -291,6 +296,7 @@ export class BaseDocument {
    */
   toMongo(): Record<string, unknown> {
     const out: Record<string, unknown> = {
+      ...this._data,
       _id: this._id,
       doctype: this.doctype,
       docstatus: this.docstatus,
@@ -298,7 +304,7 @@ export class BaseDocument {
       modified_by: this.modified_by,
       creation: this.creation,
       modified: this.modified,
-      ...this._data,
+      ...(this.deleted ? { deleted: this.deleted, deleted_by: this.deleted_by } : {}),
     };
     // Force _id to its storage form last (a 24-hex string → native ObjectId for
     // `system` naming), overriding the string copy carried in _data.

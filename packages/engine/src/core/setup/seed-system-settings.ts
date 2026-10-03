@@ -9,7 +9,7 @@ const log = createLogger("seed-settings");
 export async function seedSystemSettings(db: MongoDBService): Promise<void> {
   await db.ensureCollection(DIGITA.COLLECTIONS.SETTING, DIGITA.DATABASES.CORE);
 
-  const existing = await db.findOne(DIGITA.COLLECTIONS.SETTING, "settings", DIGITA.DATABASES.CORE);
+  const existing = await db.findOne(DIGITA.COLLECTIONS.SETTING, "settings", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
   if (!existing) {
     await db.insertOne(
       DIGITA.COLLECTIONS.SETTING,

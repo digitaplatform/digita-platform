@@ -1,10 +1,11 @@
 import { basename } from "path";
-import { DIGITA, FILE_FIELD_TYPES as FILE_URL_FIELD_TYPES } from "@digitaplatform/shared";
+import { DIGITA, FILE_FIELD_TYPES as FILE_URL_FIELD_TYPES, type EntityDefinition } from "@digitaplatform/shared";
 import type { FilterEntry } from "../database/mongodb-service.js";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { StoragePort } from "./storage-port.js";
 import { deleteImageVariants, hasImageVariants } from "./image-variants.js";
 import { createLogger } from "../logging/logger.js";
+import { fileAttachmentBlockers } from "../link/delete-protection.js";
 
 const log = createLogger("file-cleanup");
 
@@ -82,56 +83,18 @@ export function collectAttachFileIds(
   return ids;
 }
 
-/**
- * Delete a File doc + its stored blob, REFERENCE-COUNTED: the blob is removed
- * only when no OTHER File doc shares the same content-addressed storage_key, so
- * dedup'd uploads that share one object are safe. Blob deletion is best-effort
- * (an orphaned blob is recoverable; a wrongly-deleted shared blob is not). The
- * File doc is always removed. Idempotent — a missing File doc is a no-op.
- */
-export async function deleteFileRefCounted(
+/** Mark an unreferenced File in place, retaining its bytes until purge. */
+export async function softDeleteFile(
   db: MongoDBService,
-  storage: StoragePort,
   fileId: string,
+  user: { email: string },
+  entities: readonly EntityDefinition[],
 ): Promise<void> {
   const doc = (await db.findOne(FILE, fileId, CORE)) as Record<string, unknown> | null;
   if (!doc) return;
-  const blobKey = resolveStorageKey(doc);
-  const sharedKey = typeof doc["storage_key"] === "string" ? doc["storage_key"] : null;
-  if (blobKey) {
-    const refs = sharedKey
-      ? await db.count(FILE, [["storage_key", "=", sharedKey]] as FilterEntry[], CORE)
-      : 1;
-    if (refs <= 1) {
-      try {
-        await storage.delete(blobKey);
-        if (hasImageVariants(doc["file_type"] as string | undefined)) await deleteImageVariants(storage, blobKey);
-      } catch (err) {
-        log.warn(
-          { fileId, blobKey, err },
-          "Failed to delete blob during file cleanup — orphaned blob left behind",
-        );
-      }
-    } else {
-      log.info({ fileId, blobKey, refs }, "Blob kept — still referenced by other File docs");
-    }
-  }
-  // The generated thumbnail is a SEPARATE object (thumbnail_key) that used to leak
-  // on every delete. Ref-count it independently — thumbnails are content-addressed,
-  // so a dedup'd thumbnail shared by another File doc survives. Counted before the
-  // doc is removed, so this doc is included (refs <= 1 ⇒ we are the last owner).
-  const thumbKey = typeof doc["thumbnail_key"] === "string" ? doc["thumbnail_key"] : null;
-  if (thumbKey) {
-    const tRefs = await db.count(FILE, [["thumbnail_key", "=", thumbKey]] as FilterEntry[], CORE);
-    if (tRefs <= 1) {
-      try {
-        await storage.delete(thumbKey);
-      } catch (err) {
-        log.warn({ fileId, thumbKey, err }, "Failed to delete thumbnail blob during file cleanup");
-      }
-    }
-  }
-  await db.deleteOne(FILE, fileId, CORE);
+  if ((await fileAttachmentBlockers(db, fileId, entities)).length > 0) return;
+  const deleted = new Date();
+  await db.updateOne(FILE, fileId, { deleted, deleted_by: user.email, modified: deleted, modified_by: user.email }, CORE, undefined, { deleted: null });
 }
 
 /**
@@ -147,7 +110,7 @@ export async function deleteBlobIfUnreferenced(
   refField: "storage_key" | "thumbnail_key" = "storage_key",
   fileType?: string,
 ): Promise<void> {
-  const refs = await db.count(FILE, [[refField, "=", key]] as FilterEntry[], CORE);
+  const refs = await db.count(FILE, [[refField, "=", key]] as FilterEntry[], CORE, undefined, { includeDeleted: true });
   if (refs > 0) return;
   try {
     await storage.delete(key);
@@ -162,15 +125,15 @@ export async function deleteBlobIfUnreferenced(
  * Delete the files a document stopped naming, by its update or its delete. Only a file the
  * document owns goes: one bound to it, or the user's own loose upload. A record can name a file
  * it does not own, a colleague's or one bound to another record; that file stays. Never throws,
- * because a cleanup must not fail the operation that owns it; a failure is logged. Each File is
- * reference-counted via deleteFileRefCounted.
+ * because a cleanup must not fail the operation that owns it; a failure is logged. Its File row
+ * is marked deleted in place, and its bytes wait for purge.
  */
 export async function cleanupDocumentAttachments(
   db: MongoDBService,
-  storage: StoragePort,
   fileIds: ReadonlyArray<string>,
   document: { entity: string; name: string },
   user: { _id: string; email: string },
+  entities: readonly EntityDefinition[],
 ): Promise<void> {
   for (const fileId of fileIds) {
     try {
@@ -179,7 +142,7 @@ export async function cleanupDocumentAttachments(
       const isOwned = file["attached_to_name"]
         ? file["attached_to_entity"] === document.entity && file["attached_to_name"] === document.name
         : file["owner"] === user.email;
-      if (isOwned) await deleteFileRefCounted(db, storage, fileId);
+      if (isOwned) await softDeleteFile(db, fileId, user, entities);
     } catch (err) {
       log.warn({ fileId, ...document, err }, "Attachment cleanup failed for one file");
     }

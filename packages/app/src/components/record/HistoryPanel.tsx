@@ -13,7 +13,7 @@ import { ErrorBlock } from '@/components/status';
 import { tid } from '@/lib/testid';
 
 /** The actions of a document's activity stream that have a text; any other shows as the engine names it. */
-const DOC_ACTIONS = new Set(['Created', 'Updated', 'Submitted', 'Cancelled', 'Deleted', 'Amended', 'Shared']);
+const DOC_ACTIONS = new Set(['Created', 'Updated', 'Submitted', 'Cancelled', 'Deleted', 'Restored', 'Amended', 'Shared']);
 
 /**
  * A saved record's history: its versions (who, when, which fields), its activity stream and,

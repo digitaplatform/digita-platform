@@ -8,7 +8,7 @@ import type { UserContext } from "../permissions/types.js";
 import { ActionRunner } from "../action/action-runner.js";
 import { BaseDocument } from "./base-document.js";
 import { NamingService } from "./naming-service.js";
-import { toIdString } from "./id-codec.js";
+import { toIdStorage, toIdString } from "./id-codec.js";
 import { DocStatusEngine, DocStatusError } from "./docstatus-engine.js";
 import { validateEntityDataZod } from "../entity/entity-validator-zod.js";
 import { ZodSchemaBuilder } from "../entity/zod-schema-builder.js";
@@ -82,6 +82,7 @@ export class ActionHandlerMissingError extends EngineError {
   }
 }
 
+
 /**
  * Raised when an action's `show_if` is false for the document and the user: the
  * record page does not offer it, so the route refuses it too.
@@ -123,21 +124,6 @@ export class ConcurrentModificationError extends EngineError {
     public actual: string,
   ) {
     super("document_modified", { doctype, name: documentName, expected, actual }, 409, "CONCURRENT_MODIFICATION");
-  }
-}
-
-export class TimeSeriesImmutableError extends EngineError {
-  constructor(
-    public doctype: string,
-    public attempted_fields: string[],
-    public meta_field: string | undefined,
-  ) {
-    super(
-      "time_series_immutable",
-      { doctype, fields: attempted_fields.join(", "), meta_field: meta_field ?? "" },
-      400,
-      "TIME_SERIES_IMMUTABLE",
-    );
   }
 }
 
@@ -557,6 +543,8 @@ export class DocumentService {
     locale?: string,
     options: {
       everyRowNeedsRead?: boolean;
+      /** The authenticated resource list may opt into its explicit deletion filter. */
+      allowDeletedFilter?: boolean;
       scope?: Record<string, unknown>;
       /** A caller's transaction, so a hook lists rows it wrote before the commit. */
       session?: import("mongodb").ClientSession;
@@ -567,6 +555,8 @@ export class DocumentService {
     // Permission check
     await this.permissionChecker.check(user, doctype, "select");
     assertListFields(query.fields);
+    const includeDeleted = options.allowDeletedFilter === true && [...(query.filters ?? []), ...(query.or_filters ?? [])].some(([field]) => field === "deleted");
+    if (includeDeleted) await this.permissionChecker.check(user, doctype, "delete");
 
     // Build base filter. P-SEC/R7: constrain caller-supplied filter/or_filter
     // field names to the fields the user may filter on (+ system fields) and
@@ -645,7 +635,7 @@ export class DocumentService {
     // row the same way, so whenever one applies, the rows are masked as stored too,
     // and projected only afterwards.
     const gatesRows =
-      options.everyRowNeedsRead === true ||
+      includeDeleted || options.everyRowNeedsRead === true ||
       this.permissionChecker.hasConditionalRowRead(user, doctype);
     const masksStoredRows = gatesRows || sharedOnly.size > 0 || this.permissionChecker.hasRowDependentRead(user, doctype);
 
@@ -693,9 +683,9 @@ export class DocumentService {
       // The page and the total both come from the rows the user may read. A total
       // over every matching row counts hidden rows past the page, and a filter then
       // reads a hidden row's values one answer at a time.
-      const readable = await this.listReadableRows(user, doctype, entity, filterArray, query.order_by ?? defaultSort, options.session);
+      const readable = await this.listReadableRows(user, doctype, entity, filterArray, query.order_by ?? defaultSort, options.session, includeDeleted);
       total = readable.length;
-      docs = await this.loadRowsInOrder(entity, readable.slice(offset, offset + limit).map((row) => row["_id"]), options.session);
+      docs = await this.loadRowsInOrder(entity, readable.slice(offset, offset + limit).map((row) => row["_id"]), options.session, includeDeleted);
     } else {
       const page = () =>
         this.db.find(
@@ -790,6 +780,7 @@ export class DocumentService {
     filters?: Record<string, unknown>[],
     user: UserContext = GUEST_USER,
     options: {
+      allowDeletedFilter?: boolean;
       scope?: Record<string, unknown>;
       /** A caller's transaction, so a hook counts rows it wrote before the commit. */
       session?: import("mongodb").ClientSession;
@@ -841,19 +832,22 @@ export class DocumentService {
     filters: Record<string, unknown>[],
     orderBy?: string,
     session?: import("mongodb").ClientSession,
+    includeDeleted = false,
   ): Promise<Record<string, unknown>[]> {
     // Every matching row is re-checked, so the work is bounded before any row loads,
     // and each row carries only the fields its read check reads.
-    if ((await this.db.count(entity.name, filters, entity.database, session)) > env.LIST_GATED_MAX_ROWS) {
+    if ((await this.db.count(entity.name, filters, entity.database, session, { includeDeleted })) > env.LIST_GATED_MAX_ROWS) {
       throw new GatedListTooBroadError(doctype, env.LIST_GATED_MAX_ROWS);
     }
-    const fields = this.permissionChecker.listReadGateFields(user, doctype);
-    const rows = (await this.db.find(entity.name, { filters, fields, order_by: orderBy }, entity.database, session)) as Record<string, unknown>[];
+    const fields = includeDeleted ? undefined : this.permissionChecker.listReadGateFields(user, doctype);
+    const rows = (await this.db.find(entity.name, { filters, fields, order_by: orderBy, includeDeleted }, entity.database, session)) as Record<string, unknown>[];
     const readable: Record<string, unknown>[] = [];
     // Read as getDoc reads, before the row gate sees it.
     for (const stored of rows) {
       const row = readStoredRow(entity, stored);
-      if ((await this.permissionChecker.hasPermission(user, doctype, "read", row)).allowed) readable.push(row);
+      if (!(await this.permissionChecker.hasPermission(user, doctype, "read", row)).allowed) continue;
+      if (includeDeleted && !(await this.permissionChecker.hasPermission(user, doctype, "delete", row)).allowed) continue;
+      readable.push(row);
     }
     return readable;
   }
@@ -863,9 +857,10 @@ export class DocumentService {
     entity: EntityDefinition,
     ids: unknown[],
     session?: import("mongodb").ClientSession,
+    includeDeleted = false,
   ): Promise<Record<string, unknown>[]> {
     if (ids.length === 0) return [];
-    const rows = (await this.db.find(entity.name, { filters: [{ _id: { $in: ids } }] }, entity.database, session)) as Record<string, unknown>[];
+    const rows = (await this.db.find(entity.name, { filters: [{ _id: { $in: ids } }], includeDeleted }, entity.database, session)) as Record<string, unknown>[];
     const byId = new Map(rows.map((row) => [String(row["_id"]), readStoredRow(entity, row)]));
     return ids.map((id) => byId.get(String(id))).filter((row): row is Record<string, unknown> => row !== undefined);
   }
@@ -1371,16 +1366,6 @@ export class DocumentService {
       // Check if editable
       this.docStatusEngine.validateEdit(entity, doc);
 
-      // Time-series collections are append-only apart from limited meta_field
-      // modifications. Reject any patch that touches non-meta fields.
-      if (entity.time_series) {
-        const metaField = entity.time_series.meta_field;
-        const attempted = Object.keys(data).filter((k) => !k.startsWith("_") && k !== metaField);
-        if (attempted.length > 0) {
-          throw new TimeSeriesImmutableError(doctype, attempted, metaField);
-        }
-      }
-
       // Workflow transition validation. Detect a change to the workflow field
       // (default `status`). The actual side_effects + on_workflow_transition
       // rule fire INSIDE the transaction below. We capture the from/to here
@@ -1589,15 +1574,14 @@ export class DocumentService {
         session,
       );
 
-      // Reference-counted cleanup of files this save removed or replaced, once
+      // Mark files this save removed or replaced once
       // the transaction commits — its own or the caller's — so a rollback never
       // leaves the document pointing at a deleted file. doc._data now holds the
       // new values; any file present before but gone now is an orphan.
-      const storage = this.storage;
       const after = new Set(collectAttachFileIds(entity.fields, doc._data));
       const orphans = attachFilesBefore.filter((fileId) => !after.has(fileId));
-      if (storage && orphans.length > 0) {
-        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, storage, orphans, { entity: entity.name, name: doc._id }, user));
+      if (orphans.length > 0) {
+        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, orphans, { entity: entity.name, name: doc._id }, user, this.registry.getAll()));
       }
     };
     if (options.sessionOverride) {
@@ -2087,11 +2071,10 @@ export class DocumentService {
       );
 
       // As in update(): the files this patch removed go once the transaction commits.
-      const storage = this.storage;
       const after = new Set(collectAttachFileIds(entity.fields, doc._data));
       const orphans = [...attachFilesBefore].filter((fileId) => !after.has(fileId));
-      if (storage && orphans.length > 0) {
-        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, storage, orphans, { entity: entity.name, name: doc._id }, user));
+      if (orphans.length > 0) {
+        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, orphans, { entity: entity.name, name: doc._id }, user, this.registry.getAll()));
       }
     };
 
@@ -2126,34 +2109,24 @@ export class DocumentService {
     sessionOverride?: import("mongodb").ClientSession,
   ): Promise<void> {
     const entity = this.registry.get(doctype);
-    const doc = await this.loadDocInternal(doctype, name, sessionOverride);
-
-    // Permission check
-    await this.permissionChecker.check(user, doctype, "delete", doc._data);
-
-    // Check if deletable
-    this.docStatusEngine.validateDelete(entity, doc);
-
-    // Delete protection — check for references
-    const blockers = await this.deleteProtection.check(doctype, name, sessionOverride);
-    if (blockers.length > 0) {
-      throw new DeleteBlockedError(doctype, name, blockers);
-    }
-
-    // Transactional delete — before_delete + after_delete run within the
-    // same session as the deletion so cascade cleanup can be atomic.
     const runDelete = async (session: import("mongodb").ClientSession) => {
+      // Read and stamp in the same transaction, so a concurrent edit is retried rather than lost.
+      const { doc } = await this.loadDocAndStoredRow(doctype, name, session);
+      if (!isRoleVisible(entity, user, doc._data)) throw new NotFoundError(doctype, name);
+      await this.permissionChecker.check(user, doctype, "delete", doc._data);
+      this.docStatusEngine.validateDelete(entity, doc);
+      const blockers = await this.deleteProtection.check(doctype, doc._id, session);
+      if (blockers.length) throw new DeleteBlockedError(doctype, name, blockers);
       await this.hookRunner.run(doctype, "before_delete", doc, ctx, session, user);
-      await this.db.deleteOne(entity.name, name, entity.database, session);
-      // Cascade: remove this document's data-level translation rows so they don't
-      // orphan — and don't resurrect stale overlays if a business-keyed _id is
-      // reused later. Atomic with the delete (same session).
-      await this.db.deleteMany(
-        DIGITA.COLLECTIONS.TRANSLATION,
-        { namespace: "data", entity: doctype, document_name: name },
-        DIGITA.DATABASES.CORE,
-        session,
-      );
+      const deleted = new Date();
+      const matched = await this.db.updateOne(entity.name, doc._id, {
+        deleted, deleted_by: user.email, modified: deleted, modified_by: user.email,
+      }, entity.database, session, { deleted: null });
+      if (!matched) throw new NotFoundError(doctype, name);
+      doc.deleted = deleted;
+      doc.deleted_by = user.email;
+      doc.modified = deleted;
+      doc.modified_by = user.email;
       await this.hookRunner.run(doctype, "after_delete", doc, ctx, session, user);
 
       await this.activityLogService.log(
@@ -2166,15 +2139,6 @@ export class DocumentService {
         },
         session,
       );
-
-      // Cascade: reference-counted cleanup of the deleted doc's attachments once
-      // the transaction commits — its own or the caller's — so a rollback keeps
-      // them (best-effort — never fails the delete).
-      const storage = this.storage;
-      if (storage) {
-        const fileIds = collectAttachFileIds(entity.fields, doc._data);
-        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, storage, fileIds, { entity: entity.name, name: doc._id }, user));
-      }
     };
     if (sessionOverride) {
       await runDelete(sessionOverride);
@@ -2190,7 +2154,67 @@ export class DocumentService {
     log.info({ doctype, name, user: user.email }, "Document deleted");
   }
 
-  // ─── ACTION ────────────────────────────────────────────
+  async restoreDoc(...args: Parameters<DocumentService["performRestoreDoc"]>): ReturnType<DocumentService["performRestoreDoc"]> {
+    return this.writeOutsideReset(args[0], "restoreDoc", () => this.performRestoreDoc(...args));
+  }
+
+  /** Restore the retained row in place through its insert hooks and current validation. */
+  private async performRestoreDoc(
+    doctype: string,
+    name: string,
+    user: UserContext = GUEST_USER,
+    ctx?: ResponseContext,
+  ): Promise<BaseDocument> {
+    const entity = this.registry.get(doctype);
+    const id = toIdString(toIdStorage(name));
+    let doc!: BaseDocument;
+    await this.db.withTransaction(async (session) => {
+      const stored = await this.db.findOne(entity.name, id, entity.database, session, { includeDeleted: true });
+      if (!stored || stored["deleted"] == null) throw new NotFoundError(doctype, name);
+      const readable = readStoredRow(entity, stored);
+      if (!isRoleVisible(entity, user, readable)) throw new NotFoundError(doctype, name);
+      await this.permissionChecker.check(user, doctype, "delete", readable);
+      doc = new BaseDocument(doctype, stored);
+      delete doc._data["deleted"];
+      delete doc._data["deleted_by"];
+      doc.deleted = undefined;
+      doc.deleted_by = undefined;
+      doc._isNew = true;
+      await this.hookRunner.runComputedHooks(doctype, doc, ctx, session, user);
+      await this.hookRunner.run(doctype, "validate", doc, ctx, session, user);
+      if (this.ruleEngine) {
+        const mutations = await this.ruleEngine.execute(doctype, "validate", doc._data, user, session);
+        for (const field of Object.keys(mutations ?? {})) doc._dirty.add(field);
+      }
+      const validation = validateEntityDataZod(entity, doc._data, this.zodSchemaBuilder, true);
+      if (!validation.valid) {
+        for (const err of validation.errors) ctx?.error(err.code, err.params);
+        throw new ValidationFailedError(doctype, validation.errors);
+      }
+      const linkErrors = await this.linkValidator.validate(entity, doc._data, session, { user });
+      if (linkErrors.length) {
+        for (const err of linkErrors) ctx?.error(err.code, err.params);
+        throw new ValidationFailedError(doctype, linkErrors);
+      }
+      if (this.periodCloseValidator) await this.periodCloseValidator.assertPeriodOpen(entity, doc._data, "insert", session);
+      await this.hookRunner.run(doctype, "before_insert", doc, ctx, session, user);
+      doc.ensureRowIds();
+      doc.modified_by = user.email;
+      doc.modified = new Date();
+      // Replacement clears the two deletion markers and still enforces all unique indexes.
+      await this.db.upsertOne(entity.name, id, this.serializeFields(entity, doc.toMongo()), entity.database, session);
+      await this.hookRunner.run(doctype, "after_insert", doc, ctx, session, user);
+      await this.hookRunner.run(doctype, "on_change", doc, ctx, session, user);
+      await this.activityLogService.log({
+        entity: doctype, document_name: id, action: "Restored", user: user.email, user_name: user.full_name ?? user.email,
+      }, session);
+    });
+    ctx?.success("doc_restored", { doctype: entity.label ?? doctype, name: id });
+    log.info({ doctype, name: id, user: user.email }, "Document restored");
+    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user, ctx?.locale);
+    doc._data = readStoredRow(entity, doc._data);
+    return doc;
+  }
 
   /**
    * Invoke a named entity action. Used by the

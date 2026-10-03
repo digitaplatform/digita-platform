@@ -154,6 +154,30 @@ describe("POST /admin/reload-definitions", () => {
   beforeEach(async () => { running = await startAdminApp(); }, 60000);
   afterEach(async () => { await running.close(); });
 
+  it("refuses a newly loaded entity's incompatible storage before changing live or stored metadata", async () => {
+    const name = "NativeReloadRefusal";
+    const raw = running.db.getDb(DB);
+    await raw.createCollection(name, { timeseries: { timeField: "posted_at" } });
+    await raw.collection(name).insertOne({ posted_at: new Date(), value: "kept" });
+    await writeJson(join(running.root, "library", "entities", "native.entity.json"), {
+      name, module: "library", database: DB, naming: { strategy: "system" },
+      fields: [{ fieldname: "posted_at", fieldtype: "Datetime", label: "Posted" }],
+      permissions: [ADMIN],
+    });
+    try {
+      const refused = await running.reload();
+      expect(refused.statusCode).toBe(400);
+      expect(refused.json().error.detail).toBe("ordinary_collection_required");
+      expect((await running.inject("GET", `/api/v1/meta/${name}`)).statusCode).toBe(404);
+      expect(await running.db.findOne(DIGITA.COLLECTIONS.ENTITY, name, DIGITA.DATABASES.CORE)).toBeNull();
+      expect(await running.storedTarget()).toBe("Author");
+      expect(await running.servedTarget()).toBe("Author");
+      expect(await raw.collection(name).countDocuments()).toBe(1);
+    } finally {
+      await raw.dropCollection(name);
+    }
+  });
+
   it("answers the entity, the field and the target of a Link no file has and replaces no stored definition", async () => {
     // Innocent: the files as they stand reload.
     expect((await running.reload()).statusCode).toBe(200);

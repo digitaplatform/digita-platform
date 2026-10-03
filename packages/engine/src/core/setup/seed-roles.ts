@@ -30,7 +30,8 @@ export async function seedRoles(db: MongoDBService): Promise<void> {
   await db.ensureCollection(DIGITA.COLLECTIONS.ROLE, DIGITA.DATABASES.IDENTITY);
 
   for (const role of DEFAULT_ROLES) {
-    const existing = await db.findOne(DIGITA.COLLECTIONS.ROLE, role._id, DIGITA.DATABASES.IDENTITY);
+    const existing = await db.findOne(DIGITA.COLLECTIONS.ROLE, role._id, DIGITA.DATABASES.IDENTITY, undefined, { includeDeleted: true });
+    if (existing?.["deleted"] != null) continue;
     if (!existing) {
       await db.insertOne(
         DIGITA.COLLECTIONS.ROLE,
@@ -48,8 +49,9 @@ export async function seedRoles(db: MongoDBService): Promise<void> {
       log.info({ role: role._id }, "Role seeded");
     } else if (!(existing as Record<string, unknown>)["name"]) {
       // Back-fill `name` field for roles that pre-date the split (label/_id only).
-      await db.updateOne(DIGITA.COLLECTIONS.ROLE, role._id, { name: role.name }, DIGITA.DATABASES.IDENTITY);
-      log.info({ role: role._id }, "Role.name back-filled");
+      const updated = await db.updateOne(DIGITA.COLLECTIONS.ROLE, role._id, { name: role.name }, DIGITA.DATABASES.IDENTITY,
+        undefined, { deleted: null });
+      if (updated) log.info({ role: role._id }, "Role.name back-filled");
     }
   }
 }

@@ -19,6 +19,8 @@ export async function seedBrandingSettings(db: MongoDBService): Promise<void> {
     DIGITA.COLLECTIONS.BRANDING_SETTING,
     "branding",
     DIGITA.DATABASES.CORE,
+    undefined,
+    { includeDeleted: true },
   );
   if (!existing) {
     await db.insertOne(

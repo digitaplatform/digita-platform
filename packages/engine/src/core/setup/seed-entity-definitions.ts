@@ -17,7 +17,7 @@ const log = createLogger("seed-entity-definitions");
  * "carry-forward" patches are needed (the DB always mirrors the files).
  * `firstRun` (which calls this) runs on every boot; its steps are idempotent.
  *
- * Full replace (delete + insert), NOT a partial $set — so a field REMOVED in the
+ * Full replace, NOT a partial $set — so a field REMOVED in the
  * file is also removed from the DB. `creation` is preserved across re-seeds.
  */
 export async function seedEntityDefinitions(
@@ -33,7 +33,10 @@ export async function seedEntityDefinitions(
       DIGITA.COLLECTIONS.ENTITY,
       entity.name,
       DIGITA.DATABASES.CORE,
+      undefined,
+      { includeDeleted: true },
     )) as Record<string, unknown> | null;
+    if (existing?.["deleted"] != null) continue;
     const now = new Date();
     const dbDoc = {
       _id: entity.name,
@@ -45,9 +48,9 @@ export async function seedEntityDefinitions(
     };
     if (existing) {
       // Full replace so removed fields/props don't linger.
-      await db.deleteOne(DIGITA.COLLECTIONS.ENTITY, entity.name, DIGITA.DATABASES.CORE);
-      await db.insertOne(DIGITA.COLLECTIONS.ENTITY, dbDoc, DIGITA.DATABASES.CORE);
-      reseeded++;
+      const updated = await db.upsertOne(DIGITA.COLLECTIONS.ENTITY, entity.name, dbDoc, DIGITA.DATABASES.CORE,
+        undefined, { deleted: null, modified: existing["modified"] ?? null });
+      if (updated) reseeded++;
     } else {
       await db.insertOne(DIGITA.COLLECTIONS.ENTITY, dbDoc, DIGITA.DATABASES.CORE);
       inserted++;

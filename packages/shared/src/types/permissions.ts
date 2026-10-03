@@ -77,9 +77,9 @@ export function opensOperatorFields(rows: readonly ReadRow[]): boolean {
 }
 
 /** The stored fields every readable row shows: what the row is and when it changed. */
-export const IDENTITY_FIELDS: readonly string[] = ["_id", "doctype", "docstatus", "creation", "modified"];
+export const IDENTITY_FIELDS: readonly string[] = ["_id", "doctype", "docstatus", "creation", "modified", "deleted"];
 /** The stored fields that name the people who wrote a row. A read row with `fields` hides them. */
-export const OPERATOR_FIELDS: readonly string[] = ["owner", "modified_by"];
+export const OPERATOR_FIELDS: readonly string[] = ["owner", "modified_by", "deleted_by"];
 
 /** The part of a field definition that decides who reads it, a Table's child fields included. */
 export interface ReadField {

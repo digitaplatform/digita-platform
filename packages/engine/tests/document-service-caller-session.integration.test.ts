@@ -233,7 +233,7 @@ describe("A document service call with the caller's session joins its transactio
     expect(deletedBlobs).toEqual([]);
   });
 
-  it("removes the file an update cleared once the action commits", async () => {
+  it("marks the file an update cleared once the action commits, retaining its bytes", async () => {
     const bookingId = await insertAttachedBooking("FILE-000704");
     onConvert(async (doc, ctx, services) => {
       await docService.update("Booking", doc._id, { attachment: null }, admin, undefined, { sessionOverride: services.session });
@@ -242,10 +242,11 @@ describe("A document service call with the caller's session joins its transactio
     await docService.runAction("Booking", bookingId, "convert", admin);
 
     expect(await db.findOne(DIGITA.COLLECTIONS.FILE, "FILE-000704", "core")).toBeNull();
-    expect(deletedBlobs).toEqual(["bookings/FILE-000704.pdf"]);
+    expect(deletedBlobs).toEqual([]);
+    expect(await db.findOne(DIGITA.COLLECTIONS.FILE, "FILE-000704", "core", undefined, { includeDeleted: true })).toMatchObject({ deleted: expect.any(Date), deleted_by: admin.email });
   });
 
-  it("removes the attachment of a delete once the action commits", async () => {
+  it("marks a delete in place once the action commits, and keeps its attachment for a restore", async () => {
     const bookingId = await insertAttachedBooking("FILE-000703");
     const other = (await docService.insert("Booking", { title: "Runs the action" }, admin))._id;
     onConvert(async (doc, ctx, services) => {
@@ -255,8 +256,9 @@ describe("A document service call with the caller's session joins its transactio
     await docService.runAction("Booking", other, "convert", admin);
 
     expect(await stored("Booking", bookingId)).toBeNull();
-    expect(await db.findOne(DIGITA.COLLECTIONS.FILE, "FILE-000703", "core")).toBeNull();
-    expect(deletedBlobs).toEqual(["bookings/FILE-000703.pdf"]);
+    expect(await db.findOne("Booking", bookingId, "app", undefined, { includeDeleted: true })).toMatchObject({ deleted: expect.any(Date), deleted_by: admin.email });
+    expect(await db.findOne(DIGITA.COLLECTIONS.FILE, "FILE-000703", "core")).not.toBeNull();
+    expect(deletedBlobs).toEqual([]);
   });
 });
 

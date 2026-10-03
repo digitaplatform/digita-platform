@@ -11,6 +11,7 @@ export type ActivityAction =
   | "Submitted"
   | "Cancelled"
   | "Deleted"
+  | "Restored"
   | "Amended"
   | "Shared"
   | "Login"

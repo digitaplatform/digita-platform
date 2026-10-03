@@ -72,7 +72,10 @@ export async function seedRulesFromFiles(
           DIGITA.COLLECTIONS.RULE,
           rule._id,
           DIGITA.DATABASES.CORE,
+          undefined,
+          { includeDeleted: true },
         )) as Record<string, unknown> | null;
+        if (existing?.["deleted"] != null) continue;
         if (existing && existing["overridden"] === true) {
           log.debug({ id: rule._id }, "skipping rule seed — admin-overridden");
           continue;
@@ -90,7 +93,8 @@ export async function seedRulesFromFiles(
           docstatus: 0,
         };
         if (existing) {
-          await db.updateOne(DIGITA.COLLECTIONS.RULE, rule._id, payload, DIGITA.DATABASES.CORE);
+          await db.updateOne(DIGITA.COLLECTIONS.RULE, rule._id, payload, DIGITA.DATABASES.CORE,
+            undefined, { deleted: null, modified: existing["modified"] ?? null });
         } else {
           await db.insertOne(
             DIGITA.COLLECTIONS.RULE,

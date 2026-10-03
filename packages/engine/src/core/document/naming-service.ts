@@ -276,7 +276,7 @@ export class NamingService {
     let candidate = buildCandidate(seq);
     let skipped = 0;
 
-    while (await this.db.existsByField(collectionName, keyField, candidate, target, session)) {
+    while (await this.db.existsByField(collectionName, keyField, candidate, target, session, { includeDeleted: true })) {
       skipped++;
       if (skipped > MAX_SEQUENCE_SKIP_ATTEMPTS) {
         // The counter lags far behind the stored keys; it is resynced out of band

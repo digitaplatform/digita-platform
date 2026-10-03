@@ -12,8 +12,8 @@ import {
   type OptionalUnlessRequiredId,
   type ClientSession,
 } from "mongodb";
-import type { DatabaseTarget, TimeSeriesConfig } from "@digitaplatform/shared";
-import { DIGITA } from "@digitaplatform/shared";
+import type { DatabaseTarget } from "@digitaplatform/shared";
+import { DIGITA, activeRecordsFilter, activeRecordsPipeline } from "@digitaplatform/shared";
 import { env } from "../config/env.js";
 import { dbName } from "../config/db-names.js";
 import { createLogger } from "../logging/logger.js";
@@ -46,7 +46,12 @@ const log = createLogger("mongodb-service");
  */
 export type FilterEntry = Record<string, unknown> | [string, string, unknown];
 
-export interface QueryOptions {
+/** Internal read control for restoration, retention and identity reservation. */
+export interface ReadOptions {
+  includeDeleted?: boolean;
+}
+
+export interface QueryOptions extends ReadOptions {
   filters?: FilterEntry[];
   fields?: string[];
   order_by?: string;
@@ -95,13 +100,6 @@ export class MongoDBService {
   private databases = new Map<DatabaseTarget, Db>();
   /** Registered application databases (logical name → physical Mongo DB name). */
   private appDatabases = new Map<string, AppDatabaseDefinition>();
-  /**
-   * Physical keys (`<target>::<collection>`) of collections ensured as native
-   * MongoDB time-series collections. Populated by `ensureCollection` at boot.
-   * A time-series collection CANNOT be written inside a multi-document
-   * transaction (server code 263), so writes to these drop the txn session.
-   */
-  private timeSeriesCollections = new Set<string>();
   /** The work `afterCommit` queued, per session of a running `withTransaction`. */
   private commitWork = new WeakMap<ClientSession, Array<() => Promise<void>>>();
   private connected = false;
@@ -323,9 +321,10 @@ export class MongoDBService {
     id: string,
     target: DatabaseTarget,
     session?: ClientSession,
+    options: ReadOptions = {},
   ): Promise<Document | null> {
     const result = await this.collection(collectionName, target).findOne(
-      { _id: toIdStorage(id) } as unknown as Filter<Document>,
+      this.readFilter({ _id: toIdStorage(id) }, options),
       { session },
     );
     return this.normalizeReadId(result as Document | null);
@@ -336,8 +335,9 @@ export class MongoDBService {
     filter: Filter<Document>,
     target: DatabaseTarget,
     session?: ClientSession,
+    options: ReadOptions = {},
   ): Promise<Document | null> {
-    const result = await this.collection(collectionName, target).findOne(filter, { session });
+    const result = await this.collection(collectionName, target).findOne(this.readFilter(filter, options), { session });
     return this.normalizeReadId(result as Document | null);
   }
 
@@ -346,8 +346,9 @@ export class MongoDBService {
     filter: Filter<Document>,
     target: DatabaseTarget,
     session?: ClientSession,
+    options: ReadOptions = {},
   ): Promise<Document[]> {
-    const results = await this.collection(collectionName, target).find(filter, { session }).toArray();
+    const results = await this.collection(collectionName, target).find(this.readFilter(filter, options), { session }).toArray();
     return results.map((r) => this.normalizeReadId(r as Document)) as Document[];
   }
 
@@ -358,7 +359,7 @@ export class MongoDBService {
     session?: ClientSession,
   ): Promise<Document[]> {
     const col = this.collection(collectionName, target);
-    const filter = this.buildMongoFilter(options.filters || []);
+    const filter = this.readFilter(this.buildMongoFilter(options.filters || []), options);
     const findOptions: FindOptions = { session };
 
     if (options.fields?.length) {
@@ -382,42 +383,6 @@ export class MongoDBService {
   }
 
   /** Physical registry key for the time-series set. */
-  private tsKey(name: string, target: DatabaseTarget): string {
-    return `${target}::${name}`;
-  }
-
-  /** True if `name` in `target` was ensured as a native time-series collection. */
-  isTimeSeries(name: string, target: DatabaseTarget): boolean {
-    return this.timeSeriesCollections.has(this.tsKey(name, target));
-  }
-
-  /**
-   * Pick the session to write with. A native MongoDB time-series collection
-   * CANNOT be written inside a multi-document transaction — the server rejects
-   * it with code 263 (OperationNotSupportedInTransaction), even at FCV 8.0. So
-   * a time-series insert that lands inside an active transaction (stock/ledger
-   * rows written from `on_submit` hooks that run in the submit txn) drops the
-   * session and runs as a STANDALONE write, committing immediately outside the
-   * txn. Trade-off (accepted): if the surrounding txn later aborts, that
-   * append-only row is orphaned rather than rolled back — the submitted
-   * document is the source of truth and the ledger row can be reconciled.
-   * Every non-time-series write keeps the caller's session unchanged.
-   */
-  private sessionForWrite(
-    name: string,
-    target: DatabaseTarget,
-    session?: ClientSession,
-  ): ClientSession | undefined {
-    if (session?.inTransaction() && this.isTimeSeries(name, target)) {
-      log.debug(
-        { collection: name, db: target },
-        "Time-series write routed outside the active transaction",
-      );
-      return undefined;
-    }
-    return session;
-  }
-
   async insertOne(
     collectionName: string,
     data: Record<string, unknown>,
@@ -426,7 +391,7 @@ export class MongoDBService {
   ): Promise<void> {
     await this.collection(collectionName, target).insertOne(
       data as OptionalUnlessRequiredId<Document>,
-      { session: this.sessionForWrite(collectionName, target, session) },
+      { session },
     );
     log.debug({ collection: collectionName, db: target, id: data["_id"] }, "Document inserted");
   }
@@ -440,7 +405,7 @@ export class MongoDBService {
     if (docs.length === 0) return;
     await this.collection(collectionName, target).insertMany(
       docs as OptionalUnlessRequiredId<Document>[],
-      { session: this.sessionForWrite(collectionName, target, session), ordered: false },
+      { session, ordered: false },
     );
     log.debug(
       { collection: collectionName, db: target, count: docs.length },
@@ -505,13 +470,15 @@ export class MongoDBService {
     data: Record<string, unknown>,
     target: DatabaseTarget,
     session?: ClientSession,
-  ): Promise<void> {
-    await this.collection(collectionName, target).replaceOne(
-      { _id: toIdStorage(id) } as unknown as Filter<Document>,
+    expected?: Record<string, unknown>,
+  ): Promise<boolean> {
+    const result = await this.collection(collectionName, target).replaceOne(
+      { _id: toIdStorage(id), ...expected } as unknown as Filter<Document>,
       data as never,
-      { upsert: true, session },
+      { upsert: expected === undefined, session },
     );
     log.debug({ collection: collectionName, db: target, id }, "Document upserted");
+    return result.matchedCount > 0 || result.upsertedCount > 0;
   }
 
   async deleteOne(
@@ -546,9 +513,10 @@ export class MongoDBService {
     id: string,
     target: DatabaseTarget,
     session?: ClientSession,
+    options: ReadOptions = {},
   ): Promise<boolean> {
     const count = await this.collection(collectionName, target).countDocuments(
-      { _id: toIdStorage(id) } as unknown as Filter<Document>,
+      this.readFilter({ _id: toIdStorage(id) }, options),
       { limit: 1, session },
     );
     return count > 0;
@@ -567,10 +535,11 @@ export class MongoDBService {
     value: string,
     target: DatabaseTarget,
     session?: ClientSession,
+    options: ReadOptions = {},
   ): Promise<boolean> {
     const filterValue = field === "_id" ? toIdStorage(value) : value;
     const count = await this.collection(collectionName, target).countDocuments(
-      { [field]: filterValue } as unknown as Filter<Document>,
+      this.readFilter({ [field]: filterValue }, options),
       { limit: 1, session },
     );
     return count > 0;
@@ -581,8 +550,9 @@ export class MongoDBService {
     filters: FilterEntry[],
     target: DatabaseTarget,
     session?: ClientSession,
+    options: ReadOptions = {},
   ): Promise<number> {
-    const filter = this.buildMongoFilter(filters);
+    const filter = this.readFilter(this.buildMongoFilter(filters), options);
     return this.collection(collectionName, target).countDocuments(filter, { session });
   }
 
@@ -592,7 +562,7 @@ export class MongoDBService {
     target: DatabaseTarget,
     session?: ClientSession,
   ): Promise<Document[]> {
-    return this.collection(collectionName, target).aggregate(pipeline, { session }).toArray();
+    return this.collection(collectionName, target).aggregate(activeRecordsPipeline(pipeline), { session }).toArray();
   }
 
   // ─── Index Management ─────────────────────────────────
@@ -606,46 +576,22 @@ export class MongoDBService {
     return this.collection(collectionName, target).createIndex(spec, options);
   }
 
-  async ensureCollection(
-    name: string,
-    target: DatabaseTarget,
-    options?: { timeseries?: TimeSeriesConfig },
-  ): Promise<void> {
+  /** Refuse incompatible existing storage; return whether the ordinary collection exists. */
+  async assertOrdinaryCollection(name: string, target: DatabaseTarget): Promise<boolean> {
     const db = this.getDb(target);
     const collections = await db.listCollections({ name }).toArray();
     if (collections.length > 0) {
-      // If a time-series flag is requested but the existing collection isn't
-      // time-series, fail loud — Mongo doesn't support in-place conversion.
-      if (options?.timeseries) {
-        const info = collections[0] as { type?: string };
-        if (info.type !== "timeseries") {
-          // Time-series cannot be applied in place: the collection is dropped and created again.
-          throw new ConfigurationError("collection_not_time_series", { collection: name });
-        }
-        this.timeSeriesCollections.add(this.tsKey(name, target));
+      if (collections[0]!.type !== "collection") {
+        throw new ConfigurationError("ordinary_collection_required", { collection: name });
       }
-      return;
+      return true;
     }
-    if (options?.timeseries) {
-      const ts = options.timeseries;
-      const tsOpts: Record<string, unknown> = {
-        timeField: ts.time_field,
-      };
-      if (ts.meta_field) tsOpts["metaField"] = ts.meta_field;
-      if (ts.granularity) tsOpts["granularity"] = ts.granularity;
-      const createOpts: Record<string, unknown> = { timeseries: tsOpts };
-      if (ts.expire_after_seconds !== undefined) {
-        createOpts["expireAfterSeconds"] = ts.expire_after_seconds;
-      }
-      await db.createCollection(name, createOpts as never);
-      this.timeSeriesCollections.add(this.tsKey(name, target));
-      log.info(
-        { collection: name, db: target, timeseries: tsOpts },
-        "Time-series collection created",
-      );
-      return;
-    }
-    await db.createCollection(name);
+    return false;
+  }
+
+  async ensureCollection(name: string, target: DatabaseTarget): Promise<void> {
+    if (await this.assertOrdinaryCollection(name, target)) return;
+    await this.getDb(target).createCollection(name);
     log.info({ collection: name, db: target }, "Collection created");
   }
 
@@ -744,6 +690,10 @@ export class MongoDBService {
    * list route: two tuples on one field narrow the match instead of the second
    * replacing the first. A tuple's operator maps as the list route maps it.
    */
+  private readFilter(filter: Record<string, unknown>, options: ReadOptions): Filter<Document> {
+    return (options.includeDeleted ? filter : activeRecordsFilter(filter)) as Filter<Document>;
+  }
+
   private buildMongoFilter(filters: FilterEntry[]): Filter<Document> {
     const conditions: Record<string, unknown>[] = [];
 

@@ -24,7 +24,7 @@ const SCALAR_OPS = new Set(["=", "==", "!=", "<>", "<", "<=", ">", ">="]);
 /** Operators whose value is an array of date scalars (coerce element-wise). */
 const ARRAY_OPS = new Set(["in", "not in", "between"]);
 /** Meta fields stored as BSON Date (Datetime-like) but absent from entity.fields. */
-const META_DATETIME_FIELDS = new Set(["creation", "modified"]);
+const META_DATETIME_FIELDS = new Set(["creation", "modified", "deleted"]);
 
 /** Resolve a filter field path (possibly `table.child`) to its declared fieldtype,
  *  or undefined when it can't be resolved (→ value left untouched). */

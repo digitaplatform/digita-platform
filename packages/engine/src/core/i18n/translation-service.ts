@@ -5,6 +5,7 @@ import type { AnyBulkWriteOperation, Collection } from "mongodb";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { env } from "../config/env.js";
 import { createLogger } from "../logging/logger.js";
+import { EngineError } from "../errors/engine-error.js";
 
 const log = createLogger("translation-service");
 
@@ -98,6 +99,8 @@ export class TranslationService {
               overridden: false,
               entity: d.entity,
               fieldname: d.fieldname,
+              owner: "system",
+              modified_by: "system",
               creation: now,
               modified: now,
             },
@@ -224,11 +227,13 @@ export class TranslationService {
   }): Promise<void> {
     const _id = `${params.namespace}:${params.locale}:${params.key}`;
 
-    const existing = await this.db.findOne(DIGITA.COLLECTIONS.TRANSLATION, _id, DIGITA.DATABASES.CORE);
+    const existing = await this.db.findOne(DIGITA.COLLECTIONS.TRANSLATION, _id, DIGITA.DATABASES.CORE,
+      undefined, params.source === "file" ? { includeDeleted: true } : undefined);
+    if (params.source === "file" && existing?.["deleted"] != null) return;
 
     if (existing) {
       const existingData = existing as Record<string, unknown>;
-      await this.db.updateOne(
+      const updated = await this.db.updateOne(
         DIGITA.COLLECTIONS.TRANSLATION,
         _id,
         {
@@ -238,7 +243,12 @@ export class TranslationService {
           modified_by: params.user,
         },
         DIGITA.DATABASES.CORE,
+        undefined,
+        { deleted: null },
       );
+      if (!updated && params.source !== "file") {
+        throw new EngineError("not_found", { doctype: DIGITA.COLLECTIONS.TRANSLATION, name: _id }, 404, "NOT_FOUND");
+      }
     } else {
       await this.db.insertOne(
         DIGITA.COLLECTIONS.TRANSLATION,
@@ -323,22 +333,28 @@ export class TranslationService {
                 value: m.value,
                 source: "file",
                 overridden: false,
+                owner: "system",
+                modified_by: "system",
                 creation: now,
                 modified: now,
               },
             },
           });
-          inserted++;
-        } else if (existing["source"] === "file" && !existing["overridden"]) {
+        } else if (existing["deleted"] == null && existing["source"] === "file" && !existing["overridden"]) {
           ops.push({
-            updateOne: { filter: { _id: m._id }, update: { $set: { value: m.value, modified: now } } },
+            updateOne: { filter: { _id: m._id, deleted: null, source: "file", overridden: existing["overridden"] ?? null },
+              update: { $set: { value: m.value, modified: now, modified_by: "system" } } },
           });
-          inserted++;
         } else {
           skipped++;
         }
       }
-      if (ops.length > 0) await col.bulkWrite(ops, { ordered: false });
+      if (ops.length > 0) {
+        const result = await col.bulkWrite(ops, { ordered: false });
+        const written = result.insertedCount + result.matchedCount;
+        inserted += written;
+        skipped += ops.length - written;
+      }
     }
 
     log.info({ inserted, skipped }, "Translations seeded from files");

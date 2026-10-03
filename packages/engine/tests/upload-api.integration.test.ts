@@ -380,7 +380,7 @@ describe("Upload API Integration", () => {
       expect(res.headers["content-disposition"]).toContain('inline; filename="report.pdf"');
     });
 
-    it("deletes the doc AND the stored file", async () => {
+    it("PLANTED DEFECT: marks the File in place and retains its bytes until purge", async () => {
       const res = await app.inject({
         method: "DELETE",
         url: `/api/v1/file/${fileId}`,
@@ -389,8 +389,10 @@ describe("Upload API Integration", () => {
       expect(res.statusCode).toBe(200);
       expect(res.json().success).toBe(true);
 
-      // Blob gone from the backend
-      await expect(access(join(uploadDir, ...storageKey.split("/")))).rejects.toThrow();
+      // Bytes remain for restore, and the ordinary read no longer returns the File.
+      await expect(access(join(uploadDir, ...storageKey.split("/")))).resolves.toBeUndefined();
+      const retained = await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+      expect(retained).toMatchObject({ deleted: expect.any(Date), storage_key: storageKey });
       // Doc gone from the collection
       const doc = await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE);
       expect(doc).toBeNull();
@@ -671,7 +673,7 @@ describe("Upload API Integration", () => {
       expect(dl.statusCode).toBe(200);
     });
 
-    it("deleting the LAST reference removes the blob", async () => {
+    it("PLANTED DEFECT: deleting the last active reference still retains the bytes until purge", async () => {
       const res = await app.inject({
         method: "DELETE",
         url: `/api/v1/file/${idB}`,
@@ -679,7 +681,7 @@ describe("Upload API Integration", () => {
       });
       expect(res.statusCode).toBe(200);
       expect(await db.findOne(DIGITA.COLLECTIONS.FILE, idB, DIGITA.DATABASES.CORE)).toBeNull();
-      await expect(access(join(uploadDir, ...sharedKey.split("/")))).rejects.toThrow();
+      await expect(access(join(uploadDir, ...sharedKey.split("/")))).resolves.toBeUndefined();
     });
   });
 
@@ -1246,6 +1248,23 @@ describe("Upload API Integration", () => {
       /** The delete's cleanup runs once its transaction has committed, after the response. */
       const cleanupDone = () => new Promise((resolve) => setTimeout(resolve, 100));
 
+      it("PLANTED DEFECT: keeps a retained note's attachment when the live owning book drops it", async () => {
+        const { letter, bookId } = await salesBookWithLetter("%PDF retained note attachment");
+        const note = await app.inject({ method: "POST", url: "/api/v1/resource/TestNote", headers: authHeaders(ownerToken), payload: { title: "Keep for restore", rows: [{ scan: letter.file_url }] } });
+        expect(note.statusCode).toBe(201);
+        const noteId = note.json().data._id as string;
+        expect((await deleteNote(ownerToken, noteId)).statusCode).toBe(200);
+        const cleared = await app.inject({ method: "PUT", url: `/api/v1/resource/TestBook/${bookId}`, headers: authHeaders(salesToken), payload: { letter: null } });
+        expect(cleared.statusCode).toBe(200);
+        await cleanupDone();
+        expect(await db.findOne(DIGITA.COLLECTIONS.FILE, letter._id, "core")).not.toBeNull();
+        const restored = await app.inject({ method: "POST", url: `/api/v1/resource/TestNote/${noteId}/restore`, headers: authHeaders(ownerToken), payload: {} });
+        expect(restored.statusCode).toBe(200);
+        const download = await app.inject({ method: "GET", url: letter.file_url, headers: authHeaders(ownerToken) });
+        expect(download.statusCode).toBe(200);
+        expect(download.body).toContain("%PDF retained note attachment");
+      });
+
       it("keeps a colleague's letter bound to their book when a reader deletes a note that names it", async () => {
         const { letter } = await salesBookWithLetter("%PDF sales book letter, note deleted");
         const note = await app.inject({
@@ -1412,7 +1431,7 @@ describe("Upload API Integration", () => {
         expect(saved.statusCode).toBe(200);
       });
 
-      it("deletes the deleter's own loose upload with the note, when the token's sub is an id (innocent case)", async () => {
+      it("keeps the deleter's own loose upload when the note is deleted, for a restore", async () => {
         const idToken = await ta.sign({ sub: "user-id-0043", email: "owner@digita.local", roles: ["System User"] });
         // Uploaded for a book, so a note's save does not bind it: it stays its uploader's loose file.
         const own = await uploadAsApp(idToken, "letter", "%PDF id-token letter, note deleted");
@@ -1425,7 +1444,7 @@ describe("Upload API Integration", () => {
         expect(note.statusCode).toBe(201);
         expect((await deleteNote(idToken, note.json().data._id)).statusCode).toBe(200);
         await cleanupDone();
-        expect(await db.findOne(DIGITA.COLLECTIONS.FILE, own._id, "core")).toBeNull();
+        expect(await db.findOne(DIGITA.COLLECTIONS.FILE, own._id, "core")).not.toBeNull();
       });
 
       it("reports in an import's dry run the file its real run refuses", async () => {
@@ -1592,12 +1611,26 @@ describe("Upload API Integration", () => {
 
       const cleanupDone = () => new Promise((resolve) => setTimeout(resolve, 100));
 
-      it("deletes the bound file with the document", async () => {
-        const { letter, id } = await sysBookWithLetter("%PDF system book, deleted upper");
-        const deleted = await app.inject({ method: "DELETE", url: `/api/v1/resource/TestSysBook/${id.toUpperCase()}`, headers: authHeaders(ownerToken) });
+      async function deleteAndRestore(name: string) {
+        const deleted = await app.inject({ method: "DELETE", url: `/api/v1/resource/TestSysBook/${name}`, headers: authHeaders(ownerToken) });
         expect(deleted.statusCode).toBe(200);
         await cleanupDone();
-        expect(await db.findOne(DIGITA.COLLECTIONS.FILE, letter._id, "core")).toBeNull();
+        return app.inject({
+          method: "POST",
+          url: `/api/v1/resource/TestSysBook/${name}/restore`,
+          headers: authHeaders(ownerToken),
+          payload: {},
+        });
+      }
+
+      it("PLANTED DEFECT: keeps the bound file of a document deleted through its id in upper case, and restores both through it", async () => {
+        const { letter, id } = await sysBookWithLetter("%PDF system book, deleted upper");
+        const restored = await deleteAndRestore(id.toUpperCase());
+        expect(restored.statusCode).toBe(200);
+        expect(restored.json().data._id).toBe(id);
+        const row = (await db.findOne(DIGITA.COLLECTIONS.FILE, letter._id, "core")) as Record<string, unknown>;
+        expect(row["attached_to_name"]).toBe(id);
+        expect((await downloadAs(salesToken, letter._id)).statusCode).toBe(200);
       });
 
       it("binds the saver's new upload to the stored id and deletes the file it replaces", async () => {
@@ -1644,12 +1677,11 @@ describe("Upload API Integration", () => {
       });
 
       it("PLANTED INNOCENT: does the same through the stored id", async () => {
-
         const { letter, id } = await sysBookWithLetter("%PDF system book, deleted lower");
-        const deleted = await app.inject({ method: "DELETE", url: `/api/v1/resource/TestSysBook/${id}`, headers: authHeaders(ownerToken) });
-        expect(deleted.statusCode).toBe(200);
-        await cleanupDone();
-        expect(await db.findOne(DIGITA.COLLECTIONS.FILE, letter._id, "core")).toBeNull();
+        const restored = await deleteAndRestore(id);
+        expect(restored.statusCode).toBe(200);
+        expect(restored.json().data._id).toBe(id);
+        expect((await downloadAs(salesToken, letter._id)).statusCode).toBe(200);
       });
     });
   });

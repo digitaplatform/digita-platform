@@ -21,6 +21,8 @@ const SUBMITTED_PATCH_SYSTEM_FIELDS = new Set([
   "creation",
   "modified",
   "modified_by",
+  "deleted",
+  "deleted_by",
   "_id",
   "amended_from",
   "doctype",

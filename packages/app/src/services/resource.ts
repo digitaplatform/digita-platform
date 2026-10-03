@@ -157,6 +157,11 @@ export function deleteDoc(entity: string, name: string): Promise<ApiResponse<nul
   return api.del<ApiResponse<null>>(`${RESOURCE}/${enc(entity, name)}`);
 }
 
+/** Restore the retained record in place; the engine answers its readable values. */
+export function restoreDoc<T = Doc>(entity: string, name: string): Promise<ApiResponse<T>> {
+  return api.post<ApiResponse<T>>(`${RESOURCE}/${enc(entity, name)}/restore`, {});
+}
+
 export function submitDoc<T = Doc>(entity: string, name: string): Promise<ApiResponse<T>> {
   return api.post<ApiResponse<T>>(`${RESOURCE}/${enc(entity, name)}/submit`, {});
 }

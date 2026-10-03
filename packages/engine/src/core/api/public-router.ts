@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { DIGITA, type EntityDefinition, type FieldType } from "@digitaplatform/shared";
+import { DIGITA, OPERATOR_FIELDS, type EntityDefinition, type FieldType } from "@digitaplatform/shared";
 import { env } from "../config/env.js";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { NotFoundError, type DocumentService } from "../document/document-service.js";
@@ -40,7 +40,7 @@ function clampPublicPageSize(n: number): number {
 
 /** Operator-identity fields stripped from every public response (a public CMS
  *  must not expose the editing operator's email/login id or who last changed it). */
-const PUBLIC_OMIT = ["owner", "modified_by"] as const;
+const PUBLIC_OMIT = OPERATOR_FIELDS;
 function stripInternal<T extends Record<string, unknown>>(row: T): T {
   for (const k of PUBLIC_OMIT) delete row[k];
   return row;
