@@ -1,4 +1,6 @@
 // Types
+export { activeRecordsFilter, activeRecordsPipeline } from "./record-reads.js";
+
 export type {
   ApiResponse,
   ApiError,
