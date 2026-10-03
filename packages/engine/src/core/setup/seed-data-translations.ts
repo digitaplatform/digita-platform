@@ -1,5 +1,6 @@
 import { readdir, readFile } from "fs/promises";
 import { basename, join } from "path";
+import type { Document, Filter } from "mongodb";
 import { DIGITA } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
@@ -101,8 +102,12 @@ export async function seedDataTranslations(
           const existing = await db.findOne(DIGITA.COLLECTIONS.TRANSLATION, _id, DIGITA.DATABASES.CORE);
           if (existing) {
             if (existing["source"] === "file" && !existing["overridden"] && existing["value"] !== value) {
-              await db.updateOne(DIGITA.COLLECTIONS.TRANSLATION, _id, { value, modified: new Date() }, DIGITA.DATABASES.CORE);
-              updated++;
+              const result = await db.collection(DIGITA.COLLECTIONS.TRANSLATION, DIGITA.DATABASES.CORE).updateOne(
+                { _id, source: "file", overridden: { $ne: true }, value: existing["value"] } as unknown as Filter<Document>,
+                { $set: { value, modified: new Date() } },
+              );
+              if (result.modifiedCount) updated++;
+              else skipped++;
             } else {
               skipped++;
             }

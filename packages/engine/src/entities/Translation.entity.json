@@ -7,6 +7,7 @@
   "naming": { "strategy": "user_set" },
   "is_submittable": false,
   "track_changes": false,
+  "hooks": { "before_save": "translation/translation.beforeSave" },
   "title_field": "key",
   "search_fields": ["key", "value"],
   "default_sort": { "field": "key", "order": "asc" },
