@@ -7,6 +7,7 @@ import { PermissionDeniedError, type PermissionChecker } from "../permissions/pe
 import type { UserContext } from "../permissions/types.js";
 import { readStoredRow } from "../entity/field-types.js";
 import { collectAttachFileIds } from "./file-cleanup.js";
+import { toIdStorage, toIdString } from "../document/id-codec.js";
 
 export interface FileAccessDeps {
   db: MongoDBService;
@@ -55,7 +56,9 @@ export async function assertAttachFilesReadable(
   user: UserContext,
   session?: ClientSession,
 ): Promise<void> {
-  const added = new Set(collectAttachFileIds(entity.fields, data).filter((fileId) => !before.has(fileId)));
+  const canonical = (id: string) => toIdString(toIdStorage(id));
+  const previous = new Set([...before].map(canonical));
+  const added = new Set(collectAttachFileIds(entity.fields, data).map(canonical).filter((fileId) => !previous.has(fileId)));
   if (added.size === 0) return;
   const files = await deps.db.find(
     DIGITA.COLLECTIONS.FILE,

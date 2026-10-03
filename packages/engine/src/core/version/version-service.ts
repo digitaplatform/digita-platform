@@ -30,6 +30,11 @@ export function readVersionChanges(version: Version, entity: EntityDefinition): 
 export class VersionService {
   constructor(private db: MongoDBService) {}
 
+  /** Remove only this record's history when its retained row is physically purged. */
+  async deleteVersions(entity: string, documentName: string, session: ClientSession): Promise<number> {
+    return this.db.deleteMany("_versions", { entity, document_name: documentName }, DIGITA.DATABASES.AUDITS, session);
+  }
+
   /**
    * Store a version entry. Pass `session` to enlist the write into the
    * caller's transaction so the version is rolled back if the parent

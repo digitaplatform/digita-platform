@@ -389,6 +389,10 @@ export class MongoDBService {
     target: DatabaseTarget,
     session?: ClientSession,
   ): Promise<void> {
+    if (collectionName === DIGITA.COLLECTIONS.FILE && target === DIGITA.DATABASES.CORE) {
+      if (!session) return this.withTransaction((tx) => this.insertOne(collectionName, data, target, tx));
+      await this.guardFileBlobReferences([data], session);
+    }
     await this.collection(collectionName, target).insertOne(
       data as OptionalUnlessRequiredId<Document>,
       { session },
@@ -403,6 +407,10 @@ export class MongoDBService {
     session?: ClientSession,
   ): Promise<void> {
     if (docs.length === 0) return;
+    if (collectionName === DIGITA.COLLECTIONS.FILE && target === DIGITA.DATABASES.CORE) {
+      if (!session) return this.withTransaction((tx) => this.insertMany(collectionName, docs, target, tx));
+      await this.guardFileBlobReferences(docs, session);
+    }
     await this.collection(collectionName, target).insertMany(
       docs as OptionalUnlessRequiredId<Document>[],
       { session, ordered: false },
@@ -427,6 +435,10 @@ export class MongoDBService {
     expected: Record<string, unknown> = {},
   ): Promise<boolean> {
     const updateDoc: UpdateFilter<Document> = { $set: changes };
+    if (collectionName === DIGITA.COLLECTIONS.FILE && target === DIGITA.DATABASES.CORE && ("storage_key" in changes || "thumbnail_key" in changes || "file_url" in changes)) {
+      if (!session) return this.withTransaction((tx) => this.updateOne(collectionName, id, changes, target, tx, expected));
+      await this.guardFileBlobReferences([changes], session);
+    }
     const result = await this.collection(collectionName, target).updateOne(
       { _id: toIdStorage(id), ...expected } as unknown as Filter<Document>,
       updateDoc,
@@ -472,6 +484,10 @@ export class MongoDBService {
     session?: ClientSession,
     expected?: Record<string, unknown>,
   ): Promise<boolean> {
+    if (collectionName === DIGITA.COLLECTIONS.FILE && target === DIGITA.DATABASES.CORE) {
+      if (!session) return this.withTransaction((tx) => this.upsertOne(collectionName, id, data, target, tx, expected));
+      await this.guardFileBlobReferences([data], session);
+    }
     const result = await this.collection(collectionName, target).replaceOne(
       { _id: toIdStorage(id), ...expected } as unknown as Filter<Document>,
       data as never,
@@ -479,6 +495,14 @@ export class MongoDBService {
     );
     log.debug({ collection: collectionName, db: target, id }, "Document upserted");
     return result.matchedCount > 0 || result.upsertedCount > 0;
+  }
+
+  private async guardFileBlobReferences(rows: readonly Record<string, unknown>[], session: ClientSession): Promise<void> {
+    const keys = rows.flatMap((row) => [row["storage_key"], row["thumbnail_key"],
+      typeof row["file_url"] === "string" && row["file_url"].startsWith("/uploads/") ? row["file_url"].split("/").at(-1) : undefined]);
+    for (const key of [...new Set(keys.filter((key): key is string => typeof key === "string" && key.length > 0))].sort()) {
+      await this.touchGuard(`blob:${key}`, session);
+    }
   }
 
   async deleteOne(

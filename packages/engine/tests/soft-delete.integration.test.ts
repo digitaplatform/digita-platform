@@ -48,6 +48,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
 // A person deletes a record by mistake: the record leaves every read of its entity, waits in the
 // same collection, and a person who may delete it brings it back through its insert hooks.
 import { MongoMemoryReplSet } from "mongodb-memory-server";
+import { ObjectId } from "mongodb";
 import type { FastifyInstance } from "fastify";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { DIGITA } from "@digitaplatform/shared";
@@ -449,7 +450,7 @@ describe("a deleted record", () => {
     // System-ID uppercase URL/request aliases also retain File
     const sysId = "607f1f77bcf86cd799439011";
     await db.insertOne(DIGITA.COLLECTIONS.FILE, {
-      _id: sysId,
+      _id: new ObjectId(sysId),
       doctype: "File",
       docstatus: 0,
       file_name: "system-target.pdf",

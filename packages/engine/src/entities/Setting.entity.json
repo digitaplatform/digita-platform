@@ -33,7 +33,11 @@
     { "fieldname": "allow_user_language", "fieldtype": "Check", "label": "Allow Users to Choose Language", "default": true, "idx": 4 },
     { "fieldname": "sb_general", "fieldtype": "SectionBreak", "label": "General", "idx": 5 },
     { "fieldname": "timezone", "fieldtype": "Select", "options_source": "timezones", "label": "Timezone", "default": "UTC", "idx": 7 },
-    { "fieldname": "default_currency", "fieldtype": "Select", "options_source": "currencies", "label": "Currency", "description": "ISO 4217 currency code (e.g. EUR, USD) used to format amounts that carry no own currency. Optional — when unset, such amounts render without a currency symbol (the platform bakes in no currency).", "idx": 8 }
+    { "fieldname": "default_currency", "fieldtype": "Select", "options_source": "currencies", "label": "Currency", "description": "ISO 4217 currency code (e.g. EUR, USD) used to format amounts that carry no own currency. Optional — when unset, such amounts render without a currency symbol (the platform bakes in no currency).", "idx": 8 },
+    { "fieldname": "deleted_retention_months", "fieldtype": "Select", "options": ["12", "18", "24", "30"], "label": "Deleted Record Retention (Months)", "default": "12", "required": true, "idx": 9 }
+  ],
+  "actions": [
+    { "action": "purge_deleted", "label": "Purge Deleted Records", "long_running": true, "confirm": true, "requires_permission": "write" }
   ],
   "permissions": [
     { "role": "Administrator", "level": 0, "select": 1, "read": 1, "write": 1 },

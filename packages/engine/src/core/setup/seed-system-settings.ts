@@ -21,6 +21,7 @@ export async function seedSystemSettings(db: MongoDBService): Promise<void> {
         fallback_language: env.TRANSLATION_FALLBACK_LOCALE,
         allow_user_language: true,
         timezone: "UTC",
+        deleted_retention_months: "12",
         owner: "system",
         modified_by: "system",
         creation: new Date(),

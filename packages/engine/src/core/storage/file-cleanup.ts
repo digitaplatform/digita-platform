@@ -1,11 +1,11 @@
 import { basename } from "path";
 import { DIGITA, FILE_FIELD_TYPES as FILE_URL_FIELD_TYPES, type EntityDefinition } from "@digitaplatform/shared";
-import type { FilterEntry } from "../database/mongodb-service.js";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import type { StoragePort } from "./storage-port.js";
 import { deleteImageVariants, hasImageVariants } from "./image-variants.js";
 import { createLogger } from "../logging/logger.js";
 import { fileAttachmentBlockers } from "../link/delete-protection.js";
+import { toIdStorage, toIdString } from "../document/id-codec.js";
 
 const log = createLogger("file-cleanup");
 
@@ -90,11 +90,14 @@ export async function softDeleteFile(
   user: { email: string },
   entities: readonly EntityDefinition[],
 ): Promise<void> {
-  const doc = (await db.findOne(FILE, fileId, CORE)) as Record<string, unknown> | null;
-  if (!doc) return;
-  if ((await fileAttachmentBlockers(db, fileId, entities)).length > 0) return;
-  const deleted = new Date();
-  await db.updateOne(FILE, fileId, { deleted, deleted_by: user.email, modified: deleted, modified_by: user.email }, CORE, undefined, { deleted: null });
+  const id = toIdString(toIdStorage(fileId));
+  await db.withTransaction(async (session) => {
+    await db.touchGuard(`attachment:${id}`, session);
+    const doc = await db.findOne(FILE, id, CORE, session);
+    if (!doc || (await fileAttachmentBlockers(db, id, entities, session)).length > 0) return;
+    const deleted = new Date();
+    await db.updateOne(FILE, id, { deleted, deleted_by: user.email, modified: deleted, modified_by: user.email }, CORE, session, { deleted: null });
+  });
 }
 
 /**
@@ -110,12 +113,15 @@ export async function deleteBlobIfUnreferenced(
   refField: "storage_key" | "thumbnail_key" = "storage_key",
   fileType?: string,
 ): Promise<void> {
-  const refs = await db.count(FILE, [[refField, "=", key]] as FilterEntry[], CORE, undefined, { includeDeleted: true });
-  if (refs > 0) return;
   try {
-    await storage.delete(key);
-    // The width variants are made of the blob and share its reference count.
-    if (refField === "storage_key" && hasImageVariants(fileType)) await deleteImageVariants(storage, key);
+    await db.withTransaction(async (session) => {
+      await db.touchGuard(`blob:${key}`, session);
+      const refs = await db.count(FILE, [{ $or: [{ storage_key: key }, { thumbnail_key: key }, { file_url: `/uploads/${key}` }] }], CORE, session, { includeDeleted: true });
+      if (refs > 0) return;
+      await storage.delete(key);
+      // The width variants are made of the blob and share its reference count.
+      if (refField === "storage_key" && hasImageVariants(fileType)) await deleteImageVariants(storage, key);
+    });
   } catch (err) {
     log.warn({ key, refField, err }, "Failed to delete unreferenced blob — orphan left behind");
   }

@@ -99,6 +99,7 @@ export class IndexManager {
       { spec: { creation: -1 }, options: { name: "idx_creation" } },
       { spec: { modified: -1 }, options: { name: "idx_modified" } },
       { spec: { owner: 1 }, options: { name: "idx_owner" } },
+      { spec: { deleted: 1 }, options: { name: "idx_deleted" } },
     );
 
     if (entity.is_submittable) {

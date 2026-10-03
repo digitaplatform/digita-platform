@@ -7,7 +7,8 @@ import type { MongoDBService } from "../database/mongodb-service.js";
 import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { PermissionChecker } from "../permissions/permission-checker.js";
 import type { UserContext } from "../permissions/types.js";
-import type { DocumentService } from "../document/document-service.js";
+import { NotFoundError, type DocumentService } from "../document/document-service.js";
+import { toIdStorage, toIdString } from "../document/id-codec.js";
 import { env } from "../config/env.js";
 import { successResponse, errorResponse } from "./response-model.js";
 import { createLogger } from "../logging/logger.js";
@@ -224,20 +225,11 @@ function isPublicAttachmentField(
  * (the original is the fallback). Best-effort: never throws.
  */
 async function thumbnailForUpload(
-  storage: StoragePort,
-  storagePath: string,
-  contentHash: string,
-  buffer: Buffer,
-  mimetype: string,
-): Promise<string | null> {
+  storagePath: string, contentHash: string, buffer: Buffer, mimetype: string,
+): Promise<{ key: string; bytes: Buffer } | null> {
   if (!isThumbnailable(mimetype)) return null;
-  const thumb = await makeThumbnail(buffer);
-  if (!thumb) return null;
-  const key = `${storagePath}/thumb-${contentHash}.png`;
-  if (!(await storage.exists(key))) {
-    await storage.put(key, thumb, "image/png");
-  }
-  return key;
+  const bytes = await makeThumbnail(buffer);
+  return bytes ? { key: `${storagePath}/thumb-${contentHash}.png`, bytes } : null;
 }
 
 /** Whether the request asked for the thumbnail variant (`?thumb=1`). */
@@ -376,7 +368,8 @@ export function registerUploadRoutes(
 
     // Best-effort thumbnail for raster images (content-addressed, dedup'd). The
     // same route serves it via `?thumb=1`; on any failure the original is used.
-    const thumbnailKey = (await thumbnailForUpload(storage, resolution.storagePath, contentHash, buffer, data.mimetype)) ?? undefined;
+    const thumbnail = await thumbnailForUpload(resolution.storagePath, contentHash, buffer, data.mimetype);
+    const thumbnailKey = thumbnail?.key;
 
     const fileDoc: Record<string, unknown> = {
       _id: id,
@@ -403,18 +396,14 @@ export function registerUploadRoutes(
     if (attachedToName) fileDoc["attached_to_name"] = attachedToName;
     if (attachedToField) fileDoc["attached_to_field"] = attachedToField;
 
-    // H6: insert the File doc FIRST so a concurrent ref-counted delete counts
-    // this reference, THEN write the blob unconditionally (idempotent — the key
-    // is content-addressed). If a delete removed the blob in the small window
-    // before the insert committed, this put repairs it. On a storage failure,
-    // roll back the just-inserted doc so it never points at a missing blob.
-    await db.insertOne(DIGITA.COLLECTIONS.FILE, fileDoc, DIGITA.DATABASES.CORE);
-    try {
+    // Blob-reference writers and purge share a guard until the metadata and bytes are ready.
+    await db.withTransaction(async (session) => {
+      await db.touchGuard(`attachment:${id}`, session);
+      await db.insertOne(DIGITA.COLLECTIONS.FILE, fileDoc, DIGITA.DATABASES.CORE, session);
       await storage.put(storedName, buffer, data.mimetype);
-    } catch (err) {
-      await db.deleteOne(DIGITA.COLLECTIONS.FILE, id, DIGITA.DATABASES.CORE).catch(() => {});
-      throw err;
-    }
+      // Repair a thumbnail removed while this upload was still waiting for the blob guard.
+      if (thumbnail) await storage.put(thumbnail.key, thumbnail.bytes, "image/png");
+    });
 
     log.info(
       {
@@ -548,7 +537,8 @@ export function registerUploadRoutes(
     const user = request.user?.email ?? "system";
     // Regenerate the thumbnail for the new content (cleared when the replacement
     // isn't a raster image). file_url is unchanged, so the ?thumb=1 link is stable.
-    const newThumbKey = (await thumbnailForUpload(storage, resolution.storagePath, contentHash, buffer, data.mimetype)) ?? null;
+    const newThumbnail = await thumbnailForUpload(resolution.storagePath, contentHash, buffer, data.mimetype);
+    const newThumbKey = newThumbnail?.key ?? null;
     const changes = {
       file_name: data.filename,
       file_size: buffer.length,
@@ -562,37 +552,19 @@ export function registerUploadRoutes(
       modified_by: user,
     };
 
-    // 2. H6 (replace path): repoint the doc at the new key FIRST so a concurrent
-    //    ref-counted delete counts this reference, THEN write the blob
-    //    unconditionally (idempotent — content-addressed). If a delete removed a
-    //    shared blob in the window before this update committed, the put repairs
-    //    it. On a storage failure, restore the pre-replace pointer fields (the old
-    //    blob is still present — it is deleted in step 3) so the doc never points
-    //    at a missing blob.
-    await db.updateOne(DIGITA.COLLECTIONS.FILE, id, changes, DIGITA.DATABASES.CORE);
-    try {
+    // Keep deletion, replacement and new blob references serialized through the byte write.
+    await db.withTransaction(async (session) => {
+      await db.touchGuard(`attachment:${toIdString(toIdStorage(id))}`, session);
+      const fresh = await db.findOne(DIGITA.COLLECTIONS.FILE, id, DIGITA.DATABASES.CORE, session);
+      if (!fresh) throw new NotFoundError(FILE_ENTITY, id);
+      await permissionChecker.check(request.user ?? GUEST_USER, FILE_ENTITY, "write", fresh);
+      const matched = await db.updateOne(DIGITA.COLLECTIONS.FILE, id, changes, DIGITA.DATABASES.CORE, session, {
+        deleted: null, storage_key: (doc as Record<string, unknown>)["storage_key"] ?? null,
+      });
+      if (!matched) throw new NotFoundError(FILE_ENTITY, id);
       await storage.put(newKey, buffer, data.mimetype);
-    } catch (err) {
-      const d = doc as Record<string, unknown>;
-      await db
-        .updateOne(
-          DIGITA.COLLECTIONS.FILE,
-          id,
-          {
-            file_name: d["file_name"],
-            file_size: d["file_size"],
-            file_type: d["file_type"],
-            storage_key: d["storage_key"],
-            storage_backend: d["storage_backend"],
-            content_hash: d["content_hash"],
-            thumbnail_key: d["thumbnail_key"] ?? null,
-            thumbnail_url: d["thumbnail_url"] ?? null,
-          },
-          DIGITA.DATABASES.CORE,
-        )
-        .catch(() => {});
-      throw err;
-    }
+      if (newThumbnail) await storage.put(newThumbnail.key, newThumbnail.bytes, "image/png");
+    });
 
     // 3. Reference-counted delete of the old object — removed only when no other
     //    File doc still points at it (a dedup'd shared blob is kept).

@@ -333,7 +333,12 @@ export function registerPublicRoutes(
     let result;
     let variant: string | null = null;
     try {
-      if (width !== null && variantFormat) variant = await ensureImageVariant(storage, key, width, variantFormat);
+      if (width !== null && variantFormat) {
+        variant = await db.withTransaction(async (session) => {
+          await db.touchGuard(`blob:${key}`, session);
+          return ensureImageVariant(storage, key, width, variantFormat);
+        });
+      }
       result = await storage.getStream(variant ?? key);
     } catch (err) {
       if (err instanceof FileNotFoundInStorageError) {

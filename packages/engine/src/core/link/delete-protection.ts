@@ -62,6 +62,7 @@ export async function fileAttachmentBlockers(
   fileId: string,
   entities: readonly EntityDefinition[],
   session?: ClientSession,
+  excluding?: { entity: string; name: string },
 ): Promise<DeleteBlocker[]> {
   const blockers: DeleteBlocker[] = [];
   const storedId = toIdStorage(fileId);
@@ -71,7 +72,9 @@ export async function fileAttachmentBlockers(
     const paths = attachmentPaths(entity.fields);
     if (!paths.length) continue;
     // Marking a parent cannot create a gap in this read: both sides of that transition hold it.
-    const count = await db.count(entity.name, [{ $or: paths.map((path) => ({ [path]: fileUrl })) }],
+    const filters: Record<string, unknown>[] = [{ $or: paths.map((path) => ({ [path]: fileUrl })) }];
+    if (excluding?.entity === entity.name) filters.push({ _id: { $ne: toIdStorage(excluding.name) } });
+    const count = await db.count(entity.name, filters,
       entity.database, session, { includeDeleted: true });
     if (count > 0) blockers.push({ entity: entity.name, fieldname: paths.join(", "), count });
   }

@@ -1,7 +1,7 @@
 import { readdir, readFile } from "fs/promises";
 import { DIGITA } from "@digitaplatform/shared";
 import { join, basename } from "path";
-import type { AnyBulkWriteOperation, Collection } from "mongodb";
+import type { AnyBulkWriteOperation, ClientSession, Collection } from "mongodb";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { env } from "../config/env.js";
 import { createLogger } from "../logging/logger.js";
@@ -28,6 +28,13 @@ export function translationOverrideFields(stored: Record<string, unknown>, user:
 
 export class TranslationService {
   constructor(private db: MongoDBService) {}
+
+  /** Remove a purged document's texts, including independently marked translations. */
+  async deleteDataTranslations(entity: string, documentName: string, session: ClientSession): Promise<number> {
+    return this.db.deleteMany(DIGITA.COLLECTIONS.TRANSLATION, {
+      namespace: "data", entity, document_name: documentName,
+    }, DIGITA.DATABASES.CORE, session);
+  }
 
   /**
    * Scan all loaded entity definitions for Select fields and emit

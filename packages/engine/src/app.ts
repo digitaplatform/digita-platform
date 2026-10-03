@@ -92,6 +92,7 @@ import { DocumentShareService } from "./core/permissions/document-share-service.
 import { generateOpenAPISpec } from "./core/api/openapi-generator.js";
 import { firstRun } from "./core/setup/first-run.js";
 import { enableDemoReset, removeDemoReset } from "./core/setup/demo-reset.js";
+import { registerPurgeDeletedAction } from "./core/setup/purge-deleted.js";
 import { isReseedAllowed, type ReseedDeps } from "./core/setup/reseed-app-data.js";
 import { successResponse } from "./core/api/response-model.js";
 import { RuleEngine } from "./core/rules/rule-engine.js";
@@ -181,6 +182,7 @@ export async function createApp(
   });
   // Allow hooks to spawn related documents transactionally (e.g. side-effect docs on submit).
   hookRunner.setDocumentService(documentService);
+  registerPurgeDeletedAction(db, registry, hookRunner, documentService);
   ruleEngine.setDocumentService(documentService);
   workflowEngine.setRuleEngine(ruleEngine);
 
