@@ -76,22 +76,29 @@ export interface WebSite {
   hero_rain?: unknown;
 }
 
+/** A menu entry as the visitor sees it: `page` is the WebPage `_id` in the visitor's language. An entry
+ *  with children is a heading over them. */
 export interface NavItem {
   label: string;
   page?: string;
   href?: string;
-  order?: number;
   /** A lucide icon by its name (as lucide.dev lists it, "calendar-days"): the top bar of phones and
    *  tablets shows a header item as this icon, since it has no room for the item's label. */
   icon?: string;
+  children?: NavItem[];
 }
 
+/** A node of a site's menu tree, one for all languages: the tree block of `tree.menu: "website"`. */
 export interface WebNavMenu {
   _id: string;
+  label: string;
+  parent?: string | null;
+  position?: number | null;
+  icon?: string | null;
   site: string;
-  locale: string;
   location: "header" | "footer" | "family";
-  items?: NavItem[];
+  page?: string | null;
+  href?: string | null;
 }
 
 /** The tenant branding the engine's anonymous boot returns: the fields the website renders. */

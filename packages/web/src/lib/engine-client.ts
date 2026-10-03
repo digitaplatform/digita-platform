@@ -1,6 +1,7 @@
 import { entityCacheTag } from "@digitaplatform/shared";
 import { getConfig } from "@/config/env";
-import type { WebSite, WebPage, WebNavMenu, WebBranding } from "./types";
+import type { WebSite, WebPage, WebNavMenu, WebBranding, NavItem } from "./types";
+import { buildNavTree } from "./nav";
 
 /**
  * Server-side client for the engine's GENERIC public read API
@@ -18,7 +19,15 @@ export function siteId(): string {
 
 type Tuple = [string, string, unknown];
 
-type QueryParams = { filters?: Tuple[]; fields?: string[]; page_size?: number; page?: number; order_by?: string };
+type QueryParams = {
+  filters?: Tuple[];
+  fields?: string[];
+  page_size?: number;
+  page?: number;
+  order_by?: string;
+  /** The language the engine answers translatable fields in, sent as Accept-Language. */
+  locale?: string;
+};
 
 /** Logs why an engine read failed and returns the error that ends the request. A failed read must
  *  not pass for a list without rows, which every caller would answer as a missing page. */
@@ -45,7 +54,13 @@ async function queryPage<T>(doctype: string, params: QueryParams): Promise<{ row
   const url = `${engineUrl}/api/v1/public/resource/${doctype}?${qs.toString()}`;
   let res: Response;
   try {
-    res = await fetch(url, { next: { revalidate: revalidateSeconds, tags: [entityCacheTag(doctype)] } });
+    res = await fetch(url, {
+      ...(params.locale ? { headers: { "accept-language": params.locale } } : {}),
+      next: {
+        revalidate: revalidateSeconds,
+        tags: doctype === "WebNavMenu" ? [entityCacheTag(doctype), entityCacheTag("WebPage")] : [entityCacheTag(doctype)],
+      },
+    });
   } catch (err) {
     throw logFailedRead(doctype, "could not reach the engine", err);
   }
@@ -95,23 +110,22 @@ export async function listPages(locale?: string): Promise<WebPage[]> {
     ["status", "=", "published"],
   ];
   if (locale) filters.push(["locale", "=", locale]);
-  // The engine clamps page_size to its own ceiling, so the loop stops on the page count it answers, not on
-  // a short page. A unique order keeps offset paging from skipping or repeating a row that shares its sort value.
-  // Each engine page re-checks every matching row before it slices, so listing N rows costs about N * N / 200 read checks.
-  const pages: WebPage[] = [];
+  return queryAll<WebPage>("WebPage", {
+    filters,
+    fields: ["_id", "slug", "locale", "title", "translation_group", "modified", "no_index"],
+  });
+}
+
+/** Every row of a public list, page by page. The engine clamps page_size to its own ceiling, so the
+ *  loop stops on the page count it answers, not on a short page. A unique order keeps offset paging
+ *  from skipping or repeating a row that shares its sort value. Each engine page re-checks every
+ *  matching row before it slices, so listing N rows costs about N * N / 200 read checks. */
+async function queryAll<T>(doctype: string, params: Omit<QueryParams, "page" | "page_size" | "order_by">): Promise<T[]> {
+  const all: T[] = [];
   for (let page = 1; ; page++) {
-    const { rows, totalPages } = await queryPage<WebPage>(
-      "WebPage",
-      {
-        filters,
-        fields: ["_id", "slug", "locale", "title", "translation_group", "modified", "no_index"],
-        page_size: 200,
-        page,
-        order_by: "_id asc",
-      },
-    );
-    pages.push(...rows);
-    if (page >= totalPages) return pages;
+    const { rows, totalPages } = await queryPage<T>(doctype, { ...params, page_size: 200, page, order_by: "_id asc" });
+    all.push(...rows);
+    if (page >= totalPages) return all;
   }
 }
 
@@ -125,21 +139,22 @@ export async function listPublishedSlugs(): Promise<Record<string, string[]>> {
   return slugs;
 }
 
-export async function getNav(locale: string, location: WebNavMenu["location"]): Promise<WebNavMenu | null> {
-  const site = siteId();
-  const rows = await query<WebNavMenu>(
-    "WebNavMenu",
-    {
+/** The menu of this site at `location`, as the visitor sees it in `locale`: the engine resolves
+ *  readable published page variants, and buildNavTree omits unavailable destinations. */
+export async function listNav(locale: string, location: WebNavMenu["location"]): Promise<NavItem[]> {
+  const [nodes, pages] = await Promise.all([
+    queryAll<WebNavMenu>("WebNavMenu", {
       filters: [
-        ["site", "=", site],
-        ["locale", "=", locale],
+        ["site", "=", siteId()],
         ["location", "=", location],
-        ["status", "=", "published"],
+        ["active", "=", true],
       ],
-      page_size: 1,
-    },
-  );
-  return rows[0] ?? null;
+      fields: ["_id", "label", "parent", "position", "icon", "page", "href"],
+      locale,
+    }),
+    listPages(),
+  ]);
+  return buildNavTree(nodes, pages, locale);
 }
 
 /** How long a page waits for an engine's anonymous boot. Next caches only a successful answer, so

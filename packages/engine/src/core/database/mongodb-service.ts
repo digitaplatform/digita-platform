@@ -472,6 +472,27 @@ export class MongoDBService {
   }
 
   /**
+   * Update every row `filter` matches, with an update document (`$set`, `$inc`, ...) or an
+   * aggregation pipeline, whose stages can compute a row's new value from its own fields.
+   * Answers how many rows it changed.
+   */
+  async updateMany(
+    collectionName: string,
+    filter: Record<string, unknown>,
+    update: Record<string, unknown> | Record<string, unknown>[],
+    target: DatabaseTarget,
+    session?: ClientSession,
+  ): Promise<number> {
+    const result = await this.collection(collectionName, target).updateMany(
+      filter as Filter<Document>,
+      update as UpdateFilter<Document> | Document[],
+      { session },
+    );
+    log.debug({ collection: collectionName, db: target, modified: result.modifiedCount }, "Documents updated");
+    return result.modifiedCount;
+  }
+
+  /**
    * Insert-or-replace by `_id`. Used by setup/orchestrator paths that
    * need an idempotent write without going through the DocumentService
    * pipeline (no hooks, no validation, no version tracking). The supplied

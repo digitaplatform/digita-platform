@@ -39,13 +39,13 @@ const META = vi.hoisted(() => ({
   CustomerGroup: {
     name: 'CustomerGroup',
     title_field: 'name',
-    tree: { parent_field: 'parent', label_field: 'name' },
+    tree: {},
     fields: [{ fieldname: 'name', fieldtype: 'Data', label: 'Name' }],
   },
   ServiceGroup: {
     name: 'ServiceGroup',
     title_field: 'name',
-    tree: { parent_field: 'parent', label_field: 'name', group_by: 'domain' },
+    tree: { kind: true },
     fields: [{ fieldname: 'name', fieldtype: 'Data', label: 'Name' }],
   },
 }));
@@ -85,9 +85,9 @@ const FIRST_ANSWER: SearchAnswer = [
 ];
 const ZUG_ANSWER: SearchAnswer = [{ _id: 'C-3', display: 'Zug Pharma', fields: { name: 'Zug Pharma' } }];
 const GROUP_ROWS = [
-  { _id: 'G-1', name: 'Business customers', parent: null },
-  { _id: 'G-2', name: 'Hotels', parent: 'G-1' },
-  { _id: 'G-3', name: 'Private customers', parent: null },
+  { _id: 'G-1', label: 'Business customers', parent: null },
+  { _id: 'G-2', label: 'Hotels', parent: 'G-1' },
+  { _id: 'G-3', label: 'Private customers', parent: null },
 ];
 const SIZE_OF_SCREEN = ['h-dvh', 'sm:h-[90vh]'];
 
@@ -322,18 +322,18 @@ describe('the tree picker of a Link field', () => {
   it('offers no node of the previous partition while the nodes of the new one load', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    const view = renderField(SERVICE_GROUP_FIELD, { domain: 'sales' }, onChange);
+    const view = renderField(SERVICE_GROUP_FIELD, { kind: 'sales' }, onChange);
     await user.hover(screen.getByRole('combobox'));
-    await landLists([{ _id: 'G-S1', name: 'Sales key accounts', parent: null, domain: 'sales' }]);
+    await landLists([{ _id: 'G-S1', label: 'Sales key accounts', parent: null, kind: 'sales' }]);
 
-    view.rerender(buildField(SERVICE_GROUP_FIELD, { domain: 'service' }, onChange));
+    view.rerender(buildField(SERVICE_GROUP_FIELD, { kind: 'service' }, onChange));
     await waitFor(() => expect(engine.lists).toHaveLength(1));
     await user.click(screen.getByRole('combobox'));
     const panel = screen.getByRole('dialog');
     expect(within(panel).queryByRole('treeitem', { name: 'Sales key accounts' })).toBeNull();
     expect(within(panel).getByText('ui.link.searching')).toBeInTheDocument();
 
-    await landLists([{ _id: 'G-V1', name: 'Service contracts', parent: null, domain: 'service' }]);
+    await landLists([{ _id: 'G-V1', label: 'Service contracts', parent: null, kind: 'service' }]);
     expect(await within(panel).findByRole('treeitem', { name: 'Service contracts' })).toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
   });

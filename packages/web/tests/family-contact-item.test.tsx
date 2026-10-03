@@ -27,8 +27,8 @@ const siteConfig: PublicSiteConfig = {
 };
 
 const family: NavItem[] = [
-  { label: "sister", href: "https://sister.example.net", order: 0 },
-  { label: "Talk to us", href: "#contact", order: 1 },
+  { label: "sister", href: "https://sister.example.net" },
+  { label: "Talk to us", href: "#contact" },
 ];
 
 /** Whether the contact sheet is open, as the sheet itself reads it. */

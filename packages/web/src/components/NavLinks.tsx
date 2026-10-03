@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { cn, navLeafClass, topBarButtonClass } from "@digitaplatform/components";
+import { ChevronDown } from "lucide-react";
+import { Menu, cn, navLeafClass, topBarButtonClass } from "@digitaplatform/components";
 import { useSiteConfig } from "@/config/ConfigProvider";
 import type { NavItem } from "@/lib/types";
 import { isExternalHref, localePath, navHref } from "@/lib/nav";
 import { NavItemLink } from "./NavItemLink";
+import { NavMenuEntries } from "./NavMenuEntries";
 
 /** Whether `href` is the current page: home matches exactly, other items match the page or any of
  *  its sub-paths. */
@@ -25,7 +27,7 @@ export function useActiveItem(locale: string): (item: NavItem) => boolean {
 }
 
 /**
- * Header nav links, styled as the app's nav items (the kit's navLeafClass), with an ACTIVE state
+ * Header nav links (a heading as a dropdown of the entries under it), styled as the app's nav items (the kit's navLeafClass), with an ACTIVE state
  * for the current page. Client-side because it needs the current path (the Header is
  * server-rendered in the layout and can't know the active page). The tenant's apps follow as
  * plain links: each one leaves the website for the app at `/<name>/` on the same host.
@@ -36,6 +38,24 @@ export function NavLinks({ locale, items, apps, comingLabel }: { locale: string;
   return (
     <>
       {items.map((item, i) => {
+        if (item.children) {
+          return (
+            <Menu
+              key={`${item.label}-${i}`}
+              label={item.label}
+              panelClassName="w-64"
+              triggerClassName={cn(navLeafClass(false), "gap-1")}
+              trigger={
+                <>
+                  {item.label}
+                  <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                </>
+              }
+            >
+              {(close) => <NavMenuEntries locale={locale} items={item.children ?? []} comingLabel={comingLabel} close={close} />}
+            </Menu>
+          );
+        }
         const active = isActive(item);
         return (
           <NavItemLink

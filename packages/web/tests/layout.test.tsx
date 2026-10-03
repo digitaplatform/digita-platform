@@ -34,7 +34,7 @@ let websiteLook: string | undefined;
 let branding: Record<string, unknown> | null = null;
 vi.mock("../src/lib/engine-client", () => ({
   getSite: async () => (siteMissing ? null : site),
-  getNav: async () => null,
+  listNav: async () => [],
   getBranding: async () => branding,
   findWebsiteSignature: async () => websiteLook,
   listPublishedSlugs: async () => publishedSlugs,

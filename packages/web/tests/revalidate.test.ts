@@ -65,13 +65,45 @@ describe("the renderer's config", () => {
 });
 
 describe("a read of the engine", () => {
-  it("is cached under the tag of its entity, which the engine posts", async () => {
+  it("draws active menu records stored as Check booleans", async () => {
+    const fetch = vi.fn(async (url: string) => {
+      const request = new URL(url);
+      const filters = JSON.parse(request.searchParams.get("filters") ?? "[]") as [string, string, unknown][];
+      const active = filters.find(([field]) => field === "active")?.[2];
+      return Response.json({
+        data: request.pathname.endsWith("/WebNavMenu") && active === true
+          ? [{ _id: "active", label: "Visible active node", parent: null, href: "/about" }]
+          : [],
+        meta: { total_pages: 1 },
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const { listNav } = await load(() => import("../src/lib/engine-client"));
+    expect(await listNav("en", "header")).toEqual([{ label: "Visible active node", href: "/about" }]);
+  });
+
+  it("is cached under its entity and a menu's page-publication dependency", async () => {
     const fetch = vi.fn(async (_url: string, _init: { next?: { tags?: string[] } }) => Response.json({ data: [] }));
     vi.stubGlobal("fetch", fetch);
-    const { getPage, getNav, getSite } = await load(() => import("../src/lib/engine-client"));
+    const { getPage, listNav, getSite } = await load(() => import("../src/lib/engine-client"));
     await getPage("en", "about");
-    await getNav("en", "header");
+    await listNav("en", "header");
     await getSite();
-    expect(fetch.mock.calls.map(([, init]) => init.next?.tags)).toEqual([["entity:WebPage"], ["entity:WebNavMenu"], ["entity:WebSite"]]);
+    expect(fetch.mock.calls.map(([, init]) => init.next?.tags)).toEqual([
+      ["entity:WebPage"],
+      ["entity:WebNavMenu", "entity:WebPage"],
+      ["entity:WebPage"],
+      ["entity:WebSite"],
+    ]);
+  });
+
+  it("asks for a menu's labels in the visitor's language", async () => {
+    const fetch = vi.fn(async (_url: string, _init: { headers?: Record<string, string> }) => Response.json({ data: [] }));
+    vi.stubGlobal("fetch", fetch);
+    const { listNav } = await load(() => import("../src/lib/engine-client"));
+    await listNav("de", "footer");
+    const menuRead = fetch.mock.calls.find(([url]) => url.includes("/WebNavMenu?"));
+    expect(menuRead?.[1].headers).toEqual({ "accept-language": "de" });
+    expect(new URL(menuRead![0]).searchParams.get("filters")).toBe(JSON.stringify([["site", "=", "example"], ["location", "=", "footer"], ["active", "=", true]]));
   });
 });

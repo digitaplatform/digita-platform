@@ -12,7 +12,7 @@ import { isLocale } from "@/config/locales";
 import { getConfig, publicConfig } from "@/config/env";
 import { ConfigProvider } from "@/config/ConfigProvider";
 import { t } from "@/i18n/messages";
-import { getSite, getNav, getBranding, findWebsiteSignature, listPublishedSlugs } from "@/lib/engine-client";
+import { getSite, listNav, getBranding, findWebsiteSignature, listPublishedSlugs } from "@/lib/engine-client";
 import { siteSignature } from "@/lib/identity";
 import { localePath } from "@/lib/nav";
 import { jsonForScript } from "@/lib/json-script";
@@ -49,9 +49,9 @@ export default async function LocaleLayout({
 
   const [site, headerNav, footerNav, familyNav, branding, websiteLook, publishedSlugs] = await Promise.all([
     getSite(),
-    getNav(locale, "header"),
-    getNav(locale, "footer"),
-    getNav(locale, "family"),
+    listNav(locale, "header"),
+    listNav(locale, "footer"),
+    listNav(locale, "family"),
     getBranding(),
     findWebsiteSignature(),
     listPublishedSlugs(),

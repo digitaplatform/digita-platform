@@ -6,6 +6,7 @@ import {
   PermissionAction,
   ROW_ID_FIELD,
   SYSTEM_ROLES,
+  TREE_PARENT_FIELD,
   canGrantActionTo,
   opensField,
   readableChildFields,
@@ -17,6 +18,7 @@ import { docFieldsOf, evaluateExpression } from "../expression/expression-evalua
 import { permissionRowsFor, scopeValueMatches } from "./scope-filter.js";
 import type { UserContext, PermissionCheckResult } from "./types.js";
 import { createLogger } from "../logging/logger.js";
+import { TREE_KEYS } from "../tree/tree-rules.js";
 
 const log = createLogger("permission-checker");
 
@@ -561,7 +563,7 @@ export class PermissionChecker {
       ]),
       ...IDENTITY_FIELDS,
       ...operatorFields,
-      "idx", "parent", "parenttype", "parentfield",
+      "idx", ...(entity.tree ? [] : ["parent"]), "parenttype", "parentfield",
     ]);
   }
 
@@ -910,6 +912,7 @@ export class PermissionChecker {
 
     const filtered: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
+      if (entity.tree && TREE_KEYS.includes(key) && !readable.has(TREE_PARENT_FIELD)) continue;
       if (!(readable.has(key) || key.startsWith("_"))) continue;
 
       // Mask child-field rows when the Table declares any gated child.

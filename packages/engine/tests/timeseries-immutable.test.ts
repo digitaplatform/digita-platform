@@ -52,7 +52,7 @@ describe("DocumentService.update — time-series immutability", () => {
         quantity: 5,
         docstatus: 0,
       }),
-      withTransaction: vi.fn(),
+      withTransaction: vi.fn(async (work: (session: object) => Promise<unknown>) => work({})),
     } as never;
 
     const docService = new DocumentService({

@@ -32,9 +32,9 @@ vi.mock('@/hooks/useMeta', () => ({
   useMeta: () => ({ data: metaState.data }),
 }));
 const TREE_ROWS = [
-  { _id: 'N-1', name: 'Root', parent: null },
-  { _id: 'N-2', name: 'Child', parent: 'N-1' },
-  { _id: 'N-3', name: 'Loose', parent: null },
+  { _id: 'N-1', label: 'Root', parent: null },
+  { _id: 'N-2', label: 'Child', parent: 'N-1' },
+  { _id: 'N-3', label: 'Loose', parent: null },
 ];
 // `rows: undefined` is a list still on its way from the network.
 const listState = vi.hoisted(() => ({ rows: undefined as Array<Record<string, unknown>> | undefined }));
@@ -234,7 +234,7 @@ describe('LinkControl — tree mode', () => {
     metaState.data = {
       name: 'Folder',
       title_field: 'name',
-      tree: { parent_field: 'parent', label_field: 'name' },
+      tree: {},
       fields: [{ fieldname: 'name', fieldtype: 'Data', label: 'Name' }],
     };
     listState.rows = TREE_ROWS;
@@ -311,11 +311,11 @@ describe('LinkControl — tree mode', () => {
   });
 
   const GROUP_ROWS = [
-    { _id: 'G-1', name: 'Retail', parent: null },
-    { _id: 'G-2', name: 'Swiss', parent: 'G-1' },
-    { _id: 'G-3', name: 'Zurich', parent: 'G-2' },
-    { _id: 'G-4', name: 'Wholesale', parent: null },
-    { _id: 'G-5', name: 'Germany', parent: 'G-4' },
+    { _id: 'G-1', label: 'Retail', parent: null },
+    { _id: 'G-2', label: 'Swiss', parent: 'G-1' },
+    { _id: 'G-3', label: 'Zurich', parent: 'G-2' },
+    { _id: 'G-4', label: 'Wholesale', parent: null },
+    { _id: 'G-5', label: 'Germany', parent: 'G-4' },
   ];
 
   it('starts collapsed with the path to the current value open, also for rows that arrive late', async () => {

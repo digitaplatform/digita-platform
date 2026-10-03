@@ -56,7 +56,7 @@ import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
 let db: MongoDBService;
-let registry: { register: (e: EntityDefinition) => void };
+let registry: Awaited<ReturnType<typeof createApp>>["registry"];
 let adminTok: string;
 let editorTok: string;
 let clerkTok: string;
@@ -77,11 +77,10 @@ const Account: EntityDefinition = {
 
 const Group: EntityDefinition = {
   name: "Group", module: "test", database: "app", naming: { strategy: "system" },
-  business_key: "code", tree: { parent_field: "parent" },
+  business_key: "code", tree: {},
   is_submittable: false, is_log: false, track_changes: false, track_views: false,
   fields: [
     { fieldname: "code", fieldtype: "Data", label: "Code" },
-    { fieldname: "name", fieldtype: "Data", label: "Name" },
     { fieldname: "parent", fieldtype: "Link", target: "Group", label: "Parent" },
   ],
   permissions: [ADMIN_PERM],
@@ -136,9 +135,10 @@ beforeAll(async () => {
   const result = await createApp({ authn: ta.authn });
   app = result.app;
   db = result.db;
-  registry = result.registry as unknown as { register: (e: EntityDefinition) => void };
+  registry = result.registry;
   await result.startup();
   await app.ready();
+  registry.prepareDefinition(Group);
   for (const e of [Account, Group, Item, Checklist]) {
     registry.register(e);
     await db.ensureCollection(e.name, "app");
@@ -150,7 +150,7 @@ beforeAll(async () => {
 
   // Baseline master data referenced by Item link tests.
   await imp("Account", adminTok, { rows: [{ acc_no: "A1", name: "Cash" }], mode: "insert" });
-  await imp("Group", adminTok, { rows: [{ code: "G1", name: "Group One" }], mode: "insert" });
+  await imp("Group", adminTok, { rows: [{ code: "G1", label: "Group One" }], mode: "insert" });
 }, 90000);
 
 afterAll(async () => {
@@ -257,14 +257,25 @@ describe("Import modes — insert / upsert / validate", () => {
 
   it("tree file uploaded child-before-parent imports via topological order", async () => {
     const res = await imp("Group", adminTok, { rows: [
-      { code: "CH", name: "Child", parent: "PA" },
-      { code: "PA", name: "Parent" },
+      { code: "CH", label: "Child", parent: "PA" },
+      { code: "PA", label: "Parent" },
     ], mode: "insert" });
     const report = res.json().data;
     expect(report.inserted).toBe(2);
     const pa = await findOne("Group", { code: "PA" });
     const ch = await findOne("Group", { code: "CH" });
     expect(ch!.parent).toBe(String(pa!._id)); // self-link resolved by bk
+  });
+
+  it("takes a tree's _ancestors, _depth and _tree_rev columns, and stores the engine's place instead", async () => {
+    const res = await imp("Group", adminTok, { rows: [
+      { code: "TA", label: "Top", _ancestors: ["X"], _depth: 9, _tree_rev: 4 },
+      { code: "TB", label: "Below", parent: "TA", _ancestors: ["Y"], _depth: 9 },
+    ], mode: "insert" });
+    expect(res.json().data.inserted).toBe(2);
+    const ta = await findOne("Group", { code: "TA" });
+    const tb = await findOne("Group", { code: "TB" });
+    expect([ta!._ancestors, ta!._depth, tb!._ancestors, tb!._depth]).toEqual([[], 1, [String(ta!._id)], 2]);
   });
 
   it("a self-link cycle fails its members with import_circular_reference", async () => {

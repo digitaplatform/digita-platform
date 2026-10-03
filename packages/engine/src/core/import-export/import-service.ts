@@ -32,6 +32,7 @@ import { serializeRowForStorage } from "./row-serializer.js";
 import { assertAttachFilesReadable } from "../storage/file-access.js";
 import { collectAttachFileIds } from "../storage/file-cleanup.js";
 import { createLogger } from "../logging/logger.js";
+import { TREE_ANCESTORS, TREE_DEPTH, TREE_REVISION } from "../tree/tree-rules.js";
 
 const log = createLogger("import-service");
 
@@ -46,6 +47,10 @@ const SYSTEM_KEYS = new Set([
   "creation",
   "modified",
   "_link_titles",
+  // A tree node's place, which an export of a tree can carry back; the engine sets it again.
+  TREE_ANCESTORS,
+  TREE_DEPTH,
+  TREE_REVISION,
 ]);
 
 export class ImportService {
@@ -266,7 +271,7 @@ export class ImportService {
   /**
    * Order rows so a self-link parent precedes its children (tree files uploaded
    * child-before-parent still import). Only top-level self-Link fields are edges
-   * (a tree `parent_field` is one). Cycles are returned as a set — their members
+   * (a tree's `parent` is one). Cycles are returned as a set — their members
    * fail with `import_circular_reference`; the rest still process.
    */
   private topoOrder(

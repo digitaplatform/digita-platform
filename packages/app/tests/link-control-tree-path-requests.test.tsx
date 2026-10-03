@@ -35,7 +35,7 @@ vi.mock('@/hooks/useMeta', () => ({
   useMeta: (entity: string) => ({
     data:
       entity === 'CustomerGroup'
-        ? { name: entity, title_field: 'name', tree: { parent_field: 'parent', label_field: 'name' }, fields: [] }
+        ? { name: entity, title_field: 'name', tree: {}, fields: [] }
         : { name: entity, title_field: 'name', fields: [] },
   }),
 }));
@@ -89,9 +89,9 @@ async function answerNextRequest(requestsBefore: number) {
 
 beforeEach(() => {
   engine.rows = [
-    { _id: 'G-1', name: 'Business customers', parent: null },
-    { _id: 'G-2', name: 'Hotels', parent: 'G-1' },
-    { _id: 'G-5', name: 'Spa hotels', parent: 'G-2' },
+    { _id: 'G-1', label: 'Business customers', parent: null },
+    { _id: 'G-2', label: 'Hotels', parent: 'G-1' },
+    { _id: 'G-5', label: 'Spa hotels', parent: 'G-2' },
   ];
   engine.requestedEntities.length = 0;
   engine.requestedIds.length = 0;
@@ -138,7 +138,7 @@ describe('LinkControl requests for a tree path', () => {
     const cycleRow = (_id: string, name: string, parent: string) => ({
       _id,
       parent,
-      get name() {
+      get label() {
         if (++reads > 1000) throw new Error('the path walk never ends');
         return name;
       },

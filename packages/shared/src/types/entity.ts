@@ -909,23 +909,17 @@ export type DatabaseTarget =
   | (string & { __brand?: "AppDatabase" });
 
 /**
- * Marks a self-referential tree entity (any category / folder / hierarchy)
- * so the UI can render a generic tree picker (for Link fields targeting it) and a
- * tree-editor view, with no hardcoded entity or field names in the engine/UI.
+ * Gives an entity the tree block: the engine adds a node's fields (`label`, `parent`, `position`,
+ * `icon`, `active`), the indexes of a tree and `title_field: "label"`, so no tree names its own
+ * parent field. `treeBlockFields` says which fields a config brings.
  */
 export interface TreeConfig {
-  /** Self-referencing Link field pointing at the parent node (e.g. "parent"). */
-  parent_field: string;
-  /** Field shown as the node label. Defaults to the entity's `title_field`. */
-  label_field?: string;
-  /**
-   * Optional discriminator that partitions the entity into independent trees
-   * (e.g. a node's `domain` field → one separate tree per partition). A picker
-   * scoped to one value shows only that partition's tree.
-   */
-  group_by?: string;
-  /** Field used to sort siblings. Defaults to `label_field`. */
-  order_field?: string;
+  /** Partitions the entity into trees of one kind each, through the column `kind`. */
+  kind?: boolean;
+  /** The renderer that draws the entity, the app's left menu or the website's header and footer, with the fields it reads. */
+  menu?: "app" | "website";
+  /** How deep a node may lie; `TREE_MAX_DEPTH_DEFAULT` where unset. */
+  max_depth?: number;
 }
 
 /**
@@ -1092,7 +1086,7 @@ export interface EntityDefinition {
   /** Period-close enforcement. See `PeriodCheckConfig`. */
   period_check?: PeriodCheckConfig;
 
-  /** Self-referential tree config — enables the generic tree picker + editor. See `TreeConfig`. */
+  /** The tree block: see `TreeConfig`. */
   tree?: TreeConfig;
 
   /** Workflow transition list. See `TransitionDefinition`. */
