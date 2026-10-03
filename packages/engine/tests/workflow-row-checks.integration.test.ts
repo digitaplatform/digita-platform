@@ -60,7 +60,8 @@ let db: MongoDBService;
 const tokens: Record<string, string> = {};
 
 // A workflow whose state field a writer may send, and whose rows each role reads by a
-// different rule: Owner its own rows, Reader the rows not titled "Hidden", Editor all rows.
+// different rule: Owner its own rows, Reader the rows not titled "Hidden", Scoped the rows
+// assigned to it, Drafter every row but none in draft, Editor all rows.
 // Every row also names the roles that may see it, as Workspace does.
 const FLOW: EntityDefinition = {
   name: "GuardedFlow",
@@ -76,19 +77,22 @@ const FLOW: EntityDefinition = {
     { fieldname: "title", fieldtype: "Data", label: "Title" },
     { fieldname: "status", fieldtype: "Select", label: "Status", options: ["draft", "published"] },
     { fieldname: "visible_to", fieldtype: "JSON", label: "Visible to" },
+    { fieldname: "assignee", fieldtype: "Data", label: "Assignee" },
   ],
   permissions: [
     { role: SYSTEM_ROLES.ADMINISTRATOR, level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
     { role: "Owner", level: 0, select: 1, read: 1, write: 1, create: 1, if_owner: 1 },
     { role: "Reader", level: 0, select: 1, read: 1, condition: "doc.title != 'Hidden'" },
+    { role: "Scoped", level: 0, select: 1, read: 1, scope: { field: "assignee", user_field: "email" } },
+    { role: "Drafter", level: 0, select: 1, read: 1 },
     { role: "Editor", level: 0, select: 1, read: 1, write: 1, create: 1 },
   ],
   states: [
-    { value: "draft", label: "Draft", is_initial: true, doc_status: 0 },
+    { value: "draft", label: "Draft", is_initial: true, doc_status: 0, permissions: [{ role: "Drafter", read: 0 }] },
     { value: "published", label: "Published", doc_status: 0 },
   ],
   transitions: [
-    { from: "draft", to: "published", label: "Publish", allowed_roles: ["Owner", "Reader", "Editor"] },
+    { from: "draft", to: "published", label: "Publish", allowed_roles: ["Owner", "Reader", "Scoped", "Drafter", "Editor"] },
   ],
 } as unknown as EntityDefinition;
 
@@ -132,6 +136,8 @@ beforeAll(async () => {
     admin: ["Administrator", "System User"],
     owner: ["Owner"],
     reader: ["Reader"],
+    scoped: ["Scoped"],
+    drafter: ["Drafter"],
     editor: ["Editor"],
   })) {
     tokens[who] = await ta.sign({ sub: `${who}@digita.local`, email: `${who}@digita.local`, roles });
@@ -168,6 +174,8 @@ describe("a transition of a row the caller may not read", () => {
     ["an owner rule", "owner", "admin", { title: "Theirs" }],
     ["a condition", "reader", "admin", { title: "Hidden" }],
     ["role visibility", "owner", "owner", { title: "Mine", visible_to: ["Elsewhere"] }],
+    ["a scope grant", "scoped", "admin", { title: "Theirs", assignee: "someone@digita.local" }],
+    ["a state that removes read", "drafter", "admin", { title: "Draft" }],
   ])("is answered as a read when %s hides the row, and the state stays", async (_case, who, creator, data) => {
     const name = await create("GuardedFlow", creator, data);
     const read = await call("GET", who, `GuardedFlow/${name}`);
@@ -183,6 +191,7 @@ describe("a transition of a row the caller may not read", () => {
   it.each([
     ["the owner of the row", "owner", "owner", { title: "Mine" }],
     ["a reader whose condition admits the row", "reader", "admin", { title: "Open" }],
+    ["a scoped reader the row is assigned to", "scoped", "admin", { title: "Assigned", assignee: "scoped@digita.local" }],
   ])("moves for %s", async (_case, who, creator, data) => {
     const name = await create("GuardedFlow", creator, data);
     expect((await call("POST", who, `GuardedFlow/${name}/transition`, { to: "published" })).statusCode).toBe(200);
