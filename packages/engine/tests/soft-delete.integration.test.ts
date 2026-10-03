@@ -56,17 +56,22 @@ import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
+import type { DocumentService } from "../src/core/document/document-service.js";
 import { IndexManager } from "../src/core/database/index-manager.js";
 
 let replSet: MongoMemoryReplSet;
 let app: FastifyInstance;
 let db: MongoDBService;
+let documentService: DocumentService;
 let adminTok: string;
 let clerkTok: string;
 let readerTok: string;
 let shelverTok: string;
 let shareKeeperTok: string;
+let deleteOnlyTok: string;
 const insertHooks: string[] = [];
+const postUpdateHooks: string[] = [];
+const beforeSaveHooks: string[] = [];
 let rebuildCopies = false;
 
 const SHELF: EntityDefinition = {
@@ -96,15 +101,18 @@ const BOOK: EntityDefinition = {
       child_fields: [{ fieldname: "barcode", fieldtype: "Data", label: "Barcode" }],
     },
     { fieldname: "attachment", fieldtype: "Attach", label: "Attachment" },
+    { fieldname: "secret_note", fieldtype: "Data", label: "Secret Note", perm_level: 1 },
   ],
   permissions: [
     { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
+    { role: "Administrator", level: 1, read: 1, write: 1 },
     { role: "Clerk", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
     { role: "Reader", level: 0, select: 1, read: 1 },
     { role: "ShareKeeper", level: 0, select: 1 },
     { role: "ShareKeeper", level: 0, read: 1, if_owner: true },
     { role: "ShareKeeper", level: 0, delete: 1, condition: "doc.code == 'C-SHARE-KEEP'" },
     { role: "Shelver", level: 0, select: 1, read: 1, delete: 1, condition: "doc.code == 'C-9' || doc.code == 'C-COUNT-YES'" },
+    { role: "DeleteOnly", level: 0, delete: 1 },
   ],
 } as unknown as EntityDefinition;
 
@@ -141,20 +149,31 @@ beforeAll(async () => {
     await db.ensureCollection(entity.name, "app");
     await new IndexManager(db).ensureIndexes(entity);
   }
-  // The book's insert hooks, as an app module would declare them.
-  const hooks = (result.hookRunner as unknown as { hooks: Map<string, Map<string, (doc: { _id: string; _data: Record<string, unknown> }) => void>> }).hooks;
-  hooks.set("SdBook", new Map([
+  documentService = result.hookRunner.getServices()?.documentService as DocumentService;
+  // The book's hooks, as an app module would declare them.
+  await db.ensureCollection("SdBookHookMarker", "app");
+  type TestHook = (doc: { _id: string; _data: Record<string, unknown> }, ctx?: unknown, services?: { session?: import("mongodb").ClientSession }) => Promise<void> | void;
+  const hooks = (result.hookRunner as unknown as { hooks: Map<string, Map<string, TestHook>> }).hooks;
+  hooks.set("SdBook", new Map<string, TestHook>([
     ["before_insert", (doc) => {
       insertHooks.push(`before_insert ${doc._id}`);
       if (rebuildCopies) doc._data["copies"] = [{ barcode: "Rebuilt" }];
     }],
     ["after_insert", (doc) => void insertHooks.push(`after_insert ${doc._id}`)],
+    ["before_save", async (doc, _ctx, services) => {
+      if (doc._id !== "B-UPDATE-MARKED") return;
+      beforeSaveHooks.push(doc._id);
+      await db.updateOne("SdBook", doc._id, { deleted: new Date(), deleted_by: "admin@d" }, "app", services?.session);
+      await db.insertOne("SdBookHookMarker", { _id: `marker-update-${doc._id}`, action: "before_save" }, "app", services?.session);
+    }],
+    ["on_update", (doc) => void postUpdateHooks.push(`on_update ${doc._id}`)],
   ]));
   adminTok = await ta.sign({ sub: "admin@d", email: "admin@d", roles: ["Administrator", "System User"] });
   clerkTok = await ta.sign({ sub: "clerk@d", email: "clerk@d", roles: ["Clerk"] });
   readerTok = await ta.sign({ sub: "reader@d", email: "reader@d", roles: ["Reader"] });
   shelverTok = await ta.sign({ sub: "shelver@d", email: "shelver@d", roles: ["Shelver"] });
   shareKeeperTok = await ta.sign({ sub: "keeper-id", email: "keeper@d", roles: ["ShareKeeper"] });
+  deleteOnlyTok = await ta.sign({ sub: "delonly@d", email: "delonly@d", roles: ["DeleteOnly"] });
 }, 90000);
 
 afterAll(async () => {
@@ -483,6 +502,116 @@ describe("a deleted record", () => {
 
     const sysDoc = await db.findOne(DIGITA.COLLECTIONS.FILE, sysId, DIGITA.DATABASES.CORE);
     expect(sysDoc?.["deleted"]).toBeUndefined();
+  });
+
+  it("PLANTED DEFECT: refuses restore before any hook runs for an actor holding delete permission but no read rights", async () => {
+    expect((await createBook({ _id: "B-DELONLY", title: "For DeleteOnly", code: "C-DELONLY" })).statusCode).toBe(201);
+    expect((await deleteBook("B-DELONLY")).statusCode).toBe(200);
+    insertHooks.length = 0;
+
+    const res = await restoreBook("B-DELONLY", deleteOnlyTok);
+    expect(res.statusCode).toBe(403);
+    expect(insertHooks).toEqual([]);
+    const doc = await db.findOne("SdBook", "B-DELONLY", "app", undefined, { includeDeleted: true });
+    expect(doc?.["deleted"]).toBeInstanceOf(Date);
+  });
+
+  it("PLANTED DEFECT: masks level-1 hidden fields through ordinary getDoc upon restore", async () => {
+    expect((await createBook({
+      _id: "B-MASK",
+      title: "Masked",
+      code: "C-MASK",
+      secret_note: "CONFIDENTIAL_KEY",
+    })).statusCode).toBe(201);
+    expect((await deleteBook("B-MASK")).statusCode).toBe(200);
+
+    // Clerk has level 0 read/write/delete, but NO level 1 read rights.
+    const res = await restoreBook("B-MASK", clerkTok);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data._id).toBe("B-MASK");
+    expect(res.json().data.title).toBe("Masked");
+    expect(res.json().data.secret_note).toBeUndefined();
+
+    // In database, the secret_note is preserved.
+    const stored = await db.findOne("SdBook", "B-MASK", "app");
+    expect(stored?.["secret_note"]).toBe("CONFIDENTIAL_KEY");
+
+    // Administrator who holds level 1 read permission sees the field.
+    const adminRead = await app.inject({ method: "GET", url: "/api/v1/resource/SdBook/B-MASK", headers: as(adminTok) });
+    expect(adminRead.statusCode).toBe(200);
+    expect(adminRead.json().data.secret_note).toBe("CONFIDENTIAL_KEY");
+  });
+
+  it("PLANTED DEFECT: direct documentService.restoreDoc masks level-1 hidden fields on returned BaseDocument", async () => {
+    expect((await createBook({
+      _id: "B-MASK-DS",
+      title: "Direct Masked",
+      code: "C-MASK-DS",
+      secret_note: "CONFIDENTIAL_DIRECT",
+    })).statusCode).toBe(201);
+    expect((await deleteBook("B-MASK-DS")).statusCode).toBe(200);
+
+    const clerkUser = { _id: "clerk@d", email: "clerk@d", roles: ["Clerk"] };
+    const restoredDoc = await documentService.restoreDoc("SdBook", "B-MASK-DS", clerkUser);
+
+    // Direct returned BaseDocument._data must have secret_note masked
+    expect(restoredDoc.get("title")).toBe("Direct Masked");
+    expect(restoredDoc.get("secret_note")).toBeUndefined();
+    expect(restoredDoc._data["secret_note"]).toBeUndefined();
+
+    // Database still preserves secret_note
+    const stored = await db.findOne("SdBook", "B-MASK-DS", "app");
+    expect(stored?.["secret_note"]).toBe("CONFIDENTIAL_DIRECT");
+  });
+
+  it("PLANTED DEFECT: ordinary update on marked row fails NotFound before post-hooks and rolls back same-Tx before hook writes", async () => {
+    expect((await createBook({ _id: "B-UPDATE-MARKED", title: "Original Title", code: "C-UP-MARKED" })).statusCode).toBe(201);
+    postUpdateHooks.length = 0;
+    beforeSaveHooks.length = 0;
+    const adminUser = { _id: "admin@d", email: "admin@d", roles: ["Administrator", "System User"] };
+
+    // The before_save hook marks the live row inside this same transaction.
+    await expect(
+      documentService.update("SdBook", "B-UPDATE-MARKED", { title: "Attempted Title Mutation" }, adminUser),
+    ).rejects.toMatchObject({ status: 404 });
+
+    // HTTP route also returns 404
+    const putRes = await app.inject({
+      method: "PUT",
+      url: "/api/v1/resource/SdBook/B-UPDATE-MARKED",
+      headers: as(adminTok),
+      payload: { title: "HTTP Title Mutation" },
+    });
+    expect(putRes.statusCode).toBe(404);
+
+    expect(beforeSaveHooks).toEqual(["B-UPDATE-MARKED", "B-UPDATE-MARKED"]);
+    // The failed write rolls back both the hook's row marker and its side effect.
+    const marker = await db.findOne("SdBookHookMarker", "marker-update-B-UPDATE-MARKED", "app");
+    expect(marker).toBeNull();
+
+    // Post-update hook never ran
+    expect(postUpdateHooks).toEqual([]);
+
+    // Document in database still retained with original values and deleted timestamp
+    const kept = await db.findOne("SdBook", "B-UPDATE-MARKED", "app", undefined, { includeDeleted: true });
+    expect(kept?.["title"]).toBe("Original Title");
+    expect(kept?.["deleted"]).toBeUndefined();
+  });
+
+  it("PLANTED DEFECT: singleton seeds keep marked identities and normal restore recovers them", async () => {
+    const adminUser = { _id: "admin@d", email: "admin@d", roles: ["Administrator", "System User"] };
+    const { seedBrandingSettings } = await import("../src/core/setup/seed-branding-settings.js");
+    const { seedSystemSettings } = await import("../src/core/setup/seed-system-settings.js");
+    for (const [entity, id] of [[DIGITA.COLLECTIONS.BRANDING_SETTING, "branding"], [DIGITA.COLLECTIONS.SETTING, "settings"]]) {
+      await documentService.deleteDoc(entity!, id!, adminUser);
+      await seedBrandingSettings(db);
+      await seedSystemSettings(db);
+      await expect(documentService.getSingle(entity!, adminUser)).rejects.toMatchObject({ status: 404 });
+      expect((await db.findOne(entity!, id!, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true }))?.["deleted"]).toBeInstanceOf(Date);
+      const restored = await documentService.restoreDoc(entity!, id!, adminUser);
+      expect(restored._id).toBe(id);
+      expect((await db.findOne(entity!, id!, DIGITA.DATABASES.CORE))?.["deleted"]).toBeUndefined();
+    }
   });
 });
 

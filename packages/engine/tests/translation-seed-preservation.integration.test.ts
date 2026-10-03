@@ -196,6 +196,77 @@ describe("TranslationService.seedFromFiles with MongoDB source", () => {
     const storedOvr = await db.findOne(DIGITA.COLLECTIONS.TRANSLATION, "system:en:raced_ovr", DIGITA.DATABASES.CORE);
     expect(storedOvr?.["overridden"]).toBe(true);
     expect(storedOvr?.["value"]).toBe("User Override Won");
+  });
 
+  describe("TranslationService.setTranslation on marked rows", () => {
+    it("skips file-source setTranslation on marked row and retains row intact", async () => {
+      const deletedAt = new Date("2026-03-01T10:00:00Z");
+      await db.insertOne(DIGITA.COLLECTIONS.TRANSLATION, {
+        _id: "system:en:marked_file_test",
+        namespace: "system",
+        locale: "en",
+        key: "marked_file_test",
+        value: "Original Value",
+        source: "file",
+        deleted: deletedAt,
+        deleted_by: "admin@d",
+        owner: "system",
+        modified_by: "system",
+        creation: deletedAt,
+        modified: deletedAt,
+      }, DIGITA.DATABASES.CORE);
+
+      await expect(
+        translationService.setTranslation({
+          namespace: "system",
+          locale: "en",
+          key: "marked_file_test",
+          value: "Attempted File Write",
+          source: "file",
+          user: "system",
+        }),
+      ).resolves.toBeUndefined();
+
+      const stored = await db.findOne(DIGITA.COLLECTIONS.TRANSLATION, "system:en:marked_file_test", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+      expect(stored?.["value"]).toBe("Original Value");
+      expect(stored?.["deleted"]).toEqual(deletedAt);
+    });
+
+    it("throws controlled 404 on user/API setTranslation on marked row (prevents duplicate key 500) and retains row", async () => {
+      const deletedAt = new Date("2026-03-01T10:00:00Z");
+      await db.insertOne(DIGITA.COLLECTIONS.TRANSLATION, {
+        _id: "system:en:marked_user_test",
+        namespace: "system",
+        locale: "en",
+        key: "marked_user_test",
+        value: "Original User Value",
+        source: "file",
+        deleted: deletedAt,
+        deleted_by: "admin@d",
+        owner: "system",
+        modified_by: "system",
+        creation: deletedAt,
+        modified: deletedAt,
+      }, DIGITA.DATABASES.CORE);
+
+      await expect(
+        translationService.setTranslation({
+          namespace: "system",
+          locale: "en",
+          key: "marked_user_test",
+          value: "Attempted User Edit",
+          source: "user",
+          user: "admin@d",
+        }),
+      ).rejects.toMatchObject({
+        code: "not_found",
+        status: 404,
+        responseCode: "NOT_FOUND",
+      });
+
+      const stored = await db.findOne(DIGITA.COLLECTIONS.TRANSLATION, "system:en:marked_user_test", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+      expect(stored?.["value"]).toBe("Original User Value");
+      expect(stored?.["deleted"]).toEqual(deletedAt);
+    });
   });
 });

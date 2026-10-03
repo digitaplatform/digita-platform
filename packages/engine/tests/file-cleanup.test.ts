@@ -20,25 +20,35 @@ vi.mock("../src/core/logging/logger.js", () => ({
 }));
 
 import { FILE_FIELD_TYPES } from "@digitaplatform/shared";
-import { softDeleteFile, parseFileId, collectAttachFileIds } from "../src/core/storage/file-cleanup.js";
+import { softDeleteFile, deleteBlobIfUnreferenced, parseFileId, collectAttachFileIds } from "../src/core/storage/file-cleanup.js";
 import { DeleteProtection } from "../src/core/link/delete-protection.js";
 import type { EntityDefinition, FieldDefinition } from "@digitaplatform/shared";
+import type { StoragePort } from "../src/core/storage/storage-port.js";
 
 describe("File records retained until purge", () => {
-  it("PLANTED DEFECT: marks the File in place and keeps its blob and thumbnail keys", async () => {
+  it("PLANTED DEFECT: marks the File in place in a transaction and touches the attachment guard", async () => {
     const file = { _id: "FILE-1", storage_key: "p/main", thumbnail_key: "p/thumb" };
+    const mockSession = { id: "mock-session" };
     const db = {
+      withTransaction: vi.fn(async (cb: (session: unknown) => Promise<unknown>) => cb(mockSession)),
+      touchGuard: vi.fn(async () => {}),
       findOne: vi.fn(async () => file),
       updateOne: vi.fn(async (_name, _id, changes) => { Object.assign(file, changes); return true; }),
       deleteOne: vi.fn(),
     };
     await softDeleteFile(db as never, "FILE-1", { email: "operator" }, []);
+    expect(db.withTransaction).toHaveBeenCalledTimes(1);
+    expect(db.touchGuard).toHaveBeenCalledWith("attachment:FILE-1", mockSession);
+    expect(db.findOne).toHaveBeenCalledWith("File", "FILE-1", "core", mockSession);
     expect(file).toMatchObject({ storage_key: "p/main", thumbnail_key: "p/thumb", deleted: expect.any(Date), deleted_by: "operator" });
     expect(db.deleteOne).not.toHaveBeenCalled();
   });
 
   it.each([true, false])("PLANTED DEFECT / INNOCENT: a retained row holds its attachment %s", async (held) => {
+    const mockSession = { id: "mock-session-2" };
     const db = {
+      withTransaction: vi.fn(async (cb: (session: unknown) => Promise<unknown>) => cb(mockSession)),
+      touchGuard: vi.fn(async () => {}),
       findOne: vi.fn(async () => ({ _id: "FILE-1", storage_key: "p/main" })),
       count: vi.fn(async () => held ? 1 : 0),
       updateOne: vi.fn(async () => true),
@@ -46,7 +56,7 @@ describe("File records retained until purge", () => {
     const entity = { name: "Book", database: "app", fields: [{ fieldname: "lines", fieldtype: "Table", child_fields: [{ fieldname: "attachment", fieldtype: "Attach" }] }] } as unknown as EntityDefinition;
     await softDeleteFile(db as never, "FILE-1", { email: "operator" }, [entity]);
     expect(db.updateOne.mock.calls).toHaveLength(held ? 0 : 1);
-    expect(db.count).toHaveBeenCalledWith("Book", [{ $or: [{ "lines.attachment": { $regex: expect.stringContaining("FILE-1") } }] }], "app", undefined, { includeDeleted: true });
+    expect(db.count).toHaveBeenCalledWith("Book", [{ $or: [{ "lines.attachment": { $regex: expect.stringContaining("FILE-1") } }] }], "app", mockSession, { includeDeleted: true });
   });
 
   it("PLANTED DEFECT: ordinary File deletion uses the same guard in the caller's transaction", async () => {
@@ -57,6 +67,68 @@ describe("File records retained until purge", () => {
     const blockers = await new DeleteProtection(registry as never, db as never).check("File", "FILE-1", session as never);
     expect(blockers).toEqual([{ entity: "Book", fieldname: "attachment", count: 1 }]);
     expect(db.count).toHaveBeenCalledWith("Book", [{ $or: [{ attachment: { $regex: expect.stringContaining("FILE-1") } }] }], "app", session, { includeDeleted: true });
+  });
+});
+
+describe("deleteBlobIfUnreferenced", () => {
+  it("deletes blob and width variants when reference count is zero within a transaction", async () => {
+    const mockSession = { id: "blob-session" };
+    const db = {
+      withTransaction: vi.fn(async (cb: (session: unknown) => Promise<unknown>) => cb(mockSession)),
+      touchGuard: vi.fn(async () => {}),
+      count: vi.fn(async () => 0),
+    };
+    const storage: StoragePort = {
+      backend: "local",
+      delete: vi.fn(async () => {}),
+      exists: vi.fn(async () => true),
+      put: vi.fn(async () => {}),
+      getStream: vi.fn(async () => ({} as never)),
+    };
+    await deleteBlobIfUnreferenced(db as never, storage, "image-key.png", "storage_key", "image/png");
+    expect(db.withTransaction).toHaveBeenCalledTimes(1);
+    expect(db.touchGuard).toHaveBeenCalledWith("blob:image-key.png", mockSession);
+    expect(db.count).toHaveBeenCalledWith(
+      "File",
+      [{ $or: [{ storage_key: "image-key.png" }, { thumbnail_key: "image-key.png" }, { file_url: "/uploads/image-key.png" }] }],
+      "core",
+      mockSession,
+      { includeDeleted: true },
+    );
+    expect(storage.delete).toHaveBeenCalledWith("image-key.png");
+  });
+
+  it("skips storage deletion when references remain in the database", async () => {
+    const mockSession = { id: "blob-session-refs" };
+    const db = {
+      withTransaction: vi.fn(async (cb: (session: unknown) => Promise<unknown>) => cb(mockSession)),
+      touchGuard: vi.fn(async () => {}),
+      count: vi.fn(async () => 1),
+    };
+    const storage: StoragePort = {
+      backend: "local",
+      delete: vi.fn(async () => {}),
+      exists: vi.fn(async () => true),
+      put: vi.fn(async () => {}),
+      getStream: vi.fn(async () => ({} as never)),
+    };
+    await deleteBlobIfUnreferenced(db as never, storage, "busy-key.pdf", "storage_key");
+    expect(db.touchGuard).toHaveBeenCalledWith("blob:busy-key.pdf", mockSession);
+    expect(storage.delete).not.toHaveBeenCalled();
+  });
+
+  it("handles storage deletion failure without throwing (best effort)", async () => {
+    const db = {
+      withTransaction: vi.fn(async () => { throw new Error("Storage I/O exploded"); }),
+    };
+    const storage: StoragePort = {
+      backend: "local",
+      delete: vi.fn(),
+      exists: vi.fn(),
+      put: vi.fn(),
+      getStream: vi.fn(),
+    };
+    await expect(deleteBlobIfUnreferenced(db as never, storage, "err-key.png")).resolves.toBeUndefined();
   });
 });
 

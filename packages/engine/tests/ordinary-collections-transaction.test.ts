@@ -20,7 +20,13 @@ vi.mock("../src/core/logging/logger.js", () => ({
 }));
 
 import { MongoMemoryReplSet } from "mongodb-memory-server";
+import Fastify from "fastify";
+import { DIGITA, type EntityDefinition } from "@digitaplatform/shared";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
+import { registerMetaRoutes } from "../src/core/api/meta-router.js";
+import { EntityRegistry } from "../src/core/entity/entity-registry.js";
+import { PermissionChecker } from "../src/core/permissions/permission-checker.js";
+import { ConfigurationError } from "../src/core/errors/engine-error.js";
 import { env } from "../src/core/config/env.js";
 
 // Every entity collection participates in the caller's transaction.
@@ -77,5 +83,60 @@ describe("MongoDBService — ordinary entity collections", () => {
     await raw.collection("ExistingNative").insertOne({ posted_at: new Date(), quantity: 7 });
     await expect(db.ensureCollection("ExistingNative", "app")).rejects.toMatchObject({ code: "ordinary_collection_required" });
     expect(await raw.collection("ExistingNative").countDocuments()).toBe(1);
+  });
+
+  it("assertOrdinaryCollection returns true for ordinary collection, false for nonexistent, and throws ConfigurationError for non-ordinary", async () => {
+    expect(await db.assertOrdinaryCollection("Ledger", "app")).toBe(true);
+    expect(await db.assertOrdinaryCollection("NotYetCreated", "app")).toBe(false);
+    await expect(db.assertOrdinaryCollection("ExistingNative", "app")).rejects.toBeInstanceOf(ConfigurationError);
+  });
+
+  it("meta POST and PUT catch ConfigurationError and respond 400 before mutation", async () => {
+    const metaApp = Fastify();
+    metaApp.addHook("preHandler", async (request) => {
+      (request as unknown as { user: unknown }).user = { email: "admin@d", roles: ["Administrator"] };
+    });
+    const registry = new EntityRegistry();
+    const permissionChecker = new PermissionChecker(registry);
+    registerMetaRoutes(metaApp, "/api/v1", registry, db, permissionChecker);
+    await metaApp.ready();
+
+    // POST /api/v1/meta for an entity mapped to a non-ordinary collection returns 400
+    const postRes = await metaApp.inject({
+      method: "POST",
+      url: "/api/v1/meta",
+      payload: {
+        name: "ExistingNative",
+        database: "app",
+        module: "test",
+        naming: { strategy: "user_set" },
+        fields: [{ fieldname: "title", fieldtype: "Data" }],
+      },
+    });
+    expect(postRes.statusCode).toBe(400);
+    expect(postRes.json().messages[0].text).toBe("ordinary_collection_required");
+
+    // Verify no row mutated/inserted in Entity collection
+    const entityRow = await db.findOne(DIGITA.COLLECTIONS.ENTITY, "ExistingNative", DIGITA.DATABASES.CORE);
+    expect(entityRow).toBeNull();
+
+    // PUT /api/v1/meta/:doctype for an existing entity pointing to a non-ordinary collection returns 400
+    registry.register({
+      name: "ExistingNative",
+      database: "app",
+      module: "test",
+      naming: { strategy: "user_set" },
+      fields: [{ fieldname: "title", fieldtype: "Data" }],
+    } as unknown as EntityDefinition);
+
+    const putRes = await metaApp.inject({
+      method: "PUT",
+      url: "/api/v1/meta/ExistingNative",
+      payload: { label: "Updated Label" },
+    });
+    expect(putRes.statusCode).toBe(400);
+    expect(putRes.json().messages[0].text).toBe("ordinary_collection_required");
+
+    await metaApp.close();
   });
 });
