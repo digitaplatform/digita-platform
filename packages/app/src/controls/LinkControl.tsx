@@ -28,6 +28,7 @@ export default function LinkControl({
   field,
   value,
   doc,
+  entity,
   parentDoc,
   state,
   onChange,
@@ -108,7 +109,8 @@ export default function LinkControl({
   // partition (the `kind` column of `tree.kind`): a self-referential parent field on a partitioned tree
   // must only offer nodes in the SAME partition (picking a "sales" group's parent shows only the sales
   // forest, not all four domains interleaved). Explicit target_filters win.
-  const treeGroupBy = treeCfg?.kind ? TREE_KIND_FIELD : undefined;
+  const selfParent = field.fieldname === TREE_PARENT_FIELD && field.target === entity && !parentDoc && !field.target_path;
+  const treeGroupBy = selfParent && treeCfg?.kind ? TREE_KIND_FIELD : undefined;
   const partitionValue =
     treeGroupBy ? (doc as Record<string, unknown>)[treeGroupBy] : undefined;
   const treeFilters: Record<string, unknown> = { ...(resolvedFilters ?? {}) };
@@ -201,7 +203,7 @@ export default function LinkControl({
     // subtree so a cycle can never be selected (previously only caught at save).
     let disabledIds: Set<string> | undefined;
     const selfId = doc['_id'] != null && doc['_id'] !== '' ? String(doc['_id']) : '';
-    if (field.fieldname === parentField && selfId) {
+    if (selfParent && selfId) {
       const kids = new Map<string, string[]>();
       for (const n of nodes) {
         if (!n.parentId) continue;

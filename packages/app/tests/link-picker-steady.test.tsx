@@ -78,7 +78,10 @@ const CUSTOMER_FIELD = {
   search_columns: ['name'],
 } as FieldDefinition;
 const GROUP_FIELD = { fieldname: 'group', fieldtype: 'Link', label: 'Customer group', target: 'CustomerGroup' } as FieldDefinition;
-const SERVICE_GROUP_FIELD = { fieldname: 'group', fieldtype: 'Link', label: 'Group', target: 'ServiceGroup' } as FieldDefinition;
+const SERVICE_GROUP_FIELD = {
+  fieldname: 'group', fieldtype: 'Link', label: 'Group', target: 'ServiceGroup',
+  target_filters: { kind: '$doc.kind' },
+} as FieldDefinition;
 const FIRST_ANSWER: SearchAnswer = [
   { _id: 'C-1', display: 'Alpine Hotel', fields: { name: 'Alpine Hotel' } },
   { _id: 'C-2', display: 'Bergbahn AG', fields: { name: 'Bergbahn AG' } },

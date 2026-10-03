@@ -37,12 +37,18 @@ const TREE_ROWS = [
   { _id: 'N-3', label: 'Loose', parent: null },
 ];
 // `rows: undefined` is a list still on its way from the network.
-const listState = vi.hoisted(() => ({ rows: undefined as Array<Record<string, unknown>> | undefined }));
+const listState = vi.hoisted(() => ({
+  rows: undefined as Array<Record<string, unknown>> | undefined,
+  filters: [] as [string, string, unknown][][],
+}));
 vi.mock('@/hooks/useList', () => ({
-  useList: () => ({
-    data: listState.rows ? { rows: listState.rows } : undefined,
-    isLoading: !listState.rows,
-  }),
+  useList: (entity: string | undefined, params: { filters?: [string, string, unknown][] }) => {
+    if (entity) listState.filters.push(params.filters ?? []);
+    return {
+      data: listState.rows ? { rows: listState.rows } : undefined,
+      isLoading: !listState.rows,
+    };
+  },
 }));
 vi.mock('@/lib/chrome-i18n', () => ({
   useChrome: () => (key: string) => key,
@@ -115,6 +121,7 @@ function Host({
 }
 
 beforeEach(() => {
+  listState.filters = [];
   searchResults.data = [
     { _id: 'O-1', display: 'Alpha' },
     { _id: 'O-2', display: 'Beta' },
@@ -412,6 +419,26 @@ describe('LinkControl — tree mode', () => {
     expect(within(dialog).getByRole('treeitem', { name: 'Eligible root' })).toBeInTheDocument();
     expect(within(dialog).queryByText('Under filtered retired')).not.toBeInTheDocument();
     expect(within(dialog).queryByText('Grandchild under retired')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { entity: 'Widget', fieldname: 'group' },
+    { entity: 'Folder', fieldname: 'related' },
+  ])('does not infer the target kind for $entity.$fieldname from an unrelated kind field', async ({ entity, fieldname }) => {
+    metaState.data = { name: 'Folder', tree: { kind: true }, fields: [] };
+    listState.rows = [
+      { _id: 'S', label: 'Shelf node', parent: null, kind: 'shelf' },
+      { _id: 'V', label: 'Service node', parent: null, kind: 'service' },
+    ];
+    const user = userEvent.setup();
+    render(<LinkControl field={makeField({ target: 'Folder', fieldname })} value={null} entity={entity}
+      doc={{ kind: 'shelf' }} state={STATE} onChange={() => {}} controlId="group" labelId="group-label" />);
+    await user.click(screen.getByRole('combobox'));
+    expect(listState.filters).not.toHaveLength(0);
+    expect(listState.filters.every((filters) => !filters.some(([field]) => field === 'kind'))).toBe(true);
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Shelf node')).toBeInTheDocument();
+    expect(within(dialog).getByText('Service node')).toBeInTheDocument();
   });
 
   it('shows a held node that is switched off by its path, as any held node', () => {
