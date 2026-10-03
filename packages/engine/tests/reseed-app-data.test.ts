@@ -1,17 +1,21 @@
 // The demo reset wipes an app's data and seeds it again. One reset runs per app at a time, and a
 // seed that fails after the wipe runs again before the reset fails, naming the error.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 
-vi.mock("../src/core/config/env.js", () => ({ env: { DEMO_TENANT: true, SITE_ID: "" } }));
+vi.mock("../src/core/config/env.js", () => ({ env: {
+  DEMO_TENANT: true, SITE_ID: "", TRANSLATIONS_DIR: process.env["TRANSLATIONS_DIR"], TRANSLATION_FALLBACK_LOCALE: "en",
+} }));
 vi.mock("../src/core/logging/logger.js", () => ({
-  createLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+  createLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn, error: vi.fn() }),
 }));
-const { seedAppData } = vi.hoisted(() => ({ seedAppData: vi.fn() }));
+const { seedAppData, warn } = vi.hoisted(() => ({ seedAppData: vi.fn(), warn: vi.fn() }));
 vi.mock("../src/core/setup/seed-app-data.js", () => ({ seedAppData }));
 vi.mock("../src/core/setup/seed-data-translations.js", () => ({ seedDataTranslations: vi.fn().mockResolvedValue(undefined) }));
 
 import { reseedAppData, type ReseedDeps } from "../src/core/setup/reseed-app-data.js";
 import { beginWrite, runningReseedMode } from "../src/core/setup/reseed-lock.js";
+import { ConfigurationError } from "../src/core/errors/engine-error.js";
+import { englishText, loadEngineI18n } from "../src/i18n.js";
 
 const deleteMany = vi.fn();
 const deps = {
@@ -28,7 +32,10 @@ const deps = {
 /** How often the app's rows were wiped. */
 const wipes = () => deleteMany.mock.calls.filter(([collection]) => collection === "Thing").length;
 
+beforeAll(() => { loadEngineI18n(); });
+
 beforeEach(() => {
+  warn.mockClear();
   deleteMany.mockReset().mockResolvedValue(3);
   seedAppData.mockReset().mockResolvedValue({ unresolved_links: [] });
 });
@@ -70,6 +77,19 @@ describe("the demo reset", () => {
     // The lock is released after a failure, so the next reset can repair the app.
     seedAppData.mockReset().mockResolvedValue({ unresolved_links: [] });
     await expect(reseedAppData("demo", deps)).resolves.toMatchObject({ mode: "demo" });
+  });
+
+  it("preserves a coded seed error's parameters and original cause after both attempts", async () => {
+    const cause = new ConfigurationError("seed_row_docstatus_invalid", { doctype: "Thing", row: "T-3", value: "5" });
+    seedAppData.mockRejectedValue(cause);
+    const reason = englishText(cause.code, cause.params);
+    expect(reason).toContain("Thing");
+    expect(reason).toContain("T-3");
+    expect(reason).toContain("5");
+    await expect(reseedAppData("demo", deps)).rejects.toMatchObject({
+      code: "reseed_seed_failed", params: { attempts: "2", error: reason }, cause,
+    });
+    expect(warn).toHaveBeenCalledWith({ attempt: 1, err: cause }, "seed after the wipe failed; running it again");
   });
 });
 

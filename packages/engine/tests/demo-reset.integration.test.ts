@@ -1,5 +1,7 @@
 import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
 
+const { logError } = vi.hoisted(() => ({ logError: vi.fn() }));
+
 // The env mock of site-scope.integration.test.ts, with the demo tenant setting and both seed
 // tiers. One mocked module serves every boot below: each sets its own settings before it boots.
 vi.mock("../src/core/config/env.js", () => {
@@ -33,7 +35,7 @@ vi.mock("../src/core/config/env.js", () => {
   } };
 });
 vi.mock("../src/core/logging/logger.js", () => ({
-  createLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
+  createLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: logError, fatal: vi.fn() }),
   getRootLogger: () => ({ info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn(), fatal: vi.fn() }),
 }));
 vi.mock("../src/core/cache/redis-service.js", () => ({
@@ -141,6 +143,23 @@ afterAll(async () => {
   await rm(RUN_DIR, { recursive: true, force: true });
   await replSet.stop();
 }, 30000);
+
+it("keeps a boot seed failure's code, parameters and stack while continuing startup", async () => {
+  const seed = join(fixtureRoot, "operations", "seeds", "WorkOrder.seed.json");
+  await writeJson(seed, [{ _id: "BO-3", customer: "Fixture", docstatus: 5 }]);
+  logError.mockClear();
+  try {
+    const engine = await boot({ demoTenant: true, seedDemo: false });
+    const failure = logError.mock.calls.find(([, message]) => message === "Boot app-data seed failed (non-fatal) — continuing startup");
+    expect(failure).toBeDefined();
+    expect(failure![0].err).toMatchObject({ code: "seed_row_docstatus_invalid", params: { doctype: "WorkOrder", row: "BO-3", value: "5" } });
+    expect(failure![0].err.stack).toEqual(expect.any(String));
+    const meta = await engine.app.inject({ method: "GET", url: "/api/v1/meta/WorkOrder", headers: engine.admin });
+    expect(meta.statusCode).toBe(200);
+  } finally {
+    await rm(seed);
+  }
+}, 60000);
 
 /** The demo reset is not there: no definition, and a call answers as one on an unknown entity. */
 async function expectNoDemoReset({ app, registry, admin }: Boot): Promise<void> {

@@ -653,7 +653,7 @@ export async function createApp(
         );
       } catch (e) {
         log.error(
-          { err: (e as Error).message },
+          { err: e },
           "Boot app-data seed failed (non-fatal) — continuing startup",
         );
       }

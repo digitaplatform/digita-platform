@@ -10,6 +10,7 @@ import { createLogger } from "../logging/logger.js";
 import { listWritesUnderWay, markReseedRunning, writesEnded } from "./reseed-lock.js";
 import { env } from "../config/env.js";
 import { EngineError } from "../errors/engine-error.js";
+import { englishText } from "../../i18n.js";
 
 const log = createLogger("reseed-app-data");
 
@@ -61,8 +62,10 @@ export class ReseedSeedFailedError extends EngineError {
   constructor(
     readonly attempts: number,
     readonly reason: string,
+    cause?: unknown,
   ) {
     super("reseed_seed_failed", { attempts: String(attempts), error: reason }, 500, "RESEED_FAILED");
+    this.cause = cause;
   }
 }
 
@@ -195,11 +198,11 @@ async function reseedOnce(mode: ReseedMode, deps: ReseedDeps): Promise<ReseedSum
       await seedDataTranslations(db, registry, translationService, seedDirs);
       break;
     } catch (e) {
-      const message = (e as Error).message;
+      const message = e instanceof EngineError ? englishText(e.code, e.params) ?? e.message : (e as Error).message;
       if (attempt >= SEED_ATTEMPTS) {
-        throw new ReseedSeedFailedError(attempt, message);
+        throw new ReseedSeedFailedError(attempt, message, e);
       }
-      log.warn({ attempt, err: message }, "seed after the wipe failed; running it again");
+      log.warn({ attempt, err: e }, "seed after the wipe failed; running it again");
     }
   }
 
