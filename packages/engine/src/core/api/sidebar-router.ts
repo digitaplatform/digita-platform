@@ -54,14 +54,16 @@ export function registerSidebarRoutes(
       // getDoc's field filtering — a version row must not leak a gated field's
       // old/new values. The document is passed so an if_owner / condition / scope
       // level grant counts only where it holds on it; without it every such grant
-      // counts. `null` = all fields readable (admin / unrestricted).
+      // counts. A reader whom only a share admits reads level 0, as getDoc shows it.
+      // `null` = all fields readable (admin / unrestricted).
       const user = request.user as UserContext | undefined;
-      const readable = user ? permissionChecker.getReadableFields(user, doctype, doc._data) : null;
+      const sharedForRead = user ? await documentService.isSharedForReadOnly(user, doctype, doc._data) : false;
+      const readable = user ? permissionChecker.getReadableFields(user, doctype, doc._data, sharedForRead) : null;
       const result =
         user && readable
           ? versions.map((v) =>
               maskVersionChanges(v, readable, (table) =>
-                permissionChecker.getReadableChildFields(user, doctype, table, doc._data),
+                permissionChecker.getReadableChildFields(user, doctype, table, doc._data, sharedForRead),
               ),
             )
           : versions;

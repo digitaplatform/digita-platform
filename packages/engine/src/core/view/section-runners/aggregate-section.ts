@@ -1,4 +1,5 @@
 import type { AggregateSection, EntityDefinition } from "@digitaplatform/shared";
+import { IDENTITY_FIELDS, OPERATOR_FIELDS } from "@digitaplatform/shared";
 import type { Document } from "mongodb";
 import type { MongoDBService } from "../../database/mongodb-service.js";
 import type { EntityRegistry } from "../../entity/entity-registry.js";
@@ -108,7 +109,7 @@ export async function runAggregateSection(
     readableByEntity.set(name, deps.permissionChecker.getReadableFieldsOnEveryRow(user, name));
     const def = deps.registry.get(name);
     const fieldList = def.fields ?? [];
-    allFieldsByEntity.set(name, new Set(fieldList.map((f) => f.fieldname)));
+    allFieldsByEntity.set(name, new Set([...fieldList.map((f) => f.fieldname), ...OPERATOR_FIELDS]));
   };
   learnEntity(section.entity);
   for (const fromEntity of lookupTargets) learnEntity(fromEntity);
@@ -250,6 +251,7 @@ function hiddenPaths(
 ): string[] {
   const hidden = new Set(passwordFields(def));
   if (readable) {
+    for (const field of OPERATOR_FIELDS) if (!readable.has(field)) hidden.add(field);
     for (const f of def.fields ?? []) {
       if (META_FIELDS.has(f.fieldname) || f.fieldname.startsWith("_") || hidden.has(f.fieldname)) continue;
       if (!readable.has(f.fieldname)) {
@@ -360,16 +362,7 @@ function maskForeignDoc(doc: unknown, readable: Set<string>): unknown {
   return out;
 }
 
-const META_FIELDS = new Set([
-  "_id",
-  "_row_id",
-  "doctype",
-  "docstatus",
-  "owner",
-  "modified_by",
-  "creation",
-  "modified",
-]);
+const META_FIELDS = new Set([...IDENTITY_FIELDS, "_row_id"]);
 
 function filterAggregateRow(
   row: Document,

@@ -17,6 +17,7 @@ import { getFieldTypeHandler, isStoredFieldType, FieldValueError, readStoredRow 
 import { foreignPasswordValue, withStoredPasswords } from "../entity/password-cipher.js";
 import { copyDocumentData } from "./copy-service.js";
 import { projectFields } from "./project-fields.js";
+import { readQueryMask, storedIdFilter } from "./read-query-mask.js";
 import { resolveDefaults, applyNewChildRowDefaults, type DefaultContext } from "../defaults/default-resolver.js";
 import { applyScopeFilters, applyRoleVisibilityFilter, isRoleVisible, readsThroughRoleList } from "../permissions/scope-filter.js";
 import { env } from "../config/env.js";
@@ -448,8 +449,10 @@ export class DocumentService {
   }
 
   /** Whether only a share admits the user to the row, which then shows its level-0 fields. */
-  private async isSharedForReadOnly(user: UserContext, doctype: string, data: Record<string, unknown>): Promise<boolean> {
-    return !(await this.permissionChecker.hasPermission(user, doctype, "read", data)).allowed;
+  async isSharedForReadOnly(user: UserContext, doctype: string, data: Record<string, unknown>): Promise<boolean> {
+    if ((await this.permissionChecker.hasPermission(user, doctype, "read", data)).allowed || !user.email ||
+      !isRoleVisible(this.registry.get(doctype), user, data)) return false;
+    return this.documentShareService.hasShare(doctype, String(data["_id"]), user.email, "read");
   }
 
   /** The stored document, for a user who may read it, as `getDoc` checks that. */
@@ -609,12 +612,21 @@ export class DocumentService {
     const sharedIds = user.email
       ? await this.documentShareService.sharedDocumentIds(doctype, user.email)
       : [];
-    if (sharedIds.length > 0 && Object.keys(scopedFilter).length > 0) {
+    // Classify against stored rows: an existing share must not narrow a read RBAC already admits.
+    const sharedOnly = new Set<string>();
+    if (sharedIds.length > 0) {
+      const sharedRows = await this.db.find(entity.name, { filters: [{ _id: { $in: sharedIds } }] }, entity.database, options.session);
+      for (const stored of sharedRows) {
+        const row = readStoredRow(entity, stored);
+        if (await this.isSharedForReadOnly(user, doctype, row)) sharedOnly.add(String(row["_id"]));
+      }
+    }
+    if (sharedOnly.size > 0 && Object.keys(scopedFilter).length > 0) {
       const base = baseFilter as Record<string, unknown>;
       const sharedBranch =
         Object.keys(base).length > 0
-          ? { $and: [base, { _id: { $in: sharedIds } }] }
-          : { _id: { $in: sharedIds } };
+          ? { $and: [base, { _id: { $in: [...sharedOnly] } }] }
+          : { _id: { $in: [...sharedOnly] } };
       effectiveFilter = { $or: [scopedFilter as Record<string, unknown>, sharedBranch] };
     }
 
@@ -634,12 +646,49 @@ export class DocumentService {
     const gatesRows =
       options.everyRowNeedsRead === true ||
       this.permissionChecker.hasConditionalRowRead(user, doctype);
-    const masksStoredRows = gatesRows || this.permissionChecker.hasRowDependentRead(user, doctype);
+    const masksStoredRows = gatesRows || sharedOnly.size > 0 || this.permissionChecker.hasRowDependentRead(user, doctype);
 
     const dbTarget = entity.database;
     let docs: Record<string, unknown>[];
     let total: number;
-    if (gatesRows) {
+    if (sharedOnly.size > 0) {
+      const securityScope = applyRoleVisibilityFilter(entity, user, applyScopeFilters(entity, user, {}));
+      const sharedFilter = storedIdFilter({ _id: { $in: [...sharedOnly] } });
+      const admission = { $or: [storedIdFilter(securityScope), sharedFilter] };
+      const fields = this.permissionChecker.getReadableFields(user, doctype, undefined, true);
+      const tables = new Map<string, ReadonlySet<string>>();
+      for (const field of entity.fields) {
+        if (field.fieldtype !== "Table") continue;
+        const children = this.permissionChecker.getReadableChildFields(user, doctype, field.fieldname, undefined, true);
+        if (children) tables.set(field.fieldname, children);
+      }
+      // Security/scope use stored rows. Caller comparisons use the shared reader's visible values.
+      const pipeline = [
+        { $match: { $and: [admission, storedIdFilter(options.scope ?? {})] } },
+        { $replaceWith: { $cond: [{ $in: [{ $toString: "$_id" }, { $literal: [...sharedOnly] }] }, fields === null ? "$$ROOT" : readQueryMask(fields, tables), "$$ROOT"] } },
+        { $match: storedIdFilter(baseFilter as Record<string, unknown>) },
+        { $facet: {
+          total: [{ $count: "count" }],
+          data: [...(sort ? [{ $sort: sort }] : []),
+            ...(gatesRows ? [{ $limit: env.LIST_GATED_MAX_ROWS + 1 }] : [{ $skip: offset }, { $limit: limit }]),
+            { $project: { _id: 1 } }],
+        } },
+      ];
+      const [matched] = await this.db.aggregate(entity.name, pipeline, dbTarget, options.session);
+      total = (matched?.["total"] as Array<{ count: number }> | undefined)?.[0]?.count ?? 0;
+      if (gatesRows && total > env.LIST_GATED_MAX_ROWS) throw new GatedListTooBroadError(doctype, env.LIST_GATED_MAX_ROWS);
+      const rows = await this.loadRowsInOrder(entity, ((matched?.["data"] ?? []) as Record<string, unknown>[]).map((row) => row["_id"]), options.session);
+      if (gatesRows) {
+        const readable: Record<string, unknown>[] = [];
+        for (const row of rows) {
+          if (sharedOnly.has(String(row["_id"])) || (await this.permissionChecker.hasPermission(user, doctype, "read", row)).allowed) readable.push(row);
+        }
+        total = readable.length;
+        docs = readable.slice(offset, offset + limit);
+      } else {
+        docs = rows;
+      }
+    } else if (gatesRows) {
       // The page and the total both come from the rows the user may read. A total
       // over every matching row counts hidden rows past the page, and a filter then
       // reads a hidden row's values one answer at a time.
@@ -670,9 +719,8 @@ export class DocumentService {
 
     // A row shared with the user for reading shows what a level-0 read shows, as in
     // getDoc, so a filter or a sort that matched it never read a value it masks.
-    const shared = new Set(sharedIds.map(String));
     const mask = (doc: Record<string, unknown>) =>
-      this.permissionChecker.filterFieldsForRead(user, doctype, doc, shared.has(String(doc["_id"])));
+      this.permissionChecker.filterFieldsForRead(user, doctype, doc, sharedOnly.has(String(doc["_id"])));
     docs = masksStoredRows
       ? docs.map((doc) => projectFields(mask(doc), query.fields))
       : docs.map(mask);

@@ -387,10 +387,9 @@ export class PermissionChecker {
     }
 
     const entity = this.registry.get(entityName);
-    const rows: ReadRow[] = permissionRowsFor(entity, user).filter(
+    const rows: ReadRow[] = readsLevel0 ? [{ level: 0 }] : permissionRowsFor(entity, user).filter(
       (perm) => user.roles.includes(perm.role) && !!perm.read && admits(perm),
     );
-    if (readsLevel0) rows.push({ level: 0 });
     return readableFields(entity.fields, rows);
   }
 
@@ -440,10 +439,9 @@ export class PermissionChecker {
     const entity = this.registry.get(entityName);
     const tableField = entity.fields.find((f) => f.fieldname === tableFieldname);
     if (!tableField) return null;
-    const rows: ReadRow[] = permissionRowsFor(entity, user).filter(
+    const rows: ReadRow[] = readsLevel0 ? [{ level: 0 }] : permissionRowsFor(entity, user).filter(
       (perm) => user.roles.includes(perm.role) && !!perm.read && admits(perm),
     );
-    if (readsLevel0) rows.push({ level: 0 });
     return readableChildFields(tableField, rows);
   }
 
@@ -547,12 +545,12 @@ export class PermissionChecker {
    *  search and sort `entityName` on: the entity's declared fields + Table child
    *  fields for a reader of every level, otherwise getFilterableFields; + the
    *  identity fields, and `owner` and `modified_by` where every row the list answers
-   *  shows them: always where no read row names `fields` (P-SEC/R7). */
+   *  shows them through an ungated read or every admitting level-0 read. */
   getFilterAllowlist(user: UserContext, entityName: string): Set<string> {
     const entity = this.registry.get(entityName);
     const filterable = this.getFilterableFields(user, entityName);
     const reads = permissionRowsFor(entity, user).filter((perm) => !!perm.read && user.roles.includes(perm.role));
-    const showsOperatorFields = !reads.some((row) => row.fields) || opensOnEveryListedRow(reads, (row) => !row.fields);
+    const showsOperatorFields = opensOnEveryListedRow(reads, (row) => !row.fields);
     const operatorFields = filterable === null || showsOperatorFields ? OPERATOR_FIELDS : [];
     return new Set<string>([
       ...(filterable ?? [

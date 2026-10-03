@@ -58,6 +58,7 @@ let db: MongoDBService;
 let adminTok: string;
 let clerkTok: string;
 let orderId: string;
+let signToken: Awaited<ReturnType<typeof buildTestAuth>>["sign"];
 
 /** A change-tracked order whose line cost only level 1 reads; the Clerk reads level 0 alone. */
 const ORDER: EntityDefinition = {
@@ -85,6 +86,7 @@ const ORDER: EntityDefinition = {
     { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
     { role: "Administrator", level: 1, read: 1, write: 1 },
     { role: "Clerk", level: 0, select: 1, read: 1 },
+    { role: "Field Reader", level: 1, read: 1, fields: ["lines"] },
   ],
 } as unknown as EntityDefinition;
 
@@ -103,6 +105,7 @@ beforeAll(async () => {
   (env as unknown as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
 
   const ta = await buildTestAuth();
+  signToken = ta.sign;
   const result = await createApp({ authn: ta.authn });
   app = result.app;
   db = result.db;
@@ -149,5 +152,34 @@ describe("GET /resource/:doctype/:name/versions masks the Table cells a reader m
     const lines = (await changes(adminTok)).find((c) => c.field === "lines")!;
     expect(lines.old).toEqual([expect.objectContaining({ item: "Bolt", cost: 5 })]);
     expect(lines.new).toEqual([expect.objectContaining({ item: "Bolt M6", cost: 7 })]);
+  });
+
+  it("shows a share-only reader the level-0 Table cells and hides level-1 cells", async () => {
+    const shared = await app.inject({
+      method: "POST", url: "/api/v1/resource/DocShare", headers: bearer(adminTok),
+      payload: { entity: ORDER.name, document_name: orderId, shared_with: "guest@d", can_read: true, notify: false },
+    });
+    expect(shared.statusCode).toBe(201);
+    const guest = await signToken({ sub: "guest@d", email: "guest@d", roles: ["System User"] });
+    const lines = (await changes(guest)).find((change) => change.field === "lines")!;
+    expect(lines.old).toEqual([expect.objectContaining({ item: "Bolt" })]);
+    expect(lines.new).toEqual([expect.objectContaining({ item: "Bolt M6" })]);
+    expect(JSON.stringify([lines.old, lines.new])).not.toContain("cost");
+  });
+
+  it("does not add a field-level grant to the cells a share-only reader sees", async () => {
+    const shared = await app.inject({
+      method: "POST", url: "/api/v1/resource/DocShare", headers: bearer(adminTok),
+      payload: { entity: ORDER.name, document_name: orderId, shared_with: "field-reader@d", can_read: true, notify: false },
+    });
+    expect(shared.statusCode).toBe(201);
+    const token = await signToken({ sub: "field-reader@d", email: "field-reader@d", roles: ["Field Reader"] });
+    const lines = (await changes(token)).find((change) => change.field === "lines")!;
+    expect(lines.old).toEqual([expect.objectContaining({ item: "Bolt" })]);
+    expect(lines.new).toEqual([expect.objectContaining({ item: "Bolt M6" })]);
+    expect(JSON.stringify([lines.old, lines.new])).not.toContain("cost");
+    const read = await app.inject({ method: "GET", url: `/api/v1/resource/${ORDER.name}/${orderId}`, headers: bearer(token) });
+    expect(read.statusCode).toBe(200);
+    expect(JSON.stringify(read.json().data.lines)).not.toContain("cost");
   });
 });
