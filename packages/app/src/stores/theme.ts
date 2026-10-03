@@ -10,12 +10,15 @@ import {
   cacheDrawnSignature,
   cacheModeLock,
   drawnSignature as drawnLookSignature,
+  getSignature,
   isModeLocked as isLookModeLocked,
   lookCookieDomain,
   rememberIdentityChoices,
   resolveInitialDensity,
   resolveInitialMode,
+  showTabIcon,
   storeIdentityPreferences,
+  tabIconHref,
   IDENTITY_PREFERENCE_KEYS,
   type LookCacheKeys,
   type ThemeMode,
@@ -109,16 +112,6 @@ function drawnSignature(branding: BootBranding | null): string {
   return drawnLookSignature(branding, LOOK_CACHE_KEYS);
 }
 
-// The page's icon: the tenant's favicon, else the platform's, which main.tsx puts in place at
-// start. One link element is kept, so a branding without a favicon puts the platform's back.
-function showFavicon(href: string): void {
-  const link =
-    document.head.querySelector<HTMLLinkElement>('link[rel="icon"]') ??
-    document.head.appendChild(Object.assign(document.createElement('link'), { rel: 'icon' }));
-  link.removeAttribute('type');
-  link.setAttribute('href', href);
-}
-
 // Keep a choice on the person's account, which the app and the website read at their next load.
 // A write the account refuses is logged with its key, so a choice lost there is not silent.
 function keepChoiceOnAccount(key: string, value: string): void {
@@ -136,6 +129,8 @@ function applySignatureLayered(id: string, get: () => ThemeState): void {
   const branding = get().branding;
   if (branding) applyBranding(branding);
   applyDensity(get().density);
+  // The tab shows the tenant's favicon, else the signature's icon, else the platform's.
+  showTabIcon(tabIconHref(brandingImageUrl(branding?.favicon), getSignature(id)) ?? faviconUrl);
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
@@ -187,7 +182,6 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     const mode = isNowModeLocked ? 'system' : wasModeLocked ? resolveInitialMode() : get().mode;
     if (mode !== get().mode || isNowModeLocked !== wasModeLocked) applyMode(mode);
     set({ branding, density: resolveInitialDensity(undefined, branding.density), mode });
-    showFavicon(brandingImageUrl(branding.favicon) ?? faviconUrl);
     get().reapplySignature();
   },
   loadRemotePrefs: async () => {

@@ -3,6 +3,7 @@ import { DIGITA } from "@digitaplatform/shared";
 import type { MongoDBService } from "../database/mongodb-service.js";
 import { createLogger } from "../logging/logger.js";
 import { validateViewDefinition } from "./view-validator.js";
+import { EngineError } from "../errors/engine-error.js";
 
 const log = createLogger("view-registry");
 
@@ -82,7 +83,7 @@ export class ViewRegistry {
 
   get(name: string): ViewDefinition {
     const v = this.views.get(name);
-    if (!v) throw new Error(`View "${name}" not found in registry`);
+    if (!v) throw new EngineError("view_not_found", { view: name }, 404, "VIEW_NOT_FOUND");
     return v;
   }
 

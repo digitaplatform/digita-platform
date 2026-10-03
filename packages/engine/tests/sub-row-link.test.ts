@@ -87,7 +87,7 @@ describe("LinkValidator — target_path sub-row Links", () => {
       invoice_address: "no-separator",
     });
     expect(errs.length).toBe(1);
-    expect(errs[0]!.message_key).toBe("link_subrow_malformed");
+    expect(errs[0]!.code).toBe("link_subrow_malformed");
   });
 
   it("rejects when parent doc is missing", async () => {
@@ -100,7 +100,7 @@ describe("LinkValidator — target_path sub-row Links", () => {
       invoice_address: "CUST-MISSING::row-aaa",
     });
     expect(errs.length).toBe(1);
-    expect(errs[0]!.message_key).toBe("link_not_found");
+    expect(errs[0]!.code).toBe("link_not_found");
   });
 
   it("rejects when row id doesn't match any row in target Table", async () => {
@@ -116,7 +116,7 @@ describe("LinkValidator — target_path sub-row Links", () => {
       invoice_address: "CUST-1::row-zzz",
     });
     expect(errs.length).toBe(1);
-    expect(errs[0]!.message_key).toBe("link_subrow_not_found");
+    expect(errs[0]!.code).toBe("link_subrow_not_found");
   });
 
   it("rejects when target Table is missing on the parent", async () => {
@@ -129,6 +129,6 @@ describe("LinkValidator — target_path sub-row Links", () => {
       invoice_address: "CUST-1::row-aaa",
     });
     expect(errs.length).toBe(1);
-    expect(errs[0]!.message_key).toBe("link_subrow_table_missing");
+    expect(errs[0]!.code).toBe("link_subrow_table_missing");
   });
 });

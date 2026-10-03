@@ -150,7 +150,7 @@ async function refusal(save: Promise<unknown>): Promise<{ field: string; error: 
   const err = await save.then(() => undefined, (e: unknown) => e);
   expect(err).toBeInstanceOf(ValidationFailedError);
   const [first] = (err as ValidationFailedError).errors;
-  expect(first?.message_key).toBe("view_invalid");
+  expect(first?.code).toBe("view_invalid");
   return { field: first!.field, error: first!.params?.["error"] };
 }
 

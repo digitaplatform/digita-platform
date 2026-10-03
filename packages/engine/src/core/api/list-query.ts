@@ -27,7 +27,7 @@ export function wholeNumberParam(query: Record<string, unknown>, name: string, m
   if (raw === undefined || raw === "") return undefined;
   const value = typeof raw === "string" && /^\d+$/.test(raw) ? Number(raw) : NaN;
   if (!Number.isSafeInteger(value) || value < min) {
-    throw new BadRequestError(`${name} must be a whole number of at least ${min}`);
+    throw new BadRequestError("param_not_whole_number", { param: name, min: String(min) });
   }
   return value;
 }
@@ -35,7 +35,7 @@ export function wholeNumberParam(query: Record<string, unknown>, name: string, m
 function oneStringParam(query: Record<string, unknown>, name: string): string | undefined {
   const raw = query[name];
   if (raw === undefined) return undefined;
-  if (typeof raw !== "string") throw new BadRequestError(`${name} must be given once`);
+  if (typeof raw !== "string") throw new BadRequestError("param_given_twice", { param: name });
   return raw;
 }
 
@@ -44,7 +44,7 @@ function filterTuplesParam(query: Record<string, unknown>, name: string): ListQu
   if (value === undefined) return undefined;
   const isTuple = (t: unknown) => Array.isArray(t) && t.length === 3 && typeof t[0] === "string" && typeof t[1] === "string";
   if (!Array.isArray(value) || !value.every(isTuple)) {
-    throw new BadRequestError(`${name} must be a list of [field, operator, value]`);
+    throw new BadRequestError("param_not_filter_list", { param: name });
   }
   return value as ListQuery["filters"];
 }
@@ -55,6 +55,6 @@ export function jsonParam(query: Record<string, unknown>, name: string): unknown
   try {
     return JSON.parse(raw as string);
   } catch {
-    throw new BadRequestError(`${name} is not JSON`);
+    throw new BadRequestError("param_not_json", { param: name });
   }
 }

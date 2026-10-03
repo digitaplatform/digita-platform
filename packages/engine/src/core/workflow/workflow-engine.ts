@@ -10,10 +10,11 @@ import type { RuleEngine } from "../rules/rule-engine.js";
 import type { UserContext } from "../permissions/types.js";
 import { evaluateExpression } from "../expression/expression-evaluator.js";
 import { createLogger } from "../logging/logger.js";
+import { EngineError } from "../errors/engine-error.js";
 
 const log = createLogger("workflow-engine");
 
-export class IllegalTransitionError extends Error {
+export class IllegalTransitionError extends EngineError {
   constructor(
     public entity: string,
     public from: string | undefined,
@@ -25,8 +26,7 @@ export class IllegalTransitionError extends Error {
       | "from_terminal"
       | "no_initial_state",
   ) {
-    super(`Illegal workflow transition on ${entity}: ${from ?? "(initial)"} → ${to} (${reason})`);
-    this.name = "IllegalTransitionError";
+    super("illegal_transition", { doctype: entity, from: from ?? "", to, reason }, 409, "ILLEGAL_TRANSITION");
   }
 }
 
@@ -82,7 +82,7 @@ function isNoState(value: unknown): boolean {
  * carries `docstatus_default`. Fail loud: the entity author must declare which state
  * the flip lands in, rather than the engine guessing by declaration order.
  */
-export class AmbiguousDocStatusStateError extends Error {
+export class AmbiguousDocStatusStateError extends EngineError {
   constructor(
     public entity: string,
     public docStatus: 0 | 1 | 2,
@@ -90,11 +90,11 @@ export class AmbiguousDocStatusStateError extends Error {
     public reason: "no_default" | "multiple_default",
   ) {
     super(
-      `Ambiguous state for docstatus ${docStatus} on ${entity}: candidates [${candidates.join(
-        ", ",
-      )}] (${reason}). Declare docstatus_default:true on exactly one.`,
+      "docstatus_state_ambiguous",
+      { doctype: entity, docstatus: String(docStatus), states: candidates.join(", "), reason },
+      500,
+      "AMBIGUOUS_DOCSTATUS_STATE",
     );
-    this.name = "AmbiguousDocStatusStateError";
   }
 }
 

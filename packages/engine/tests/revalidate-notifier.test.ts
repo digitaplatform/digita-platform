@@ -102,12 +102,12 @@ describe("RevalidateNotifier.assertSettings at start-up", () => {
 
   it("names REVALIDATE_URL when an entity grants Guest read and it is missing", async () => {
     await expect(notifier({ REVALIDATE_URL: "", REVALIDATE_SECRET: SECRET }).assertSettings(all))
-      .rejects.toThrow("Missing required environment variable: REVALIDATE_URL (WebPage grants Guest read)");
+      .rejects.toMatchObject({ code: "setting_missing_for_guest_read", params: { setting: "REVALIDATE_URL", doctype: "WebPage" } });
   });
 
   it("names REVALIDATE_SECRET when an entity grants Guest read and it is missing", async () => {
     await expect(notifier({ REVALIDATE_URL: URL, REVALIDATE_SECRET: "" }).assertSettings(all))
-      .rejects.toThrow("Missing required environment variable: REVALIDATE_SECRET (WebPage grants Guest read)");
+      .rejects.toMatchObject({ code: "setting_missing_for_guest_read", params: { setting: "REVALIDATE_SECRET", doctype: "WebPage" } });
   });
 
   it("passes with both settings", async () => {

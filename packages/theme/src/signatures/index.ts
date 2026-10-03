@@ -52,6 +52,9 @@ export interface Signature {
   /** Inline SVG wordmark lockup (self-contained, own colours) — the wide brand
    *  chrome variant; falls back to the app name text when absent. */
   wordmark?: string;
+  /** Inline SVG of the browser tab's icon (self-contained, own colours). A page that wears the
+   *  signature shows it where the tenant set no favicon; without it the tab shows the platform's. */
+  icon?: string;
   /** The brand COLOUR WORLD: semantic token → {light,dark}. Written inline as
    *  `--color-<token>: light-dark(light, dark)`, so canvas/surface/text/border
    *  flip with the mode. Keys are theme token names (bg, surface, textMain, …).

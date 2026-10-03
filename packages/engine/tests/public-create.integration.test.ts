@@ -194,7 +194,8 @@ describe("POST /api/v1/public/resource/:doctype", () => {
       // The website's record route reads this code to answer a refused field as the form's 403,
       // apart from a value the visitor got wrong (VALIDATION_ERROR, below).
       expect((res.json().error as { code: string }).code, key).toBe("BAD_REQUEST");
-      expect((res.json().error as { detail: string }).detail, key).toContain(`"${key}"`);
+      expect((res.json().error as { detail: string }).detail, key).toBe("public_field_not_settable");
+      expect(res.json().messages[0].text, key).toContain(`field ${key} of Lead`);
     }
     expect(await leads()).toBe(before);
   });
@@ -223,7 +224,8 @@ describe("POST /api/v1/public/resource/:doctype", () => {
     for (const [doctype, visitor] of [["NamedLead", "203.0.113.11"], ["CodedLead", "203.0.113.13"]] as const) {
       const res = await post(doctype, { code: "chosen", text: "x" }, visitor);
       expect(res.statusCode, doctype).toBe(400);
-      expect((res.json().error as { detail: string }).detail, doctype).toContain('"code"');
+      expect((res.json().error as { detail: string }).detail, doctype).toBe("public_field_not_settable");
+      expect(res.json().messages[0].text, doctype).toContain(`field code of ${doctype}`);
     }
   });
 

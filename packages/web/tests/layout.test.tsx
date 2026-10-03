@@ -6,6 +6,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { WebSite } from "../src/lib/types";
 
 vi.mock("server-only", () => ({}));
+// Next imports an svg as a static image; the test stands in for it with the address.
+vi.mock("@digitaplatform/theme/favicon.svg", () => ({ default: { src: "/platform-favicon.svg" } }));
 vi.mock("../src/i18n/messages", () => ({ t: (key: string) => key }));
 const redirect = vi.fn((url: string): never => {
   throw new Error(`redirect ${url}`);
@@ -24,11 +26,13 @@ vi.mock("next/headers", () => ({
 }));
 
 let site: WebSite;
+/** The engine answers no readable row for SITE_ID. */
+let siteMissing = false;
 let publishedSlugs: Record<string, string[]> = { en: [""], de: [""] };
 let websiteLook: string | undefined;
 let branding: Record<string, unknown> | null = null;
 vi.mock("../src/lib/engine-client", () => ({
-  getSite: async () => site,
+  getSite: async () => (siteMissing ? null : site),
   getNav: async () => null,
   getBranding: async () => branding,
   findWebsiteSignature: async () => websiteLook,
@@ -56,7 +60,8 @@ Object.assign(process.env, {
   TENANT_APPS: "crm",
 });
 
-const { default: LocaleLayout } = await import("../src/app/[locale]/layout");
+const { default: LocaleLayout, generateMetadata } = await import("../src/app/[locale]/layout");
+const { registerSignature } = await import("@digitaplatform/theme");
 
 async function render(): Promise<string> {
   const page = await LocaleLayout({ children: null, params: Promise.resolve({ locale: "en" }) });
@@ -65,6 +70,7 @@ async function render(): Promise<string> {
 
 beforeEach(() => {
   site = { _id: "example", site_name: "example", domain: "example.org" };
+  siteMissing = false;
   publishedSlugs = { en: [""], de: [""] };
   requestHeaders = { "x-nonce": "bm9uY2U=" };
   localeCookie = undefined;
@@ -155,6 +161,28 @@ describe("the locale layout", () => {
     }
   });
 
+  it("PLANTED DEFECT: names a site with no readable row and no app name by its look, never a fixed Digita", async () => {
+    siteMissing = true;
+    websiteLook = "simetrix";
+    try {
+      const html = await render();
+      // PLANTED INNOCENT: the look is drawn, so a missing name means the brand was looked for.
+      expect(html).toContain('data-signature="simetrix"');
+      expect(html).toContain('aria-label="simetrix"');
+      expect(html).not.toMatch(/>Digita</);
+      expect(html).not.toContain('aria-label="Digita"');
+    } finally {
+      websiteLook = undefined;
+    }
+  });
+
+  it("PLANTED DEFECT: writes the app name as text where the site's name is empty, not under the look's wordmark", async () => {
+    site = { ...site, site_name: "", theme: "simetrix" };
+    branding = { app_name: "Acme" };
+    const html = await render();
+    expect([/>Acme</.test(html), html.includes('aria-label="Acme"')]).toEqual([true, false]);
+  });
+
   it("draws a site without a theme in the website look the tenant's settings name", async () => {
     site = { ...site, theme: undefined };
     websiteLook = "veloluck-workbench";
@@ -184,5 +212,27 @@ describe("the locale layout", () => {
   it("PLANTED DEFECT: refuses a request the middleware did not give a nonce, instead of writing a script the policy blocks", async () => {
     requestHeaders = {};
     await expect(render()).rejects.toThrow("x-nonce");
+  });
+});
+
+describe("the tab icon of a site", () => {
+  const tabIcon = async () => {
+    const icons = (await generateMetadata()).icons as { icon: { url: string; type: string } };
+    return icons.icon;
+  };
+
+  it("shows the icon of the signature the site names", async () => {
+    registerSignature({ id: "tab-icon-test", name: "Tab icon test", accent: "#112233", icon: '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>' });
+    site = { ...site, theme: "tab-icon-test" };
+    expect(await tabIcon()).toEqual({
+      url: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>')}`,
+      type: "image/svg+xml",
+    });
+  });
+
+  it("PLANTED INNOCENT: shows the platform's icon where the signature names none", async () => {
+    registerSignature({ id: "tab-icon-none", name: "No tab icon", accent: "#112233" });
+    site = { ...site, theme: "tab-icon-none" };
+    expect(await tabIcon()).toEqual({ url: "/platform-favicon.svg", type: "image/svg+xml" });
   });
 });

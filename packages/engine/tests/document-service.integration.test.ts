@@ -333,7 +333,7 @@ describe("DocumentService Integration", () => {
     it("rejects insert when linked document does not exist", async () => {
       await expect(
         docService.insert("Invoice", { title: "INV 2", customer: "GHOST-CUST" }, adminUser),
-      ).rejects.toThrow(/Validation failed/);
+      ).rejects.toMatchObject({ code: "validation_failed", errors: [expect.objectContaining({ field: "customer", code: "link_not_found" })] });
     });
   });
 
@@ -694,7 +694,7 @@ describe("A Table write that repeats a _row_id is refused", () => {
       ),
     );
     expect(err.errors).toEqual([
-      expect.objectContaining({ field: "checklist[1]", message_key: "table_row_repeated" }),
+      expect.objectContaining({ field: "checklist[1]", code: "table_row_repeated" }),
     ]);
     expect(await storedRows(created._id)).toEqual([stored]);
   });
@@ -1111,8 +1111,8 @@ describe("Available actions (ActionRunner)", () => {
     const doc = await docService.insert("Actionable", { status: "Done" }, adminUser);
     await expect(docService.runAction("Actionable", doc._id, "approve", adminUser)).rejects.toMatchObject({
       name: "ActionNotAvailableError",
-      statusCode: 409,
-      messageKey: "action_not_available",
+      status: 409,
+      code: "action_not_available",
       params: { action: "Approve" },
     });
   });
@@ -1428,7 +1428,7 @@ describe("Int field — a fraction is refused, not cut to a whole number", () =>
   const refusedKeys = (write: Promise<unknown>) =>
     write.then(
       () => "stored",
-      (e: unknown) => (e instanceof ValidationFailedError ? e.errors.map((x) => [x.field, x.message_key]) : e),
+      (e: unknown) => (e instanceof ValidationFailedError ? e.errors.map((x) => [x.field, x.code]) : e),
     );
 
   it("refuses 1.9 and \"1.9\" on insert and on update with field_invalid_int on the field", async () => {
@@ -2300,16 +2300,16 @@ describe("A Link names only a row its writer may select", () => {
   });
 
   const refusal = async (write: Promise<unknown>) => {
-    const err = (await write.then(() => undefined, (e: unknown) => e)) as { errors?: Array<{ field: string; message_key: string }> };
+    const err = (await write.then(() => undefined, (e: unknown) => e)) as { errors?: Array<{ field: string; code: string }> };
     return err?.errors;
   };
 
   it("refuses a create that links a row the writer may not select, as a row that does not exist", async () => {
     const unselectable = await refusal(docService.insert("SelOrder", { title: "x", product: "INT-1" }, seller));
     const missing = await refusal(docService.insert("SelOrder", { title: "x", product: "NONE-1" }, seller));
-    expect(unselectable).toEqual([expect.objectContaining({ field: "product", message_key: "link_not_found" })]);
+    expect(unselectable).toEqual([expect.objectContaining({ field: "product", code: "link_not_found" })]);
     // The same answer as an id nobody has: only the value it names differs.
-    const shape = (errs?: Array<{ field: string; message_key: string }>) => errs?.map((e) => [e.field, e.message_key]);
+    const shape = (errs?: Array<{ field: string; code: string }>) => errs?.map((e) => [e.field, e.code]);
     expect(shape(missing)).toEqual(shape(unselectable));
   });
 
@@ -2325,7 +2325,7 @@ describe("A Link names only a row its writer may select", () => {
     await docService.update("SelOrder", order._id, { title: "renamed" }, seller);
     const shop = await docService.insert("SelOrder", { title: "y", product: "SHOP-1" }, seller);
     const moved = await refusal(docService.update("SelOrder", shop._id, { product: "INT-1" }, seller));
-    expect(moved).toEqual([expect.objectContaining({ field: "product", message_key: "link_not_found" })]);
+    expect(moved).toEqual([expect.objectContaining({ field: "product", code: "link_not_found" })]);
   });
 
   it("copies and amends an order whose Links an Administrator set, as the Links were stored", async () => {
@@ -2339,7 +2339,7 @@ describe("A Link names only a row its writer may select", () => {
   });
 
   it("judges a Link in a Table row as a header Link: new or moved refused, kept as stored", async () => {
-    const rowRefusal = [expect.objectContaining({ field: expect.stringContaining("lines"), message_key: "link_not_found" })];
+    const rowRefusal = [expect.objectContaining({ field: expect.stringContaining("lines"), code: "link_not_found" })];
     expect(await refusal(docService.insert("SelOrder", { title: "x", lines: [{ product: "INT-1", qty: 1 }] }, seller))).toEqual(rowRefusal);
 
     const order = await docService.insert("SelOrder", { title: "x", lines: [{ product: "INT-1", qty: 1 }, { product: "SHOP-1", qty: 1 }] }, adminUser);
@@ -2357,7 +2357,7 @@ describe("A Link names only a row its writer may select", () => {
 
   it("refuses the preview of such a Link before it reads the row", async () => {
     const draft = await refusal(docService.preview("SelOrder", { title: "x", product: "INT-1" }, seller));
-    expect(draft).toEqual([expect.objectContaining({ field: "product", message_key: "link_not_found" })]);
+    expect(draft).toEqual([expect.objectContaining({ field: "product", code: "link_not_found" })]);
     const fine = await docService.preview("SelOrder", { title: "x", product: "SHOP-1" }, seller);
     expect(fine._data["secret"]).toBe("cost 4");
   });
@@ -2578,9 +2578,9 @@ describe("A Table cell is stored as a field of its type is", () => {
   it("refuses a cell its type refuses, on the cell's path", async () => {
     const refused = await docService.insert("TypedCellDoc", { title: "t", rows: [{ f0: "1" }, { f0: "0x10" }] }, adminUser).then(
       () => undefined,
-      (e: { errors?: Array<{ field: string; message_key: string }> }) => e.errors,
+      (e: { errors?: Array<{ field: string; code: string }> }) => e.errors,
     );
-    expect(refused).toEqual([expect.objectContaining({ field: "rows.1.f0", message_key: "field_invalid_int" })]);
+    expect(refused).toEqual([expect.objectContaining({ field: "rows.1.f0", code: "field_invalid_int" })]);
   });
 });
 

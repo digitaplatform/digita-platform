@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import { brandingStyle, darkBandIdentityRule, lookCookieDomain, signatureStyle, PAGE_IDENTITY_ELEMENT_ID } from "@digitaplatform/theme";
+import { brandingStyle, darkBandIdentityRule, lookCookieDomain, signatureStyle, tabIconHref, PAGE_IDENTITY_ELEMENT_ID } from "@digitaplatform/theme";
 import { IDENTITY_BOOT_SCRIPT } from "@digitaplatform/theme/identity-boot";
 import favicon from "@digitaplatform/theme/favicon.svg";
 import { SignatureBackdrop } from "@digitaplatform/components";
@@ -28,8 +28,13 @@ import { contactSheetTexts, designSwitcherTexts } from "@/components/chrome-text
 // fetches are cache-tagged with a runtime TTL (see engine-client).
 export const dynamic = "force-dynamic";
 
-// The favicon the app loads too, as metadata so every response carries it, 404s included.
-export const metadata: Metadata = { icons: { icon: { url: favicon.src, type: "image/svg+xml" } } };
+// The tab shows the icon of the site's signature, else the platform's, which the app loads too; as
+// metadata, so every response carries it, 404s included.
+export async function generateMetadata(): Promise<Metadata> {
+  const [site, websiteLook] = await Promise.all([getSite(), findWebsiteSignature()]);
+  const icon = tabIconHref(undefined, siteSignature(site?.theme, websiteLook)) ?? favicon.src;
+  return { icons: { icon: { url: icon, type: "image/svg+xml" } } };
+}
 
 export default async function LocaleLayout({
   children,
@@ -71,11 +76,12 @@ export default async function LocaleLayout({
     home: t("notFoundHome", locale as Locale),
   });
   // A website carries its own name: the site's `site_name` wins over the tenant's `app_name`,
-  // which names the tenant's apps, not its public site.
+  // which names the tenant's apps, not its public site. Without either, as when the engine answers
+  // no readable row for SITE_ID, the site wears its look's name, as the app does.
   const brand = {
-    name: site?.site_name ?? branding?.app_name ?? "Digita",
+    name: site?.site_name || branding?.app_name || signature.name,
     logoUrl: brandingImageUrl(branding?.logo),
-    nameIsCustom: Boolean(site?.site_name ?? branding?.app_name),
+    nameIsCustom: Boolean(site?.site_name || branding?.app_name),
     signature,
   };
   // The middleware makes a nonce per request; without it the boot script would not run under the

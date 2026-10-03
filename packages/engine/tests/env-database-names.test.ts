@@ -35,14 +35,15 @@ describe("a tenant engine's database names", () => {
   });
 
   it("stop the start when the grant is missing, naming it", async () => {
-    await expect(envWith({ ...tenant, MONGODB_DATABASE_NAMES: "" })).rejects.toThrow(/MONGODB_DATABASE_NAMES/);
+    await expect(envWith({ ...tenant, MONGODB_DATABASE_NAMES: "" })).rejects.toMatchObject({ code: "setting_missing", params: { setting: "MONGODB_DATABASE_NAMES" } });
   });
 
   it("stop the start when a reserved database is not granted, naming it", async () => {
     const { auth: _auth, ...withoutAuth } = granted;
-    await expect(envWith({ ...tenant, MONGODB_DATABASE_NAMES: JSON.stringify(withoutAuth) })).rejects.toThrow(
-      /no database for "auth"/,
-    );
+    await expect(envWith({ ...tenant, MONGODB_DATABASE_NAMES: JSON.stringify(withoutAuth) })).rejects.toMatchObject({
+      code: "database_not_granted",
+      params: { suffix: "auth" },
+    });
   });
 });
 

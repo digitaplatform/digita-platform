@@ -9,6 +9,7 @@ import {
   type StorageGetResult,
   type StoragePort,
 } from "./storage-port.js";
+import { EngineError } from "../errors/engine-error.js";
 
 /**
  * Keys are server-generated: `<storage_path>/<uuid><ext>` where storage_path
@@ -24,7 +25,7 @@ function splitKey(key: string): string[] {
     segments.length > 3 ||
     segments.some((s) => !s || s === "." || s === ".." || !SAFE_SEGMENT.test(s))
   ) {
-    throw new Error(`Invalid storage key: ${key}`);
+    throw new EngineError("storage_key_invalid", { key }, 500, "INTERNAL_ERROR");
   }
   return segments;
 }

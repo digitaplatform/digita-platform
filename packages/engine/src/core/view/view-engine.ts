@@ -17,20 +17,20 @@ import { runLinkSection } from "./section-runners/link-section.js";
 import { runListSection } from "./section-runners/list-section.js";
 import { runAggregateSection } from "./section-runners/aggregate-section.js";
 import { createLogger } from "../logging/logger.js";
+import { EngineError } from "../errors/engine-error.js";
 
 const log = createLogger("view-engine");
 
-export class BadRequestError extends Error {
-  constructor(public detail: string) {
-    super(detail);
-    this.name = "BadRequestError";
+/** A request the engine refuses for its shape: a parameter, a body or a file it cannot use. */
+export class BadRequestError extends EngineError {
+  constructor(code: string, params: Record<string, string> = {}) {
+    super(code, params, 400, "BAD_REQUEST");
   }
 }
 
-export class ViewNotFoundError extends Error {
+export class ViewNotFoundError extends EngineError {
   constructor(public viewName: string) {
-    super(`View "${viewName}" not found`);
-    this.name = "ViewNotFoundError";
+    super("view_not_found", { view: viewName }, 404, "VIEW_NOT_FOUND");
   }
 }
 
@@ -77,8 +77,8 @@ export class ViewEngine {
     // coercing so `required: true` on that param is satisfied by the URL.
     const queryWithRoot: Record<string, string> = { ...input.query };
     if (anchored) {
-      if (!view.source) throw new BadRequestError("anchored view missing source");
-      if (!input.rootName) throw new BadRequestError("rootName required");
+      if (!view.source) throw new EngineError("view_source_missing", { view: view._id }, 500, "VIEW_SOURCE_MISSING");
+      if (!input.rootName) throw new BadRequestError("param_required", { param: "rootName" });
       queryWithRoot[view.source.param] = input.rootName;
     }
 
@@ -204,7 +204,7 @@ function coerceParams(
   for (const def of defs) {
     const raw = query[def.name];
     if (raw === undefined || raw === "") {
-      if (def.required) throw new BadRequestError(`param "${def.name}" required`);
+      if (def.required) throw new BadRequestError("param_required", { param: def.name });
       if (def.default !== undefined) out[def.name] = def.default;
       continue;
     }
@@ -220,19 +220,19 @@ function coerce(def: ViewParamDefinition, raw: string): unknown {
       return raw;
     case "number": {
       const n = Number(raw);
-      if (Number.isNaN(n)) throw new BadRequestError(`param "${def.name}" not a number`);
+      if (Number.isNaN(n)) throw new BadRequestError("param_not_number", { param: def.name });
       return n;
     }
     case "boolean":
       return raw === "true" || raw === "1";
     case "date": {
       const d = new Date(raw);
-      if (Number.isNaN(d.getTime())) throw new BadRequestError(`param "${def.name}" not a date`);
+      if (Number.isNaN(d.getTime())) throw new BadRequestError("param_not_date", { param: def.name });
       return d;
     }
     case "enum":
       if (def.enum_values && !def.enum_values.includes(raw)) {
-        throw new BadRequestError(`param "${def.name}" not in enum`);
+        throw new BadRequestError("param_not_one_of", { param: def.name, values: def.enum_values.join(", ") });
       }
       return raw;
   }

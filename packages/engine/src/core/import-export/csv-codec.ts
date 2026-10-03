@@ -33,9 +33,7 @@ export function decodeCsvRows(
           if (s === "true" || s === "1") out[key] = true;
           else if (s === "false" || s === "0") out[key] = false;
           else
-            throw new BadRequestError(
-              `import_invalid_cell: row ${i + 1} column "${key}" expected a boolean, got "${val}"`,
-            );
+            throw new BadRequestError("import_cell_not_boolean", { row: String(i + 1), column: key, value: String(val) });
           break;
         }
         case "Table":
@@ -43,9 +41,7 @@ export function decodeCsvRows(
           try {
             out[key] = JSON.parse(val);
           } catch {
-            throw new BadRequestError(
-              `import_invalid_cell: row ${i + 1} column "${key}" is not valid JSON`,
-            );
+            throw new BadRequestError("import_cell_not_json", { row: String(i + 1), column: key });
           }
           break;
         }

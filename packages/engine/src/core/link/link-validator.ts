@@ -21,7 +21,7 @@ export interface LinkValidationError {
   field: string;
   target: string;
   value: string;
-  message_key: string;
+  code: string;
   params: Record<string, string>;
 }
 
@@ -113,7 +113,7 @@ export class LinkValidator {
           field: fieldPath,
           target: field.target,
           value,
-          message_key: "link_subrow_malformed",
+          code: "link_subrow_malformed",
           params: { target: field.target, value, expected: "<parent_id>::<row_id>" },
         });
         return;
@@ -125,7 +125,7 @@ export class LinkValidator {
           field: fieldPath,
           target: field.target,
           value,
-          message_key: "link_not_found",
+          code: "link_not_found",
           params: { target: field.target, value: parsed.parentId },
         });
         return;
@@ -136,7 +136,7 @@ export class LinkValidator {
           field: fieldPath,
           target: field.target,
           value,
-          message_key: "link_subrow_table_missing",
+          code: "link_subrow_table_missing",
           params: { target: field.target, table: field.target_path },
         });
         return;
@@ -147,7 +147,7 @@ export class LinkValidator {
           field: fieldPath,
           target: field.target,
           value,
-          message_key: "link_subrow_not_found",
+          code: "link_subrow_not_found",
           params: { target: field.target, table: field.target_path, row: parsed.rowId },
         });
       }
@@ -163,7 +163,7 @@ export class LinkValidator {
         field: fieldPath,
         target: field.target,
         value,
-        message_key: "link_not_found",
+        code: "link_not_found",
         params: { target: field.target, value },
       });
     }

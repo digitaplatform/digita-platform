@@ -10,6 +10,7 @@ import { seedDataTranslations } from "./seed-data-translations.js";
 import { createLogger } from "../logging/logger.js";
 import { listWritesUnderWay, markReseedRunning, writesEnded } from "./reseed-lock.js";
 import { env } from "../config/env.js";
+import { EngineError } from "../errors/engine-error.js";
 
 const log = createLogger("reseed-app-data");
 
@@ -47,38 +48,32 @@ export interface ReseedSummary {
 }
 
 /** A reset refused while one in the other mode runs; the caller starts it once that one has ended. */
-export class ReseedRunningError extends Error {
+export class ReseedRunningError extends EngineError {
   constructor(
     readonly running: ReseedMode,
     readonly requested: ReseedMode,
   ) {
-    super(`a reseed in mode ${running} is running; start the reseed in mode ${requested} once it has ended`);
-    this.name = "ReseedRunningError";
+    super("reseed_running", { running, requested }, 409, "RESEED_RUNNING");
   }
 }
 
 /** A reset whose seed failed after the wipe on every attempt, naming the last error. */
-export class ReseedSeedFailedError extends Error {
+export class ReseedSeedFailedError extends EngineError {
   constructor(
     readonly attempts: number,
     readonly reason: string,
   ) {
-    super(
-      `the seed failed ${attempts} times after the app data was wiped; ` +
-        `the app holds only the rows seeded before the failure: ${reason}`,
-    );
-    this.name = "ReseedSeedFailedError";
+    super("reseed_seed_failed", { attempts: String(attempts), error: reason }, 500, "RESEED_FAILED");
   }
 }
 
 /** A reset that gave up before the wipe, because writes that began before it did not end in time. */
-export class ReseedWritesRunningError extends Error {
+export class ReseedWritesRunningError extends EngineError {
   constructor(
     readonly seconds: number,
     readonly writes: string[],
   ) {
-    super(`the reset waited ${seconds} s for writes that had not ended, and wiped nothing: ${writes.join(", ")}`);
-    this.name = "ReseedWritesRunningError";
+    super("reseed_writes_running", { seconds: String(seconds), writes: writes.join(", ") }, 409, "RESEED_WRITES_RUNNING");
   }
 }
 

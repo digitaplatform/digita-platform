@@ -79,7 +79,7 @@ describe("createStoragePort", () => {
       UPLOAD_S3_ENDPOINT: "http://garage:3900",
       // key + secret missing
     });
-    expect(() => createStoragePort()).toThrow(/UPLOAD_S3_KEY, UPLOAD_S3_SECRET/);
+    expect(() => createStoragePort()).toThrow(expect.objectContaining({ code: "storage_config_incomplete", params: { backend: "s3", missing: "UPLOAD_S3_KEY, UPLOAD_S3_SECRET" } }));
   });
 
   it("returns R2 storage (backend 'r2') deriving the account endpoint + region 'auto'", async () => {
@@ -137,6 +137,6 @@ describe("createStoragePort", () => {
       UPLOAD_S3_SECRET: "s",
       // no account id, no endpoint → endpoint cannot be derived
     });
-    expect(() => createStoragePort()).toThrow(/UPLOAD_R2_ACCOUNT_ID\/UPLOAD_S3_ENDPOINT/);
+    expect(() => createStoragePort()).toThrow(expect.objectContaining({ code: "storage_config_incomplete", params: expect.objectContaining({ missing: expect.stringContaining("UPLOAD_R2_ACCOUNT_ID/UPLOAD_S3_ENDPOINT") }) }));
   });
 });

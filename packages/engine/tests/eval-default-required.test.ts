@@ -38,7 +38,7 @@ const loan = {
 
 function insertErrors(data: Record<string, unknown>): string[][] {
   const filled = resolveDefaults(loan, data, { user: "ann@example.com", timeZone: "UTC" });
-  return validateEntityDataZod(loan, filled, new ZodSchemaBuilder()).errors.map((e) => [e.field, e.message_key]);
+  return validateEntityDataZod(loan, filled, new ZodSchemaBuilder()).errors.map((e) => [e.field, e.code]);
 }
 
 describe("a required field with an eval: default on insert", () => {

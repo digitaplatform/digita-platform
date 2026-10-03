@@ -35,9 +35,9 @@ describe("DocStatusError", () => {
     expect(err.name).toBe("DocStatusError");
   });
 
-  it("stores messageKey and params", () => {
+  it("stores its code and params", () => {
     const err = new DocStatusError("already_submitted", { doctype: "Invoice", name: "INV-001" });
-    expect(err.messageKey).toBe("already_submitted");
+    expect(err.code).toBe("already_submitted");
     expect(err.params).toEqual({ doctype: "Invoice", name: "INV-001" });
   });
 });
@@ -61,7 +61,7 @@ describe("DocStatusEngine – validateSubmit", () => {
     try {
       engine.validateSubmit(entity, doc);
     } catch (err) {
-      expect((err as DocStatusError).messageKey).toBe("not_submittable");
+      expect((err as DocStatusError).code).toBe("not_submittable");
       expect((err as DocStatusError).params["doctype"]).toBe("Invoice");
     }
   });
@@ -74,7 +74,7 @@ describe("DocStatusEngine – validateSubmit", () => {
     try {
       engine.validateSubmit(entity, doc);
     } catch (err) {
-      expect((err as DocStatusError).messageKey).toBe("already_submitted");
+      expect((err as DocStatusError).code).toBe("already_submitted");
       expect((err as DocStatusError).params["name"]).toBe("INV-001");
     }
   });
@@ -87,7 +87,7 @@ describe("DocStatusEngine – validateSubmit", () => {
     try {
       engine.validateSubmit(entity, doc);
     } catch (err) {
-      expect((err as DocStatusError).messageKey).toBe("cannot_submit_cancelled");
+      expect((err as DocStatusError).code).toBe("cannot_submit_cancelled");
     }
   });
 });
@@ -130,7 +130,7 @@ describe("DocStatusEngine – validateCancel", () => {
     try {
       engine.validateCancel(entity, doc);
     } catch (err) {
-      expect((err as DocStatusError).messageKey).toBe("not_submittable");
+      expect((err as DocStatusError).code).toBe("not_submittable");
     }
   });
 
@@ -142,7 +142,7 @@ describe("DocStatusEngine – validateCancel", () => {
     try {
       engine.validateCancel(entity, doc);
     } catch (err) {
-      expect((err as DocStatusError).messageKey).toBe("already_cancelled");
+      expect((err as DocStatusError).code).toBe("already_cancelled");
       expect((err as DocStatusError).params["name"]).toBe("INV-001");
     }
   });
@@ -155,7 +155,7 @@ describe("DocStatusEngine – validateCancel", () => {
     try {
       engine.validateCancel(entity, doc);
     } catch (err) {
-      expect((err as DocStatusError).messageKey).toBe("cannot_cancel_draft");
+      expect((err as DocStatusError).code).toBe("cannot_cancel_draft");
     }
   });
 });
@@ -206,7 +206,7 @@ describe("DocStatusEngine – validateEdit", () => {
     try {
       engine.validateEdit(entity, doc);
     } catch (err) {
-      expect((err as DocStatusError).messageKey).toBe("cannot_edit_submitted");
+      expect((err as DocStatusError).code).toBe("cannot_edit_submitted");
       expect((err as DocStatusError).params["doctype"]).toBe("Invoice");
     }
   });
@@ -219,7 +219,7 @@ describe("DocStatusEngine – validateEdit", () => {
     try {
       engine.validateEdit(entity, doc);
     } catch (err) {
-      expect((err as DocStatusError).messageKey).toBe("cannot_edit_cancelled");
+      expect((err as DocStatusError).code).toBe("cannot_edit_cancelled");
     }
   });
 });
@@ -249,7 +249,7 @@ describe("DocStatusEngine – validateDelete", () => {
     try {
       engine.validateDelete(entity, doc);
     } catch (err) {
-      expect((err as DocStatusError).messageKey).toBe("cannot_delete_submitted");
+      expect((err as DocStatusError).code).toBe("cannot_delete_submitted");
       expect((err as DocStatusError).params["doctype"]).toBe("Invoice");
     }
   });
@@ -263,7 +263,7 @@ describe("DocStatusEngine – validateDelete", () => {
       try {
         engine.validateDelete(entity, doc);
       } catch (err) {
-        expect((err as DocStatusError).messageKey).toBe("cannot_delete_log");
+        expect((err as DocStatusError).code).toBe("cannot_delete_log");
       }
     }
   });
@@ -277,7 +277,7 @@ describe("DocStatusEngine – validateDelete", () => {
     try {
       engine.validateDelete(entity, doc);
     } catch (err) {
-      expect((err as DocStatusError).messageKey).toBe("cannot_delete_submitted");
+      expect((err as DocStatusError).code).toBe("cannot_delete_submitted");
     }
   });
 });
@@ -304,7 +304,7 @@ describe("DocStatusEngine – prepareAmend", () => {
     try {
       engine.prepareAmend(entity, doc);
     } catch (err) {
-      expect((err as DocStatusError).messageKey).toBe("cannot_amend_not_cancelled");
+      expect((err as DocStatusError).code).toBe("cannot_amend_not_cancelled");
       expect((err as DocStatusError).params["doctype"]).toBe("Invoice");
       expect((err as DocStatusError).params["name"]).toBe("INV-001");
     }
@@ -318,7 +318,7 @@ describe("DocStatusEngine – prepareAmend", () => {
     try {
       engine.prepareAmend(entity, doc);
     } catch (err) {
-      expect((err as DocStatusError).messageKey).toBe("cannot_amend_not_cancelled");
+      expect((err as DocStatusError).code).toBe("cannot_amend_not_cancelled");
       expect((err as DocStatusError).params["name"]).toBe("INV-002");
     }
   });
@@ -371,7 +371,7 @@ describe("DocStatusEngine – validateSubmittedPatch", () => {
       fn();
       return undefined;
     } catch (err) {
-      return (err as DocStatusError).messageKey;
+      return (err as DocStatusError).code;
     }
   }
 

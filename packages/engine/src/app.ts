@@ -26,7 +26,7 @@ import {
 import { RemoteAuthnAdapter } from "./core/auth/remote-authn-adapter.js";
 import { callerIsInternal } from "./core/auth/audience.js";
 import { TranslationService } from "./core/i18n/translation-service.js";
-import { loadEngineI18n, engineI18n } from "./i18n.js";
+import { loadEngineI18n, engineI18n, messageLocale } from "./i18n.js";
 import { LocaleResolver } from "./core/i18n/locale-resolver.js";
 import { PermissionChecker } from "./core/permissions/permission-checker.js";
 import { RoleRegistry, setRoleRegistry } from "./core/permissions/role-registry.js";
@@ -100,6 +100,7 @@ import { ViewRegistry } from "./core/view/view-registry.js";
 import { ViewEngine } from "./core/view/view-engine.js";
 import { seedViewsFromFiles } from "./core/view/view-loader.js";
 import { registerViewRoutes } from "./core/api/view-router.js";
+import { ConfigurationError } from "./core/errors/engine-error.js";
 
 const log = createLogger("app");
 
@@ -334,11 +335,7 @@ export async function createApp(
     const body = payload as { messages?: import("@digitaplatform/shared").ResponseMessage[] } | null;
     if (!body || !Array.isArray(body.messages) || body.messages.length === 0) return payload;
     const i18n = engineI18n();
-    const userLang = (request.user as { language?: string } | undefined)?.language;
-    const locale =
-      userLang && i18n.supported.includes(userLang)
-        ? userLang
-        : i18n.resolveLocale(request.headers["accept-language"]);
+    const locale = messageLocale((request.user as { language?: string } | undefined)?.language, request.headers["accept-language"]);
     for (const m of body.messages) {
       // A key the engine has no text for is an app's key, such as a hook's refusal: the app's
       // texts reach only the client, so the key travels on with its params for the client to fill.
@@ -506,9 +503,11 @@ export async function createApp(
         const token = cookieTok ?? bearer ?? queryTok;
         let user;
         try {
-          if (!token) throw new Error("no token");
-          user = (await authn.verifyAccessToken(token)).user;
+          user = token ? (await authn.verifyAccessToken(token)).user : undefined;
         } catch {
+          user = undefined;
+        }
+        if (!user) {
           socket.close(1008, "unauthorized");
           return;
         }
@@ -730,11 +729,7 @@ export async function createApp(
         { count: storagePathOffenders.length, offenders: storagePathOffenders },
         "Attach storage-path lint FAILED — refusing to boot",
       );
-      throw new Error(
-        `Attach storage-path lint failed for ${storagePathOffenders.length} ` +
-          `entity definition(s) — every entity with Attach/AttachImage fields must ` +
-          `declare a valid top-level "storage_path":\n${detail}`,
-      );
+      throw new ConfigurationError("attach_storage_path_invalid", { count: String(storagePathOffenders.length), doctypes: detail });
     }
     log.info(
       "Attach storage-path lint passed — every Attach/AttachImage entity declares a valid storage_path",

@@ -193,7 +193,7 @@ describe("Import modes — insert / upsert / validate", () => {
     const report = res.json().data;
     expect(report.inserted).toBe(1);
     expect(report.failed).toBe(1);
-    expect(report.errors[0].message_key).toBe("link_not_found");
+    expect(report.errors[0].code).toBe("link_not_found");
     expect(await findOne("Item", { item_no: "IT_BAD" })).toBeUndefined();
     expect(await findOne("Item", { item_no: "IT_OK" })).toBeDefined();
   });
@@ -235,7 +235,7 @@ describe("Import modes — insert / upsert / validate", () => {
     const res = await imp("Item", adminTok, { rows: [{ name: "no key", group: "G1" }], mode: "upsert" });
     const report = res.json().data;
     expect(report.failed).toBe(1);
-    expect(report.errors[0].message_key).toBe("import_missing_business_key");
+    expect(report.errors[0].code).toBe("import_missing_business_key");
   });
 
   it("enforces IMPORT_MAX_ROWS (101 rows → 400)", async () => {
@@ -275,7 +275,7 @@ describe("Import modes — insert / upsert / validate", () => {
     const report = res.json().data;
     expect(report.inserted).toBe(0);
     expect(report.failed).toBe(2);
-    expect(report.errors.every((e: { message_key?: string }) => e.message_key === "import_circular_reference")).toBe(true);
+    expect(report.errors.every((e: { code?: string }) => e.code === "import_circular_reference")).toBe(true);
   });
 
   it("CSV body: fieldtypes decode (Check 'false' → false, Int/Float/Date, Table JSON cell)", async () => {
@@ -354,7 +354,7 @@ describe("An import row that repeats a unique value", () => {
     expect(res.statusCode).toBe(200);
     const report = res.json().data;
     expect([report.inserted, report.failed]).toEqual([1, 1]);
-    expect(report.errors[0]).toMatchObject({ row: 1, field: "code", message_key: "duplicate_key", params: { field: "code" } });
+    expect(report.errors[0]).toMatchObject({ row: 1, field: "code", code: "duplicate_key", params: { field: "code" } });
     expect(res.body).not.toMatch(/E11000|dup key|idx_uniq/);
   });
 });
@@ -486,6 +486,130 @@ describe("An engine error reaches a person in their language (#24)", () => {
     expect(res.json().messages[0].text).toBe("A parcel weighs more than nothing");
     expect(res.json().error).toMatchObject({ code: "RULE_REFUSED", detail: "rule_refused" });
     expect(await db.count("RuleParcel", [], "app")).toBe(0);
+  });
+
+  it("answers a delete that other records block with 409 in German, with the blockers", async () => {
+    const group = (await findOne("Group", { code: "G1" }))!;
+    const res = await app.inject({ method: "DELETE", url: `/api/v1/resource/Group/${String(group._id)}`, headers: german(adminTok) });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().messages[0].text).toMatch(/^Löschen nicht möglich: [1-9]\d* Item verweisen auf dieses Dokument$/);
+    expect(res.json().error).toMatchObject({ code: "DELETE_BLOCKED", detail: "link_delete_blocked" });
+  });
+
+  it("answers a record whose numbering field is empty with 400 in German, bound to the field, not a 500", async () => {
+    const Ticket = {
+      name: "NamedTicket", module: "test", database: "app", naming: { strategy: "by_field", field: "code" },
+      is_submittable: false, is_log: false, track_changes: false, track_views: false,
+      fields: [{ fieldname: "code", fieldtype: "Data", label: "Code" }, { fieldname: "note", fieldtype: "Data", label: "Note" }],
+      permissions: [ADMIN_PERM],
+    } as unknown as EntityDefinition;
+    registry.register(Ticket);
+    await db.ensureCollection("NamedTicket", "app");
+    const res = await app.inject({ method: "POST", url: "/api/v1/resource/NamedTicket", headers: german(adminTok), payload: { note: "no code" } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().messages[0]).toMatchObject({ text: 'Feld "code" wird für die Nummerierung benötigt.', path: "code" });
+    expect(res.json().error).toMatchObject({ code: "NAMING_FIELD_REQUIRED", detail: "naming_field_required", field: "code" });
+  });
+
+  it("answers a save into a closed period and a date no period covers in German", async () => {
+    const de = readBundle(process.env.TRANSLATIONS_DIR!).de!;
+    const FiscalPeriod = {
+      name: "FiscalPeriod", module: "test", database: "app", naming: { strategy: "system" },
+      is_submittable: false, is_log: false, track_changes: false, track_views: false,
+      fields: [
+        { fieldname: "start_date", fieldtype: "Date", label: "Start" },
+        { fieldname: "end_date", fieldtype: "Date", label: "End" },
+        { fieldname: "is_closed", fieldtype: "Check", label: "Closed" },
+      ],
+      permissions: [ADMIN_PERM],
+    } as unknown as EntityDefinition;
+    const Voucher = {
+      name: "Voucher", module: "test", database: "app", naming: { strategy: "system" },
+      is_submittable: false, is_log: false, track_changes: false, track_views: false,
+      period_check: { date_field: "posting_date", period_entity: "FiscalPeriod", block_on: ["insert"] },
+      fields: [{ fieldname: "posting_date", fieldtype: "Date", label: "Posting date" }],
+      permissions: [ADMIN_PERM],
+    } as unknown as EntityDefinition;
+    for (const e of [FiscalPeriod, Voucher]) {
+      registry.register(e);
+      await db.ensureCollection(e.name, "app");
+    }
+    const period = await app.inject({
+      method: "POST", url: "/api/v1/resource/FiscalPeriod", headers: bearer(adminTok),
+      payload: { start_date: "2026-01-01", end_date: "2026-01-31", is_closed: 1 },
+    });
+    expect(period.statusCode).toBe(201);
+
+    const closed = await app.inject({ method: "POST", url: "/api/v1/resource/Voucher", headers: german(adminTok), payload: { posting_date: "2026-01-15" } });
+    expect(closed.statusCode).toBe(409);
+    expect(closed.json().messages[0].text).toBe(de["period_closed"]);
+    expect(closed.json().error).toMatchObject({ code: "PERIOD_CLOSED", detail: "period_closed" });
+
+    const uncovered = await app.inject({ method: "POST", url: "/api/v1/resource/Voucher", headers: german(adminTok), payload: { posting_date: "2027-05-01" } });
+    expect(uncovered.statusCode).toBe(400);
+    expect(uncovered.json().messages[0].text).toBe(de["period_not_found_for_date"]);
+    expect(uncovered.json().error).toMatchObject({ code: "PERIOD_NOT_FOUND", detail: "period_not_found_for_date" });
+    expect(await db.count("Voucher", [], "app")).toBe(0);
+  });
+
+  it("answers a state the workflow does not allow with 409 in German", async () => {
+    const Ticket = {
+      name: "FlowTicket", module: "test", database: "app", naming: { strategy: "system" },
+      is_submittable: false, is_log: false, track_changes: false, track_views: false,
+      fields: [{ fieldname: "status", fieldtype: "Data", label: "Status" }],
+      states: [{ value: "open", is_initial: true }, { value: "done" }],
+      transitions: [{ from: "open", to: "done" }],
+      permissions: [ADMIN_PERM],
+    } as unknown as EntityDefinition;
+    registry.register(Ticket);
+    await db.ensureCollection("FlowTicket", "app");
+    const created = await app.inject({ method: "POST", url: "/api/v1/resource/FlowTicket", headers: bearer(adminTok), payload: {} });
+    expect(created.statusCode).toBe(201);
+    const res = await app.inject({
+      method: "PUT", url: `/api/v1/resource/FlowTicket/${created.json().data._id as string}`, headers: german(adminTok), payload: { status: "archived" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().messages[0].text).toBe(readBundle(process.env.TRANSLATIONS_DIR!).de!["illegal_transition"]);
+    expect(res.json().error).toMatchObject({ code: "ILLEGAL_TRANSITION", detail: "illegal_transition" });
+  });
+
+  it("answers an empty import and a malformed list parameter in German", async () => {
+    const empty = await app.inject({ method: "POST", url: "/api/v1/import/Item", headers: german(adminTok), payload: { rows: [], mode: "insert" } });
+    expect(empty.statusCode).toBe(400);
+    expect(empty.json().messages[0].text).toBe("Der Import enthält keine Zeilen.");
+    expect(empty.json().error).toMatchObject({ code: "BAD_REQUEST", detail: "import_nothing" });
+
+    const list = await app.inject({ method: "GET", url: "/api/v1/resource/Item?limit=many", headers: german(adminTok) });
+    expect(list.statusCode).toBe(400);
+    expect(list.json().messages[0].text).toBe("limit muss eine ganze Zahl von mindestens 1 sein.");
+    expect(list.json().error).toMatchObject({ code: "BAD_REQUEST", detail: "param_not_whole_number" });
+  });
+
+  it("answers a malformed filter value and a malformed fields list in German", async () => {
+    const value = await app.inject({
+      method: "GET", url: `/api/v1/resource/Item?filters=${encodeURIComponent(JSON.stringify([["qty", "=", [1, 2]]]))}`, headers: german(adminTok),
+    });
+    expect(value.statusCode).toBe(400);
+    expect(value.json().messages[0].text).toBe("Ein Filter mit dem Operator = nimmt einen einfachen Wert, keine Liste und kein Objekt.");
+    expect(value.json().error).toMatchObject({ code: "MALFORMED_FILTER_VALUE", detail: "filter_value_malformed" });
+
+    const fields = await app.inject({
+      method: "GET", url: `/api/v1/resource/Item?fields=${encodeURIComponent(JSON.stringify(["lines", "lines.amount"]))}`, headers: german(adminTok),
+    });
+    expect(fields.statusCode).toBe(400);
+    expect(fields.json().messages[0].text).toBe("Die Feldliste muss Feldpfade nennen, keiner innerhalb eines anderen.");
+    expect(fields.json().error).toMatchObject({ code: "MALFORMED_FIELDS", detail: "fields_malformed" });
+  });
+
+  it("lists a row an import refuses with its text in German", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/api/v1/import/Item", headers: german(adminTok),
+      payload: { rows: [{ item_no: "IT_DE", name: "Broken link", group: "NOWHERE" }], mode: "insert" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.errors).toEqual([
+      expect.objectContaining({ row: 1, code: "link_not_found", message: "Group 'NOWHERE' existiert nicht" }),
+    ]);
   });
 
   it("answers a role rename with 400 in German, not a 500", async () => {

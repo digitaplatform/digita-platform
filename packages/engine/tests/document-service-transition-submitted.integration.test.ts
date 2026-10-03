@@ -163,7 +163,7 @@ describe("transition() on a submitted doc (E5)", () => {
   it("T14c: a move that would change docstatus is rejected (use cancel/amend)", async () => {
     const id = await submittedOrder();
     await expect(docService.transition("OrderDoc", id, "cancelled", admin)).rejects.toMatchObject({
-      messageKey: "transition_requires_docstatus_verb",
+      code: "transition_requires_docstatus_verb",
     });
   });
 
@@ -210,7 +210,7 @@ describe("transition() side_effects on a submitted doc (E5 / §4 step 15)", () =
     await docService.submit("OrderBad", doc._id, admin);
     await expect(
       docService.transition("OrderBad", doc._id, "delivered", salesManager),
-    ).rejects.toMatchObject({ messageKey: "field_not_allowed_on_submit" });
+    ).rejects.toMatchObject({ code: "field_not_allowed_on_submit" });
     const raw = await db.findOne("OrderBad", doc._id, "app");
     expect(raw?.["status"]).toBe("confirmed"); // aborted — unchanged
     expect(raw?.["grand_total"]).toBe(1);

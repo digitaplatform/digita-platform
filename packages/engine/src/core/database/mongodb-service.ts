@@ -19,6 +19,7 @@ import { dbName } from "../config/db-names.js";
 import { createLogger } from "../logging/logger.js";
 import { mapOperatorToMongo } from "./filter-builder.js";
 import { toIdString, toIdStorage, normalizeIdFilterValue } from "../document/id-codec.js";
+import { ConfigurationError, EngineError } from "../errors/engine-error.js";
 
 const log = createLogger("mongodb-service");
 
@@ -53,12 +54,10 @@ export interface QueryOptions {
   offset?: number;
 }
 
-export class MalformedFilterError extends Error {
-  constructor(received: unknown) {
-    super(
-      `Malformed filter entry — expected { field: value } object or [field, op, value] tuple, got: ${JSON.stringify(received)}`,
-    );
-    this.name = "MalformedFilterError";
+/** A filter entry that is neither a `{ field: value }` object nor a `[field, op, value]` tuple. */
+export class MalformedFilterError extends EngineError {
+  constructor() {
+    super("filter_malformed", {}, 400, "MALFORMED_FILTER");
   }
 }
 
@@ -67,12 +66,12 @@ export class MalformedFilterError extends Error {
  * the redacted URI so the caller can format an actionable hint without
  * leaking credentials. The original driver error is attached as `cause`.
  */
-export class MongoUnreachableError extends Error {
-  public readonly uri: string;
-  constructor(uri: string, cause: unknown) {
-    super(`MongoDB unreachable at ${uri}`);
-    this.name = "MongoUnreachableError";
-    this.uri = uri;
+export class MongoUnreachableError extends ConfigurationError {
+  constructor(
+    public readonly uri: string,
+    cause: unknown,
+  ) {
+    super("database_unreachable", { uri });
     (this as { cause?: unknown }).cause = cause;
   }
 }
@@ -184,11 +183,11 @@ export class MongoDBService {
     // A tenant engine opens only granted databases; every one is bound at connect or
     // registered from its grant, so reaching here means the grant lacks this target.
     if (env.MONGODB_DATABASE_NAMES) {
-      throw new Error(`Database target "${target}" is not among the databases MONGODB_DATABASE_NAMES grants`);
+      throw new ConfigurationError("database_target_not_granted", { target });
     }
     const slug = target.replace(/-/g, "_").replace(/[^A-Za-z0-9_]/g, "_");
     if (!slug) {
-      throw new Error(`Invalid database target "${target}"`);
+      throw new ConfigurationError("database_target_invalid", { target });
     }
     // App/domain targets already embed the app name (discovery names them
     // `<app>_<domain>`, e.g. erp_sales), so ONLY the tenant GUID is injected —
@@ -214,19 +213,15 @@ export class MongoDBService {
   registerAppDatabase(def: AppDatabaseDefinition): void {
     const name = def.name;
     if (name === "identity" || name === "logs" || name === "audits" || name === "core") {
-      throw new Error(
-        `Cannot register reserved database target "${name}" — reserved names use their dedicated env vars`,
-      );
+      throw new ConfigurationError("database_target_reserved", { target: name });
     }
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name)) {
-      throw new Error(`Invalid database target name "${name}"`);
+      throw new ConfigurationError("database_target_invalid", { target: name });
     }
     const physical = def.physical ?? this.resolveDbName(name);
     const existing = this.appDatabases.get(name);
     if (existing && existing.physical !== physical) {
-      throw new Error(
-        `Database target "${name}" already registered as "${existing.physical}", cannot remap to "${physical}"`,
-      );
+      throw new ConfigurationError("database_target_remapped", { target: name, physical: String(existing.physical), requested: physical });
     }
     this.appDatabases.set(name, { ...def, physical });
     if (this.connected) {
@@ -249,12 +244,12 @@ export class MongoDBService {
    */
   getDb(target: DatabaseTarget): Db {
     if (!this.connected) {
-      throw new Error("MongoDB not connected. Call connect() first.");
+      throw new EngineError("database_not_connected", {}, 500, "INTERNAL_ERROR");
     }
     let db = this.databases.get(target);
     if (db) return db;
     if (target === "identity" || target === "logs" || target === "audits" || target === "core") {
-      throw new Error(`Reserved database target "${target}" not initialised`);
+      throw new EngineError("database_target_not_initialised", { target }, 500, "INTERNAL_ERROR");
     }
     const physical = this.appDatabases.get(target)?.physical ?? this.resolveDbName(target);
     db = this.client.db(physical);
@@ -304,7 +299,7 @@ export class MongoDBService {
    */
   afterCommit(session: ClientSession, work: () => Promise<void>): void {
     const queue = this.commitWork.get(session);
-    if (!queue) throw new Error("afterCommit needs a session that withTransaction started");
+    if (!queue) throw new EngineError("after_commit_without_transaction", {}, 500, "INTERNAL_ERROR");
     queue.push(work);
   }
 
@@ -603,10 +598,8 @@ export class MongoDBService {
       if (options?.timeseries) {
         const info = collections[0] as { type?: string };
         if (info.type !== "timeseries") {
-          throw new Error(
-            `Collection "${name}" exists but is not a time-series collection. ` +
-              `Time-series cannot be applied in place; drop and recreate.`,
-          );
+          // Time-series cannot be applied in place: the collection is dropped and created again.
+          throw new ConfigurationError("collection_not_time_series", { collection: name });
         }
         this.timeSeriesCollections.add(this.tsKey(name, target));
       }
@@ -737,7 +730,7 @@ export class MongoDBService {
       // Form 1: top-level tuple [field, operator, value]
       if (Array.isArray(filter)) {
         if (filter.length !== 3 || typeof filter[0] !== "string" || typeof filter[1] !== "string") {
-          throw new MalformedFilterError(filter);
+          throw new MalformedFilterError();
         }
         const [field, operator, value] = filter;
         conditions.push({ [field]: mapOperatorToMongo(operator, value) });
@@ -748,7 +741,7 @@ export class MongoDBService {
       // stays a value of its key: read as a filter on the field it names, it would pass the
       // allow-list its key was checked against. Reject plain primitives and nulls.
       if (filter === null || typeof filter !== "object") {
-        throw new MalformedFilterError(filter);
+        throw new MalformedFilterError();
       }
       if (Object.keys(filter).length > 0) conditions.push({ ...filter });
     }

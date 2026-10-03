@@ -26,6 +26,7 @@ import {
   entityHasAnyFreeze,
 } from "../snapshot/snapshot-resolver.js";
 import { createLogger } from "../logging/logger.js";
+import { ConfigurationError } from "../errors/engine-error.js";
 
 const log = createLogger("seed-app-data");
 
@@ -211,7 +212,7 @@ export async function seedAppData(
       try {
         const raw = await readFile(join(dir, file), "utf-8");
         const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) throw new Error("top-level JSON must be an array");
+        if (!Array.isArray(parsed)) throw new ConfigurationError("seed_file_not_list", { file });
         rows = parsed as CollectedRow[];
       } catch (e) {
         log.error({ file: join(dir, file), err: (e as Error).message }, "seed file parse failed");
@@ -608,10 +609,7 @@ async function insertRows(
       declaredDocstatus !== undefined &&
       !(typeof declaredDocstatus === "number" && [0, 1, 2].includes(declaredDocstatus))
     ) {
-      throw new Error(
-        `Seed row "${String(id)}" for ${entity.name} has an invalid docstatus ` +
-          `${JSON.stringify(declaredDocstatus)} — must be 0, 1, or 2`,
-      );
+      throw new ConfigurationError("seed_row_docstatus_invalid", { doctype: entity.name, row: String(id), value: JSON.stringify(declaredDocstatus) });
     }
     const docstatus = typeof declaredDocstatus === "number" ? declaredDocstatus : 0;
 

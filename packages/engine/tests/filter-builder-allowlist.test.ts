@@ -26,7 +26,9 @@ describe("buildMongoFilter allow-list (P-SEC/R7 — NoSQL operator injection)", 
   });
 
   it("rejects an undeclared field name", () => {
-    expect(() => buildMongoFilter({ filters: [["password", "=", "x"]] }, [], allowed)).toThrow(/password/);
+    expect(() => buildMongoFilter({ filters: [["password", "=", "x"]] }, [], allowed)).toThrow(
+      expect.objectContaining({ code: "filter_field_not_allowed", params: { field: "password" } }),
+    );
   });
 
   it("rejects an injected or_filter field too", () => {

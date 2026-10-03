@@ -107,7 +107,7 @@ describe("NamingService — generic series-bound counters", () => {
       fields: [],
       permissions: [],
     } as unknown as EntityDefinition;
-    await expect(naming.generateId(e, {})).rejects.toThrow(/branch/);
+    await expect(naming.generateId(e, {})).rejects.toMatchObject({ code: "naming_field_required", field: "branch", status: 400 });
   });
 });
 

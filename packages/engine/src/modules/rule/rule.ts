@@ -16,12 +16,12 @@ export async function beforeSave(doc: BaseDocument, _ctx?: ResponseContext, serv
   if (problem) {
     const inCondition = !!rule.condition && findUnparsableRuleExpression({ ...rule, actions: [] }) !== null;
     throw new ValidationFailedError("Rule", [
-      { field: inCondition ? "condition" : "actions", message_key: "rule_expression_invalid", params: { error: problem } },
+      { field: inCondition ? "condition" : "actions", code: "rule_expression_invalid", params: { error: problem } },
     ]);
   }
   const lint = services?.registry ? findRuleLintError(rule, services.registry) : null;
   // The event is a Select, so a lint of a Rule save can only fail on its actions.
-  if (lint) throw new ValidationFailedError("Rule", [{ field: "actions", message_key: "rule_invalid", params: { error: lint } }]);
+  if (lint) throw new ValidationFailedError("Rule", [{ field: "actions", code: "rule_invalid", params: { error: lint } }]);
 }
 
 /**

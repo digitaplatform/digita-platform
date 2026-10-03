@@ -12,6 +12,6 @@ export async function beforeSave(doc: BaseDocument): Promise<void> {
   const errors = validateViewContent(doc._data);
   if (errors.length === 0) return;
   throw new ValidationFailedError("View", [
-    { field: "sections", message_key: "view_invalid", params: { error: errors.map((e) => e.message).join("; ") } },
+    { field: "sections", code: "view_invalid", params: { error: errors.map((e) => e.message).join("; ") } },
   ]);
 }

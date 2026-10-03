@@ -3,6 +3,7 @@ import { resolve, dirname, join } from "path";
 import { readdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { dbName, grantedDatabaseName, parseDatabaseNames } from "./db-names.js";
+import { ConfigurationError } from "../errors/engine-error.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -43,7 +44,7 @@ function getEnv(key: string, fallback: string): string {
 function getEnvRequired(key: string): string {
   const val = process.env[key];
   if (!val) {
-    throw new Error(`Missing required environment variable: ${key}`);
+    throw new ConfigurationError("setting_missing", { setting: key });
   }
   return val;
 }
@@ -53,7 +54,7 @@ function getEnvInt(key: string, fallback: number): number {
   if (!val) return fallback;
   const parsed = parseInt(val, 10);
   if (isNaN(parsed)) {
-    throw new Error(`Environment variable ${key} must be an integer, got: ${val}`);
+    throw new ConfigurationError("setting_not_integer", { setting: key, value: val });
   }
   return parsed;
 }
@@ -62,7 +63,7 @@ function getEnvInt(key: string, fallback: number): number {
 function getEnvCountRequired(key: string): number {
   const val = getEnvRequired(key);
   if (!/^\d+$/.test(val)) {
-    throw new Error(`Environment variable ${key} must be a whole number of 0 or more, got: ${val}`);
+    throw new ConfigurationError("setting_not_whole_number", { setting: key, value: val, min: "0" });
   }
   return parseInt(val, 10);
 }
@@ -72,7 +73,7 @@ function getEnvPositiveInt(key: string, fallback: number): number {
   const val = process.env[key];
   if (val === undefined || val === "") return fallback;
   if (!/^\d+$/.test(val) || parseInt(val, 10) < 1) {
-    throw new Error(`Environment variable ${key} must be a whole number of 1 or more, got: ${val}`);
+    throw new ConfigurationError("setting_not_whole_number", { setting: key, value: val, min: "1" });
   }
   return parseInt(val, 10);
 }
@@ -86,7 +87,7 @@ function getEnvDurationMs(key: string, fallback: string): number {
   const factor = { ms: 1, s: 1000, m: 60_000, h: 3_600_000 } as const;
   const ms = match ? parseInt(match[1]!, 10) * factor[match[2] as keyof typeof factor] : 0;
   if (ms < 1) {
-    throw new Error(`Environment variable ${key} must be a duration like 1m or 30s, got: ${val}`);
+    throw new ConfigurationError("setting_not_duration", { setting: key, value: val });
   }
   return ms;
 }
@@ -117,9 +118,7 @@ function getEnvOneOf<T extends string>(key: string, allowed: readonly T[], fallb
   const val = process.env[key];
   if (val === undefined || val === "") return fallback;
   if (!allowed.includes(val as T)) {
-    throw new Error(
-      `Environment variable ${key} must be one of ${allowed.join(", ")}, got: ${val}`,
-    );
+    throw new ConfigurationError("setting_not_one_of", { setting: key, value: val, values: allowed.join(", ") });
   }
   return val as T;
 }

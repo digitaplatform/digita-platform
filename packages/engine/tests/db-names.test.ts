@@ -10,12 +10,12 @@ describe("parseDatabaseNames", () => {
   });
 
   it.each([
-    ["no JSON", "core=g1_erp_core_prod", /not valid JSON/],
-    ["a list", '["g1_erp_core_prod"]', /must map each suffix/],
-    ["an empty name", '{"core":""}', /must map each suffix/],
-    ["a name that is no string", '{"core":1}', /must map each suffix/],
-  ])("refuses %s", (_case, json, message) => {
-    expect(() => parseDatabaseNames(json)).toThrow(message);
+    ["no JSON", "core=g1_erp_core_prod", "setting_not_json"],
+    ["a list", '["g1_erp_core_prod"]', "database_names_not_map"],
+    ["an empty name", '{"core":""}', "database_names_not_map"],
+    ["a name that is no string", '{"core":1}', "database_names_not_map"],
+  ])("refuses %s", (_case, json, code) => {
+    expect(() => parseDatabaseNames(json)).toThrow(expect.objectContaining({ code }));
   });
 });
 
@@ -27,6 +27,6 @@ describe("grantedDatabaseName", () => {
   });
 
   it("names the missing suffix and what is granted", () => {
-    expect(() => grantedDatabaseName(names, "sales")).toThrow('no database for "sales"; it grants: core, auth');
+    expect(() => grantedDatabaseName(names, "sales")).toThrow(expect.objectContaining({ code: "database_not_granted", params: { suffix: "sales", granted: "core, auth" } }));
   });
 });

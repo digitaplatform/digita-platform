@@ -349,7 +349,7 @@ describe("a Table Password cell of a copied or amended document", () => {
     }
   });
 
-  it("answers 409 PASSWORD_KEY_NOT_LISTED when a carried value's key is no longer listed", async () => {
+  it("answers 409 PASSWORD_KEY_NOT_LISTED in the reader's language when a carried value's key is no longer listed", async () => {
     const keys = env as { PASSWORD_FIELD_KEYS: string; PASSWORD_FIELD_ACTIVE_KEY_ID: string };
     const before = { list: keys.PASSWORD_FIELD_KEYS, active: keys.PASSWORD_FIELD_ACTIVE_KEY_ID };
     try {
@@ -358,9 +358,15 @@ describe("a Table Password cell of a copied or amended document", () => {
       const source = await post("Vault", { title: "Orphaned key", secret: "top-secret" });
       keys.PASSWORD_FIELD_KEYS = "k2=YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODk=";
       keys.PASSWORD_FIELD_ACTIVE_KEY_ID = "k2";
-      const copy = await post(`Vault/${source.json().data._id}/copy`);
+      const copy = await app.inject({
+        method: "POST",
+        url: `/api/v1/resource/Vault/${source.json().data._id}/copy`,
+        headers: { ...authHeaders(), "accept-language": "de" },
+      });
       expect(copy.statusCode).toBe(409);
       expect(copy.json().error.code).toBe("PASSWORD_KEY_NOT_LISTED");
+      const german = readBundle(process.env.TRANSLATIONS_DIR!).de!["password_key_not_listed"]!;
+      expect(copy.json().messages[0].text).toBe(german.replaceAll("{key}", "k1"));
       expect(JSON.stringify(copy.json())).not.toContain("top-secret");
     } finally {
       keys.PASSWORD_FIELD_KEYS = before.list;

@@ -1,13 +1,13 @@
 import type { Readable } from "stream";
+import { EngineError } from "../errors/engine-error.js";
 
 /**
  * Thrown when a storage backend is asked for a key it does not hold.
  * Routers map this to a 404 ApiResponse.
  */
-export class FileNotFoundInStorageError extends Error {
+export class FileNotFoundInStorageError extends EngineError {
   constructor(public readonly key: string) {
-    super(`File not found in storage: ${key}`);
-    this.name = "FileNotFoundInStorageError";
+    super("file_not_in_storage", { key }, 404, "FILE_NOT_FOUND");
   }
 }
 

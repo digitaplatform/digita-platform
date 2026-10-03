@@ -137,13 +137,11 @@ describe("LocalStoragePort", () => {
   });
 
   it("rejects path-like keys (traversal guard)", async () => {
-    await expect(port.put("../escape.txt", Buffer.from("x"))).rejects.toThrow(/Invalid storage key/);
-    await expect(port.getStream("customers/../escape.txt")).rejects.toThrow(/Invalid storage key/);
-    await expect(port.getStream("a/b/c/d.txt")).rejects.toThrow(/Invalid storage key/);
-    await expect(port.getStream("customers//x.txt")).rejects.toThrow(/Invalid storage key/);
-    await expect(port.getStream("/customers/x.txt")).rejects.toThrow(/Invalid storage key/);
-    await expect(port.put("customers\\evil.txt", Buffer.from("x"))).rejects.toThrow(
-      /Invalid storage key/,
-    );
+    await expect(port.put("../escape.txt", Buffer.from("x"))).rejects.toMatchObject({ code: "storage_key_invalid" });
+    await expect(port.getStream("customers/../escape.txt")).rejects.toMatchObject({ code: "storage_key_invalid" });
+    await expect(port.getStream("a/b/c/d.txt")).rejects.toMatchObject({ code: "storage_key_invalid" });
+    await expect(port.getStream("customers//x.txt")).rejects.toMatchObject({ code: "storage_key_invalid" });
+    await expect(port.getStream("/customers/x.txt")).rejects.toMatchObject({ code: "storage_key_invalid" });
+    await expect(port.put("customers\\evil.txt", Buffer.from("x"))).rejects.toMatchObject({ code: "storage_key_invalid" });
   });
 });

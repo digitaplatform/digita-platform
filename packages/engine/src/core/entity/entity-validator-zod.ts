@@ -16,7 +16,7 @@ import { validateRowUniqueness } from "./row-uniqueness-validator.js";
  * shape (and existing UI translation keys).
  *
  * Message keys: every rule `field-to-zod.ts` builds names its key as its Zod
- * message, and that key is the issue's `message_key`. A Zod check that names
+ * message, and that key is the issue's `code`. A Zod check that names
  * none, such as a value of the wrong type, gets `field_invalid_type` through the
  * parse's error map, which ranks below a message the schema names.
  *
@@ -39,7 +39,7 @@ export function validateEntityDataZod(
       const fieldPath = pathToString(issue.path);
       errors.push({
         field: fieldPath,
-        message_key: issue.message,
+        code: issue.message,
         message: issue.message,
         params: issueParams(fieldPath, issue),
       });

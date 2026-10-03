@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import type { EntityDefinition, FieldDefinition } from "@digitaplatform/shared";
 import { ROW_ID_FIELD } from "@digitaplatform/shared";
+import { ConfigurationError, EngineError } from "../errors/engine-error.js";
 
 /**
  * A Password field's value at rest: AES-256-GCM under the key `key_id` names.
@@ -121,9 +122,7 @@ export function assertPasswordFieldKeys(entities: EntityDefinition[]): void {
   const first = entities.find((e) => !e.is_virtual && passwordFieldPaths(e).length > 0);
   if (!first) return;
   if (!settings?.PASSWORD_FIELD_KEYS) {
-    throw new Error(
-      `Missing required environment variable: PASSWORD_FIELD_KEYS (${first.name}.${passwordFieldPaths(first)[0]} is a Password field)`,
-    );
+    throw new ConfigurationError("password_keys_missing_for_field", { setting: "PASSWORD_FIELD_KEYS", field: `${first.name}.${passwordFieldPaths(first)[0]}` });
   }
   passwordKeySet();
 }
@@ -134,24 +133,23 @@ function passwordKeySet(): PasswordKeySet {
   const raw = settings?.PASSWORD_FIELD_KEYS ?? "";
   const activeKeyId = settings?.PASSWORD_FIELD_ACTIVE_KEY_ID ?? "";
   if (parsed && parsed.raw === raw && parsed.activeKeyId === activeKeyId) return parsed.set;
-  if (!raw) throw new Error("Missing required environment variable: PASSWORD_FIELD_KEYS");
+  if (!raw) throw new ConfigurationError("setting_missing", { setting: "PASSWORD_FIELD_KEYS" });
   const keys = new Map<string, Buffer>();
-  for (const pair of raw.split(",")) {
+  for (const [index, pair] of raw.split(",").entries()) {
     const at = pair.indexOf("=");
     const id = at < 0 ? "" : pair.slice(0, at).trim();
-    if (!/^[A-Za-z0-9_-]+$/.test(id)) {
-      throw new Error(`PASSWORD_FIELD_KEYS: expected <id>=<base64 key> pairs, got "${pair.trim()}"`);
-    }
-    if (keys.has(id)) throw new Error(`PASSWORD_FIELD_KEYS: key id "${id}" is listed twice`);
+    // The pair may hold key material, so the error names its position, never the pair.
+    if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new ConfigurationError("password_key_pair_malformed", { position: String(index + 1) });
+    if (keys.has(id)) throw new ConfigurationError("password_key_listed_twice", { key: id });
     const key = Buffer.from(pair.slice(at + 1).trim(), "base64");
     if (key.length !== KEY_BYTES) {
-      throw new Error(`PASSWORD_FIELD_KEYS: key "${id}" is not ${KEY_BYTES} bytes of base64`);
+      throw new ConfigurationError("password_key_wrong_length", { key: id, bytes: String(KEY_BYTES) });
     }
     keys.set(id, key);
   }
-  if (!activeKeyId) throw new Error("Missing required environment variable: PASSWORD_FIELD_ACTIVE_KEY_ID");
+  if (!activeKeyId) throw new ConfigurationError("setting_missing", { setting: "PASSWORD_FIELD_ACTIVE_KEY_ID" });
   if (!keys.has(activeKeyId)) {
-    throw new Error(`PASSWORD_FIELD_ACTIVE_KEY_ID: "${activeKeyId}" is not a key id of PASSWORD_FIELD_KEYS`);
+    throw new ConfigurationError("password_active_key_not_listed", { key: activeKeyId });
   }
   parsed = { raw, activeKeyId, set: { keys, activeKeyId } };
   return parsed.set;
@@ -172,15 +170,14 @@ export function encryptPassword(clear: string): EncryptedPassword {
 
 /** A stored Password value names a key id PASSWORD_FIELD_KEYS no longer lists, so
  *  it cannot be read back; a copy or an amendment that must carry it stops here. */
-export class PasswordKeyNotListedError extends Error {
+export class PasswordKeyNotListedError extends EngineError {
   constructor(public readonly keyId: string) {
-    super(`A stored Password value uses key "${keyId}", which PASSWORD_FIELD_KEYS no longer lists; list it again to copy or amend this document`);
-    this.name = "PasswordKeyNotListedError";
+    super("password_key_not_listed", { key: keyId }, 409, "PASSWORD_KEY_NOT_LISTED");
   }
 }
 
 export function decryptPassword(stored: unknown): string {
-  if (!isEncryptedPassword(stored)) throw new Error("decryptPassword: the value is not an encrypted Password value");
+  if (!isEncryptedPassword(stored)) throw new EngineError("password_value_not_encrypted", {}, 500, "INTERNAL_ERROR");
   const key = passwordKeySet().keys.get(stored.key_id);
   if (!key) throw new PasswordKeyNotListedError(stored.key_id);
   const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(stored.iv, "base64"), { authTagLength: 16 });

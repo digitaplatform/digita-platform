@@ -9,13 +9,6 @@ export interface ResolverContext {
   warnings: string[];
 }
 
-export class TokenResolutionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "TokenResolutionError";
-  }
-}
-
 const RESERVED_PREFIXES = ["$root.", "$user.", "$param.", "$now"];
 
 /**

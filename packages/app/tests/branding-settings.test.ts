@@ -54,6 +54,17 @@ describe('the branding a tenant sets', () => {
     expect(document.head.querySelectorAll('link[rel="icon"]')).toHaveLength(1);
   });
 
+  it("shows the icon of the signature the tenant wears where it sets no favicon, and the favicon over it", async () => {
+    const store = await loadThemeStore();
+    const { registerSignature } = await import('@digitaplatform/theme');
+    const icon = '<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/></svg>';
+    registerSignature({ id: 'tab-icon-test', name: 'Tab icon test', accent: '#112233', icon });
+    store.getState().setBranding({ default_signature: 'tab-icon-test' });
+    expect(iconHref()).toBe(`data:image/svg+xml,${encodeURIComponent(icon)}`);
+    store.getState().setBranding({ default_signature: 'tab-icon-test', favicon: '/files/favicon.png' });
+    expect(iconHref()).toBe('/files/favicon.png');
+  });
+
   it("PLANTED DEFECT: shows the platform's favicon, not one the branding names on another host", async () => {
     const store = await loadThemeStore();
     store.getState().setBranding({ favicon: 'https://evil.example/favicon.png' });

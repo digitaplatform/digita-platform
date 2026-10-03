@@ -57,13 +57,14 @@ export interface DeliveredSignature {
   family?: string;
   monogram?: string;
   wordmark?: string;
+  icon?: string;
   colors?: Record<string, SignatureValue>;
   graphics?: Record<string, SignatureValue>;
 }
 
 /**
  * Register a delivered signature so getSignature(id) resolves its full identity:
- * accent, fonts, lockup family, colour world, graphics, monogram and wordmark. A
+ * accent, fonts, lockup family, colour world, graphics, monogram, wordmark and tab icon. A
  * thin signature carries no colours or graphics. Applying it (signature, then the
  * tenant's branding, then density) stays with the caller.
  */
@@ -76,6 +77,7 @@ export function registerDeliveredSignature(signature: DeliveredSignature): void 
     family: signature.family,
     monogram: signature.monogram,
     wordmark: signature.wordmark,
+    icon: signature.icon,
     colors: signature.colors,
     graphics: signature.graphics,
   });

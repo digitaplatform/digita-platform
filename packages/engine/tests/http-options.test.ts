@@ -66,7 +66,7 @@ describe("the engine's proxy setting", () => {
     for (const bad of ["", "-1", "1.5", "x", " 1"]) {
       vi.resetModules();
       vi.stubEnv("API_TRUSTED_PROXY_HOPS", bad);
-      await expect(import("../src/core/config/env.js")).rejects.toThrow(/API_TRUSTED_PROXY_HOPS/);
+      await expect(import("../src/core/config/env.js")).rejects.toMatchObject({ params: { setting: "API_TRUSTED_PROXY_HOPS" } });
     }
   });
 
