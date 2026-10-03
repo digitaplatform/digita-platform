@@ -50,7 +50,10 @@ export async function buildPageMetadata(page: WebPage, site: WebSite | null): Pr
   const path = pagePath(page.locale, page.slug);
   const title = page.meta_title || page.title;
   const description = page.meta_description;
-  const image = ogImageUrl(page.og_image || site?.default_og_image);
+  // A page or site that names its own image keeps it; every other page shows the one drawn for it.
+  const image =
+    ogImageUrl(page.og_image || site?.default_og_image) ??
+    absoluteUrl(`/api/og?${new URLSearchParams({ locale: page.locale, slug: page.slug })}`);
 
   const languages = pageAlternates(page, page.translation_group ? await listPages() : []);
 
@@ -67,13 +70,13 @@ export async function buildPageMetadata(page: WebPage, site: WebSite | null): Pr
       siteName: site?.site_name,
       locale: page.locale,
       type: "website",
-      images: image ? [{ url: image }] : undefined,
+      images: [{ url: image }],
     },
     twitter: {
-      card: image ? "summary_large_image" : "summary",
+      card: "summary_large_image",
       title,
       description,
-      images: image ? [image] : undefined,
+      images: [image],
     },
   };
 }
