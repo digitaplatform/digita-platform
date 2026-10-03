@@ -149,4 +149,25 @@ describe("a seeded Language", () => {
     await expect(seedLanguages(db)).resolves.toBeUndefined();
     expect([await codeOf("de"), await codeOf("pt")]).toEqual([undefined, "de"]);
   });
+
+  it("marked Language it survives seedLanguages rerun and reserves unique code", async () => {
+    await seedLanguages(db);
+    await docService.deleteDoc("Language", "it", admin);
+    const beforeRerun = await db.findOne(DIGITA.COLLECTIONS.LANGUAGE, "it", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(beforeRerun).toMatchObject({ _id: "it", code: "it" });
+    expect(beforeRerun?.["deleted"]).toBeInstanceOf(Date);
+    expect(beforeRerun?.["deleted_by"]).toBe(admin.email);
+
+    await expect(seedLanguages(db)).resolves.toBeUndefined();
+
+    const afterRerun = await db.findOne(DIGITA.COLLECTIONS.LANGUAGE, "it", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(afterRerun).toEqual(beforeRerun);
+    expect(await db.findOne(DIGITA.COLLECTIONS.LANGUAGE, "it", DIGITA.DATABASES.CORE)).toBeNull();
+
+    await expect(docService.insert("Language", { name: "Italian Duplicate", code: "it" }, admin)).rejects.toThrow();
+
+    await languages().insertOne({ _id: "it-custom" as never, name: "Custom Italian", doctype: "language", docstatus: 0 });
+    await seedLanguages(db);
+    expect(await codeOf("it-custom")).toBeUndefined();
+  });
 });

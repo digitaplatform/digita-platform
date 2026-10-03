@@ -118,4 +118,43 @@ describe('the deleted records of a list', () => {
     expect(screen.getByText('Still here')).toBeInTheDocument();
     expect(page.list.mock.lastCall![1].filters).not.toContainEqual(['deleted', 'is', 'set']);
   });
+
+  it('retains enabled previous navigation back to page 1 on an empty page 2 when total is 20', () => {
+    page.list.mockReturnValue({
+      data: {
+        rows: [],
+        total: 20,
+        page: 2,
+        pageSize: 20,
+        totalPages: 1,
+      },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+    });
+    renderList('display=deleted&page=2', ['Clerk']);
+    expect(screen.queryByTestId('deleted-empty')).toBeNull();
+    const prevBtn = screen.getByRole('button', { name: 'ui.list.previous' });
+    expect(prevBtn).not.toBeDisabled();
+    fireEvent.click(prevBtn);
+    expect(lastWrite()).toMatchObject({ display: 'deleted', page: '1' });
+  });
+
+  it('retains no-deleted empty state when total is 0', () => {
+    page.list.mockReturnValue({
+      data: {
+        rows: [],
+        total: 0,
+        page: 1,
+        pageSize: 20,
+        totalPages: 0,
+      },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+    });
+    renderList('display=deleted', ['Clerk']);
+    expect(screen.getByTestId('deleted-empty')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ui.list.previous' })).toBeNull();
+  });
 });

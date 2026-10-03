@@ -64,6 +64,7 @@ let adminTok: string;
 let clerkTok: string;
 let readerTok: string;
 let shelverTok: string;
+let shareKeeperTok: string;
 const insertHooks: string[] = [];
 let rebuildCopies = false;
 
@@ -93,12 +94,16 @@ const BOOK: EntityDefinition = {
       label: "Copies",
       child_fields: [{ fieldname: "barcode", fieldtype: "Data", label: "Barcode" }],
     },
+    { fieldname: "attachment", fieldtype: "Attach", label: "Attachment" },
   ],
   permissions: [
     { role: "Administrator", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
     { role: "Clerk", level: 0, select: 1, read: 1, write: 1, create: 1, delete: 1 },
     { role: "Reader", level: 0, select: 1, read: 1 },
-    { role: "Shelver", level: 0, select: 1, read: 1, delete: 1, condition: "doc.code == 'C-9'" },
+    { role: "ShareKeeper", level: 0, select: 1 },
+    { role: "ShareKeeper", level: 0, read: 1, if_owner: true },
+    { role: "ShareKeeper", level: 0, delete: 1, condition: "doc.code == 'C-SHARE-KEEP'" },
+    { role: "Shelver", level: 0, select: 1, read: 1, delete: 1, condition: "doc.code == 'C-9' || doc.code == 'C-COUNT-YES'" },
   ],
 } as unknown as EntityDefinition;
 
@@ -148,6 +153,7 @@ beforeAll(async () => {
   clerkTok = await ta.sign({ sub: "clerk@d", email: "clerk@d", roles: ["Clerk"] });
   readerTok = await ta.sign({ sub: "reader@d", email: "reader@d", roles: ["Reader"] });
   shelverTok = await ta.sign({ sub: "shelver@d", email: "shelver@d", roles: ["Shelver"] });
+  shareKeeperTok = await ta.sign({ sub: "keeper-id", email: "keeper@d", roles: ["ShareKeeper"] });
 }, 90000);
 
 afterAll(async () => {
@@ -287,6 +293,195 @@ describe("a deleted record", () => {
     expect((await restoreBook("B8")).statusCode).toBe(404);
     expect(insertHooks).toEqual([]);
     expect((await restoreBook("absent")).statusCode).toBe(404);
+  });
+
+  it("counts deleted rows only with delete permission and the ordinary row read gate", async () => {
+    for (const [name, code] of [["B-COUNT-YES", "C-COUNT-YES"], ["B-COUNT-NO", "C-COUNT-NO"]]) {
+      expect((await createBook({ _id: name, title: name, code })).statusCode).toBe(201);
+      expect((await deleteBook(name!)).statusCode).toBe(200);
+    }
+    const ids = { _id: { $in: ["B-COUNT-YES", "B-COUNT-NO"] } };
+    const count = (token: string, filters: Record<string, unknown>[]) => app.inject({
+      method: "GET", url: `/api/v1/resource/SdBook/count?filters=${encodeURIComponent(JSON.stringify(filters))}`, headers: as(token),
+    });
+    expect((await count(adminTok, [ids])).json().data.count).toBe(0);
+    expect((await count(adminTok, [ids, { deleted: { $ne: null } }])).json().data.count).toBe(2);
+    expect((await count(shelverTok, [ids, { deleted: { $ne: null } }])).json().data.count).toBe(1);
+    expect((await count(readerTok, [ids, { deleted: { $ne: null } }])).statusCode).toBe(403);
+  });
+
+  it("keeps deleted share-only rows in the shared query path and still checks each delete grant", async () => {
+    for (const [name, code] of [["B-SHARED-DELETED-YES", "C-SHARE-KEEP"], ["B-SHARED-DELETED-NO", "C-SHARE-DENY"]]) {
+      expect((await createBook({ _id: name, title: name, code })).statusCode).toBe(201);
+      await db.insertOne(DIGITA.COLLECTIONS.DOC_SHARE, {
+        _id: `SdBook:${name}:keeper@d`, entity: "SdBook", document_name: name,
+        shared_with: "keeper@d", can_read: true, owner: "admin@d", creation: new Date(), modified: new Date(),
+      }, DIGITA.DATABASES.IDENTITY);
+      expect((await deleteBook(name!)).statusCode).toBe(200);
+    }
+    const response = await listDeleted(shareKeeperTok);
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.map((row: { _id: string }) => row._id)).toEqual(["B-SHARED-DELETED-YES"]);
+    expect(response.json().meta.total).toBe(1);
+  });
+
+  it("refuses generic DELETE resource/File/id, POST bulk-delete, and DELETE file/id for a File held by a deleted parent", async () => {
+    const fileId = "FILE-HELD-BY-DEL-PARENT";
+    const fileUrl = `/api/v1/file/${fileId}/download`;
+    await db.insertOne(DIGITA.COLLECTIONS.FILE, {
+      _id: fileId,
+      doctype: "File",
+      docstatus: 0,
+      file_name: "parent-attachment.pdf",
+      file_url: fileUrl,
+      is_private: true,
+      owner: "admin@d",
+      modified_by: "admin@d",
+      creation: new Date(),
+      modified: new Date(),
+    }, DIGITA.DATABASES.CORE);
+
+    expect((await createBook({ _id: "B-PARENT", title: "Parent Book", code: "C-PARENT", attachment: fileUrl })).statusCode).toBe(201);
+    expect((await deleteBook("B-PARENT")).statusCode).toBe(200);
+    expect((await db.findOne("SdBook", "B-PARENT", "app", undefined, { includeDeleted: true }))?.["deleted"]).toBeInstanceOf(Date);
+
+    // generic DELETE resource/File/id refuses
+    const resGeneric = await app.inject({ method: "DELETE", url: `/api/v1/resource/File/${fileId}`, headers: as(adminTok) });
+    expect(resGeneric.statusCode).toBe(409);
+    expect(resGeneric.json().error.code).toBe("DELETE_BLOCKED");
+    let fileDoc = await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE);
+    expect(fileDoc?.["deleted"]).toBeUndefined();
+
+    // POST resource/File/bulk-delete { names } refuses
+    const resBulk = await app.inject({
+      method: "POST",
+      url: "/api/v1/resource/File/bulk-delete",
+      headers: as(adminTok),
+      payload: { names: [fileId] },
+    });
+    expect(resBulk.statusCode).toBe(200);
+    expect(resBulk.json().data.deleted).toEqual([]);
+    expect(resBulk.json().data.failed).toHaveLength(1);
+    expect(resBulk.json().data.failed[0]).toMatchObject({ name: fileId });
+    fileDoc = await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE);
+    expect(fileDoc?.["deleted"]).toBeUndefined();
+
+    // DELETE file/id refuses
+    const resDirect = await app.inject({ method: "DELETE", url: `/api/v1/file/${fileId}`, headers: as(adminTok) });
+    expect(resDirect.statusCode).toBe(409);
+    expect(resDirect.json().error.code).toBe("DELETE_BLOCKED");
+    fileDoc = await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE);
+    expect(fileDoc?.["deleted"]).toBeUndefined();
+
+    // Unreferenced File positive still marks
+    const unreferencedId = "FILE-FREE-UNREFERENCED";
+    await db.insertOne(DIGITA.COLLECTIONS.FILE, {
+      _id: unreferencedId,
+      doctype: "File",
+      docstatus: 0,
+      file_name: "free.pdf",
+      file_url: `/api/v1/file/${unreferencedId}/download`,
+      is_private: true,
+      owner: "admin@d",
+      modified_by: "admin@d",
+      creation: new Date(),
+      modified: new Date(),
+    }, DIGITA.DATABASES.CORE);
+
+    const resFree = await app.inject({ method: "DELETE", url: `/api/v1/file/${unreferencedId}`, headers: as(adminTok) });
+    expect(resFree.statusCode).toBe(200);
+    const markedFree = await db.findOne(DIGITA.COLLECTIONS.FILE, unreferencedId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(markedFree?.["deleted"]).toBeInstanceOf(Date);
+    expect(markedFree?.["deleted_by"]).toBe("admin@d");
+    expect(await db.findOne(DIGITA.COLLECTIONS.FILE, unreferencedId, DIGITA.DATABASES.CORE)).toBeNull();
+  });
+
+  it("prevents zero-reference gap when shared attachment owner drops reference, across mark and restore, and supports uppercase system-ID URL aliases", async () => {
+    const sharedFileId = "FILE-SHARED-AB";
+    const sharedUrl = `/api/v1/file/${sharedFileId}/download`;
+    await db.insertOne(DIGITA.COLLECTIONS.FILE, {
+      _id: sharedFileId,
+      doctype: "File",
+      docstatus: 0,
+      file_name: "shared.pdf",
+      file_url: sharedUrl,
+      attached_to_entity: "SdBook",
+      attached_to_name: "B-SHARE-A",
+      attached_to_field: "attachment",
+      is_private: true,
+      owner: "admin@d",
+      modified_by: "admin@d",
+      creation: new Date(),
+      modified: new Date(),
+    }, DIGITA.DATABASES.CORE);
+
+    expect((await createBook({ _id: "B-SHARE-A", title: "Book A", code: "C-SHARE-A", attachment: sharedUrl })).statusCode).toBe(201);
+    expect((await createBook({ _id: "B-SHARE-B", title: "Book B", code: "C-SHARE-B", attachment: sharedUrl })).statusCode).toBe(201);
+
+    // A drops F: cleanupDocumentAttachments runs on A, but F remains active while B is live
+    const dropRes = await app.inject({
+      method: "PUT",
+      url: "/api/v1/resource/SdBook/B-SHARE-A",
+      headers: as(adminTok),
+      payload: { attachment: null },
+    });
+    expect(dropRes.statusCode).toBe(200);
+
+    let fileRecord = await db.findOne(DIGITA.COLLECTIONS.FILE, sharedFileId, DIGITA.DATABASES.CORE);
+    expect(fileRecord?.["deleted"]).toBeUndefined();
+
+    // Now mark B as deleted: F remains active while B is marked
+    expect((await deleteBook("B-SHARE-B")).statusCode).toBe(200);
+    const delAttempt = await app.inject({ method: "DELETE", url: `/api/v1/file/${sharedFileId}`, headers: as(adminTok) });
+    expect(delAttempt.statusCode).toBe(409);
+    expect(delAttempt.json().error.code).toBe("DELETE_BLOCKED");
+
+    fileRecord = await db.findOne(DIGITA.COLLECTIONS.FILE, sharedFileId, DIGITA.DATABASES.CORE);
+    expect(fileRecord?.["deleted"]).toBeUndefined();
+
+    // Restore B: B is live again and still references F
+    expect((await restoreBook("B-SHARE-B")).statusCode).toBe(200);
+    const restoredB = await db.findOne("SdBook", "B-SHARE-B", "app");
+    expect(restoredB?.["attachment"]).toBe(sharedUrl);
+    fileRecord = await db.findOne(DIGITA.COLLECTIONS.FILE, sharedFileId, DIGITA.DATABASES.CORE);
+    expect(fileRecord?.["deleted"]).toBeUndefined();
+
+    // System-ID uppercase URL/request aliases also retain File
+    const sysId = "607f1f77bcf86cd799439011";
+    await db.insertOne(DIGITA.COLLECTIONS.FILE, {
+      _id: sysId,
+      doctype: "File",
+      docstatus: 0,
+      file_name: "system-target.pdf",
+      file_url: `/api/v1/file/${sysId}/download`,
+      is_private: true,
+      owner: "admin@d",
+      modified_by: "admin@d",
+      creation: new Date(),
+      modified: new Date(),
+    }, DIGITA.DATABASES.CORE);
+
+    const upperUrl = `/api/v1/file/${sysId.toUpperCase()}/download`;
+    expect((await createBook({ _id: "B-UPPER", title: "Upper Book", code: "C-UPPER", attachment: upperUrl })).statusCode).toBe(201);
+
+    const upperDelRes = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/file/${sysId.toUpperCase()}`,
+      headers: as(adminTok),
+    });
+    expect(upperDelRes.statusCode).toBe(409);
+    expect(upperDelRes.json().error.code).toBe("DELETE_BLOCKED");
+
+    const genericUpperDelRes = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/resource/File/${sysId.toUpperCase()}`,
+      headers: as(adminTok),
+    });
+    expect(genericUpperDelRes.statusCode).toBe(409);
+    expect(genericUpperDelRes.json().error.code).toBe("DELETE_BLOCKED");
+
+    const sysDoc = await db.findOne(DIGITA.COLLECTIONS.FILE, sysId, DIGITA.DATABASES.CORE);
+    expect(sysDoc?.["deleted"]).toBeUndefined();
   });
 });
 

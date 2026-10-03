@@ -606,7 +606,7 @@ export class DocumentService {
     // Classify against stored rows: an existing share must not narrow a read RBAC already admits.
     const sharedOnly = new Set<string>();
     if (sharedIds.length > 0) {
-      const sharedRows = await this.db.find(entity.name, { filters: [{ _id: { $in: sharedIds } }] }, entity.database, options.session);
+      const sharedRows = await this.db.find(entity.name, { filters: [{ _id: { $in: sharedIds } }], includeDeleted }, entity.database, options.session);
       for (const stored of sharedRows) {
         const row = readStoredRow(entity, stored);
         if (await this.isSharedForReadOnly(user, doctype, row)) sharedOnly.add(String(row["_id"]));
@@ -665,14 +665,15 @@ export class DocumentService {
             { $project: { _id: 1 } }],
         } },
       ];
-      const [matched] = await this.db.aggregate(entity.name, pipeline, dbTarget, options.session);
+      const [matched] = await this.db.aggregate(entity.name, pipeline, dbTarget, options.session, { includeDeleted });
       total = (matched?.["total"] as Array<{ count: number }> | undefined)?.[0]?.count ?? 0;
       if (gatesRows && total > env.LIST_GATED_MAX_ROWS) throw new GatedListTooBroadError(doctype, env.LIST_GATED_MAX_ROWS);
-      const rows = await this.loadRowsInOrder(entity, ((matched?.["data"] ?? []) as Record<string, unknown>[]).map((row) => row["_id"]), options.session);
+      const rows = await this.loadRowsInOrder(entity, ((matched?.["data"] ?? []) as Record<string, unknown>[]).map((row) => row["_id"]), options.session, includeDeleted);
       if (gatesRows) {
         const readable: Record<string, unknown>[] = [];
         for (const row of rows) {
-          if (sharedOnly.has(String(row["_id"])) || (await this.permissionChecker.hasPermission(user, doctype, "read", row)).allowed) readable.push(row);
+          const canRead = sharedOnly.has(String(row["_id"])) || (await this.permissionChecker.hasPermission(user, doctype, "read", row)).allowed;
+          if (canRead && (!includeDeleted || (await this.permissionChecker.hasPermission(user, doctype, "delete", row)).allowed)) readable.push(row);
         }
         total = readable.length;
         docs = readable.slice(offset, offset + limit);
@@ -796,6 +797,8 @@ export class DocumentService {
     // wired into buildMongoFilter for tuple-form — must be applied here explicitly.
     await this.permissionChecker.check(user, doctype, "select");
     const allowed = this.permissionChecker.getFilterAllowlist(user, entity.name);
+    const includeDeleted = options.allowDeletedFilter === true && (filters ?? []).some((filter) => Object.hasOwn(filter, "deleted"));
+    if (includeDeleted) await this.permissionChecker.check(user, doctype, "delete");
     // Apply scope filter so users with restricted scope only count
     // their own visible rows, not the global total.
     const merged: Record<string, unknown> = {};
@@ -813,8 +816,8 @@ export class DocumentService {
     const filterArray = [scopedFilter, options.scope ?? {}].filter((filter) => Object.keys(filter).length > 0);
     // C1: a `condition` read grant cannot be a Mongo filter, so count only the
     // condition-visible rows, as getList's total does.
-    if (this.permissionChecker.hasConditionalRowRead(user, doctype)) {
-      return (await this.listReadableRows(user, doctype, entity, filterArray, undefined, options.session)).length;
+    if (includeDeleted || this.permissionChecker.hasConditionalRowRead(user, doctype)) {
+      return (await this.listReadableRows(user, doctype, entity, filterArray, undefined, options.session, includeDeleted)).length;
     }
     return this.db.count(entity.name, filterArray, entity.database, options.session);
   }

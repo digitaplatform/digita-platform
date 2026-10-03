@@ -73,7 +73,7 @@ async function writeBook(root: string, authorTarget: string, extraFields: unknow
   await writeJson(join(root, "library", "entities", "book.entity.json"), {
     name: "Book", module: "library", database: DB, naming: { strategy: "system" },
     fields: [
-      { fieldname: "title", fieldtype: "Data", label: "Title" },
+      { fieldname: "title", fieldtype: "Data", label: "Title", translatable: true },
       { fieldname: "author", fieldtype: "Link", label: "Author", target: authorTarget },
       ...extraFields,
     ],
@@ -255,6 +255,181 @@ describe("POST /admin/reload-definitions runs every check boot runs on the defin
     running = await startAdminApp();
     await writeBook(running.root, "Author", [{ fieldname: "reset", fieldtype: "Link", label: "Reset", target: "DemoReset" }]);
     expect((await running.reload()).statusCode).toBe(200);
+  }, 120000);
+
+  it("keeps marked custom and file-seeded Rule, View, and Translation rows unchanged while refreshing active controls", async () => {
+    await mkdir(join(running.root, "rules"), { recursive: true });
+    await writeJson(join(running.root, "rules", "retained.rule.json"), {
+      _id: "rule-file-retained",
+      entity: "Book",
+      event: "before_save",
+      actions: [{ type: "set_value", field: "title", value: "'Retained Rule Value'" }],
+    });
+
+    await mkdir(join(running.root, "views"), { recursive: true });
+    await writeJson(join(running.root, "views", "retained.view.json"), {
+      _id: "view-file-retained",
+      name: "Retained View",
+      anchored: false,
+      sections: [{ key: "rows", kind: "list", entity: "Book", limit: 10 }],
+    });
+    await writeJson(join(running.root, "views", "active.view.json"), {
+      _id: "view-file-active",
+      name: "Active View Initial",
+      anchored: false,
+      sections: [{ key: "rows", kind: "list", entity: "Book", limit: 10 }],
+    });
+
+    await mkdir(join(running.root, "seeds"), { recursive: true });
+    await writeJson(join(running.root, "seeds", "Book.translations.json"), [
+      { _id: "retained-book", field: "title", en: "Fresh File Title" },
+      { _id: "active-book", field: "title", en: "Active File Title" },
+    ]);
+
+    await writeJson(join(running.root, "rules", "active.rule.json"), {
+      _id: "rule-file-active", entity: "Book", event: "before_save", condition: "false",
+      actions: [{ type: "set_value", field: "title", value: "'Active Rule'" }],
+    });
+
+    const deletedAt = new Date("2026-02-01T12:00:00Z");
+    const createdAt = new Date("2026-01-01T12:00:00Z");
+
+    const customRule = {
+      _id: "rule-custom-retained",
+      entity: "Book",
+      event: "before_save",
+      actions: [{ type: "set_value", field: "title", value: "'Custom Rule Value'" }],
+      deleted: deletedAt,
+      deleted_by: "admin@digita.local",
+      owner: "admin@digita.local",
+      modified_by: "admin@digita.local",
+      creation: createdAt,
+      modified: createdAt,
+      docstatus: 0,
+    };
+    const fileRule = {
+      _id: "rule-file-retained",
+      entity: "Book",
+      event: "before_save",
+      actions: [{ type: "set_value", field: "title", value: "'Retained Rule Value'" }],
+      deleted: deletedAt,
+      deleted_by: "admin@digita.local",
+      owner: "system",
+      modified_by: "admin@digita.local",
+      creation: createdAt,
+      modified: createdAt,
+      docstatus: 0,
+    };
+    await running.db.insertOne(DIGITA.COLLECTIONS.RULE, customRule, DIGITA.DATABASES.CORE);
+    await running.db.insertOne(DIGITA.COLLECTIONS.RULE, fileRule, DIGITA.DATABASES.CORE);
+
+    const customView = {
+      _id: "view-custom-retained",
+      name: "Custom View",
+      anchored: false,
+      sections: [{ key: "rows", kind: "list", entity: "Book", limit: 10 }],
+      deleted: deletedAt,
+      deleted_by: "admin@digita.local",
+      owner: "admin@digita.local",
+      modified_by: "admin@digita.local",
+      creation: createdAt,
+      modified: createdAt,
+      docstatus: 0,
+    };
+    const fileView = {
+      _id: "view-file-retained",
+      name: "Retained View",
+      anchored: false,
+      sections: [{ key: "rows", kind: "list", entity: "Book", limit: 10 }],
+      deleted: deletedAt,
+      deleted_by: "admin@digita.local",
+      owner: "system",
+      modified_by: "admin@digita.local",
+      creation: createdAt,
+      modified: createdAt,
+      docstatus: 0,
+    };
+    const activeView = {
+      _id: "view-file-active",
+      name: "Active View Initial",
+      anchored: false,
+      sections: [{ key: "rows", kind: "list", entity: "Book", limit: 10 }],
+      owner: "system",
+      modified_by: "system",
+      creation: createdAt,
+      modified: createdAt,
+      docstatus: 0,
+    };
+    await running.db.insertOne(DIGITA.COLLECTIONS.VIEW, customView, DIGITA.DATABASES.CORE);
+    await running.db.insertOne(DIGITA.COLLECTIONS.VIEW, fileView, DIGITA.DATABASES.CORE);
+    await running.db.insertOne(DIGITA.COLLECTIONS.VIEW, activeView, DIGITA.DATABASES.CORE);
+
+    const customTranslation = {
+      _id: "data:en:Book.custom-book.title",
+      namespace: "data",
+      locale: "en",
+      key: "Book.custom-book.title",
+      value: "Custom Translation",
+      source: "user",
+      deleted: deletedAt,
+      deleted_by: "admin@digita.local",
+      owner: "admin@digita.local",
+      modified_by: "admin@digita.local",
+      creation: createdAt,
+      modified: createdAt,
+    };
+    const fileTranslation = {
+      _id: "data:en:Book.retained-book.title",
+      namespace: "data",
+      locale: "en",
+      key: "Book.retained-book.title",
+      value: "Original Stored Title",
+      source: "file",
+      deleted: deletedAt,
+      deleted_by: "admin@digita.local",
+      owner: "system",
+      modified_by: "admin@digita.local",
+      creation: createdAt,
+      modified: createdAt,
+    };
+    await running.db.insertOne(DIGITA.COLLECTIONS.TRANSLATION, customTranslation, DIGITA.DATABASES.CORE);
+    await running.db.insertOne(DIGITA.COLLECTIONS.TRANSLATION, fileTranslation, DIGITA.DATABASES.CORE);
+
+    await writeJson(join(running.root, "views", "active.view.json"), {
+      _id: "view-file-active",
+      name: "Active View Refreshed",
+      anchored: false,
+      sections: [{ key: "rows", kind: "list", entity: "Book", limit: 25 }],
+    });
+
+    const reloadRes = await running.reload();
+    expect(reloadRes.statusCode).toBe(200);
+
+    const storedCustomRule = await running.db.findOne(DIGITA.COLLECTIONS.RULE, "rule-custom-retained", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(storedCustomRule).toMatchObject(customRule);
+
+    const storedFileRule = await running.db.findOne(DIGITA.COLLECTIONS.RULE, "rule-file-retained", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(storedFileRule).toMatchObject(fileRule);
+
+    const storedCustomView = await running.db.findOne(DIGITA.COLLECTIONS.VIEW, "view-custom-retained", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(storedCustomView).toMatchObject(customView);
+
+    const storedFileView = await running.db.findOne(DIGITA.COLLECTIONS.VIEW, "view-file-retained", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(storedFileView).toMatchObject(fileView);
+
+    const storedCustomTrans = await running.db.findOne(DIGITA.COLLECTIONS.TRANSLATION, "data:en:Book.custom-book.title", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(storedCustomTrans).toMatchObject(customTranslation);
+
+    const storedFileTrans = await running.db.findOne(DIGITA.COLLECTIONS.TRANSLATION, "data:en:Book.retained-book.title", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(storedFileTrans).toMatchObject(fileTranslation);
+
+    const storedActiveView = await running.db.findOne(DIGITA.COLLECTIONS.VIEW, "view-file-active", DIGITA.DATABASES.CORE);
+    const activeRule = await running.db.findOne(DIGITA.COLLECTIONS.RULE, "rule-file-active", DIGITA.DATABASES.CORE);
+    expect(activeRule?.["actions"]).toEqual([{ type: "set_value", field: "title", value: "'Active Rule'" }]);
+    const activeTranslation = await running.db.findOne(DIGITA.COLLECTIONS.TRANSLATION, "data:en:Book.active-book.title", DIGITA.DATABASES.CORE);
+    expect(activeTranslation?.["value"]).toBe("Active File Title");
+    expect(storedActiveView?.["name"]).toBe("Active View Refreshed");
+    expect((storedActiveView?.["sections"] as Array<{ limit: number }>)[0]?.limit).toBe(25);
   }, 120000);
 });
 

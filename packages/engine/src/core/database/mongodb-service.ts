@@ -561,8 +561,9 @@ export class MongoDBService {
     pipeline: Document[],
     target: DatabaseTarget,
     session?: ClientSession,
+    options: ReadOptions = {},
   ): Promise<Document[]> {
-    return this.collection(collectionName, target).aggregate(activeRecordsPipeline(pipeline), { session }).toArray();
+    return this.collection(collectionName, target).aggregate(options.includeDeleted ? pipeline : activeRecordsPipeline(pipeline), { session }).toArray();
   }
 
   // ─── Index Management ─────────────────────────────────
