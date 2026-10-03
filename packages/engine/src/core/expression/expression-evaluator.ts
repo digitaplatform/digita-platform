@@ -75,14 +75,6 @@ function contextResolver(ctx: ExpressionContext): IdentifierResolver {
 }
 
 /**
- * Evaluate an expression string against a document and optional user context.
- * Returns true/false for conditional expressions. On parse error or a
- * disallowed identifier it returns `safeDefault` — `true` for visibility
- * expressions (depends_on/show_if: a broken expr shows the field) but callers
- * gating ACCESS (permission conditions) MUST pass `false` so a typo'd condition
- * fails CLOSED (denies) instead of silently granting.
- */
-/**
  * The top-level `doc` fields an expression reads, for a caller that loads only
  * those; `undefined` when it cannot name them (a parse failure, or `doc` read as
  * a whole), so the caller loads the whole row.
@@ -96,6 +88,14 @@ export function docFieldsOf(expression: string): string[] | undefined {
   }
 }
 
+/**
+ * Evaluate an expression string against a document and optional user context.
+ * Returns true/false for conditional expressions. On parse error or a
+ * disallowed identifier it returns `safeDefault` — `true` for visibility
+ * expressions (depends_on/show_if: a broken expr shows the field) but callers
+ * gating ACCESS (permission conditions) MUST pass `false` so a typo'd condition
+ * fails CLOSED (denies) instead of silently granting.
+ */
 export function evaluateExpression(
   expression: string,
   context: ExpressionContext,
