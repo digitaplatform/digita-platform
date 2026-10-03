@@ -26,17 +26,17 @@ import { AppMenu } from '@/plugins/app-menu/AppMenu';
 
 // The workshop's three sections, as the engine answers them to an Administrator.
 const LEAD = [
-  { _id: 'lead', label: 'Workshop lead', parent: null, position: 1 },
-  { _id: 'lead-orders', label: 'All orders', parent: 'lead', position: 1, target_entity: 'WorkOrder' },
+  { _id: 'lead', label: 'Workshop lead', parent: null, active: true, position: 1 },
+  { _id: 'lead-orders', label: 'All orders', parent: 'lead', active: true, position: 1, target_entity: 'WorkOrder' },
 ];
 const RECEPTION = [
-  { _id: 'reception', label: 'Reception', parent: null, position: 2 },
-  { _id: 'reception-open', label: 'Open orders', parent: 'reception', position: 1, target_entity: 'WorkOrder', filter_json: { status: 'Open' } },
+  { _id: 'reception', label: 'Reception', parent: null, active: true, position: 2 },
+  { _id: 'reception-open', label: 'Open orders', parent: 'reception', active: true, position: 1, target_entity: 'WorkOrder', filter_json: { status: 'Open' } },
 ];
 const TECHNICIAN = [
-  { _id: 'technician', label: 'Technician', parent: null, position: 3 },
-  { _id: 'technician-mine', label: 'My jobs', parent: 'technician', position: 1, target_url: '/WorkOrder?mine=1' },
-  { _id: 'technician-manual', label: 'Manual', parent: 'technician', position: 2, target_url: 'https://manuals.example.org/bikes' },
+  { _id: 'technician', label: 'Technician', parent: null, active: true, position: 3 },
+  { _id: 'technician-mine', label: 'My jobs', parent: 'technician', active: true, position: 1, target_url: '/WorkOrder?mine=1' },
+  { _id: 'technician-manual', label: 'Manual', parent: 'technician', active: true, position: 2, target_url: 'https://manuals.example.org/bikes' },
 ];
 
 const labels = (nodes: ReturnType<typeof buildAppMenu>) => nodes.map((n) => [n.label, n.children.map((c) => c.label)]);
@@ -53,13 +53,26 @@ describe('buildAppMenu', () => {
   it('PLANTED DEFECT: gives Reception its section only, and no node whose parent the engine withheld', () => {
     // The engine answers Reception's rows; a lead entry whose roles also name Reception arrives
     // without its section, so it is not drawn.
-    const rows = [...RECEPTION, { _id: 'lead-reports', label: 'Reports', parent: 'lead', position: 2, target_entity: 'Report' }];
+    const rows = [...RECEPTION, { _id: 'lead-reports', label: 'Reports', parent: 'lead', active: true, position: 2, target_entity: 'Report' }];
     expect(labels(buildAppMenu(rows))).toEqual([['Reception', ['Open orders']]]);
   });
 
   it('leaves out a switched-off node with its subtree, and a node without children and without a target', () => {
-    const rows = [...LEAD, { ...RECEPTION[0]!, active: 0 }, RECEPTION[1]!, { _id: 'empty', label: 'Empty', parent: null, position: 9 }];
+    const rows = [...LEAD, { ...RECEPTION[0]!, active: 0 }, RECEPTION[1]!, { _id: 'empty', label: 'Empty', parent: null, active: true, position: 9 }];
     expect(labels(buildAppMenu(rows))).toEqual([['Workshop lead', ['All orders']]]);
+  });
+
+  it.each([
+    { _id: 'masked-parent', label: 'Hidden ancestry', active: true, target_entity: 'Report' },
+    { _id: 'masked-active', label: 'Hidden activation', parent: null, target_entity: 'Report' },
+  ])('omits $label when an eligibility field was masked', (masked) => {
+    expect(labels(buildAppMenu([...LEAD, masked]))).toEqual([['Workshop lead', ['All orders']]]);
+  });
+
+  it('omits descendants of a parent whose eligibility field was masked', () => {
+    const maskedParent: Record<string, unknown> = { ...RECEPTION[0]! };
+    delete maskedParent.active;
+    expect(labels(buildAppMenu([...LEAD, maskedParent, RECEPTION[1]!]))).toEqual([['Workshop lead', ['All orders']]]);
   });
 
   it('opens a list with its filter, a path in the app, and an absolute address outside it', () => {

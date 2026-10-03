@@ -39,7 +39,9 @@ const order = (a: Row, b: Row) =>
 export function buildAppMenu(rows: Row[]): MenuNode[] {
   const byParent = new Map<string, Row[]>();
   for (const row of rows) {
-    if (row[TREE_ACTIVE_FIELD] === 0 || row[TREE_ACTIVE_FIELD] === false) continue;
+    // Readable defaults are explicit; masked eligibility fields cannot establish a visible node.
+    if (!Object.hasOwn(row, TREE_PARENT_FIELD) || !Object.hasOwn(row, TREE_ACTIVE_FIELD)
+      || row[TREE_ACTIVE_FIELD] === 0 || row[TREE_ACTIVE_FIELD] === false) continue;
     const key = text(row[TREE_PARENT_FIELD]) ?? '';
     byParent.set(key, [...(byParent.get(key) ?? []), row]);
   }

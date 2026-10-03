@@ -157,6 +157,7 @@ export function TreeEditor({
           <div className="w-48">
             <Select
               aria-label={labels.kind}
+              disabled={disabled}
               value={kind ?? ''}
               onChange={setChosenKind}
               options={kinds.map((k) => ({ value: k, label: k }))}

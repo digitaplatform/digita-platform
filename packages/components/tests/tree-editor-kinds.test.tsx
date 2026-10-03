@@ -1,7 +1,7 @@
 // The kit's tree editor on an entity that holds one tree per kind: it lists the kinds the nodes
 // carry, shows one kind's tree, and "New kind" asks for a name and adds that kind's first node.
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TreeEditor, type TreeEditorLabels, type TreeEditorNode } from '../src/composites/TreeEditor.js';
 
@@ -78,6 +78,36 @@ describe('TreeEditor kinds', () => {
     expect(screen.queryByRole('combobox', { name: 'kind' })).toBeNull();
     expect(screen.queryByRole('button', { name: '+ addRoot' })).toBeNull();
     expect(screen.getByRole('button', { name: '+ newKind' })).toBeInTheDocument();
+  });
+
+  it('keeps the kind fixed during a move and until its write finishes', async () => {
+    let finishMove!: () => void;
+    const pendingMove = new Promise<void>((resolve) => { finishMove = resolve; });
+    const onMove = vi.fn(() => pendingMove);
+    render(
+      <TreeEditor
+        nodes={NODES}
+        hasKinds
+        canMove={() => true}
+        labels={LABELS}
+        onAdd={vi.fn()}
+        onEdit={vi.fn()}
+        onMove={onMove}
+        onDelete={vi.fn()}
+      />,
+    );
+    const user = userEvent.setup();
+    const selector = screen.getByRole('combobox', { name: 'kind' });
+    await user.click(screen.getByRole('button', { name: 'move' }));
+    expect(selector).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'cancel' }));
+    expect(selector).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'move' }));
+    await user.click(screen.getByRole('button', { name: 'moveToRoot' }));
+    expect(onMove).toHaveBeenCalledWith('A-1', null);
+    expect(selector).toBeDisabled();
+    await act(async () => { finishMove(); await pendingMove; });
+    expect(selector).toBeEnabled();
   });
 
   it('PLANTED INNOCENT: an entity without kinds shows every node and offers no kind list', () => {
