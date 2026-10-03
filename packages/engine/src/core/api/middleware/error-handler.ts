@@ -1,5 +1,5 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
-import type { ApiResponse, DeclaredClientError } from "@digitaplatform/shared";
+import type { ApiResponse } from "@digitaplatform/shared";
 import {
   MongoServerError,
   MongoNetworkError,
@@ -10,6 +10,7 @@ import {
 import { ValidationFailedError } from "../../document/document-service.js";
 import { UnknownDoctypeError } from "../../entity/entity-registry.js";
 import { EngineError } from "../../errors/engine-error.js";
+import { declaredClientMessage, findDeclaredClientError } from "../../errors/declared-client-error.js";
 import { englishText } from "../../../i18n.js";
 import { createLogger } from "../../logging/logger.js";
 import { urlPath } from "../../logging/url-path.js";
@@ -141,39 +142,32 @@ export function globalErrorHandler(
   // below (TypeError / Mongo / fetch errors never carry a 4xx one — no silent
   // fallback keeps genuine server faults loud). Not logged as an error: it's a
   // client error and the debug log above already captured it.
-  const declared: unknown = (error as { statusCode?: unknown }).statusCode;
-  if (
-    typeof declared === "number" &&
-    Number.isInteger(declared) &&
-    declared >= 400 &&
-    declared <= 499
-  ) {
-    const e = error as Error & Partial<DeclaredClientError>;
+  const declared = findDeclaredClientError(error);
+  if (declared) {
+    const { text, params, field } = declaredClientMessage(declared);
     const response: ApiResponse<null> = {
       success: false,
-      status_code: declared,
+      status_code: declared.statusCode,
       data: null,
       messages: [
         {
-          // Raw text passes the i18n preSerialization hook verbatim (unknown key
-          // → identity), so either a message key or a plain sentence surfaces.
-          text: e.messageKey ?? error.message,
+          text,
           type: "error",
           show: true,
-          ...(e.field ? { path: e.field } : {}),
-          ...(e.messageKey && e.params ? { params: e.params } : {}),
+          ...(field ? { path: field } : {}),
+          ...(params ? { params } : {}),
         },
       ],
       error: {
-        code: e.code || "BUSINESS_RULE_VIOLATION",
+        code: declared.code || "BUSINESS_RULE_VIOLATION",
         // The raw Error.message is preserved for diagnostics even when a
         // messageKey drives the shown text.
         detail: error.message,
         trace_id: traceId,
-        ...(e.field ? { field: e.field } : {}),
+        ...(field ? { field } : {}),
       },
     };
-    reply.code(declared).send(response);
+    reply.code(declared.statusCode).send(response);
     return;
   }
 
