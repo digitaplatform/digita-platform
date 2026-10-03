@@ -170,9 +170,9 @@ export function listDeleted(entity: string): Promise<ApiResponse<DeletedRecordRo
   return api.get<ApiResponse<DeletedRecordRow[]>>(`${RESOURCE}/${enc(entity)}/deleted`);
 }
 
-/** Put a deleted record back under its id; the engine answers the record. */
-export function restoreDeleted<T = Doc>(entity: string, name: string): Promise<ApiResponse<T>> {
-  return api.post<ApiResponse<T>>(`${RESOURCE}/${enc(entity)}/deleted/${enc(name)}/restore`, {});
+/** Put the deletion of `name` at `deletedAt` back under its id; the engine answers the record. */
+export function restoreDeleted<T = Doc>(entity: string, name: string, deletedAt: string): Promise<ApiResponse<T>> {
+  return api.post<ApiResponse<T>>(`${RESOURCE}/${enc(entity)}/deleted/${enc(name)}/restore`, { deleted_at: deletedAt });
 }
 
 export function submitDoc<T = Doc>(entity: string, name: string): Promise<ApiResponse<T>> {

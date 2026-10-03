@@ -100,6 +100,14 @@ export class ActionNotAvailableError extends Error implements DeclaredClientErro
   }
 }
 
+/** A restore of a deleted record whose name a live record holds again: the restore overwrites
+ *  nothing, and the person decides which of the two stays. */
+export class RestoreNameTakenError extends EngineError {
+  constructor(doctype: string, name: string) {
+    super("restore_name_taken", { doctype, name }, 409, "RESTORE_NAME_TAKEN");
+  }
+}
+
 export class ValidationFailedError extends Error {
   constructor(
     public doctype: string,
@@ -2181,28 +2189,31 @@ export class DocumentService {
   }
 
   /**
-   * Put a deleted record back under its id, with its child rows, data translations and files.
-   * Whoever may delete the record may restore it. The restore runs the record's insert hooks
-   * (`validate`, `before_insert`, `after_insert`, `on_change`) and checks its links, so a hook that
-   * undid something at the delete does it again. A record or unique value that took the id or a
-   * unique value meanwhile refuses the restore with a duplicate key on that field.
+   * Put the deletion of `name` at `deletedAt` back under its id, with its child rows, data
+   * translations and files. Whoever may delete the record may restore it. The restore runs the
+   * record's insert hooks (`validate`, `before_insert`, `after_insert`, `on_change`) and checks its
+   * links, so a hook that undid something at the delete does it again. A live record that holds
+   * the name again refuses the restore; one that took a unique value refuses it with a duplicate
+   * key on that field.
    */
   private async performRestoreDoc(
     doctype: string,
     name: string,
+    deletedAt: Date,
     user: UserContext = GUEST_USER,
     ctx?: ResponseContext,
   ): Promise<BaseDocument> {
     const entity = this.registry.get(doctype);
     // A system id is found in any case, as a read finds it.
     const id = toIdString(toIdStorage(name));
-    const deleted = await this.deletedRecords.find(entity.name, id);
+    const deleted = await this.deletedRecords.find(entity.name, id, deletedAt);
     if (!deleted) throw new NotFoundError(doctype, name);
     await this.permissionChecker.check(user, doctype, "delete", readStoredRow(entity, deleted.record));
 
     const doc = new BaseDocument(doctype, { ...deleted.record });
     doc._isNew = true;
     const runRestore = async (session: import("mongodb").ClientSession) => {
+      if (await this.db.exists(entity.name, id, entity.database, session)) throw new RestoreNameTakenError(doctype, id);
       await this.hookRunner.runComputedHooks(doctype, doc, ctx, session, user);
       await this.hookRunner.run(doctype, "validate", doc, ctx, session, user);
       if (this.ruleEngine) {
@@ -2234,7 +2245,7 @@ export class DocumentService {
       for (const translation of deleted.translations) {
         await this.db.upsertOne(DIGITA.COLLECTIONS.TRANSLATION, toIdString(translation["_id"]), translation, DIGITA.DATABASES.CORE, session);
       }
-      await this.deletedRecords.remove(entity.name, id, session);
+      await this.deletedRecords.remove(deleted, session);
 
       await this.hookRunner.run(doctype, "after_insert", doc, ctx, session, user);
       await this.hookRunner.run(doctype, "on_change", doc, ctx, session, user);

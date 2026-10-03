@@ -256,7 +256,7 @@ describe("A document service call with the caller's session joins its transactio
     await docService.runAction("Booking", other, "convert", admin);
 
     expect(await stored("Booking", bookingId)).toBeNull();
-    expect(await db.findOne(DELETED_COLLECTION, `Booking:${bookingId}`, DIGITA.DATABASES.AUDITS)).not.toBeNull();
+    expect(await db.findOneByFilter(DELETED_COLLECTION, { entity: "Booking", document_name: bookingId }, DIGITA.DATABASES.AUDITS)).not.toBeNull();
     expect(await db.findOne(DIGITA.COLLECTIONS.FILE, "FILE-000703", "core")).not.toBeNull();
     expect(deletedBlobs).toEqual([]);
   });

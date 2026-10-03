@@ -1596,7 +1596,14 @@ describe("Upload API Integration", () => {
         const deleted = await app.inject({ method: "DELETE", url: `/api/v1/resource/TestSysBook/${name}`, headers: authHeaders(ownerToken) });
         expect(deleted.statusCode).toBe(200);
         await cleanupDone();
-        return app.inject({ method: "POST", url: `/api/v1/resource/TestSysBook/deleted/${name}/restore`, headers: authHeaders(ownerToken) });
+        const listed = await app.inject({ method: "GET", url: "/api/v1/resource/TestSysBook/deleted", headers: authHeaders(ownerToken) });
+        const deletion = (listed.json().data as Array<{ name: string; deleted_at: string }>).find((row) => row.name.toUpperCase() === name.toUpperCase())!;
+        return app.inject({
+          method: "POST",
+          url: `/api/v1/resource/TestSysBook/deleted/${name}/restore`,
+          headers: authHeaders(ownerToken),
+          payload: { deleted_at: deletion.deleted_at },
+        });
       }
 
       it("PLANTED DEFECT: keeps the bound file of a document deleted through its id in upper case, and restores both through it", async () => {

@@ -107,10 +107,15 @@ const createBook = (payload: Record<string, unknown>, token = adminTok) =>
   app.inject({ method: "POST", url: "/api/v1/resource/SdBook", headers: as(token), payload });
 const deleteBook = (name: string, token = adminTok) =>
   app.inject({ method: "DELETE", url: `/api/v1/resource/SdBook/${name}`, headers: as(token) });
-const restoreBook = (name: string, token = adminTok) =>
-  app.inject({ method: "POST", url: `/api/v1/resource/SdBook/deleted/${name}/restore`, headers: as(token) });
 const listDeleted = (token = adminTok) =>
   app.inject({ method: "GET", url: "/api/v1/resource/SdBook/deleted", headers: as(token) });
+const restoreDeletion = (name: string, deletedAt: string, token = adminTok) =>
+  app.inject({ method: "POST", url: `/api/v1/resource/SdBook/deleted/${name}/restore`, headers: as(token), payload: { deleted_at: deletedAt } });
+/** The deletions of `name`, the latest first, as the list answers them to the admin. */
+const deletionsOf = async (name: string): Promise<string[]> =>
+  ((await listDeleted()).json().data as Array<{ name: string; deleted_at: string }>).filter((row) => row.name === name).map((row) => row.deleted_at);
+/** Restore the latest deletion of `name`. */
+const restoreBook = async (name: string, token = adminTok) => restoreDeletion(name, (await deletionsOf(name))[0] ?? "", token);
 const titleTranslation = (name: string) => ({
   _id: `data:de:SdBook.${name}.title`,
   namespace: "data", locale: "de", key: `SdBook.${name}.title`, value: `Titel ${name}`,
@@ -164,7 +169,7 @@ describe("a deleted record", () => {
     expect((await read("/api/v1/resource/SdBook/count")).json().data.count).toBe(0);
     expect(await db.findOne("SdBook", "B1", "app")).toBeNull();
 
-    const kept = await db.findOne(DELETED_COLLECTION, "SdBook:B1", DIGITA.DATABASES.AUDITS);
+    const kept = await db.findOneByFilter(DELETED_COLLECTION, { entity: "SdBook", document_name: "B1" }, DIGITA.DATABASES.AUDITS);
     expect(kept).toMatchObject({ entity: "SdBook", document_name: "B1", deleted_by: "admin@d", record: { title: "Gone", code: "C-1" } });
     expect((kept!["translations"] as unknown[]).length).toBe(1);
     const texts = await db.findManyByFilter(DIGITA.COLLECTIONS.TRANSLATION, { entity: "SdBook", document_name: "B1" }, DIGITA.DATABASES.CORE);
@@ -185,7 +190,7 @@ describe("a deleted record", () => {
     expect(after).toMatchObject({ title: "Back", code: "C-2", pin: before["pin"], owner: before["owner"], creation: before["creation"] });
     expect(before["pin"]).not.toBe("1234");
     expect(after["copies"]).toEqual(before["copies"]);
-    expect(await db.findOne(DELETED_COLLECTION, "SdBook:B2", DIGITA.DATABASES.AUDITS)).toBeNull();
+    expect(await deletionsOf("B2")).toEqual([]);
 
     const german = await app.inject({ method: "GET", url: "/api/v1/resource/SdBook/B2", headers: { ...as(adminTok), "accept-language": "de" } });
     expect(german.json().data.title).toBe("Titel B2");
@@ -193,19 +198,21 @@ describe("a deleted record", () => {
     expect(log.map((row) => row["action"])).toEqual(expect.arrayContaining(["Deleted", "Restored"]));
   });
 
-  it("frees its id and unique values for a new record, and a restore that meets them is refused by the field", async () => {
+  it("frees its id and unique values for a new record, and a restore that meets them is refused, overwriting nothing", async () => {
     expect((await createBook({ _id: "B3", title: "First", code: "C-3" })).statusCode).toBe(201);
     expect((await deleteBook("B3")).statusCode).toBe(200);
     expect((await createBook({ _id: "B3", title: "Second", code: "C-3b" })).statusCode).toBe(201);
     const byId = await restoreBook("B3");
-    expect([byId.statusCode, byId.json().error.field]).toEqual([409, "_id"]);
+    expect([byId.statusCode, byId.json().error.code]).toEqual([409, "RESTORE_NAME_TAKEN"]);
+    expect((await db.findOne("SdBook", "B3", "app"))?.["title"]).toBe("Second");
+    expect(await deletionsOf("B3")).toHaveLength(1);
 
     expect((await createBook({ _id: "B4", title: "Coded", code: "C-4" })).statusCode).toBe(201);
     expect((await deleteBook("B4")).statusCode).toBe(200);
     expect((await createBook({ _id: "B5", title: "Took the code", code: "C-4" })).statusCode).toBe(201);
     const byCode = await restoreBook("B4");
     expect([byCode.statusCode, byCode.json().error.field]).toEqual([409, "code"]);
-    expect(await db.findOne(DELETED_COLLECTION, "SdBook:B4", DIGITA.DATABASES.AUDITS)).not.toBeNull();
+    expect(await deletionsOf("B4")).toHaveLength(1);
   });
 
   it("is refused a restore whose link names a record that is gone", async () => {
@@ -241,11 +248,21 @@ describe("a deleted record", () => {
     expect((await restoreBook("B9", shelverTok)).statusCode).toBe(200);
   });
 
-  it("keeps one deleted record per name: a second delete of the name replaces the first", async () => {
+  it("PLANTED DEFECT: keeps every deletion of a name, and restores the one chosen", async () => {
+    // The reception deletes Muster AG, creates it again and deletes it again: both versions stay.
     expect((await createBook({ _id: "B8", title: "Old", code: "C-8" })).statusCode).toBe(201);
     expect((await deleteBook("B8")).statusCode).toBe(200);
     expect((await createBook({ _id: "B8", title: "New", code: "C-8n" })).statusCode).toBe(201);
     expect((await deleteBook("B8")).statusCode).toBe(200);
-    expect((await restoreBook("B8")).json().data.title).toBe("New");
+    const [latest, earlier] = await deletionsOf("B8");
+    expect(earlier).toBeDefined();
+    const restored = await restoreDeletion("B8", earlier!);
+    expect([restored.statusCode, restored.json().data.title]).toEqual([200, "Old"]);
+    expect(await deletionsOf("B8")).toEqual([latest]);
+  });
+
+  it("refuses a restore that names no deletion", async () => {
+    expect((await restoreDeletion("B8", "")).statusCode).toBe(400);
+    expect((await restoreDeletion("B8", "2001-01-01T00:00:00.000Z")).statusCode).toBe(404);
   });
 });

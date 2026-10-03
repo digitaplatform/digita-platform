@@ -203,6 +203,9 @@ describe("the demo reset on a demo tenant", () => {
     });
     const deletedOrder = deleted.json().data._id as string;
     expect((await app.inject({ method: "DELETE", url: `/api/v1/resource/WorkOrder/${deletedOrder}`, headers: admin })).statusCode).toBe(200);
+    const deletedOrders = async () =>
+      ((await app.inject({ method: "GET", url: "/api/v1/resource/WorkOrder/deleted", headers: admin })).json().data as Array<{ name: string }>).map((row) => row.name);
+    expect(await deletedOrders()).toEqual([deletedOrder]);
     // PLANTED INNOCENT: a deleted record of the core database, which the reset keeps.
     const coreDeleted = { _id: "Workspace:kept", entity: "Workspace", document_name: "kept", deleted_at: new Date(), deleted_by: "admin", record: {}, translations: [] };
     await engine.db.insertOne(DELETED_COLLECTION, coreDeleted, DIGITA.DATABASES.AUDITS);
@@ -216,7 +219,7 @@ describe("the demo reset on a demo tenant", () => {
     expect(order.json().data.customer).toBe("Anna Muster");
     const gone = await app.inject({ method: "GET", url: `/api/v1/resource/WorkOrder/${visitorOrder}`, headers: admin });
     expect(gone.statusCode).toBe(404);
-    expect((await app.inject({ method: "POST", url: `/api/v1/resource/WorkOrder/deleted/${deletedOrder}/restore`, headers: admin })).statusCode).toBe(404);
+    expect(await deletedOrders()).toEqual([]);
     expect(await engine.db.findOne(DELETED_COLLECTION, "Workspace:kept", DIGITA.DATABASES.AUDITS)).not.toBeNull();
     const setting = await app.inject({ method: "GET", url: "/api/v1/resource/WorkshopSetting/workshop", headers: admin });
     expect(setting.json().data.hourly_rate).toBe(120);

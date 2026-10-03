@@ -93,19 +93,23 @@ beforeEach(() => {
   service.restoreDeleted.mockClear();
   service.listDeleted.mockResolvedValue({
     success: true,
-    data: [{ name: 'B-1', title: 'Gone by mistake', deleted_at: '2026-10-03T08:15:00Z', deleted_by: 'clerk@library' }],
+    data: [
+      { name: 'B-1', title: 'Gone again', deleted_at: '2026-10-03T08:15:00Z', deleted_by: 'clerk@library' },
+      { name: 'B-1', title: 'Gone by mistake', deleted_at: '2026-10-01T16:40:00Z', deleted_by: 'clerk@library' },
+    ],
   });
   service.restoreDeleted.mockResolvedValue({ success: true, data: { _id: 'B-1', title: 'Gone by mistake' } });
 });
 
 describe('the deleted records of a list', () => {
-  it('PLANTED DEFECT: shows them to a person who may delete, and restores one', async () => {
+  it('PLANTED DEFECT: shows each deletion to a person who may delete, and restores the one chosen', async () => {
     renderList('display=deleted', ['Clerk']);
     expect(await screen.findByText('Gone by mistake')).toBeInTheDocument();
-    expect(screen.getByText('clerk@library')).toBeInTheDocument();
+    expect(screen.getByText('Gone again')).toBeInTheDocument();
+    expect(screen.getAllByText('clerk@library')).toHaveLength(2);
     expect(screen.queryByText('Still here')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'ui.action.restore' }));
-    await waitFor(() => expect(service.restoreDeleted).toHaveBeenCalledWith('Book', 'B-1'));
+    fireEvent.click(screen.getAllByRole('button', { name: 'ui.action.restore' })[1]!);
+    await waitFor(() => expect(service.restoreDeleted).toHaveBeenCalledWith('Book', 'B-1', '2026-10-01T16:40:00Z'));
     await waitFor(() => expect(toast).toHaveBeenCalledWith('ui.list.restored {"name":"B-1"}', 'success'));
   });
 

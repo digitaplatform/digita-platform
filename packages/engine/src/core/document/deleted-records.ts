@@ -22,23 +22,26 @@ export interface DeletedRecord {
   translations: Record<string, unknown>[];
 }
 
-const deletedRecordId = (entity: string, name: string): string => `${entity}:${name}`;
+/** One deletion: a record of the same name deleted again later is a deletion of its own. */
+const deletedRecordId = (entity: string, name: string, deletedAt: Date): string => `${entity}:${name}:${deletedAt.getTime()}`;
 
 export class DeletedRecords {
   constructor(private readonly db: MongoDBService) {}
 
-  /** Keep a record that is being deleted. A record of the same name deleted before is replaced:
-   *  one name has one deleted record, the one a restore brings back. */
+  /** Keep a record that is being deleted. Every deletion is kept, also of a name deleted before,
+   *  so only the purge ever removes one. */
   async keep(
     entry: Omit<DeletedRecord, "_id" | "deleted_at">,
     session: ClientSession,
   ): Promise<void> {
-    const _id = deletedRecordId(entry.entity, entry.document_name);
-    await this.db.upsertOne(DELETED_COLLECTION, _id, { _id, ...entry, deleted_at: new Date() }, DIGITA.DATABASES.AUDITS, session);
+    const deletedAt = new Date();
+    const _id = deletedRecordId(entry.entity, entry.document_name, deletedAt);
+    await this.db.insertOne(DELETED_COLLECTION, { _id, ...entry, deleted_at: deletedAt }, DIGITA.DATABASES.AUDITS, session);
   }
 
-  async find(entity: string, name: string, session?: ClientSession): Promise<DeletedRecord | null> {
-    return (await this.db.findOne(DELETED_COLLECTION, deletedRecordId(entity, name), DIGITA.DATABASES.AUDITS, session)) as DeletedRecord | null;
+  /** The deletion of `name` at `deletedAt`. */
+  async find(entity: string, name: string, deletedAt: Date, session?: ClientSession): Promise<DeletedRecord | null> {
+    return (await this.db.findOne(DELETED_COLLECTION, deletedRecordId(entity, name, deletedAt), DIGITA.DATABASES.AUDITS, session)) as DeletedRecord | null;
   }
 
   /** The entity's deleted records, the latest first. */
@@ -53,8 +56,8 @@ export class DeletedRecords {
     return rows as unknown as DeletedRecord[];
   }
 
-  async remove(entity: string, name: string, session: ClientSession): Promise<void> {
-    await this.db.deleteOne(DELETED_COLLECTION, deletedRecordId(entity, name), DIGITA.DATABASES.AUDITS, session);
+  async remove(deleted: DeletedRecord, session: ClientSession): Promise<void> {
+    await this.db.deleteOne(DELETED_COLLECTION, deleted._id, DIGITA.DATABASES.AUDITS, session);
   }
 
   /** Forget the deleted records of `entities`, as a reset of their data does. */
