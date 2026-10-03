@@ -465,8 +465,8 @@ function SearchIcon() {
   );
 }
 
-/** `rows` without every node whose `active` is off and every node under one. A node without the
- *  field is on, as the block's default is. */
+/** Offer only nodes whose complete active ancestry is readable. The engine supplies readable
+ *  defaults; an absent eligibility field was masked and cannot establish an active chain. */
 function withoutSwitchedOff(rows: Record<string, unknown>[], parentField: string): Record<string, unknown>[] {
   const byId = new Map(rows.map((r) => [String(r._id), r]));
   const isActive = (id: string): boolean => {
@@ -474,7 +474,8 @@ function withoutSwitchedOff(rows: Record<string, unknown>[], parentField: string
     while (id) {
       const row = byId.get(id);
       // A filtered or unreadable ancestor cannot establish that its subtree is active.
-      if (!row || seen.has(id) || row[TREE_ACTIVE_FIELD] === 0 || row[TREE_ACTIVE_FIELD] === false) return false;
+      if (!row || seen.has(id) || !Object.hasOwn(row, parentField) || !Object.hasOwn(row, TREE_ACTIVE_FIELD)
+        || row[TREE_ACTIVE_FIELD] === 0 || row[TREE_ACTIVE_FIELD] === false) return false;
       seen.add(id);
       id = row[parentField] == null ? '' : String(row[parentField]);
     }

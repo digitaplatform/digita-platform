@@ -674,7 +674,7 @@ export class DocumentService {
     const shared = new Set(sharedIds.map(String));
     const mask = (doc: Record<string, unknown>) =>
       this.permissionChecker.filterFieldsForRead(user, doctype, doc, shared.has(String(doc["_id"])));
-    docs = masksStoredRows
+    docs = masksStoredRows || entity.tree
       ? docs.map((doc) => projectFields(mask(doc), query.fields))
       : docs.map(mask);
 

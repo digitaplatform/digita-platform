@@ -32,9 +32,9 @@ vi.mock('@/hooks/useMeta', () => ({
   useMeta: () => ({ data: metaState.data }),
 }));
 const TREE_ROWS = [
-  { _id: 'N-1', label: 'Root', parent: null },
-  { _id: 'N-2', label: 'Child', parent: 'N-1' },
-  { _id: 'N-3', label: 'Loose', parent: null },
+  { _id: 'N-1', label: 'Root', parent: null, active: true },
+  { _id: 'N-2', label: 'Child', parent: 'N-1', active: true },
+  { _id: 'N-3', label: 'Loose', parent: null, active: true },
 ];
 // `rows: undefined` is a list still on its way from the network.
 const listState = vi.hoisted(() => ({
@@ -318,11 +318,11 @@ describe('LinkControl — tree mode', () => {
   });
 
   const GROUP_ROWS = [
-    { _id: 'G-1', label: 'Retail', parent: null },
-    { _id: 'G-2', label: 'Swiss', parent: 'G-1' },
-    { _id: 'G-3', label: 'Zurich', parent: 'G-2' },
-    { _id: 'G-4', label: 'Wholesale', parent: null },
-    { _id: 'G-5', label: 'Germany', parent: 'G-4' },
+    { _id: 'G-1', label: 'Retail', parent: null, active: true },
+    { _id: 'G-2', label: 'Swiss', parent: 'G-1', active: true },
+    { _id: 'G-3', label: 'Zurich', parent: 'G-2', active: true },
+    { _id: 'G-4', label: 'Wholesale', parent: null, active: true },
+    { _id: 'G-5', label: 'Germany', parent: 'G-4', active: true },
   ];
 
   it('starts collapsed with the path to the current value open, also for rows that arrive late', async () => {
@@ -392,10 +392,10 @@ describe('LinkControl — tree mode', () => {
 
   it('PLANTED DEFECT: offers no switched-off node, nor any node under it', async () => {
     listState.rows = [
-      { _id: 'N-1', label: 'Root', parent: null },
-      { _id: 'N-2', label: 'Child', parent: 'N-1' },
+      { _id: 'N-1', label: 'Root', parent: null, active: true },
+      { _id: 'N-2', label: 'Child', parent: 'N-1', active: true },
       { _id: 'N-3', label: 'Retired', parent: null, active: 0 },
-      { _id: 'N-4', label: 'Under retired', parent: 'N-3' },
+      { _id: 'N-4', label: 'Under retired', parent: 'N-3', active: true },
     ];
     const user = userEvent.setup();
     render(<Host field={makeField({ target: 'Folder' })} onChange={vi.fn()} />);
@@ -422,13 +422,36 @@ describe('LinkControl — tree mode', () => {
   });
 
   it.each([
+    ['parent', { _id: 'N-4', label: 'Masked child', active: true }],
+    ['active', { _id: 'N-4', label: 'Masked inactive node', parent: null }],
+  ])('offers no node whose %s field was masked', async (_field, maskedRow) => {
+    listState.rows = [maskedRow];
+    const user = userEvent.setup();
+    render(<Host field={makeField({ target: 'Folder' })} />);
+    await user.click(screen.getByRole('combobox'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryAllByRole('treeitem')).toHaveLength(0);
+  });
+
+  it('rejects a descendant when an ancestor active field was masked', async () => {
+    listState.rows = [
+      { _id: 'N-1', label: 'Masked ancestor', parent: null },
+      { _id: 'N-4', label: 'Child', parent: 'N-1', active: true },
+    ];
+    const user = userEvent.setup();
+    render(<Host field={makeField({ target: 'Folder' })} />);
+    await user.click(screen.getByRole('combobox'));
+    expect(within(await screen.findByRole('dialog')).queryAllByRole('treeitem')).toHaveLength(0);
+  });
+
+  it.each([
     { entity: 'Widget', fieldname: 'group' },
     { entity: 'Folder', fieldname: 'related' },
   ])('does not infer the target kind for $entity.$fieldname from an unrelated kind field', async ({ entity, fieldname }) => {
     metaState.data = { name: 'Folder', tree: { kind: true }, fields: [] };
     listState.rows = [
-      { _id: 'S', label: 'Shelf node', parent: null, kind: 'shelf' },
-      { _id: 'V', label: 'Service node', parent: null, kind: 'service' },
+      { _id: 'S', label: 'Shelf node', parent: null, active: true, kind: 'shelf' },
+      { _id: 'V', label: 'Service node', parent: null, active: true, kind: 'service' },
     ];
     const user = userEvent.setup();
     render(<LinkControl field={makeField({ target: 'Folder', fieldname })} value={null} entity={entity}

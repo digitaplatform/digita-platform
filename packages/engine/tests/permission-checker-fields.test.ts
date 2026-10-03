@@ -138,3 +138,52 @@ describe("PermissionChecker — fields on a permission row", () => {
     expect(checker.isPickerTitleVisible(clerk, "Item", "title")).toBe(true);
   });
 });
+
+
+describe("PermissionChecker — readable tree defaults", () => {
+  function treeChecker(permissions: EntityDefinition["permissions"], defaultActive = 1) {
+    const registry = new EntityRegistry();
+    const entity = {
+      name: "Group", module: "test", database: "app", tree: {},
+      naming: { strategy: "user_set" },
+      fields: [{ fieldname: "active", fieldtype: "Check", label: "Active", default: defaultActive }],
+      permissions,
+    } as EntityDefinition;
+    registry.prepareDefinition(entity);
+    registry.register(entity);
+    return new PermissionChecker(registry);
+  }
+
+  it("returns known root/active defaults without changing the stored row", () => {
+    const checker = treeChecker([{ role: "Clerk", level: 0, read: 1, select: 1 }]);
+    const stored = { _id: "G-1", label: "Root" };
+    expect(checker.filterFieldsForRead(clerk, "Group", stored)).toMatchObject({ parent: null, active: true });
+    expect(stored).toEqual({ _id: "G-1", label: "Root" });
+    expect(checker.filterFieldsForRead({ ...clerk, roles: [SYSTEM_ROLES.ADMINISTRATOR] }, "Group", stored))
+      .toMatchObject({ parent: null, active: true });
+    expect(treeChecker([{ role: "Clerk", level: 0, read: 1 }], 0).filterFieldsForRead(clerk, "Group", stored).active)
+      .toBe(false);
+    expect(checker.filterFieldsForRead(clerk, "Group", { ...stored, active: false }).active).toBe(false);
+  });
+
+  it.each([
+    [["label", "active"], "parent"],
+    [["label", "parent"], "active"],
+  ])("keeps the unreadable %s eligibility field absent", (fields, masked) => {
+    const checker = treeChecker([{ role: "Clerk", level: 0, read: 1, select: 1, fields: fields as string[] }]);
+    expect(checker.filterFieldsForRead(clerk, "Group", { _id: "G-1", label: "Root" }))
+      .not.toHaveProperty(masked as string);
+  });
+
+  it("decides conditional field visibility against the stored row", () => {
+    const checker = treeChecker([
+      { role: "Clerk", level: 0, read: 1, select: 1, fields: ["label"] },
+      { role: "Clerk", level: 0, read: 1, condition: "eval:doc.active==true", fields: ["parent", "active"] },
+    ]);
+    const defaults = checker.filterFieldsForRead(clerk, "Group", { _id: "G-1", label: "Root" });
+    expect(defaults).not.toHaveProperty("parent");
+    expect(defaults).not.toHaveProperty("active");
+    expect(checker.filterFieldsForRead(clerk, "Group", { _id: "G-2", label: "Root", active: true }))
+      .toMatchObject({ parent: null, active: true });
+  });
+});

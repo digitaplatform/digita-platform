@@ -391,6 +391,16 @@ describe("a move", () => {
   });
 });
 
+describe("tree list eligibility defaults", () => {
+  it("returns readable defaults but keeps an explicit field projection exact", async () => {
+    await db.insertOne("TGroup", { _id: "A", label: "Root" }, "app");
+    const complete = await docService.getList("TGroup", {}, admin);
+    expect(complete.data[0]).toMatchObject({ _id: "A", parent: null, active: true });
+    const projected = await docService.getList("TGroup", { fields: ["label"] }, admin);
+    expect(projected.data[0]).toEqual({ _id: "A", label: "Root" });
+  });
+});
+
 describe("tree ancestry and parent permissions", () => {
   it("masks placement on document, list and aggregate reads when parent is unreadable", async () => {
     await add("TGroup", "A", null);

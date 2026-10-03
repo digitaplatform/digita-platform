@@ -6,6 +6,7 @@ import {
   PermissionAction,
   ROW_ID_FIELD,
   SYSTEM_ROLES,
+  TREE_ACTIVE_FIELD,
   TREE_PARENT_FIELD,
   canGrantActionTo,
   opensField,
@@ -903,11 +904,22 @@ export class PermissionChecker {
     sharedForRead = false,
   ): Record<string, unknown> {
     const readable = this.getReadableFields(user, entityName, data, sharedForRead);
+    const entity = this.registry.get(entityName);
+    // A readable default must be distinguishable from a field the read mask removed. Evaluate
+    // permission conditions against the stored row before adding those defaults.
+    if (entity.tree) {
+      data = {
+        ...data,
+        [TREE_PARENT_FIELD]: data[TREE_PARENT_FIELD] ?? null,
+        [TREE_ACTIVE_FIELD]: data[TREE_ACTIVE_FIELD] === undefined
+          ? Boolean(entity.fields.find((field) => field.fieldname === TREE_ACTIVE_FIELD)?.default ?? 1)
+          : data[TREE_ACTIVE_FIELD],
+      };
+    }
 
     // null means all fields are readable
     if (!readable) return data;
 
-    const entity = this.registry.get(entityName);
     const tableFields = new Map(
       entity.fields.filter((f) => f.fieldtype === "Table").map((f) => [f.fieldname, f] as const),
     );
