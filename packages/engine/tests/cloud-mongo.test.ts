@@ -14,4 +14,14 @@ describe("cloud Mongo fixture boundary", () => {
     vi.stubEnv("DIGITA_TEST_MONGODB_URI", `mongodb://${host}:27017/?replicaSet=rs0&directConnection=true`);
     await expect(createReplicaFixture()).rejects.toThrow("run-owned loopback replica set");
   });
+  it.each([
+    "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true&proxyHost=production.example.com",
+    "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true&directConnection=false",
+    "mongodb://127.0.0.1:27017/tenant?replicaSet=rs0&directConnection=true",
+    "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true#fragment",
+  ])("refuses extra URI options before connecting", async (uri) => {
+    vi.stubEnv("DIGITA_TEST_RUN_ID", "12345678-1234-1234-1234-123456789abc");
+    vi.stubEnv("DIGITA_TEST_MONGODB_URI", uri);
+    await expect(createReplicaFixture()).rejects.toThrow("run-owned loopback replica set");
+  });
 });

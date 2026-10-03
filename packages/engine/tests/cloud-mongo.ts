@@ -16,28 +16,29 @@ async function cloudFixture() {
   const uri = new URL(value);
   if (uri.protocol !== "mongodb:" || uri.hostname !== "127.0.0.1" ||
       uri.port !== "27017" || uri.username || uri.password ||
+      (uri.pathname !== "" && uri.pathname !== "/") || uri.hash || uri.searchParams.size !== 2 ||
       uri.searchParams.get("replicaSet") !== "rs0" ||
       uri.searchParams.get("directConnection") !== "true") {
     throw new Error("cloud Mongo fixture only accepts the run-owned loopback replica set");
   }
   const client = new MongoClient(value, { serverSelectionTimeoutMS: 15000 });
-  await client.connect();
   async function clearFixtureData() {
+    const owner = await client.db("digita_test_fixture")
+      .collection<{ _id: string; runID: string }>("owner")
+      .findOne({ _id: "pipeline-run" });
+    if (owner?.runID !== runId) {
+      throw new Error("cloud Mongo sidecar has no matching run ownership marker");
+    }
     const { databases } = await client.db("admin").admin().listDatabases({ nameOnly: true });
     for (const { name } of databases) {
       if (!["admin", "config", "local", "digita_test_fixture"].includes(name)) await client.db(name).dropDatabase();
     }
   }
   try {
+    await client.connect();
     const hello = await client.db("admin").command({ hello: 1 });
     if (!hello.isWritablePrimary || hello.setName !== "rs0") {
       throw new Error("cloud Mongo sidecar is not the writable rs0 primary");
-    }
-    const owner = await client.db("digita_test_fixture")
-      .collection<{ _id: string; runID: string }>("owner")
-      .findOne({ _id: "pipeline-run" });
-    if (owner?.runID !== runId) {
-      throw new Error("cloud Mongo sidecar has no matching run ownership marker");
     }
     await clearFixtureData();
   } catch (error) {

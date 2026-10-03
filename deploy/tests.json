@@ -120,5 +120,8 @@
         "packages/web/package.json"
       ]
     }
+  ],
+  "dependencyRoots": [
+    "."
   ]
 }
