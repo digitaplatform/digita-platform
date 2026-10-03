@@ -112,12 +112,15 @@ for pin in $pins; do
     done
   done
 done
+promote_issues=()
+for issue in $issues; do promote_issues+=(--issue "$repository#$issue"); done
 if [ ${#blocked[@]} -gt 0 ]; then
   printf '%s\n' "${blocked[@]}" >&2
-  refuse "$target deletes keys that may still be read (above), so $stage stays on $pins. Remove the reader, or check the other repository and promote by hand with digita-deploy/scripts/translations-promote.sh"
+  # The release stands either way. A reader here is removed by a change and a new release; a key of
+  # another repository is cleared by a person who reads that repository's running code, and who then
+  # promotes with the command below from a digita-deploy checkout at the master of origin.
+  refuse "$target deletes keys that may still be read (above), so $stage stays on $pins. Once no running code reads them, promote from a digita-deploy checkout at the master of origin: bash scripts/translations-promote.sh $stage $target ${promote_issues[*]}"
 fi
 echo "$name: no literal reader in this repository holds a key that $target deletes, and no other repository's key is deleted"
 
-promote_issues=()
-for issue in $issues; do promote_issues+=(--issue "$repository#$issue"); done
 bash "$work/deploy/scripts/translations-promote.sh" "$stage" "$target" "${promote_issues[@]}"

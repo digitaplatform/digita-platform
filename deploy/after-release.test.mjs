@@ -105,10 +105,12 @@ test("PLANTED INNOCENT: a deleted key without a reader promotes the stage to the
   assert.match(result.stdout, new RegExp(`PROMOTE prod ${w.head} --issue digitaplatform/digita-platform#7$`, "m"));
 });
 
-test("PLANTED DEFECT: a deleted key of another repository's texts stops the promote and names that repository", () => {
-  const result = run(world({ deleted: { "digita-auth-frontend": ["auth_gone"] } }));
+test("PLANTED DEFECT: a deleted key of another repository's texts stops the promote, naming that repository and the command for after its check", () => {
+  const w = world({ deleted: { "digita-auth-frontend": ["auth_gone"] } });
+  const result = run(w);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /digita-auth-frontend: auth_gone may be read by digitaplatform\/digita-auth/);
+  assert.match(result.stderr, new RegExp(`promote from a digita-deploy checkout at the master of origin: bash scripts/translations-promote\\.sh prod ${w.head} --issue digitaplatform/digita-platform#7$`, "m"));
   assert.doesNotMatch(result.stdout, /PROMOTE/);
 });
 
