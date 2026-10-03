@@ -71,6 +71,7 @@ export function buildNavTree(
   };
   const childrenOf = new Map<string | null, WebNavMenu[]>();
   for (const node of nodes) {
+    if (!Object.hasOwn(node, "parent") || typeof node.label !== "string") continue;
     const parent = node.parent || null;
     childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), node]);
   }

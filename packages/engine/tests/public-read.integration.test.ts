@@ -134,12 +134,14 @@ describe("public website-menu page Links", () => {
       { locale: "de", slug: "private", translation_group: "private", status: "published", title: "Private page" },
       { locale: "en", slug: "foreign", translation_group: "foreign", status: "draft" },
       { locale: "de", slug: "standalone", status: "published" },
+      { locale: "en", slug: "both", translation_group: "both", status: "published", title: "English title" },
+      { locale: "de", slug: "both", translation_group: "both", status: "published", title: "German title" },
     ];
     for (const page of pages) {
       await db.insertOne("WebPage", baseRow({ _id: id(page.locale, page.slug), title: page.slug, site: "nav-site", ...page }), "web_content");
     }
     await db.insertOne("WebPage", baseRow({ _id: "other::de::foreign", site: "other", locale: "de", slug: "foreign", title: "Foreign", translation_group: "foreign", status: "published" }), "web_content");
-    for (const slug of ["about", "draft-target", "missing", "private", "foreign", "standalone"]) {
+    for (const slug of ["about", "draft-target", "missing", "private", "foreign", "standalone", "both"]) {
       await db.insertOne("WebNavMenu", {
         _id: `nav-${slug}`, doctype: "WebNavMenu", docstatus: 0, creation: now, modified: now,
         label: slug, parent: null, active: true, site: "nav-site", location: "header",
@@ -174,6 +176,23 @@ describe("public website-menu page Links", () => {
     const one = await app.inject({ method: "GET", url: `${menuURL}/nav-standalone`, headers: { "accept-language": "de" } });
     expect(one.statusCode).toBe(200);
     expect(one.json().data.page).toBe(id("de", "standalone"));
+  });
+
+  it("clears the previous target's title only when a public list or single Link changes", async () => {
+    const headers = { "accept-language": "de" };
+    const list = await app.inject({ method: "GET", url: menuURL, headers });
+    expect(list.statusCode).toBe(200);
+    const row = list.json().data.find((item: { _id: string }) => item._id === "nav-both");
+    expect(row.page).toBe(id("de", "both"));
+    expect(row._link_titles?.page).toBeUndefined();
+    expect(row._link_titles?.site).toBe("Navigation");
+    const one = await app.inject({ method: "GET", url: `${menuURL}/nav-both`, headers });
+    expect(one.statusCode).toBe(200);
+    expect(one.json().data.page).toBe(id("de", "both"));
+    expect(one.json().data._link_titles?.page).toBeUndefined();
+    const unchanged = await app.inject({ method: "GET", url: `${menuURL}/nav-both`, headers: { "accept-language": "en" } });
+    expect(unchanged.statusCode).toBe(200);
+    expect(unchanged.json().data._link_titles?.page).toBe("English title");
   });
 
   it("does not reconstruct a masked page Link", async () => {

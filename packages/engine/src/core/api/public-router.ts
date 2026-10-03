@@ -162,7 +162,12 @@ export function registerPublicRoutes(
           everyRowNeedsRead: true,
           scope: { ...match, site: stored["site"], locale, status: "published" },
         });
-        if (pages.data[0]) row["page"] = pages.data[0]["_id"];
+        const resolved = pages.data[0]?.["_id"];
+        if (typeof resolved === "string" && resolved !== row["page"]) {
+          row["page"] = resolved;
+          const titles = row["_link_titles"];
+          if (titles && typeof titles === "object") delete (titles as Record<string, unknown>)["page"];
+        }
       } catch (error) {
         if (!(error instanceof PermissionDeniedError)) throw error;
       }

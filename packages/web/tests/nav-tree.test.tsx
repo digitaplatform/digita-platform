@@ -25,7 +25,7 @@ const siteConfig: PublicSiteConfig = {
   notFound: { title: "", body: "", home: "" },
 };
 
-const node = (n: Partial<WebNavMenu> & Pick<WebNavMenu, "_id" | "label">): WebNavMenu => ({ site: "example", location: "footer", ...n });
+const node = (n: Partial<WebNavMenu> & Pick<WebNavMenu, "_id" | "label">): WebNavMenu => ({ site: "example", location: "footer", parent: null, ...n });
 
 const pages: Pick<WebPage, "_id" | "locale" | "translation_group">[] = [
   { _id: "example::en::about", locale: "en", translation_group: "about" },
@@ -70,6 +70,14 @@ describe("a site's menu tree", () => {
     expect(buildNavTree(onlyEnglish, pages, "de")).toEqual([]);
     // The read leaves out inactive nodes, so a child's parent is missing.
     expect(buildNavTree([node({ _id: "orphan", label: "Orphan", parent: "inactive", href: "/x" })], pages, "en")).toEqual([]);
+  });
+
+  it.each(["parent", "label"] as const)("omits a node with masked %s and its descendants while keeping readable roots", (field) => {
+    const masked = node({ _id: "masked", label: "Masked", href: "/hidden" });
+    delete (masked as Partial<WebNavMenu>)[field];
+    const descendant = node({ _id: "descendant", label: "Hidden child", parent: "masked", href: "/hidden-child" });
+    const readable = node({ _id: "readable", label: "Readable", href: "/ok" });
+    expect(buildNavTree([masked, descendant, readable], [], "en")).toEqual([{ label: "Readable", href: "/ok" }]);
   });
 
   it("draws a node with children as a heading, and keeps the rules of #contact, a web link and a node with no link", () => {

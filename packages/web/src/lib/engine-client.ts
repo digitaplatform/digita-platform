@@ -56,7 +56,10 @@ async function queryPage<T>(doctype: string, params: QueryParams): Promise<{ row
   try {
     res = await fetch(url, {
       ...(params.locale ? { headers: { "accept-language": params.locale } } : {}),
-      next: { revalidate: revalidateSeconds, tags: [entityCacheTag(doctype)] },
+      next: {
+        revalidate: revalidateSeconds,
+        tags: doctype === "WebNavMenu" ? [entityCacheTag(doctype), entityCacheTag("WebPage")] : [entityCacheTag(doctype)],
+      },
     });
   } catch (err) {
     throw logFailedRead(doctype, "could not reach the engine", err);

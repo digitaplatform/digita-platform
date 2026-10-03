@@ -82,7 +82,7 @@ describe("a read of the engine", () => {
     expect(await listNav("en", "header")).toEqual([{ label: "Visible active node", href: "/about" }]);
   });
 
-  it("is cached under the tag of its entity, which the engine posts", async () => {
+  it("is cached under its entity and a menu's page-publication dependency", async () => {
     const fetch = vi.fn(async (_url: string, _init: { next?: { tags?: string[] } }) => Response.json({ data: [] }));
     vi.stubGlobal("fetch", fetch);
     const { getPage, listNav, getSite } = await load(() => import("../src/lib/engine-client"));
@@ -91,7 +91,7 @@ describe("a read of the engine", () => {
     await getSite();
     expect(fetch.mock.calls.map(([, init]) => init.next?.tags)).toEqual([
       ["entity:WebPage"],
-      ["entity:WebNavMenu"],
+      ["entity:WebNavMenu", "entity:WebPage"],
       ["entity:WebPage"],
       ["entity:WebSite"],
     ]);
