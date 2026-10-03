@@ -20,7 +20,7 @@ import { FetchFromResolver } from "../src/core/fetch/fetch-from-resolver.js";
 import { DeleteProtection } from "../src/core/link/delete-protection.js";
 import { CancelProtection } from "../src/core/link/cancel-protection.js";
 import { VersionService } from "../src/core/version/version-service.js";
-import { WorkflowEngine } from "../src/core/workflow/workflow-engine.js";
+import { WorkflowEngine, IllegalTransitionError } from "../src/core/workflow/workflow-engine.js";
 import { ViewLogService } from "../src/core/version/view-log-service.js";
 import { ActivityLogService } from "../src/core/logging/activity-log-service.js";
 import { TranslationService } from "../src/core/i18n/translation-service.js";
@@ -283,6 +283,65 @@ describe("updateSubmitted — scalar band", () => {
 // PUT /resource/:doctype/:name calls — must itself refuse the edit. updateSubmitted
 // (the narrow allow_on_submit band) is the ONLY sanctioned post-submit mutation and
 // has no HTTP verb; the generic edit path stays hard-blocked regardless of field.
+
+/** A submitted document whose workflow moves on after submit: posted → paid, both doc_status 1. */
+function settleFlow(): EntityDefinition {
+  return {
+    ...settleEntity("SettleFlow"),
+    states: [
+      { value: "draft", label: "Draft", is_initial: true, doc_status: 0 },
+      { value: "posted", label: "Posted", doc_status: 1, docstatus_default: true },
+      { value: "paid", label: "Paid", doc_status: 1 },
+    ],
+    transitions: [
+      { from: "draft", to: "posted", label: "Post", allowed_roles: [SYSTEM_ROLES.ADMINISTRATOR] },
+      { from: "posted", to: "paid", label: "Pay", allowed_roles: [SYSTEM_ROLES.ADMINISTRATOR] },
+    ],
+  } as unknown as EntityDefinition;
+}
+
+// transition() judges a move before it writes the workflow field through updateSubmitted, so
+// these call updateSubmitted directly: the field write must be judged inside the write itself.
+describe("updateSubmitted — a write of the workflow field", () => {
+  beforeEach(async () => {
+    registry.register(settleFlow());
+    await db.ensureCollection("SettleFlow", "app");
+  });
+
+  async function posted(): Promise<string> {
+    const id = await insertSubmitted("SettleFlow", { title: "Inv", amount_due: 10 });
+    expect((await db.findOne("SettleFlow", id, "app"))?.["status"]).toBe("posted");
+    return id;
+  }
+
+  it.each([
+    ["no state", null],
+    ["an empty state", ""],
+    ["an object", { toString: 1 }],
+    ["an undeclared state", "archived"],
+  ])("refuses %s as an undeclared transition, and the state stays", async (_case, status) => {
+    const id = await posted();
+    await expect(
+      docService.updateSubmitted("SettleFlow", id, { set: { status } }, admin, undefined, { allowWorkflowField: true }),
+    ).rejects.toBeInstanceOf(IllegalTransitionError);
+    expect((await db.findOne("SettleFlow", id, "app"))?.["status"]).toBe("posted");
+  });
+
+  it("PLANTED INNOCENT: passes the current state as no move", async () => {
+    const id = await posted();
+    await docService.updateSubmitted("SettleFlow", id, { set: { status: "posted", note: "seen" } }, admin, undefined, {
+      allowWorkflowField: true,
+    });
+    const raw = await db.findOne("SettleFlow", id, "app");
+    expect([raw?.["status"], raw?.["note"]]).toEqual(["posted", "seen"]);
+  });
+
+  it("PLANTED INNOCENT: moves along a declared transition", async () => {
+    const id = await posted();
+    await docService.updateSubmitted("SettleFlow", id, { set: { status: "paid" } }, admin, undefined, { allowWorkflowField: true });
+    expect((await db.findOne("SettleFlow", id, "app"))?.["status"]).toBe("paid");
+  });
+});
 
 describe("update() — hard-blocked on a non-draft submittable doc (UI read-only parity)", () => {
   beforeEach(async () => {
