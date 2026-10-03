@@ -55,6 +55,8 @@ jobs:
           --filter '@digitaplatform/components'
           --filter '@digitaplatform/plugins'
           test
+      - name: Test the translations promote after a release
+        run: node --test deploy/after-release.test.mjs
 
   # The app's gate: lint (eslint --max-warnings 0, type-aware over src and tests), typecheck,
   # tests and the production build. It resolves the workspace packages' types, so the foundation
