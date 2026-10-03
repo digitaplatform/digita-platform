@@ -54,7 +54,7 @@ const sorted = (set: Set<string> | null) => (set ? [...set].sort() : set);
 describe("PermissionChecker — fields on a permission row", () => {
   it("opens the named fields of the row's level and the identity fields, not owner", () => {
     const checker = checkerFor([{ role: "Clerk", level: 0, select: 1, read: 1, fields: ["title", "margin"] }]);
-    expect(sorted(checker.getReadableFields(clerk, "Item"))).toEqual(["_id", "creation", "docstatus", "doctype", "modified", "title"]);
+    expect(sorted(checker.getReadableFields(clerk, "Item"))).toEqual(["_id", "creation", "deleted", "docstatus", "doctype", "modified", "title"]);
     expect(checker.getFilterAllowlist(clerk, "Item").has("owner")).toBe(false);
     expect(checker.getFilterAllowlist(clerk, "Item").has("cost")).toBe(false);
   });

@@ -198,6 +198,7 @@ describe("Files of a field that became public", () => {
   });
 
   it("are public after the boot step, with the public URL in the File, the row and the Table cell", async () => {
+    registry.register(shop(false));
     const main = await upload("image", "main.pdf", "main picture", "ITEM-1");
     const gallery = await upload("picture", "gallery.pdf", "gallery picture", "ITEM-1");
     const scan = await upload("invoice_scan", "scan.pdf", "private scan", "ITEM-1");

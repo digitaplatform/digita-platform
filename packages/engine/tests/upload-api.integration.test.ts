@@ -64,11 +64,13 @@ import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import type { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import sharp from "sharp";
 import { IMAGE_VARIANT_WIDTHS } from "../src/core/storage/image-variants.js";
+import type { DocumentService } from "../src/core/document/document-service.js";
 
 let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
 let registry: EntityRegistry;
+let docService: DocumentService;
 let ta: Awaited<ReturnType<typeof buildTestAuth>>;
 let authToken: string;
 /** Non-admin System User — owns nothing uploaded by admin. */
@@ -87,6 +89,7 @@ beforeAll(async () => {
   app = result.app;
   db = result.db;
   registry = result.registry;
+  docService = result.hookRunner.getServices()!.documentService as DocumentService;
   await result.startup();
   await app.ready();
 
@@ -1858,11 +1861,25 @@ describe("Upload API Integration", () => {
       expect(await exists(variantOnDisk(640, "webp"))).toBe(true);
     });
 
-    it("deletes the variants with the file", async () => {
+    it("retains the file and variants on soft delete until purge", async () => {
       await app.inject({ method: "GET", url: `${photoUrl}?w=320`, headers: { accept: "image/avif" } });
       expect(await exists(variantOnDisk(320, "avif"))).toBe(true);
       const del = await app.inject({ method: "DELETE", url: `/api/v1/file/${photoId}`, headers: authHeaders() });
       expect(del.statusCode).toBe(200);
+      expect(await db.findOne(DIGITA.COLLECTIONS.FILE, photoId, DIGITA.DATABASES.CORE)).toBeNull();
+      const retained = await db.findOne(DIGITA.COLLECTIONS.FILE, photoId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+      expect(retained?.deleted).toBeInstanceOf(Date);
+      expect(retained?.deleted_by).toBe("admin@digita.local");
+      expect((await app.inject({ method: "GET", url: photoUrl })).statusCode).toBe(404);
+      expect(await exists(onDisk(photoKey))).toBe(true);
+      expect(await exists(variantOnDisk(640, "webp"))).toBe(true);
+      expect(await exists(variantOnDisk(320, "avif"))).toBe(true);
+
+      const purged = await docService.purgeDoc(DIGITA.COLLECTIONS.FILE, photoId, {
+        _id: "admin@digita.local", email: "admin@digita.local", roles: ["Administrator", "System User"],
+      }, { deletedBefore: new Date((retained!.deleted as Date).getTime() + 1) });
+      expect(purged).toMatchObject({ purged: true, files_deleted: 1 });
+      expect(await db.findOne(DIGITA.COLLECTIONS.FILE, photoId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true })).toBeNull();
       expect(await exists(onDisk(photoKey))).toBe(false);
       expect(await exists(variantOnDisk(640, "webp"))).toBe(false);
       expect(await exists(variantOnDisk(320, "avif"))).toBe(false);

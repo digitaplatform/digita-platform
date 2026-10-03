@@ -54,17 +54,25 @@ import { DIGITA } from "@digitaplatform/shared";
 import { mkdir, mkdtemp, writeFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
+import { createStoragePort } from "../src/core/storage/storage-factory.js";
 
 let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
 let registry: EntityRegistry;
+let storage: ReturnType<typeof createStoragePort>;
+let uploadDir: string;
+const originalUploadPath = env.UPLOAD_LOCAL_PATH;
 let authToken: string;
 let signToken: Awaited<ReturnType<typeof buildTestAuth>>["sign"];
 
 beforeAll(async () => {
   replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as any).MONGODB_URI = replSet.getUri();
+
+  uploadDir = await mkdtemp(join(tmpdir(), "resource-api-files-"));
+  (env as { UPLOAD_LOCAL_PATH: string }).UPLOAD_LOCAL_PATH = uploadDir;
+  storage = createStoragePort();
 
   const ta = await buildTestAuth();
   signToken = ta.sign;
@@ -86,10 +94,17 @@ afterAll(async () => {
   await app.close();
   await db.disconnect();
   await replSet.stop();
+  await rm(uploadDir, { recursive: true, force: true });
+  (env as { UPLOAD_LOCAL_PATH: string }).UPLOAD_LOCAL_PATH = originalUploadPath;
 }, 30000);
 
 function authHeaders() {
   return { authorization: `Bearer ${authToken}` };
+}
+
+async function storedFileUrl(key: string, size: number): Promise<string> {
+  await storage.put(key, Buffer.alloc(size), "application/pdf");
+  return `/uploads/${key}`;
 }
 
 describe("ordinary collection boundary", () => {
@@ -106,7 +121,7 @@ describe("ordinary collection boundary", () => {
     try {
       const res = await app.inject({ method: "POST", url: "/api/v1/meta", headers: authHeaders(), payload: definition(name) });
       expect(res.statusCode).toBe(400);
-      expect(res.json().messages[0].text).toBe("ordinary_collection_required");
+      expect(res.json().error.detail).toBe("ordinary_collection_required");
       expect(await db.findOne(DIGITA.COLLECTIONS.ENTITY, name, DIGITA.DATABASES.CORE)).toBeNull();
       expect(registry.has(name)).toBe(false);
       expect((await app.inject({ method: "GET", url: `/api/v1/meta/${name}`, headers: authHeaders() })).statusCode).toBe(404);
@@ -190,7 +205,7 @@ describe("Resource API Integration", () => {
         method: "POST",
         url: "/api/v1/resource/File",
         headers: authHeaders(),
-        payload: { file_name: "test.pdf", file_url: "/uploads/test.pdf", file_size: 1024, file_type: "application/pdf" },
+        payload: { file_name: "test.pdf", file_url: await storedFileUrl("test.pdf", 1024), file_size: 1024, file_type: "application/pdf" },
       });
 
       expect(res.statusCode).toBe(201);
@@ -272,12 +287,13 @@ describe("Resource API Integration", () => {
     beforeAll(async () => {
       // Create a few documents for list testing
       for (let i = 1; i <= 3; i++) {
-        await app.inject({
+        const created = await app.inject({
           method: "POST",
           url: "/api/v1/resource/File",
           headers: authHeaders(),
-          payload: { file_name: `list-test-${i}.pdf`, file_url: `/uploads/list-${i}.pdf`, file_size: 1024, file_type: "application/pdf" },
+          payload: { file_name: `list-test-${i}.pdf`, file_url: await storedFileUrl(`list-${i}.pdf`, 1024), file_size: 1024, file_type: "application/pdf" },
         });
+        expect(created.statusCode).toBe(201);
       }
     });
 
@@ -346,8 +362,9 @@ describe("Resource API Integration", () => {
           method: "POST",
           url: "/api/v1/resource/File",
           headers: authHeaders(),
-          payload: { file_name: `bulk-del-${i}.pdf`, file_url: `/uploads/bd-${i}.pdf`, file_size: 512, file_type: "application/pdf" },
+          payload: { file_name: `bulk-del-${i}.pdf`, file_url: await storedFileUrl(`bd-${i}.pdf`, 512), file_size: 512, file_type: "application/pdf" },
         });
+        expect(res.statusCode).toBe(201);
         names.push(res.json().data._id);
       }
 
@@ -528,7 +545,7 @@ describe("Resource API Integration", () => {
         method: "POST",
         url: "/api/v1/resource/File",
         headers: { authorization: `Bearer ${token}` },
-        payload: { file_name: "log-actor.pdf", file_url: "/uploads/log-actor.pdf", file_size: 1, file_type: "application/pdf" },
+        payload: { file_name: "log-actor.pdf", file_url: await storedFileUrl("log-actor.pdf", 1), file_size: 1, file_type: "application/pdf" },
       });
       expect(createRes.statusCode).toBe(201);
       const docId = createRes.json().data._id;
@@ -550,7 +567,7 @@ describe("Resource API Integration", () => {
         method: "POST",
         url: "/api/v1/resource/File",
         headers: { ...authHeaders(), "accept-language": "de" },
-        payload: { file_name: "de.pdf", file_url: "/uploads/de.pdf", file_size: 1, file_type: "application/pdf" },
+        payload: { file_name: "de.pdf", file_url: await storedFileUrl("de.pdf", 1), file_size: 1, file_type: "application/pdf" },
       });
       expect(res.statusCode).toBe(201);
       const msgs = (res.json().messages ?? []) as { text: string; params?: unknown }[];
@@ -571,7 +588,7 @@ describe("Resource API Integration", () => {
         method: "POST",
         url: "/api/v1/resource/File",
         headers: authHeaders(),
-        payload: { file_name: "conc.pdf", file_url: "/uploads/conc.pdf", file_size: 10, file_type: "application/pdf" },
+        payload: { file_name: "conc.pdf", file_url: await storedFileUrl("conc.pdf", 10), file_size: 10, file_type: "application/pdf" },
       });
       expect(res.statusCode).toBe(201);
       docId = res.json().data._id;
@@ -697,7 +714,7 @@ describe("Resource API Integration", () => {
         method: "POST",
         url: "/api/v1/resource/File",
         headers: authHeaders(),
-        payload: { file_name: "inputs.pdf", file_url: "/uploads/inputs.pdf", file_size: 1, file_type: "application/pdf" },
+        payload: { file_name: "inputs.pdf", file_url: await storedFileUrl("inputs.pdf", 1), file_size: 1, file_type: "application/pdf" },
       });
       fileName = res.json().data._id;
     });
@@ -1051,7 +1068,7 @@ describe("H1 — sidebar routes enforce per-doc read authz", () => {
       method: "POST",
       url: "/api/v1/resource/File",
       headers: authHeaders(),
-      payload: { file_name: "sidebar.pdf", file_url: "/uploads/sidebar.pdf", file_size: 1, file_type: "application/pdf" },
+      payload: { file_name: "sidebar.pdf", file_url: await storedFileUrl("sidebar.pdf", 1), file_size: 1, file_type: "application/pdf" },
     });
     fileId = res.json().data._id;
     // A user whose (invented) role grants no read on File.
@@ -1166,7 +1183,7 @@ describe("H2 — export runs as the caller, not GUEST_USER", () => {
       method: "POST",
       url: "/api/v1/resource/File",
       headers: authHeaders(),
-      payload: { file_name: "export-me.pdf", file_url: "/uploads/export-me.pdf", file_size: 2, file_type: "application/pdf" },
+      payload: { file_name: "export-me.pdf", file_url: await storedFileUrl("export-me.pdf", 2), file_size: 2, file_type: "application/pdf" },
     });
     const res = await app.inject({ method: "GET", url: "/api/v1/export/File", headers: authHeaders() });
     expect(res.statusCode).toBe(200);

@@ -153,7 +153,7 @@ describe("a seed pass links by business key to a row the same pass mints", () =>
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("links to the minted row, and reads the stored Authors once", async () => {
+  it("links to the minted row with one reservation lookup and one active-index read", async () => {
     const inserted: Record<string, Array<Record<string, unknown>>> = {};
     const db = {
       find: vi.fn(async () => []),
@@ -170,7 +170,10 @@ describe("a seed pass links by business key to a row the same pass mints", () =>
     await seedAppData(db, registry("system"), {} as NamingService, [dir]);
 
     expect(inserted["Book"]?.map((b) => String(b["author"]))).toEqual([String(inserted["Author"]![0]!["_id"])]);
-    expect((db.find as ReturnType<typeof vi.fn>).mock.calls.filter(([coll]) => coll === "Author")).toHaveLength(1);
+    expect((db.find as ReturnType<typeof vi.fn>).mock.calls.filter(([coll]) => coll === "Author")).toEqual([
+      ["Author", { fields: ["_id", "deleted", "name"], includeDeleted: true }, "app"],
+      ["Author", { fields: ["_id", "name"] }, "app"],
+    ]);
   });
 });
 

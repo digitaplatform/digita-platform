@@ -19,7 +19,7 @@ describe("readableFields", () => {
 
   it("answers only the fields a row with `fields` names, and then no operator field", () => {
     const fields = readableFields(customer, [{ level: 0, fields: ["name"] }]);
-    expect([...fields].sort()).toEqual(["_id", "creation", "docstatus", "doctype", "modified", "name"]);
+    expect([...fields].sort()).toEqual(["_id", "creation", "deleted", "docstatus", "doctype", "modified", "name"]);
     expect(readableFields(customer, [{ level: 0 }]).has("owner")).toBe(true);
   });
 });

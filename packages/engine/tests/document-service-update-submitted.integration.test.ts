@@ -34,6 +34,10 @@ import type { BaseDocument } from "../src/core/document/base-document.js";
 import { env } from "../src/core/config/env.js";
 import type { StoragePort } from "../src/core/storage/storage-port.js";
 import { mayReadFile } from "../src/core/storage/file-access.js";
+import { LocalStoragePort } from "../src/core/storage/local-storage.js";
+import { mkdtemp, rm } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
 
 let replSet: ReplicaFixture;
 let db: MongoDBService;
@@ -1050,11 +1054,12 @@ describe("updateSubmitted — an attach cell of a Table in the band", () => {
     await expect(patchScan(await uploadedBy(clerk.email))).resolves.toBeDefined();
   });
 
-  it("binds the patcher's own upload so a colleague may read it, and deletes it when a later patch removes it", async () => {
+  it("binds the patcher's own upload so a colleague may read it, and retains it marked when a later patch removes it", async () => {
     const colleague: UserContext = { _id: "colleague-001", email: "colleague@test.local", roles: ["System User"] };
-    const deleted: string[] = [];
-    const storage = { delete: async (key: string) => void deleted.push(key) } as unknown as StoragePort;
+    const uploadDir = await mkdtemp(join(tmpdir(), "submitted-attachments-"));
+    const storage = new LocalStoragePort(uploadDir);
     const service = docService as unknown as { storage?: StoragePort };
+    const previousStorage = service.storage;
     service.storage = storage;
     try {
       const doc = await docService.insert("ReceiptDoc", { title: "Paid", receipts: [{ scan: null }] }, admin);
@@ -1064,6 +1069,7 @@ describe("updateSubmitted — an attach cell of a Table in the band", () => {
         docService.updateSubmitted("ReceiptDoc", doc._id, { children: [{ table: "receipts", row_id: rowId, set: { scan } }] }, clerk);
       const scan = await uploadedBy(clerk.email);
       const fileId = scan.split("/")[4]!;
+      await storage.put(`receipts/${fileId}`, Buffer.from("scan fixture"), "application/pdf");
       await db.updateOne(DIGITA.COLLECTIONS.FILE, fileId, { storage_key: `receipts/${fileId}` }, "core");
 
       await patchScan(scan);
@@ -1073,11 +1079,16 @@ describe("updateSubmitted — an attach cell of a Table in the band", () => {
       expect(await mayReadFile(access, colleague, file)).toBe(true);
 
       await patchScan(null);
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, "core")).toBeNull();
-      expect(deleted).toEqual([`receipts/${fileId}`]);
+      await vi.waitFor(async () => {
+        expect(await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, "core")).toBeNull();
+        const retained = await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, "core", undefined, { includeDeleted: true });
+        expect(retained?.deleted).toBeInstanceOf(Date);
+        expect(retained?.deleted_by).toBe(clerk.email);
+      });
+      expect(await storage.exists(`receipts/${fileId}`)).toBe(true);
     } finally {
-      service.storage = undefined;
+      service.storage = previousStorage;
+      await rm(uploadDir, { recursive: true, force: true });
     }
   });
 

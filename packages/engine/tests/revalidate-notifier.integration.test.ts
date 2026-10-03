@@ -116,6 +116,7 @@ let app: FastifyInstance;
 let db: MongoDBService;
 let adminToken: string;
 let fixtureRoot: string;
+let observedPageId = "p1";
 
 const bearer = () => ({ authorization: `Bearer ${adminToken}` });
 /** The purge posts after the commit, so a test waits for it; the limit is far above a busy machine's delay. */
@@ -130,7 +131,7 @@ beforeAll(async () => {
     let raw = "";
     req.on("data", (chunk: Buffer) => (raw += chunk.toString()));
     req.on("end", () => {
-      void new Promise((resolve) => setTimeout(resolve, rendererDelayMs)).then(() => db?.findOne("WebPage", "p1", DB)).then((row) => {
+      void new Promise((resolve) => setTimeout(resolve, rendererDelayMs)).then(() => db?.findOne("WebPage", observedPageId, DB)).then((row) => {
         purges.push({
           secret: req.headers["x-revalidate-secret"] as string | undefined,
           tags: (JSON.parse(raw) as { tags: string[] }).tags,
@@ -196,14 +197,21 @@ describe("the renderer's cache purge", () => {
     expect(copied.statusCode).toBe(201);
     expect((await purgesAfter(++seen))[0]!.tags).toEqual(["entity:WebBlock"]);
 
-    const imported = await app.inject({
-      method: "POST", url: "/api/v1/import/WebPage", headers: bearer(),
-      payload: { mode: "insert", rows: [{ _id: "p1", title: "Imported" }] },
-    });
-    expect(imported.statusCode).toBe(200);
-    expect(await purgesAfter(++seen)).toEqual([{ secret: "shared-secret", tags: ["entity:WebPage"], storedTitle: "Imported" }]);
-    await app.inject({ method: "DELETE", url: `${RES}/WebPage/p1`, headers: bearer() });
-    await purgesAfter(++seen);
+    observedPageId = "p-import";
+    try {
+      const imported = await app.inject({
+        method: "POST", url: "/api/v1/import/WebPage", headers: bearer(),
+        payload: { mode: "insert", rows: [{ _id: observedPageId, title: "Imported" }] },
+      });
+      expect(imported.statusCode).toBe(200);
+      expect(imported.json().data).toMatchObject({ inserted: 1, failed: 0 });
+      expect(await purgesAfter(++seen)).toEqual([{ secret: "shared-secret", tags: ["entity:WebPage"], storedTitle: "Imported" }]);
+      const deleted = await app.inject({ method: "DELETE", url: `${RES}/WebPage/${observedPageId}`, headers: bearer() });
+      expect(deleted.statusCode).toBe(200);
+      await purgesAfter(++seen);
+    } finally {
+      observedPageId = "p1";
+    }
   });
 
   it("PLANTED INNOCENT: is not posted for an import that only validates", async () => {

@@ -51,12 +51,18 @@ import { env } from "../src/core/config/env.js";
 import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
+import { createStoragePort } from "../src/core/storage/storage-factory.js";
+import { mkdtemp, rm } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
 
 // File grants System User read only `if_owner`, so a System User who does not own a File
 // cannot read it. A DocShare must not hand that user the read that RBAC denies.
 let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
+let uploadDir: string;
+const originalUploadPath = env.UPLOAD_LOCAL_PATH;
 let adminTok: string;
 let strangerTok: string;
 let fileId: string;
@@ -67,6 +73,10 @@ const bearer = (tok: string) => ({ authorization: `Bearer ${tok}` });
 beforeAll(async () => {
   replSet = await createReplicaFixture({ replSet: { count: 1 } });
   (env as unknown as { MONGODB_URI: string }).MONGODB_URI = replSet.getUri();
+
+  uploadDir = await mkdtemp(join(tmpdir(), "docshare-files-"));
+  (env as { UPLOAD_LOCAL_PATH: string }).UPLOAD_LOCAL_PATH = uploadDir;
+  await createStoragePort().put("payroll.pdf", Buffer.from("x"), "application/pdf");
 
   const ta = await buildTestAuth();
   sign = ta.sign;
@@ -93,6 +103,8 @@ afterAll(async () => {
   await app.close();
   await db.disconnect();
   await replSet.stop();
+  await rm(uploadDir, { recursive: true, force: true });
+  (env as { UPLOAD_LOCAL_PATH: string }).UPLOAD_LOCAL_PATH = originalUploadPath;
 }, 30000);
 
 describe("a DocShare grants only what the sharer may read", () => {

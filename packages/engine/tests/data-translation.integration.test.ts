@@ -60,11 +60,13 @@ import { seedDataTranslations } from "../src/core/setup/seed-data-translations.j
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import type { EntityRegistry } from "../src/core/entity/entity-registry.js";
+import type { DocumentService } from "../src/core/document/document-service.js";
 
 let replSet: ReplicaFixture;
 let app: FastifyInstance;
 let db: MongoDBService;
 let registry: EntityRegistry;
+let docService: DocumentService;
 let ta: Awaited<ReturnType<typeof buildTestAuth>>;
 let token: string;
 
@@ -79,6 +81,7 @@ beforeAll(async () => {
   app = result.app;
   db = result.db;
   registry = result.registry;
+  docService = result.hookRunner.getServices()!.documentService as DocumentService;
   await result.startup();
   await app.ready();
 
@@ -600,16 +603,16 @@ describe("realtime WS gateway", () => {
   });
 });
 
-describe("data translations are cleaned up on document delete", () => {
+describe("data translations are retained on soft delete and cleaned up on purge", () => {
   const meta = { doctype: "gl", docstatus: 0, owner: "admin@digita.local", modified_by: "admin@digita.local", creation: new Date(), modified: new Date() };
   const dataTrans = () =>
     db.find(
       DIGITA.COLLECTIONS.TRANSLATION,
-      { filters: [{ namespace: "data", entity: "GlAcct", document_name: "9999" }] },
+      { filters: [{ namespace: "data", entity: "GlAcct", document_name: "9999" }], includeDeleted: true },
       DIGITA.DATABASES.CORE,
     );
 
-  it("deletes the doc's data-translation rows and does not resurrect them on _id reuse", async () => {
+  it("reserves the marked id and retains translations until purge, then permits clean _id reuse", async () => {
     await db.insertOne("GlAcct", { _id: "9999", code: "9999", name: "Temp", ...meta }, DIGITA.DATABASES.CORE);
     await db.insertOne(
       DIGITA.COLLECTIONS.TRANSLATION,
@@ -633,8 +636,21 @@ describe("data translations are cleaned up on document delete", () => {
     });
     expect(del.statusCode).toBe(200);
 
-    // The orphan translation row is gone.
-    expect((await dataTrans()).length).toBe(0);
+    const retained = await db.findOne("GlAcct", "9999", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    expect(retained?.deleted).toBeInstanceOf(Date);
+    expect(retained?.deleted_by).toBe("admin@digita.local");
+    expect((await get("/api/v1/resource/GlAcct/9999", "de")).statusCode).toBe(404);
+    expect(await dataTrans()).toEqual([expect.objectContaining({ value: "Zeitweise" })]);
+    await expect(
+      db.insertOne("GlAcct", { _id: "9999", code: "9999", name: "Fresh", ...meta }, DIGITA.DATABASES.CORE),
+    ).rejects.toMatchObject({ code: 11000 });
+
+    const purged = await docService.purgeDoc("GlAcct", "9999", {
+      _id: "admin@digita.local", email: "admin@digita.local", roles: ["Administrator", "System User"],
+    }, { deletedBefore: new Date((retained!.deleted as Date).getTime() + 1) });
+    expect(purged).toMatchObject({ purged: true, translations_deleted: 1 });
+    expect(await db.findOne("GlAcct", "9999", DIGITA.DATABASES.CORE, undefined, { includeDeleted: true })).toBeNull();
+    expect(await dataTrans()).toEqual([]);
 
     // Resurrection guard: a reused _id shows the stored value, not the stale overlay.
     await db.insertOne("GlAcct", { _id: "9999", code: "9999", name: "Fresh", ...meta }, DIGITA.DATABASES.CORE);

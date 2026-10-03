@@ -258,6 +258,7 @@ describe("POST /admin/reload-definitions runs every check boot runs on the defin
   }, 120000);
 
   it("keeps marked custom and file-seeded Rule, View, and Translation rows unchanged while refreshing active controls", async () => {
+    running = await startAdminApp();
     await mkdir(join(running.root, "rules"), { recursive: true });
     await writeJson(join(running.root, "rules", "retained.rule.json"), {
       _id: "rule-file-retained",
