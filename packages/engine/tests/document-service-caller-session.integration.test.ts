@@ -10,6 +10,7 @@ vi.mock("../src/core/logging/logger.js", () => ({
 
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { MongoDBService } from "../src/core/database/mongodb-service.js";
+import { DELETED_COLLECTION } from "../src/core/document/deleted-records.js";
 import { EntityRegistry } from "../src/core/entity/entity-registry.js";
 import { PermissionChecker } from "../src/core/permissions/permission-checker.js";
 import { HookRunner, type HookServices } from "../src/core/hooks/hook-runner.js";
@@ -245,7 +246,7 @@ describe("A document service call with the caller's session joins its transactio
     expect(deletedBlobs).toEqual(["bookings/FILE-000704.pdf"]);
   });
 
-  it("removes the attachment of a delete once the action commits", async () => {
+  it("moves a delete to the deleted records once the action commits, and keeps its attachment for a restore", async () => {
     const bookingId = await insertAttachedBooking("FILE-000703");
     const other = (await docService.insert("Booking", { title: "Runs the action" }, admin))._id;
     onConvert(async (doc, ctx, services) => {
@@ -255,8 +256,9 @@ describe("A document service call with the caller's session joins its transactio
     await docService.runAction("Booking", other, "convert", admin);
 
     expect(await stored("Booking", bookingId)).toBeNull();
-    expect(await db.findOne(DIGITA.COLLECTIONS.FILE, "FILE-000703", "core")).toBeNull();
-    expect(deletedBlobs).toEqual(["bookings/FILE-000703.pdf"]);
+    expect(await db.findOne(DELETED_COLLECTION, `Booking:${bookingId}`, DIGITA.DATABASES.AUDITS)).not.toBeNull();
+    expect(await db.findOne(DIGITA.COLLECTIONS.FILE, "FILE-000703", "core")).not.toBeNull();
+    expect(deletedBlobs).toEqual([]);
   });
 });
 

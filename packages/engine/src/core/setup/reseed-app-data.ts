@@ -4,6 +4,7 @@ import type { EntityRegistry } from "../entity/entity-registry.js";
 import type { DomainDirectory } from "../database/app-db-discovery.js";
 import type { TranslationService } from "../i18n/translation-service.js";
 import { NamingService } from "../document/naming-service.js";
+import { DeletedRecords } from "../document/deleted-records.js";
 import { seedAppData, type UnresolvedSeedLink } from "./seed-app-data.js";
 import { seedDataTranslations } from "./seed-data-translations.js";
 import { createLogger } from "../logging/logger.js";
@@ -166,6 +167,10 @@ async function reseedOnce(mode: ReseedMode, deps: ReseedDeps): Promise<ReseedSum
       );
     }
   }
+
+  // The deleted records of the wiped entities go with them, so no restore brings a visitor's
+  // record back into the seeded data. A deleted record of the core database stays restorable.
+  await new DeletedRecords(db).clear(registry.getAll().filter((e) => appDbs.includes(e.database)).map((e) => e.name));
 
   // 2. Wipe sequences in every app database — naming counters
   //    must reset so reseeded rows reuse their original IDs.

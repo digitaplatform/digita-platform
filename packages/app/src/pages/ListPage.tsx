@@ -22,6 +22,7 @@ import { canGrantActionTo } from '@digitaplatform/shared';
 import { ListRenderer } from '@/components/render/ListRenderer';
 import { TreeEditor } from '@/components/render/TreeEditor';
 import { ListToolbar } from '@/components/list/ListToolbar';
+import { DeletedRecordsList } from '@/components/list/DeletedRecordsList';
 import { ImportWizard } from '@/components/list/ImportWizard';
 import { LoadingBlock, ErrorBlock } from '@/components/status';
 import { TableSkeleton } from '@digitaplatform/components';
@@ -216,6 +217,14 @@ export default function ListPage() {
   // no fallback to `read`, whether or not a row models it.
   const canExportRoundTrip = hasEntityPermission(meta, user, 'export');
   const treeMode = !!meta.tree && display === 'tree';
+  // Whoever may delete records of the entity sees its deleted records and restores them.
+  const canDelete = hasEntityPermission(meta, user, 'delete');
+  const deletedMode = canDelete && display === 'deleted';
+  const displays = [
+    { value: 'list', label: tc('ui.tree.viewList') },
+    ...(meta.tree ? [{ value: 'tree', label: tc('ui.tree.viewTree') }] : []),
+    ...(canDelete ? [{ value: 'deleted', label: tc('ui.list.viewDeleted') }] : []),
+  ];
 
   // ── URL writers ────────────────────────────────────────────────────────────
   // Keep `?view` while patching structural params → editing FORKS the view.
@@ -385,7 +394,7 @@ export default function ListPage() {
         canCreate={canCreate}
         isAdmin={prefs.isAdmin}
         canEditView={prefs.canEdit}
-        onSearch={treeMode ? undefined : (q) => updateParam({ q: q || undefined }, true)}
+        onSearch={treeMode || deletedMode ? undefined : (q) => updateParam({ q: q || undefined }, true)}
         onFiltersChange={onFiltersChange}
         onColumnsChange={onColumnsChange}
         onApplyView={onApplyView}
@@ -414,24 +423,21 @@ export default function ListPage() {
         />
       )}
 
-      {meta.tree && (
+      {displays.length > 1 && (
         <SegmentedControl
-          aria-label={tc('ui.tree.viewTree')}
-          value={treeMode ? 'tree' : 'list'}
-          // The tree searches in its own box: a list query would stay in the count and the exports
-          // with no box showing it.
-          onChange={(v) =>
-            updateParam(v === 'tree' ? { display: 'tree', q: undefined } : { display: undefined })
-          }
-          options={[
-            { value: 'list', label: tc('ui.tree.viewList') },
-            { value: 'tree', label: tc('ui.tree.viewTree') },
-          ]}
+          aria-label={tc('ui.list.display')}
+          value={treeMode ? 'tree' : deletedMode ? 'deleted' : 'list'}
+          // The tree and the deleted records search in no list box: a list query would stay in the
+          // count and the exports with no box showing it.
+          onChange={(v) => updateParam(v === 'list' ? { display: undefined } : { display: v, q: undefined })}
+          options={displays}
         />
       )}
 
       {treeMode ? (
         <TreeEditor entity={entity!} meta={meta} tree={meta.tree!} />
+      ) : deletedMode ? (
+        <DeletedRecordsList entity={entity!} />
       ) : listQ.isLoading ? (
         <TableSkeleton columns={5} rows={10} />
       ) : listQ.isError ? (

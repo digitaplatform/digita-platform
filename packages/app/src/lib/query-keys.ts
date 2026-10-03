@@ -10,6 +10,7 @@ export const qk = {
   list: (entity: string, params: unknown) => ['resource', entity, 'list', params] as const,
   doc: (entity: string, name: string) => ['resource', entity, 'doc', name] as const,
   single: (entity: string) => ['resource', entity, 'single'] as const,
+  deleted: (entity: string) => ['resource', entity, 'deleted'] as const,
   actions: (entity: string, name: string) => ['resource', entity, 'doc', name, 'actions'] as const,
   relatedDocs: (entity: string, name: string) => ['resource', entity, 'doc', name, 'related'] as const,
   versions: (entity: string, name: string) => ['resource', entity, 'doc', name, 'history', 'versions'] as const,

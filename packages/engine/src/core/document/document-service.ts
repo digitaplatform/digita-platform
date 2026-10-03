@@ -8,7 +8,8 @@ import type { UserContext } from "../permissions/types.js";
 import { ActionRunner } from "../action/action-runner.js";
 import { BaseDocument } from "./base-document.js";
 import { NamingService } from "./naming-service.js";
-import { toIdString } from "./id-codec.js";
+import { DeletedRecords } from "./deleted-records.js";
+import { toIdStorage, toIdString } from "./id-codec.js";
 import { DocStatusEngine, DocStatusError } from "./docstatus-engine.js";
 import { validateEntityDataZod } from "../entity/entity-validator-zod.js";
 import { ZodSchemaBuilder } from "../entity/zod-schema-builder.js";
@@ -231,6 +232,7 @@ const GUEST_USER: UserContext = {
 
 export class DocumentService {
   private namingService: NamingService;
+  private deletedRecords: DeletedRecords;
   private docStatusEngine: DocStatusEngine;
 
   private registry;
@@ -292,6 +294,7 @@ export class DocumentService {
     this.tenantTimeZone = deps.tenantTimeZone;
 
     this.namingService = new NamingService(deps.db);
+    this.deletedRecords = new DeletedRecords(deps.db);
     this.docStatusEngine = new DocStatusEngine();
     this.actionRunner = new ActionRunner(deps.permissionChecker);
   }
@@ -2085,7 +2088,7 @@ export class DocumentService {
     sessionOverride?: import("mongodb").ClientSession,
   ): Promise<void> {
     const entity = this.registry.get(doctype);
-    const doc = await this.loadDocInternal(doctype, name, sessionOverride);
+    const { doc, stored } = await this.loadDocAndStoredRow(doctype, name, sessionOverride);
 
     // Permission check
     await this.permissionChecker.check(user, doctype, "delete", doc._data);
@@ -2105,19 +2108,17 @@ export class DocumentService {
     }
 
     // Transactional delete — before_delete + after_delete run within the
-    // same session as the deletion so cascade cleanup can be atomic.
+    // same session as the move so cascade cleanup can be atomic. The record
+    // moves to the deleted records with its data translations, so a new record
+    // may take its id or a unique value, and a restore brings both back. Its
+    // files stay for the restore.
     const runDelete = async (session: import("mongodb").ClientSession) => {
       await this.hookRunner.run(doctype, "before_delete", doc, ctx, session, user);
+      const translationFilter = { namespace: "data", entity: doctype, document_name: doc._id };
+      const translations = await this.db.findManyByFilter(DIGITA.COLLECTIONS.TRANSLATION, translationFilter, DIGITA.DATABASES.CORE, session);
+      await this.deletedRecords.keep({ entity: doctype, document_name: doc._id, deleted_by: user.email, record: stored, translations }, session);
       await this.db.deleteOne(entity.name, name, entity.database, session);
-      // Cascade: remove this document's data-level translation rows so they don't
-      // orphan — and don't resurrect stale overlays if a business-keyed _id is
-      // reused later. Atomic with the delete (same session).
-      await this.db.deleteMany(
-        DIGITA.COLLECTIONS.TRANSLATION,
-        { namespace: "data", entity: doctype, document_name: name },
-        DIGITA.DATABASES.CORE,
-        session,
-      );
+      await this.db.deleteMany(DIGITA.COLLECTIONS.TRANSLATION, translationFilter, DIGITA.DATABASES.CORE, session);
       await this.hookRunner.run(doctype, "after_delete", doc, ctx, session, user);
 
       await this.activityLogService.log(
@@ -2130,15 +2131,6 @@ export class DocumentService {
         },
         session,
       );
-
-      // Cascade: reference-counted cleanup of the deleted doc's attachments once
-      // the transaction commits — its own or the caller's — so a rollback keeps
-      // them (best-effort — never fails the delete).
-      const storage = this.storage;
-      if (storage) {
-        const fileIds = collectAttachFileIds(entity.fields, doc._data);
-        this.db.afterCommit(session, () => cleanupDocumentAttachments(this.db, storage, fileIds, { entity: entity.name, name: doc._id }, user));
-      }
     };
     if (sessionOverride) {
       await runDelete(sessionOverride);
@@ -2152,6 +2144,119 @@ export class DocumentService {
     });
 
     log.info({ doctype, name, user: user.email }, "Document deleted");
+  }
+
+  // ─── DELETED RECORDS ───────────────────────────────────
+
+  /**
+   * The entity's deleted records that `user` may restore, the latest first: those a `delete` row
+   * of the user's roles admits. Each shows its name, when and by whom it was deleted, and its
+   * title where the user may read the title field.
+   */
+  async listDeleted(
+    doctype: string,
+    user: UserContext = GUEST_USER,
+  ): Promise<Array<{ name: string; title?: string; deleted_at: Date; deleted_by: string }>> {
+    const entity = this.registry.get(doctype);
+    await this.permissionChecker.check(user, doctype, "delete");
+    const out: Array<{ name: string; title?: string; deleted_at: Date; deleted_by: string }> = [];
+    for (const row of await this.deletedRecords.list(entity.name)) {
+      const record = readStoredRow(entity, row.record);
+      if (!(await this.permissionChecker.hasPermission(user, doctype, "delete", record)).allowed) continue;
+      const titleField = entity.title_field;
+      const readable = this.permissionChecker.getReadableFields(user, doctype, record);
+      const title = titleField && (!readable || readable.has(titleField)) ? record[titleField] : undefined;
+      out.push({
+        name: row.document_name,
+        ...(typeof title === "string" && title ? { title } : {}),
+        deleted_at: row.deleted_at,
+        deleted_by: row.deleted_by,
+      });
+    }
+    return out;
+  }
+
+  async restoreDoc(...args: Parameters<DocumentService["performRestoreDoc"]>): ReturnType<DocumentService["performRestoreDoc"]> {
+    return this.writeOutsideReset(args[0], "restoreDoc", () => this.performRestoreDoc(...args));
+  }
+
+  /**
+   * Put a deleted record back under its id, with its child rows, data translations and files.
+   * Whoever may delete the record may restore it. The restore runs the record's insert hooks
+   * (`validate`, `before_insert`, `after_insert`, `on_change`) and checks its links, so a hook that
+   * undid something at the delete does it again. A record or unique value that took the id or a
+   * unique value meanwhile refuses the restore with a duplicate key on that field.
+   */
+  private async performRestoreDoc(
+    doctype: string,
+    name: string,
+    user: UserContext = GUEST_USER,
+    ctx?: ResponseContext,
+  ): Promise<BaseDocument> {
+    const entity = this.registry.get(doctype);
+    // A system id is found in any case, as a read finds it.
+    const id = toIdString(toIdStorage(name));
+    const deleted = await this.deletedRecords.find(entity.name, id);
+    if (!deleted) throw new NotFoundError(doctype, name);
+    await this.permissionChecker.check(user, doctype, "delete", readStoredRow(entity, deleted.record));
+
+    const doc = new BaseDocument(doctype, { ...deleted.record });
+    doc._isNew = true;
+    const runRestore = async (session: import("mongodb").ClientSession) => {
+      await this.hookRunner.runComputedHooks(doctype, doc, ctx, session, user);
+      await this.hookRunner.run(doctype, "validate", doc, ctx, session, user);
+      if (this.ruleEngine) {
+        const ruleMutations = await this.ruleEngine.execute(doctype, "validate", doc._data, user, session);
+        for (const f of Object.keys(ruleMutations ?? {})) doc._dirty.add(f);
+      }
+      const validation = validateEntityDataZod(entity, doc._data, this.zodSchemaBuilder, true);
+      if (!validation.valid) {
+        for (const err of validation.errors) ctx?.error(err.message_key, err.params);
+        throw new ValidationFailedError(doctype, validation.errors);
+      }
+      const linkErrors = await this.linkValidator.validate(entity, doc._data, session, { user, stored: deleted.record });
+      if (linkErrors.length > 0) {
+        for (const err of linkErrors) ctx?.error(err.message_key, err.params);
+        throw new ValidationFailedError(
+          doctype,
+          linkErrors.map((e) => ({ field: e.field, message_key: e.message_key, params: e.params })),
+        );
+      }
+      if (this.periodCloseValidator) {
+        await this.periodCloseValidator.assertPeriodOpen(entity, doc._data, "insert", session);
+      }
+      await this.hookRunner.run(doctype, "before_insert", doc, ctx, session, user);
+
+      doc.modified_by = user.email;
+      doc.modified = new Date();
+      await this.db.insertOne(entity.name, doc.toMongo(), entity.database, session);
+      // The record's own texts win over a row a seed wrote for its id meanwhile.
+      for (const translation of deleted.translations) {
+        await this.db.upsertOne(DIGITA.COLLECTIONS.TRANSLATION, toIdString(translation["_id"]), translation, DIGITA.DATABASES.CORE, session);
+      }
+      await this.deletedRecords.remove(entity.name, id, session);
+
+      await this.hookRunner.run(doctype, "after_insert", doc, ctx, session, user);
+      await this.hookRunner.run(doctype, "on_change", doc, ctx, session, user);
+      await this.activityLogService.log(
+        {
+          entity: doctype,
+          document_name: id,
+          action: "Restored",
+          user: user.email,
+          user_name: user.full_name ?? user.email,
+        },
+        session,
+      );
+    };
+    await this.db.withTransaction(runRestore);
+
+    ctx?.success("doc_restored", { doctype: entity.label ?? doctype, name: id });
+    log.info({ doctype, name: id, user: user.email }, "Document restored");
+
+    doc._link_titles = await this.linkTitleResolver.resolve(entity, doc._data, user, ctx?.locale);
+    doc._data = readStoredRow(entity, doc._data);
+    return doc;
   }
 
   // ─── ACTION ────────────────────────────────────────────

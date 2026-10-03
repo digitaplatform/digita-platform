@@ -157,6 +157,24 @@ export function deleteDoc(entity: string, name: string): Promise<ApiResponse<nul
   return api.del<ApiResponse<null>>(`${RESOURCE}/${enc(entity, name)}`);
 }
 
+/** A deleted record of an entity, as the person who may restore it sees it in the list. */
+export interface DeletedRecordRow {
+  name: string;
+  title?: string;
+  deleted_at: string;
+  deleted_by: string;
+}
+
+/** The entity's deleted records the person may restore, the latest first. */
+export function listDeleted(entity: string): Promise<ApiResponse<DeletedRecordRow[]>> {
+  return api.get<ApiResponse<DeletedRecordRow[]>>(`${RESOURCE}/${enc(entity)}/deleted`);
+}
+
+/** Put a deleted record back under its id; the engine answers the record. */
+export function restoreDeleted<T = Doc>(entity: string, name: string): Promise<ApiResponse<T>> {
+  return api.post<ApiResponse<T>>(`${RESOURCE}/${enc(entity)}/deleted/${enc(name)}/restore`, {});
+}
+
 export function submitDoc<T = Doc>(entity: string, name: string): Promise<ApiResponse<T>> {
   return api.post<ApiResponse<T>>(`${RESOURCE}/${enc(entity, name)}/submit`, {});
 }

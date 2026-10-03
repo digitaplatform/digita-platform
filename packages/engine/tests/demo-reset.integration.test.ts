@@ -58,6 +58,7 @@ import { createApp } from "../src/app.js";
 import { buildTestAuth } from "./_test-auth.js";
 import type { MongoDBService } from "../src/core/database/mongodb-service.js";
 import type { EntityRegistry } from "../src/core/entity/entity-registry.js";
+import { DELETED_COLLECTION } from "../src/core/document/deleted-records.js";
 
 // A workshop-shaped fixture app: one domain folder, a reference row in `seeds/` and a demo row
 // in `seeds-demo/`. Domain entities land in `<app dir basename>_<domain>`.
@@ -197,6 +198,14 @@ describe("the demo reset on a demo tenant", () => {
     });
     expect(created.statusCode).toBe(201);
     const visitorOrder = created.json().data._id as string;
+    const deleted = await app.inject({
+      method: "POST", url: "/api/v1/resource/WorkOrder", headers: admin, payload: { customer: "A deleting visitor" },
+    });
+    const deletedOrder = deleted.json().data._id as string;
+    expect((await app.inject({ method: "DELETE", url: `/api/v1/resource/WorkOrder/${deletedOrder}`, headers: admin })).statusCode).toBe(200);
+    // PLANTED INNOCENT: a deleted record of the core database, which the reset keeps.
+    const coreDeleted = { _id: "Workspace:kept", entity: "Workspace", document_name: "kept", deleted_at: new Date(), deleted_by: "admin", record: {}, translations: [] };
+    await engine.db.insertOne(DELETED_COLLECTION, coreDeleted, DIGITA.DATABASES.AUDITS);
 
     const reset = await app.inject({ method: "POST", url: RESET, headers: admin, payload: {} });
     expect(reset.statusCode).toBe(200);
@@ -207,6 +216,8 @@ describe("the demo reset on a demo tenant", () => {
     expect(order.json().data.customer).toBe("Anna Muster");
     const gone = await app.inject({ method: "GET", url: `/api/v1/resource/WorkOrder/${visitorOrder}`, headers: admin });
     expect(gone.statusCode).toBe(404);
+    expect((await app.inject({ method: "POST", url: `/api/v1/resource/WorkOrder/deleted/${deletedOrder}/restore`, headers: admin })).statusCode).toBe(404);
+    expect(await engine.db.findOne(DELETED_COLLECTION, "Workspace:kept", DIGITA.DATABASES.AUDITS)).not.toBeNull();
     const setting = await app.inject({ method: "GET", url: "/api/v1/resource/WorkshopSetting/workshop", headers: admin });
     expect(setting.json().data.hourly_rate).toBe(120);
   });

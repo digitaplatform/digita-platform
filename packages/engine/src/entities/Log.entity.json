@@ -14,7 +14,7 @@
       "fieldname": "action",
       "fieldtype": "Select",
       "label": "Action",
-      "options": ["Created", "Updated", "Submitted", "Cancelled", "Deleted", "Amended", "Shared", "Login", "Logout", "Password Changed", "Import", "Export"],
+      "options": ["Created", "Updated", "Submitted", "Cancelled", "Deleted", "Restored", "Amended", "Shared", "Login", "Logout", "Password Changed", "Import", "Export"],
       "required": true,
       "in_list_view": true,
       "in_standard_filter": true,

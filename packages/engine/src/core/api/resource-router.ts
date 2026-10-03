@@ -212,6 +212,28 @@ export function registerResourceRoutes(
     return reply.send(successResponse(null, ctx.getMessages()));
   });
 
+  // ─── DELETED RECORDS ───────────────────────────────────
+  // `deleted` is a reserved sub-path, as count and single are: Fastify matches the static segment
+  // ahead of the parametric :name.
+  app.get(`${basePath}/:doctype/deleted`, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { doctype } = request.params as { doctype: string };
+    const rows = await documentService.listDeleted(doctype, getUser(request));
+    return reply.send(successResponse(rows));
+  });
+
+  app.post(
+    `${basePath}/:doctype/deleted/:name/restore`,
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { doctype, name } = request.params as { doctype: string; name: string };
+      const ctx = new ResponseContext(await localeOf(request));
+
+      const doc = await documentService.restoreDoc(doctype, name, getUser(request), ctx);
+      emitChange("insert", doctype, doc._id);
+      if (localeResolver.affects(doctype)) await localeResolver.refresh();
+      return reply.send(successResponse(projectRead(request, documentService.toReadableJSON(doctype, doc, getUser(request))), ctx.getMessages()));
+    },
+  );
+
   // ─── SUBMIT ────────────────────────────────────────────
   app.post(
     `${basePath}/:doctype/:name/submit`,

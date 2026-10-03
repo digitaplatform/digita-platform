@@ -5,6 +5,7 @@ import { IndexManager } from "./index-manager.js";
 import { env } from "../config/env.js";
 import { createLogger } from "../logging/logger.js";
 import { encryptPassword, passwordFieldPaths } from "../entity/password-cipher.js";
+import { DELETED_COLLECTION } from "../document/deleted-records.js";
 
 const log = createLogger("schema-migrator");
 
@@ -171,8 +172,20 @@ export class SchemaMigrator {
       });
       await this.db.updateOne("_versions", version["_id"] as string, { changes }, DIGITA.DATABASES.AUDITS);
     }
-    if (encrypted || versions.length) {
-      log.info({ entity: entity.name, rows: encrypted, versions: versions.length }, "Password values encrypted");
+    // A deleted record waits with its row as stored, so its clear values move forward too.
+    const recordFilter = {
+      entity: entity.name,
+      $or: clearFilter.$or.map((clause) => Object.fromEntries(Object.entries(clause).map(([k, v]) => [`record.${k}`, v]))),
+    };
+    const deleted = await this.db.findManyByFilter(DELETED_COLLECTION, recordFilter, DIGITA.DATABASES.AUDITS);
+    for (const row of deleted) {
+      const record = { ...(row["record"] as Record<string, unknown>) };
+      for (const f of header) if (isClear(record[f])) record[f] = forward(record[f]);
+      for (const [table, f] of cells) if (Array.isArray(record[table])) record[table] = forwardRows(record[table], f);
+      await this.db.updateOne(DELETED_COLLECTION, row["_id"] as string, { record }, DIGITA.DATABASES.AUDITS);
+    }
+    if (encrypted || versions.length || deleted.length) {
+      log.info({ entity: entity.name, rows: encrypted, versions: versions.length, deleted: deleted.length }, "Password values encrypted");
     }
   }
 

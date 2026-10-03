@@ -395,7 +395,7 @@ describe("a clear Password value stored before this change", () => {
     expect(clear(raw["secret"])).toBe("new-by-user");
   });
 
-  it("moves forward to its encrypted form by the migration, in rows, Table cells and _versions", async () => {
+  it("PLANTED DEFECT: moves forward to its encrypted form by the migration, in rows, Table cells, _versions and deleted records", async () => {
     await db.insertOne("Vault", {
       _id: "V-9001", title: "Old", secret: "old-clear", accounts: [{ _row_id: "r1", host: "imap", password: "old-row-clear" }, { _row_id: "r2", host: "pop", password: null }],
     }, "app");
@@ -403,8 +403,18 @@ describe("a clear Password value stored before this change", () => {
       _id: "old-version", entity: "Vault", document_name: "V-9001", changed_by: "admin@digita.local", timestamp: new Date(),
       changes: [{ field: "secret", old: null, new: "old-clear" }, { field: "accounts[r1].password", old: "older", new: "old-row-clear" }, { field: "title", old: "a", new: "Old" }],
     }, "audits");
+    await db.insertOne("_deleted", {
+      _id: "Vault:V-9002", entity: "Vault", document_name: "V-9002", deleted_at: new Date(), deleted_by: "admin@digita.local", translations: [],
+      record: { _id: "V-9002", title: "Deleted", secret: "deleted-clear", accounts: [{ _row_id: "r1", host: "imap", password: "deleted-row-clear" }] },
+    }, "audits");
 
     await migrator().migrate(vault);
+
+    const kept = (await db.findOne("_deleted", "Vault:V-9002", "audits")) as { record: Record<string, unknown> };
+    expect(JSON.stringify(kept)).not.toContain("deleted-clear");
+    expect(clear(kept.record["secret"])).toBe("deleted-clear");
+    expect(clear((kept.record["accounts"] as Record<string, unknown>[])[0]!["password"])).toBe("deleted-row-clear");
+    expect(kept.record["title"]).toBe("Deleted");
 
     const raw = (await db.findOne("Vault", "V-9001", "app")) as Record<string, unknown>;
     expect(raw["secret"]).not.toBe("old-clear");
