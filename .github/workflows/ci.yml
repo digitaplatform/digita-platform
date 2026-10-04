@@ -94,7 +94,7 @@ jobs:
       - name: Download digitaplatform/digita-translations pinned for es-MX
         run: |
           mkdir -p "$RUNNER_TEMP/digita-translations"
-          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/3e21f69d3f52ff436959b178696197c1c89e2de4 \
+          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/27a34f213abdf9fd0ebc9ad9f9398fe5d8005669 \
             | tar -xz -C "$RUNNER_TEMP/digita-translations" --strip-components=1
       - name: Test the app
         run: pnpm --filter '@digitaplatform/app' test
@@ -138,7 +138,7 @@ jobs:
       - name: Download digitaplatform/digita-translations pinned for es-MX
         run: |
           mkdir -p "$RUNNER_TEMP/digita-translations"
-          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/3e21f69d3f52ff436959b178696197c1c89e2de4 \
+          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/27a34f213abdf9fd0ebc9ad9f9398fe5d8005669 \
             | tar -xz -C "$RUNNER_TEMP/digita-translations" --strip-components=1
       - name: Test the web site
         run: pnpm --filter '@digitaplatform/web' test
@@ -197,7 +197,7 @@ jobs:
       - name: Download digitaplatform/digita-translations pinned for es-MX
         run: |
           mkdir -p "$RUNNER_TEMP/digita-translations"
-          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/3e21f69d3f52ff436959b178696197c1c89e2de4 \
+          curl -fsSL https://codeload.github.com/digitaplatform/digita-translations/tar.gz/27a34f213abdf9fd0ebc9ad9f9398fe5d8005669 \
             | tar -xz -C "$RUNNER_TEMP/digita-translations" --strip-components=1
       - name: Engine test suite
         run: pnpm --filter '@digitaplatform/engine' test
