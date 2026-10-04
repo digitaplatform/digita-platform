@@ -1,4 +1,6 @@
 import { vi, describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import { randomUUID } from "node:crypto";
+import { PermissionChecker } from "../src/core/permissions/permission-checker.js";
 
 vi.mock("../src/core/config/env.js", () => {
   return { env: {
@@ -1095,5 +1097,145 @@ describe("physical purge — cutoff, Setting retention, and chunk cursor paginat
 
     const remaining = await db.count("PurgeBook", [{ _id: { $regex: "^000-CHUNK-BOOK-" } }], "app", undefined, { includeDeleted: true });
     expect(remaining).toBe(0);
+  });
+});
+
+describe("retention purge authority", () => {
+  // Unique collections isolate counts from intentionally retained prior fixtures.
+  async function personalRows(owner = `other-${randomUUID()}@d`) {
+    const entity = {
+      ...PURGE_BOOK, name: `RetainedPersonal${randomUUID().replaceAll("-", "")}`, personal: true,
+      permissions: [
+        ...PURGE_BOOK.permissions,
+        { role: "System User", level: 0, read: 1, write: 1, delete: 1 },
+      ],
+    } satisfies EntityDefinition;
+    registry.register(entity);
+    await db.ensureCollection(entity.name, "app");
+    await new IndexManager(db).ensureIndexes(entity);
+    const secret = `private-${randomUUID()}`;
+    const ids = { due: randomUUID(), live: randomUUID(), young: randomUUID() };
+    for (const [kind, id] of Object.entries(ids)) {
+      await db.insertOne(entity.name, {
+        _id: id, doctype: entity.name, title: `${secret}-${kind}`, owner,
+        modified_by: owner, creation: monthsAgo(14), modified: monthsAgo(14),
+        ...(kind === "live" ? {} : {
+          deleted: monthsAgo(kind === "due" ? 14 : 2), deleted_by: owner,
+        }),
+      }, "app");
+    }
+    const rows = await db.findManyByFilter(entity.name, {}, "app", undefined, { includeDeleted: true });
+    const cursor = JSON.stringify({
+      entity: entity.name, completed: 0, records: 0, files: 0, versions: 0, translations: 0,
+    });
+    return { entity: entity.name, ids, secret, rows, cursor };
+  }
+
+  it.each([false, true])("keeps ordinary owner gates and reference guards; shared attachment=%s", async (shared) => {
+    await db.updateOne("Setting", "Setting", { deleted_retention_months: "12" }, DIGITA.DATABASES.CORE);
+    const f = await personalRows();
+    await expect(documentService.getDoc(f.entity, f.ids.live, adminUser))
+      .rejects.toMatchObject({ status: 403 });
+    await expect(documentService.deleteDoc(f.entity, f.ids.live, adminUser))
+      .rejects.toMatchObject({ status: 403 });
+    await expect(documentService.restoreDoc(f.entity, f.ids.due, adminUser))
+      .rejects.toMatchObject({ status: 403 });
+    await expect(documentService.purgeDoc(f.entity, f.ids.due, adminUser, { deletedBefore: monthsAgo(12) }))
+      .rejects.toMatchObject({ status: 403 });
+
+    const fileId = randomUUID();
+    const key = `q9/${randomUUID()}.txt`;
+    await storage.put(key, Buffer.from(f.secret), "text/plain");
+    await db.insertOne("File", {
+      _id: fileId, doctype: "File", file_name: "private.txt", storage_key: key,
+      file_type: "text/plain", file_url: `/api/v1/file/${fileId}/download`,
+      owner: `unbound-${randomUUID()}@d`, modified_by: adminUser.email,
+      creation: monthsAgo(14), modified: monthsAgo(14), deleted: monthsAgo(14),
+    }, DIGITA.DATABASES.CORE);
+    await db.updateOne(f.entity, f.ids.due, { attachment: `/api/v1/file/${fileId}/download` }, "app");
+    if (shared) {
+      await db.updateOne(f.entity, f.ids.young, { attachment: `/api/v1/file/${fileId}/download` }, "app");
+      f.rows = await db.findManyByFilter(f.entity, {}, "app", undefined, { includeDeleted: true });
+    }
+
+    const run = await documentService.runAction("Setting", "Setting", "purge_deleted", adminUser,
+      undefined, { [JOBS_CURSOR_PARAM]: f.cursor }) as {
+        done: boolean; cursor: string; progress: { completed: number };
+      };
+    expect(run.done).toBe(false); // File is always later than this custom entity.
+    expect(run.progress.completed).toBe(1);
+    expect(JSON.parse(run.cursor)).toMatchObject({
+      completed: 1, records: shared ? 1 : 2, files: shared ? 0 : 1, versions: 0, translations: 0,
+    });
+    expect(Object.keys(run).sort()).toEqual(["cursor", "done", "progress"]);
+    const output = JSON.stringify(run);
+    expect(output).not.toContain(f.secret);
+    expect(output).not.toContain(f.rows[0]!["owner"]);
+    expect(output).not.toMatch(/"(?:title|owner|doctype|attachment|_id)"\s*:/);
+    expect(await db.findOne(f.entity, f.ids.due, "app", undefined, { includeDeleted: true })).toBeNull();
+    for (const id of [f.ids.live, f.ids.young]) {
+      expect(await db.findOne(f.entity, id, "app", undefined, { includeDeleted: true }))
+        .toEqual(f.rows.find(row => String(row["_id"]) === id));
+    }
+    const file = await db.findOne("File", fileId, DIGITA.DATABASES.CORE, undefined, { includeDeleted: true });
+    if (shared) expect(file).toMatchObject({ storage_key: key, deleted: expect.any(Date) });
+    else expect(file).toBeNull();
+    expect(await storage.exists(key)).toBe(shared);
+  });
+
+  it.each(["missing Administrator", "denied Setting.write"] as const)(
+    "rejects %s despite weakened metadata, including direct internal calls", async (gate) => {
+      await db.updateOne("Setting", "Setting", { deleted_retention_months: "12" }, DIGITA.DATABASES.CORE);
+      const actor = gate === "missing Administrator"
+        ? { ...adminUser, roles: ["System User"] } : adminUser;
+      const f = await personalRows(actor.email); // Ordinary row deletion is allowed for this actor.
+      const setting = registry.get("Setting");
+      registry.register({
+        ...setting, actions: setting.actions!.map(action => action.action === "purge_deleted"
+          ? { ...action, allowed_roles: [], requires_permission: undefined, show_if: undefined }
+          : action),
+      });
+      const original = PermissionChecker.prototype.hasPermission;
+      const permission = vi.spyOn(PermissionChecker.prototype, "hasPermission")
+        .mockImplementation(function (this: PermissionChecker, user, entity, action, doc) {
+          if (entity === "Setting") {
+            return Promise.resolve({
+              allowed: !(gate === "denied Setting.write" && action === "write"),
+              reason: "Retention permission fixture",
+            });
+          }
+          return original.call(this, user, entity, action, doc);
+        });
+      try {
+        await expect(documentService.runAction("Setting", "Setting", "purge_deleted", actor,
+          undefined, { [JOBS_CURSOR_PARAM]: f.cursor })).rejects.toMatchObject({ status: 403 });
+        expect(await db.findManyByFilter(f.entity, {}, "app", undefined, { includeDeleted: true }))
+          .toEqual(f.rows);
+        permission.mockClear();
+        await expect(documentService.purgeDoc(f.entity, f.ids.due, actor,
+          { deletedBefore: monthsAgo(12) }, undefined, true)).rejects.toMatchObject({ status: 403 });
+        if (gate === "denied Setting.write") {
+          expect(permission).toHaveBeenCalledWith(actor, "Setting", "write", expect.anything());
+        }
+        expect(await db.findManyByFilter(f.entity, {}, "app", undefined, { includeDeleted: true }))
+          .toEqual(f.rows);
+      } finally {
+        permission.mockRestore();
+        registry.register(setting);
+      }
+    },
+  );
+
+  it("rejects a fresh cutoff before mutation and still enforces expiry internally", async () => {
+    await db.updateOne("Setting", "Setting", { deleted_retention_months: "12" }, DIGITA.DATABASES.CORE);
+    const f = await personalRows(adminUser.email);
+    await expect(documentService.purgeDoc(f.entity, f.ids.due, adminUser,
+      { deletedBefore: new Date() }, undefined, true)).rejects.toThrow();
+    expect(await db.findManyByFilter(f.entity, {}, "app", undefined, { includeDeleted: true }))
+      .toEqual(f.rows);
+    await expect(documentService.purgeDoc(f.entity, f.ids.young, adminUser,
+      { deletedBefore: monthsAgo(12) }, undefined, true)).resolves.toMatchObject({ purged: false });
+    expect(await db.findManyByFilter(f.entity, {}, "app", undefined, { includeDeleted: true }))
+      .toEqual(f.rows);
   });
 });

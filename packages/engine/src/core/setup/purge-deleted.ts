@@ -47,7 +47,7 @@ export function registerPurgeDeletedAction(
     };
     const rows = await db.aggregate(entity.name, [{ $match: filter }, { $sort: { _id: 1 } }, { $limit: CHUNK_SIZE }], entity.database, undefined, { includeDeleted: true });
     for (const row of rows) {
-      const result = await documentService.purgeDoc(entity.name, String(row["_id"]), services.user, { deletedBefore: cutoff });
+      const result = await documentService.purgeDoc(entity.name, String(row["_id"]), services.user, { deletedBefore: cutoff }, undefined, true);
       state.completed++;
       state.records += Number(result.purged) + (entity.name === DIGITA.COLLECTIONS.FILE ? 0 : result.files_deleted);
       state.files += result.files_deleted;

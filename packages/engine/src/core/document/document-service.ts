@@ -1,6 +1,6 @@
 import type { EntityDefinition, ActionDefinition, TransitionDefinition, SubmittedPatch } from "@digitaplatform/shared";
 import { ConfigurationError, EngineError } from "../errors/engine-error.js";
-import { LAYOUT_FIELD_TYPES, DIGITA, DocStatus, ROW_ID_FIELD } from "@digitaplatform/shared";
+import { LAYOUT_FIELD_TYPES, DIGITA, DocStatus, ROW_ID_FIELD, SYSTEM_ROLES } from "@digitaplatform/shared";
 import { calculateChanges, deepEqual, type FieldChange } from "./change-tracker.js";
 import type { DocumentServiceDeps } from "./service-deps.js";
 import type { HookServices } from "../hooks/hook-runner.js";
@@ -2252,9 +2252,20 @@ export class DocumentService {
   async purgeDoc(
     doctype: string, name: string, user: UserContext, cutoff: PurgeCutoff,
     sessionOverride?: import("mongodb").ClientSession,
+    /** Rechecks Setting authority and expiry before purging other owners' personal rows. */
+    retentionPurge = false,
   ): Promise<PurgeResult> {
     const date = cutoff.deletedBefore ?? cutoff.createdBefore;
     if (!(date instanceof Date) || !Number.isFinite(date.getTime())) throw new EngineError("field_invalid_date", { field: cutoff.createdBefore ? "creation" : "deleted" }, 400, "BAD_REQUEST");
+    if (retentionPurge) {
+      const setting = await this.assertRetentionPurgeAccess(user);
+      const months = Number(setting["deleted_retention_months"] ?? 12);
+      if (![12, 18, 24, 30].includes(months)) throw new RangeError("Invalid deleted record retention");
+      const policyCutoff = new Date();
+      policyCutoff.setUTCMonth(policyCutoff.getUTCMonth() - months);
+      if (!cutoff.deletedBefore || cutoff.createdBefore || date > policyCutoff) throw new EngineError("field_invalid_date", { field: "deleted" }, 400, "BAD_REQUEST");
+      if (sessionOverride) throw new EngineError("purge_requires_own_transaction", {}, 400, "PURGE_TRANSACTION_REQUIRED");
+    }
     const entity = this.registry.get(doctype);
     const id = toIdString(toIdStorage(name));
     return this.writeOutsideReset(doctype, "purgeDoc", async () => {
@@ -2267,7 +2278,7 @@ export class DocumentService {
             // Keep retry state local to this callback: Mongo may roll it back and run it again.
             const committedMarkers: string[] = [];
             await this.db.touchGuard(`purge:${doctype}:${id}`, session);
-            const stored = await this.loadPurgeRecord(entity, id, user, cutoff, session);
+            const stored = await this.loadPurgeRecord(entity, id, user, cutoff, session, retentionPurge);
             if (!stored) return committedMarkers;
             for (const fileId of await this.purgeFileIds(entity, id, stored, session)) {
               await this.db.touchGuard(`attachment:${fileId}`, session);
@@ -2278,7 +2289,7 @@ export class DocumentService {
                 continue;
               }
               // A File seen marked in a committed phase may have been explicitly restored.
-              if (observedMarkedFiles.has(fileId) || !(await this.ownsPurgeFile(entity, id, stored, file, user))) continue;
+              if (observedMarkedFiles.has(fileId) || !(await this.ownsPurgeFile(entity, id, stored, file, user, retentionPurge))) continue;
               if ((await fileAttachmentBlockers(this.db, fileId, this.registry.getAll(), session, { entity: doctype, name: id })).length > 0) continue;
               const now = new Date();
               if (await this.db.updateOne(DIGITA.COLLECTIONS.FILE, fileId, {
@@ -2293,7 +2304,7 @@ export class DocumentService {
           const empty: PurgeResult = { purged: false, versions_deleted: 0, translations_deleted: 0, files_deleted: 0 };
           await this.db.touchGuard(`purge:${doctype}:${id}`, session);
           if (doctype === DIGITA.COLLECTIONS.FILE) await this.db.touchGuard(`attachment:${id}`, session);
-          const stored = await this.loadPurgeRecord(entity, id, user, cutoff, session);
+          const stored = await this.loadPurgeRecord(entity, id, user, cutoff, session, retentionPurge);
           if (!stored) return empty;
           const fileIds = doctype === DIGITA.COLLECTIONS.FILE ? [] : await this.purgeFileIds(entity, id, stored, session);
           if (sessionOverride && (doctype === DIGITA.COLLECTIONS.FILE || fileIds.length > 0)) {
@@ -2309,7 +2320,7 @@ export class DocumentService {
               await this.db.touchGuard(`attachment:${fileId}`, session);
               const file = await this.db.findOne(DIGITA.COLLECTIONS.FILE, fileId, DIGITA.DATABASES.CORE, session, { includeDeleted: true });
               if (!file) continue;
-              const owned = await this.ownsPurgeFile(entity, id, stored, file, user);
+              const owned = await this.ownsPurgeFile(entity, id, stored, file, user, retentionPurge);
               const referenced = (await fileAttachmentBlockers(this.db, fileId, this.registry.getAll(), session, { entity: doctype, name: id })).length > 0;
               if (file["deleted"] == null && owned && !referenced && !observedMarkedFiles.has(fileId)) {
                 // The last other parent disappeared after phase one. Commit a marker in a fresh
@@ -2348,13 +2359,20 @@ export class DocumentService {
     });
   }
 
-  private async loadPurgeRecord(entity: EntityDefinition, id: string, user: UserContext, cutoff: PurgeCutoff, session: import("mongodb").ClientSession) {
+  private async assertRetentionPurgeAccess(user: UserContext, setting?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (!user.roles.includes(SYSTEM_ROLES.ADMINISTRATOR)) throw PermissionDeniedError.forAction(DIGITA.COLLECTIONS.SETTING, "write");
+    const data = setting ?? (await this.getDoc(DIGITA.COLLECTIONS.SETTING, "Setting", user))._data;
+    await this.permissionChecker.check(user, DIGITA.COLLECTIONS.SETTING, "write", data);
+    return data;
+  }
+
+  private async loadPurgeRecord(entity: EntityDefinition, id: string, user: UserContext, cutoff: PurgeCutoff, session: import("mongodb").ClientSession, retentionPurge = false) {
     const stored = await this.db.findOneByFilter(entity.name, {
       _id: toIdStorage(id) as never,
       deleted: { $type: "date", ...(cutoff.deletedBefore ? { $lt: cutoff.deletedBefore } : {}) },
       ...(cutoff.createdBefore ? { creation: { $lt: cutoff.createdBefore } } : {}),
     }, entity.database, session, { includeDeleted: true });
-    if (stored) {
+    if (stored && !retentionPurge) {
       const readable = readStoredRow(entity, stored);
       if (!isRoleVisible(entity, user, readable)) throw new NotFoundError(entity.name, id);
       await this.permissionChecker.check(user, entity.name, "delete", readable);
@@ -2376,8 +2394,9 @@ export class DocumentService {
     return [...new Set([...this.attachmentIds(entity, stored), ...bound.map((file) => toIdString(file["_id"]))])].sort();
   }
 
-  private async ownsPurgeFile(entity: EntityDefinition, id: string, parent: Record<string, unknown>, file: Record<string, unknown>, user: UserContext): Promise<boolean> {
+  private async ownsPurgeFile(entity: EntityDefinition, id: string, parent: Record<string, unknown>, file: Record<string, unknown>, user: UserContext, retentionPurge = false): Promise<boolean> {
     if (file["attached_to_name"]) return file["attached_to_entity"] === entity.name && toIdString(toIdStorage(String(file["attached_to_name"]))) === id;
+    if (retentionPurge) return true;
     if (typeof parent["deleted_by"] === "string" && file["owner"] === parent["deleted_by"]) return true;
     // The last reference may belong to another owner. Its cleanup uses the existing File delete grant.
     const definition = this.registry.get(DIGITA.COLLECTIONS.FILE);
@@ -2464,7 +2483,7 @@ export class DocumentService {
 
     // Physical purge commits retry pointers per record before byte I/O; its own service owns transactions.
     if (doctype === DIGITA.COLLECTIONS.SETTING && actionName === "purge_deleted") {
-      await this.permissionChecker.check(user, doctype, "write", doc._data);
+      await this.assertRetentionPurgeAccess(user, doc._data);
       if (sessionOverride) throw new EngineError("purge_requires_own_transaction", {}, 400, "PURGE_TRANSACTION_REQUIRED");
       if (!this.actionRunner.isShown(action, doc, user)) throw new ActionNotAvailableError(action);
       return this.hookRunner.runAction(doctype, actionName, doc, ctx, undefined, user, params, extraServices);
