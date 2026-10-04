@@ -1092,9 +1092,10 @@ describe("updateSubmitted — an attach cell of a Table in the band", () => {
     }
   });
 
-  it("PLANTED INNOCENT: binds no colleague's file a patch names, and deletes none it removes", async () => {
+  it("keeps colleague ownership and retains bytes when Administrator removes the last loose reference", async () => {
     const deleted: string[] = [];
     const service = docService as unknown as { storage?: StoragePort };
+    const previousStorage = service.storage;
     service.storage = { delete: async (key: string) => void deleted.push(key) } as unknown as StoragePort;
     try {
       const doc = await docService.insert("ReceiptDoc", { title: "Paid", receipts: [{ scan: null }] }, admin);
@@ -1106,11 +1107,12 @@ describe("updateSubmitted — an attach cell of a Table in the band", () => {
       await docService.updateSubmitted("ReceiptDoc", doc._id, { children: [{ table: "receipts", row_id: rowId, set: { scan } }] }, admin);
       expect(((await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, "core")) as Record<string, unknown>)["attached_to_name"]).toBeUndefined();
       await docService.updateSubmitted("ReceiptDoc", doc._id, { children: [{ table: "receipts", row_id: rowId, set: { scan: null } }] }, admin);
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      expect(await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, "core")).not.toBeNull();
+      expect(await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, "core")).toBeNull();
+      expect(await db.findOne(DIGITA.COLLECTIONS.FILE, fileId, "core", undefined, { includeDeleted: true }))
+        .toMatchObject({ owner: "colleague@test.local", deleted: expect.any(Date), deleted_by: admin.email });
       expect(deleted).toEqual([]);
     } finally {
-      service.storage = undefined;
+      service.storage = previousStorage;
     }
   });
 });

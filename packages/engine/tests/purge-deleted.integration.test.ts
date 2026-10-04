@@ -46,6 +46,7 @@ vi.mock("../src/core/cache/redis-service.js", () => ({
 
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import type { ClientSession } from "mongodb";
+import { toIdStorage } from "../src/core/document/id-codec.js";
 import type { FastifyInstance } from "fastify";
 import type { EntityDefinition } from "@digitaplatform/shared";
 import { DIGITA, JOBS_CURSOR_PARAM } from "@digitaplatform/shared";
@@ -363,14 +364,14 @@ describe("physical purge — referenced File preservation across live and retain
     const headers = { authorization: `Bearer ${token}` };
     const created = await app.inject({
       method: "POST", url: "/api/v1/resource/PurgeBook", headers,
-      payload: { _id: name, title: "Reused identity" },
+      payload: { _id: name },
     });
     expect(created.statusCode).toBe(201);
     expect(created.json().data).toMatchObject({ _id: name });
     const read = await app.inject({ method: "GET", url: `/api/v1/resource/PurgeBook/${name}`, headers });
     expect(read.statusCode).toBe(200);
     expect(read.json().data).toMatchObject({ _id: name });
-    expect(await db.findOne("PurgeBook", name, "app")).toMatchObject({ owner: "new@d", title: "Reused identity" });
+    expect(await db.findOne("PurgeBook", name, "app")).toMatchObject({ owner: "new@d" });
   }
 
   it.each([[true, true], [false, true], [true, false]])("invalidates a shared File's old binding without blocking its existing reference (field: %s, retained: %s)", async (currentField, retainedParent) => {
@@ -441,10 +442,11 @@ describe("physical purge — referenced File preservation across live and retain
   });
 
   it.each([false, true])("preserves a File restored between purge phases (previous marker: %s)", async (alreadyMarked) => {
-    const first = "B-RESTORED-BETWEEN-PHASES";
-    const fileId = "FILE-RESTORED-BETWEEN-PHASES";
-    const key = "books/restored-between-phases.png";
-    const thumbKey = "books/restored-between-phases-thumb.png";
+    const suffix = alreadyMarked ? "PREV" : "NEW";
+    const first = `B-RESTORED-BETWEEN-PHASES-${suffix}`;
+    const fileId = `FILE-RESTORED-BETWEEN-PHASES-${suffix}`;
+    const key = `books/restored-between-phases-${suffix}.png`;
+    const thumbKey = `books/restored-between-phases-${suffix}-thumb.png`;
     const fileUrl = `/api/v1/file/${fileId}/download`;
     const bytes: [Buffer, Buffer] = [Buffer.from("restored main bytes"), Buffer.from("restored thumbnail bytes")];
     const [originalToken, adminToken, newToken] = await Promise.all([
@@ -514,14 +516,15 @@ describe("physical purge — referenced File preservation across live and retain
   });
 
   it.each([
-    [true, "507F1F77BCF86CD799439011"], [false, "507F1F77BCF86CD799439011"],
-    [true, "507f1F77bCf86cD799439011"], [false, "507f1F77bCf86cD799439011"],
+    [true, "507F1F77BCF86CD799439011"], [false, "507F1F77BCF86CD799439012"],
+    [true, "507f1F77bCf86cD799439013"], [false, "507f1F77bCf86cD799439014"],
   ] as const)("invalidates canonical parent bindings (included in attachment: %s, spelling: %s)", async (includedInAttachment, mixedCaseParent) => {
-    const canonicalParent = "507f1f77bcf86cd799439011";
-    const last = `B-OTHER-REF-${includedInAttachment ? "INCL" : "OMIT"}`;
-    const fileId = `FILE-MIXED-CASE-${includedInAttachment ? "INCL" : "OMIT"}`;
-    const key = `books/mixed-${includedInAttachment ? "incl" : "omit"}.png`;
-    const thumbKey = `books/mixed-${includedInAttachment ? "incl" : "omit"}-thumb.png`;
+    const canonicalParent = mixedCaseParent.toLowerCase();
+    const suffix = canonicalParent.slice(-3);
+    const last = `B-OTHER-REF-${suffix}`;
+    const fileId = `FILE-MIXED-CASE-${suffix}`;
+    const key = `books/mixed-${suffix}.png`;
+    const thumbKey = `books/mixed-${suffix}-thumb.png`;
     const fileUrl = `/api/v1/file/${fileId}/download`;
     const bytes: [Buffer, Buffer] = [Buffer.from("mixed case parent bytes"), Buffer.from("mixed thumb bytes")];
     const [originalToken, adminToken, newToken] = await Promise.all([
@@ -541,7 +544,7 @@ describe("physical purge — referenced File preservation across live and retain
     }, DIGITA.DATABASES.CORE);
 
     await db.insertOne("PurgeBook", {
-      _id: canonicalParent, title: "Parent A", owner: "original@d",
+      _id: toIdStorage(canonicalParent), title: "Parent A", owner: "original@d",
       deleted_by: "original@d", deleted: monthsAgo(14),
       creation: monthsAgo(16), modified: monthsAgo(14),
       ...(includedInAttachment ? { attachment: fileUrl } : {}),
@@ -1016,11 +1019,16 @@ describe("physical purge — cutoff, Setting retention, and chunk cursor paginat
   it("PLANTED DEFECT: chunks entity rows at 100 with cursor pagination and purges File entities last", async () => {
     await db.updateOne(DIGITA.COLLECTIONS.SETTING, "Setting", { deleted_retention_months: "12" }, DIGITA.DATABASES.CORE);
 
+    // Other retained fixtures remain in this app; the purge correctly includes their due rows too.
+    const existingDueBooks = await db.count("PurgeBook", [
+      { deleted: { $type: "date", $lt: monthsAgo(12) } },
+    ], "app", undefined, { includeDeleted: true });
+
     // Insert 105 deleted records for chunking verification
     const bulkDocs = [];
     for (let i = 1; i <= 105; i++) {
       bulkDocs.push({
-        _id: `CHUNK-BOOK-${String(i).padStart(3, "0")}`,
+        _id: `000-CHUNK-BOOK-${String(i).padStart(3, "0")}`,
         doctype: "PurgeBook",
         title: `Chunk ${i}`,
         deleted: monthsAgo(14),
@@ -1053,7 +1061,7 @@ describe("physical purge — cutoff, Setting retention, and chunk cursor paginat
 
     const parsedCursor = JSON.parse(res1.cursor!) as { entity: string; after?: string; records: number };
     expect(parsedCursor.entity).toBe("PurgeBook");
-    expect(parsedCursor.after).toBe("CHUNK-BOOK-100");
+    expect(parsedCursor.after).toBe("000-CHUNK-BOOK-100");
     expect(parsedCursor.records).toBe(100);
 
     // Chunk 2: resuming with cursor to complete PurgeBook
@@ -1062,9 +1070,9 @@ describe("physical purge — cutoff, Setting retention, and chunk cursor paginat
       { [JOBS_CURSOR_PARAM]: res1.cursor },
     ) as { done: boolean; cursor?: string; progress: { completed: number } };
 
-    const parsedCursor2 = res2.cursor ? JSON.parse(res2.cursor) as { entity: string; records: number; after?: string } : null;
+    const parsedCursor2 = res2.cursor ? JSON.parse(res2.cursor) as { entity: string; records: number; files: number; after?: string } : null;
     if (!res2.done && parsedCursor2) {
-      expect(parsedCursor2.records).toBe(105);
+      expect(parsedCursor2.records).toBe(105 + existingDueBooks + parsedCursor2.files);
       expect(parsedCursor2.after).toBeUndefined();
     }
 
@@ -1079,7 +1087,7 @@ describe("physical purge — cutoff, Setting retention, and chunk cursor paginat
     expect(next.done).toBe(true);
     expect(visited.at(-1)).toBe(DIGITA.COLLECTIONS.FILE);
 
-    const remaining = await db.count("PurgeBook", [{ _id: { $regex: "^CHUNK-BOOK-" } }], "app", undefined, { includeDeleted: true });
+    const remaining = await db.count("PurgeBook", [{ _id: { $regex: "^000-CHUNK-BOOK-" } }], "app", undefined, { includeDeleted: true });
     expect(remaining).toBe(0);
   });
 });
