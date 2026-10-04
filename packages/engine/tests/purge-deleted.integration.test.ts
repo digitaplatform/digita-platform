@@ -429,9 +429,15 @@ describe("physical purge — referenced File preservation across live and retain
     expect(activeFile?.["deleted"] ?? null).toBeNull();
     for (const token of [originalToken, adminToken]) await expectDownloads(fileUrl, token, bytes);
     await expectDownloads(fileUrl, newToken);
-    await expect(documentService.insert("PurgeBook", {
-      _id: `B-NEW-REFERENCE-${suffix}`, title: "Cannot add another owner's File", attachment: fileUrl,
-    }, newOwner)).rejects.toMatchObject({ responseCode: "PERMISSION_DENIED", params: { doctype: "File" } });
+    // This role may create the parent but cannot write its attachment field. The ignored
+    // field must not become a stored reference or grant access to the colleague's File.
+    const attempted = await documentService.insert("PurgeBook", {
+      _id: `B-NEW-REFERENCE-${suffix}`, attachment: fileUrl,
+    }, newOwner);
+    const attemptedStored = await db.findOne("PurgeBook", attempted._id, "app");
+    expect(attemptedStored).toMatchObject({ owner: newOwner.email });
+    expect(attemptedStored?.["attachment"] ?? null).toBeNull();
+    await expectDownloads(fileUrl, newToken);
     expect(await storage.exists(key)).toBe(true);
     await db.updateOne("PurgeBook", last, { deleted: monthsAgo(14), deleted_by: "other@d" }, "app");
     expect(await documentService.purgeDoc("PurgeBook", last, adminUser, cutoff)).toMatchObject({ purged: true, files_deleted: 1 });
