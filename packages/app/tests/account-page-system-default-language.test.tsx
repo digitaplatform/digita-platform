@@ -111,3 +111,27 @@ describe('saving the profile language', () => {
     expect(document.documentElement.lang).toBe('fr');
   });
 });
+
+
+describe('a region that follows an older boot payload language', () => {
+  it('keeps following es-MX when saving only a timezone', async () => {
+    const mx = readBundle(process.env.TRANSLATIONS_DIR!)['es-MX']!;
+    useI18nStore.setState({ locale: 'es-MX' });
+    useSessionStore.setState({ locale: { code: 'es-MX', format_locale: 'es-MX', timezone: null } });
+    document.documentElement.lang = 'es-MX';
+    const save = vi.spyOn(useSessionStore.getState(), 'setLocaleFormat').mockResolvedValue();
+    try {
+      renderAccount();
+      const form = screen.getByRole('heading', { name: mx['ui.account.region.title'] }).closest('form')!;
+      const triggers = form.querySelectorAll<HTMLButtonElement>('[data-ui="select-trigger"]');
+      expect(triggers[0]?.textContent).toContain(mx['ui.account.region.formatLocaleDefault']);
+      fireEvent.click(triggers[1]!);
+      fireEvent.click(screen.getByRole('option', { name: 'America/Mexico_City' }));
+      fireEvent.click(within(form).getByRole('button', { name: mx['ui.account.region.save'] }));
+      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: mx['ui.account.region.save'] }));
+      await vi.waitFor(() => expect(save).toHaveBeenCalledWith(null, 'America/Mexico_City'));
+    } finally {
+      save.mockRestore();
+    }
+  });
+});

@@ -41,6 +41,18 @@ describe("pathSlug", () => {
 describe("preferredLocale", () => {
   const offered = ["en", "de"];
 
+  it("prefers the offered Mexican tag before Spanish and preserves quality order", () => {
+    const regional = ["en", "es", "es-MX"];
+    expect(preferredLocale("ES-mx;Q=0.9,en;q=0.5", regional, "en")).toBe("es-MX");
+    expect(preferredLocale("es-MX ;q=1,en;q=0.5", regional, "en")).toBe("es-MX");
+    expect(preferredLocale("de ;q=1,en;q=0.5", offered, "en")).toBe("de");
+    expect(preferredLocale("es-MX;q=0,es;q=0.5", regional, "en")).toBe("es");
+    expect(preferredLocale("en;q=1,es-MX;q=0.5", regional, "en")).toBeNull();
+    expect(preferredLocale("es-MX", ["en", "es"], "en")).toBe("es");
+    expect(preferredLocale("es-ES", regional, "en")).toBe("es");
+    expect(pathSlug("/es-MX/privacy", regional)).toBe("privacy");
+  });
+
   it("PLANTED DEFECT: a browser that prefers German, with a region, is sent to de", () => {
     expect(preferredLocale("de-CH,de;q=0.9,en;q=0.8", offered, "en")).toBe("de");
     // Reading the tag whole (de-CH is not an offered locale) would pick en here, and this goes red.

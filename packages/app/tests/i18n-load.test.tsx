@@ -40,6 +40,29 @@ afterEach(() => {
 });
 
 describe('loading the texts of a language', () => {
+  it('merges Mexican, Spanish and configured fallback texts in that priority', async () => {
+    const dictionaries: Record<string, Record<string, string>> = {
+      'es-MX': { exact: 'México' }, es: { exact: 'España', base: 'Español' },
+      de: { exact: 'Deutsch', base: 'Deutsch', last: 'Fallback' },
+    };
+    getTranslations.mockImplementation(async (code: string) => ({ success: true, data: dictionaries[code] }));
+    await useI18nStore.getState().load('es-MX', 'de');
+    expect(useI18nStore.getState().translations).toEqual({ exact: 'México', base: 'Español', last: 'Fallback' });
+    expect(document.documentElement.lang).toBe('es-MX');
+    await useI18nStore.getState().load('es-MX', 'es-MX');
+    expect(useI18nStore.getState().translations.exact).toBe('México');
+  });
+
+  it('keeps the old language when a regional fallback dictionary cannot load', async () => {
+    getTranslations.mockImplementation(async (code: string) => {
+      if (code === 'es') throw new Error('Spanish unavailable');
+      return { success: true, data: { exact: 'México' } };
+    });
+    await expect(useI18nStore.getState().load('es-MX')).rejects.toThrow(TranslationsLoadError);
+    expect(useI18nStore.getState().locale).toBe('en');
+    expect(document.documentElement.lang).toBe('en');
+  });
+
   it('fails, naming the language, when the request fails, and keeps the texts it had', async () => {
     getTranslations.mockRejectedValue(new Error('engine restarting'));
     const load = useI18nStore.getState().load('de');

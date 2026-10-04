@@ -122,8 +122,8 @@ export async function createApp(
   // via JWKS. The engine no longer issues tokens — login / refresh / logout /
   // 2FA / sessions all live in digita-auth.
   const authn = opts.authn ?? new RemoteAuthnAdapter();
-  const translationService = new TranslationService(db);
   const localeResolver = new LocaleResolver(db);
+  const translationService = new TranslationService(db, () => localeResolver.getFallbackLanguage());
   // File storage backend (local disk | S3/Garage) — fails boot in production
   // when UPLOAD_STORAGE=s3 is configured incompletely.
   const storage = createStoragePort();

@@ -16,6 +16,7 @@ const LABELS: Record<string, string> = {
   it: "Italiano",
   fr: "Français",
   es: "Español",
+  "es-MX": "Español (México)",
   tr: "Türkçe",
 };
 const labelFor = (loc: string) => LABELS[loc] ?? loc.toUpperCase();

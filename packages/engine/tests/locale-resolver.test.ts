@@ -41,6 +41,7 @@ describe("LocaleResolver — region/timezone via UserPreference", () => {
     expect(loc.code).toBe("de"); // UI language
     expect(loc.format_locale).toBe("de-CH"); // Swiss formatting
     expect(loc.timezone).toBe("Europe/Zurich");
+    expect(loc.has_format_locale_preference).toBe(true);
   });
 
   it("lets the preference override the UI language (it UI, CH formatting)", async () => {
@@ -56,6 +57,7 @@ describe("LocaleResolver — region/timezone via UserPreference", () => {
     const loc = await r.resolve({ email: "user@example.com", language: "de" });
     expect(loc.format_locale).toBe("de");
     expect(loc.timezone).toBeNull();
+    expect(loc.has_format_locale_preference).toBe(false);
   });
 
   it("survives a malformed preference value (no throw, falls back)", async () => {
@@ -85,6 +87,27 @@ function makeMutableDb(state: { langs: string[] }): MongoDBService {
 }
 
 describe("LocaleResolver — cache invalidation (B2)", () => {
+  it("keeps es-MX for tokens and weighted mixed-case headers, defaulting formats to that tag", async () => {
+    const state = { langs: ["en", "es", "es-MX"] };
+    const r = new LocaleResolver(makeMutableDb(state));
+    await r.initialize();
+    expect(await r.resolve({ language: "es-MX" })).toMatchObject({ code: "es-MX", format_locale: "es-MX" });
+    expect(await r.resolve(undefined, "ES-mx;Q=0.9,en;q=0.5")).toMatchObject({ code: "es-MX", format_locale: "es-MX" });
+    expect(await r.resolveLanguage(undefined, "es-MX ;q=1,en;q=0.5")).toBe("es-MX");
+    expect(await r.resolveLanguage(undefined, "es-MX;q=0,es;q=0.5")).toBe("es");
+    expect(await r.resolveLanguage(undefined, "en;q=0.9,es-MX;q=0.5")).toBe("en");
+    expect(await r.resolveLanguage(undefined, "es-ES")).toBe("es");
+    state.langs = ["en", "es"];
+    await r.refresh();
+    expect(await r.resolveLanguage(undefined, "es-MX")).toBe("es");
+  });
+
+  it('retains a base-language header with whitespace before its quality parameter', async () => {
+    const r = new LocaleResolver(makeMutableDb({ langs: ['en', 'de'] }));
+    await r.initialize();
+    expect(await r.resolveLanguage(undefined, 'de ;q=1,en;q=0.5')).toBe('de');
+  });
+
   it("affects() flags the settings singleton and the Language registry only", () => {
     const r = new LocaleResolver(makeMutableDb({ langs: ["en"] }));
     expect(r.affects("Setting")).toBe(true);

@@ -26,7 +26,10 @@ export function translationOverrideFields(stored: Record<string, unknown>, user:
 }
 
 export class TranslationService {
-  constructor(private db: MongoDBService) {}
+  constructor(
+    private db: MongoDBService,
+    private fallbackLocale: () => string = () => env.TRANSLATION_FALLBACK_LOCALE,
+  ) {}
 
   /**
    * Scan all loaded entity definitions for Select fields and emit
@@ -122,6 +125,9 @@ export class TranslationService {
   ): Promise<Record<string, string>> {
     const result: Record<string, string> = {};
 
+    const locales = locale.includes("-")
+      ? [...new Set([locale, locale.split("-")[0]!, this.fallbackLocale()])]
+      : [locale];
     const docs = await this.db.find(
       DIGITA.COLLECTIONS.TRANSLATION,
       {
@@ -130,7 +136,7 @@ export class TranslationService {
             namespace: "data",
             entity,
             document_name: documentName,
-            locale,
+            locale: { $in: locales },
             fieldname: { $in: fields },
           },
         ],
@@ -138,9 +144,12 @@ export class TranslationService {
       DIGITA.DATABASES.CORE,
     );
 
-    for (const doc of docs) {
-      const d = doc as Record<string, unknown>;
-      result[d["fieldname"] as string] = d["value"] as string;
+    for (const language of [...locales].reverse()) {
+      for (const doc of docs) {
+        const d = doc as Record<string, unknown>;
+        if (d["locale"] !== language) continue;
+        result[d["fieldname"] as string] = d["value"] as string;
+      }
     }
 
     return result;
@@ -180,6 +189,9 @@ export class TranslationService {
 
     if (documentNames.length === 0 || fields.length === 0) return result;
 
+    const locales = locale.includes("-")
+      ? [...new Set([locale, locale.split("-")[0]!, this.fallbackLocale()])]
+      : [locale];
     const docs = await this.db.find(
       DIGITA.COLLECTIONS.TRANSLATION,
       {
@@ -188,7 +200,7 @@ export class TranslationService {
             namespace: "data",
             entity,
             document_name: { $in: documentNames },
-            locale,
+            locale: { $in: locales },
             fieldname: { $in: fields },
           },
         ],
@@ -196,11 +208,14 @@ export class TranslationService {
       DIGITA.DATABASES.CORE,
     );
 
-    for (const doc of docs) {
-      const d = doc as Record<string, unknown>;
-      const docName = d["document_name"] as string;
-      if (!result.has(docName)) result.set(docName, {});
-      result.get(docName)![d["fieldname"] as string] = d["value"] as string;
+    for (const language of [...locales].reverse()) {
+      for (const doc of docs) {
+        const d = doc as Record<string, unknown>;
+        if (d["locale"] !== language) continue;
+        const docName = d["document_name"] as string;
+        if (!result.has(docName)) result.set(docName, {});
+        result.get(docName)![d["fieldname"] as string] = d["value"] as string;
+      }
     }
 
     return result;

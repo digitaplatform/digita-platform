@@ -195,7 +195,7 @@ export default function AccountPage() {
         error={profileM.isError ? (serverReason(profileM.error) ?? tc('ui.status.somethingWrong')) : undefined}
       />
       <RegionCard
-        formatLocale={locale?.format_locale}
+        formatLocale={(locale?.has_format_locale_preference ?? Boolean(locale?.format_locale && locale.format_locale !== locale.code)) ? locale?.format_locale : undefined}
         timezone={locale?.timezone}
         currency={defaultCurrency ?? undefined}
         onSave={onSaveRegion}

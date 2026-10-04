@@ -42,6 +42,7 @@ const LABEL: Record<string, string> = {
   en: 'Customer group',
   de: 'Kundengruppe',
   es: 'Grupo de clientes',
+  'es-MX': 'Grupo de clientes',
   fr: 'Groupe de clients',
   it: 'Gruppo clienti',
   tr: 'Müşteri grubu',

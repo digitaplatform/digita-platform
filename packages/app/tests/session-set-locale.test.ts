@@ -13,7 +13,7 @@ const refused = async () => {
 const getTranslations = vi.fn();
 const getDoc = vi.fn(refused);
 const getUserPreference = vi.fn(refused);
-const getBoot = vi.fn(refused);
+const getBoot = vi.fn<() => Promise<unknown>>(refused);
 vi.mock('@/services/translations', () => ({ getTranslations: (code: string) => getTranslations(code) }));
 vi.mock('@/services/resource', () => ({ getDoc: () => getDoc() }));
 vi.mock('@/services/userPreference', () => ({
@@ -46,6 +46,59 @@ afterEach(() => {
 });
 
 describe('setLocale', () => {
+  it('distinguishes following es-MX from an explicit es-MX region on the next switch', async () => {
+    useSessionStore.setState({ locale: { code: 'es-MX', format_locale: 'es-MX', has_format_locale_preference: false } });
+    await useSessionStore.getState().setLocale('en');
+    expect(useSessionStore.getState().locale?.format_locale).toBe('en');
+    useSessionStore.setState({ locale: { code: 'es-MX', format_locale: 'es-MX', has_format_locale_preference: true } });
+    await useSessionStore.getState().setLocale('en');
+    expect(useSessionStore.getState().locale?.format_locale).toBe('es-MX');
+    expect(getUserPreference).not.toHaveBeenCalled();
+  });
+
+  it('follows the language across two switches when an older boot has no format field', async () => {
+    useSessionStore.setState({ user: null, locale: { code: 'en' } });
+    await useSessionStore.getState().setLocale('es-MX');
+    await useSessionStore.getState().setLocale('de');
+    expect(useSessionStore.getState().locale).toMatchObject({ code: 'de', format_locale: 'de', has_format_locale_preference: false });
+  });
+
+  it('keeps an explicit region from an older boot payload across two language switches', async () => {
+    useSessionStore.setState({ user: null, locale: { code: 'en', format_locale: 'es-MX' } });
+    await useSessionStore.getState().setLocale('es-MX');
+    await useSessionStore.getState().setLocale('de');
+    expect(useSessionStore.getState().locale).toMatchObject({ code: 'de', format_locale: 'es-MX', has_format_locale_preference: true });
+  });
+
+  it('keeps an explicit Mexico region saved after boot when switching languages', async () => {
+    useSessionStore.setState({ user: null, locale: { code: 'es-MX', format_locale: 'es-MX', has_format_locale_preference: false } });
+    await useSessionStore.getState().setLocaleFormat('es-MX', null);
+    await useSessionStore.getState().setLocale('en');
+    expect(useSessionStore.getState().locale).toMatchObject({ code: 'en', format_locale: 'es-MX', has_format_locale_preference: true });
+    expect(getUserPreference).not.toHaveBeenCalled();
+  });
+
+  it('follows the next language after an explicit region is cleared', async () => {
+    useSessionStore.setState({ user: null, locale: { code: 'es-MX', format_locale: 'es-MX', has_format_locale_preference: true } });
+    await useSessionStore.getState().setLocaleFormat(null, null);
+    await useSessionStore.getState().setLocale('en');
+    expect(useSessionStore.getState().locale).toMatchObject({ code: 'en', format_locale: 'en', has_format_locale_preference: false });
+    expect(getUserPreference).not.toHaveBeenCalled();
+  });
+
+  it('uses the boot configured fallback after resetting a regional language', async () => {
+    getBoot.mockResolvedValue({ success: true, data: {
+      user: { _id: 'demo', email: 'demo@example.test', roles: [], demo: true },
+      locale: { code: 'es-MX', fallback: 'de', format_locale: 'es-MX' },
+    } });
+    getTranslations.mockImplementation(async (code: string) => ({ success: true, data: code === 'de' ? { 'entity.OnlyFallback': 'Nur Deutsch' } : {} }));
+    await useSessionStore.getState().resetLocale();
+    expect(useI18nStore.getState().locale).toBe('es-MX');
+    expect(useI18nStore.getState().t('entity.OnlyFallback')).toBe('Nur Deutsch');
+    expect(getTranslations).toHaveBeenCalledWith('de');
+    expect(getTranslations).not.toHaveBeenCalledWith('en');
+  });
+
   // The toast of a failed load says to choose the language again; by then a boot may already
   // name it (the topbar saves the pick to the profile), while the old texts are still in use.
   it('loads the texts again when the language is chosen again after a failed load', async () => {
@@ -78,6 +131,7 @@ describe('setLocale', () => {
       direction: 'ltr',
       format_locale: 'de',
       timezone: 'Europe/Zurich',
+      has_format_locale_preference: false,
     });
   });
 
@@ -108,7 +162,7 @@ describe('setLocale', () => {
   it('switches a visitor who is not signed in by the same rule', async () => {
     useSessionStore.setState({ status: 'anonymous', locale: { code: 'en', direction: 'ltr', format_locale: 'en', timezone: null } });
     await useSessionStore.getState().setLocale('ar');
-    expect(useSessionStore.getState().locale).toEqual({ code: 'ar', direction: 'rtl', format_locale: 'ar', timezone: null });
+    expect(useSessionStore.getState().locale).toEqual({ code: 'ar', direction: 'rtl', format_locale: 'ar', timezone: null, has_format_locale_preference: false });
     expect(document.documentElement.dir).toBe('rtl');
     expect(document.documentElement.lang).toBe('ar');
     expect(getTranslations).not.toHaveBeenCalled();

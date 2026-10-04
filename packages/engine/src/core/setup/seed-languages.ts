@@ -56,6 +56,17 @@ export const DEFAULT_LANGUAGES = [
     docstatus: 0,
   },
   {
+    _id: "es-MX",
+    name: "Spanish (Mexico)",
+    native_name: "Español (México)",
+    direction: "ltr",
+    flag_emoji: "\u{1F1F2}\u{1F1FD}",
+    enabled: true,
+    translation_coverage: 0,
+    doctype: "language",
+    docstatus: 0,
+  },
+  {
     _id: "fr",
     name: "French",
     native_name: "Fran\u00e7ais",

@@ -36,9 +36,8 @@ export function getStoredLocale(): string | null {
   }
 }
 
-/** The browser's preferred UI language as a bare 2-letter code (e.g. "de" from
- *  "de-CH"), or null. The auto-detect default when the user has NOT manually
- *  picked a language: it is sent as Accept-Language so the engine negotiates it
+/** The browser's preferred full language tag (e.g. "es-MX"), or null. The auto-detect default
+ *  when the user has NOT manually picked a language: it is sent as Accept-Language so the engine negotiates it
  *  against the enabled languages (falling back to the platform default if the
  *  browser language isn't enabled). Never persisted — a manual choice
  *  ([[getStoredLocale]]) always wins and re-detection follows the browser. */
@@ -46,8 +45,7 @@ export function getBrowserLocale(): string | null {
   const nav = typeof navigator !== 'undefined' ? navigator : undefined;
   const langs = nav?.languages?.length ? nav.languages : nav?.language ? [nav.language] : [];
   for (const l of langs) {
-    const base = l?.slice(0, 2).toLowerCase();
-    if (base) return base;
+    if (l?.trim()) return l.trim();
   }
   return null;
 }
@@ -83,17 +81,19 @@ export async function pickBootLocale(
  * page as the next boot would: the direction of the language as /boot offers it, the
  * person's own region, else the language itself, and the timezone they already have. It
  * reads no Language row or preference, because a person whose roles grant neither switches
- * too. A format_locale equal to the current language follows the language, as the region
- * card reads it, since a region the person picks always names its country.
+ * too. Boot distinguishes an explicit region from following the language even when both
+ * are the same regional tag.
  */
 function resolveLocale(code: string, current: BootLocale | null, languages: BootLanguage[]): BootLocale {
-  const own = current?.format_locale && current.format_locale !== current.code ? current.format_locale : undefined;
+  const explicit = current?.has_format_locale_preference ?? Boolean(current?.format_locale && current.format_locale !== current.code);
+  const own = explicit ? current?.format_locale : undefined;
   return {
     ...current,
     code,
     // The engine's LocaleResolver reads a Language row without a direction as left to right.
     direction: languages.find((l) => l.code === code)?.direction ?? 'ltr',
     format_locale: own ?? code,
+    has_format_locale_preference: explicit,
   };
 }
 
@@ -228,7 +228,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // The data texts need a sign-in, so a visitor switches the chrome texts alone,
     // as App does at boot.
     if (signedIn) {
-      await useI18nStore.getState().load(code);
+      await useI18nStore.getState().load(code, get().locale?.fallback);
     } else {
       document.documentElement.lang = code;
       useI18nStore.setState({ locale: code });
@@ -250,7 +250,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const { resolved, data } = await pickBootLocale(() => get().bootstrap());
     // The data texts need a sign-in, so a visitor takes the chrome texts alone, as App does.
     if (data?.user) {
-      await useI18nStore.getState().load(resolved);
+      await useI18nStore.getState().load(resolved, data.locale?.fallback);
     } else {
       document.documentElement.lang = resolved;
       useI18nStore.setState({ locale: resolved });
@@ -276,6 +276,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       locale: {
         ...(cur ?? { code: document.documentElement.lang || 'en' }),
         format_locale: fmt ?? cur?.code,
+        has_format_locale_preference: Boolean(fmt),
         timezone: tz,
       },
     });

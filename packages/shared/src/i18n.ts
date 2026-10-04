@@ -16,7 +16,7 @@ export type LocaleMessages = Record<string, string>;
 export type LocaleBundle = Record<string, LocaleMessages>;
 
 /** The languages every build's translations carry in full. */
-export const SUPPORTED_LANGUAGES = ["en", "de", "es", "fr", "it", "tr"] as const;
+export const SUPPORTED_LANGUAGES = ["en", "de", "es", "es-MX", "fr", "it", "tr"] as const;
 
 export type Language = (typeof SUPPORTED_LANGUAGES)[number];
 
@@ -24,7 +24,7 @@ export type Language = (typeof SUPPORTED_LANGUAGES)[number];
 export const FALLBACK_LANGUAGE: Language = "en";
 
 export interface Translator {
-  /** Resolve `key` in `locale` (→ fallback → key itself), interpolating `{param}`s. */
+  /** Resolve `key` in `locale` (→ base language → fallback → key itself), interpolating `{param}`s. */
   t(key: string, params?: Record<string, string | number>, locale?: string): string;
   /**
    * The `<key>.one` or `<key>.other` message for `count`, as the language's plural rules pick it,
@@ -50,27 +50,32 @@ export function createTranslator(bundle: LocaleBundle, fallback: string): Transl
       .split(",")
       .map((part) => {
         const [tag, ...params] = part.trim().split(";");
-        const lang = tag?.trim().split("-")[0]?.toLowerCase();
+        const lang = tag?.trim().toLowerCase();
         let q = 1;
         for (const p of params) {
-          const m = /^\s*q=([0-9.]+)\s*$/.exec(p);
+          const m = /^\s*q=([0-9.]+)\s*$/i.exec(p);
           if (m?.[1] !== undefined) q = Number(m[1]);
         }
         return lang ? { lang, q } : null;
       })
       .filter((x): x is { lang: string; q: number } => x !== null && x.q > 0)
       .sort((a, b) => b.q - a.q);
-    for (const { lang } of langs) if (supported.includes(lang)) return lang;
+    for (const { lang } of langs) {
+      const exact = supported.find((code) => code.toLowerCase() === lang);
+      if (exact) return exact;
+      const base = lang.split("-")[0]!;
+      if (supported.includes(base)) return base;
+    }
     return fallback;
   }
 
   function languageOf(locale?: string): string {
-    return locale && supported.includes(locale) ? locale : fallback;
+    return resolveLocale(locale);
   }
 
   function t(key: string, params?: Record<string, string | number>, locale?: string): string {
     const loc = languageOf(locale);
-    const template = bundle[loc]?.[key] ?? bundle[fallback]?.[key] ?? key;
+    const template = bundle[loc]?.[key] ?? bundle[loc.split("-")[0]!]?.[key] ?? bundle[fallback]?.[key] ?? key;
     if (!params) return template;
     return template.replace(/\{(\w+)\}/g, (_m, k: string) =>
       params[k] !== undefined ? String(params[k]) : `{${k}}`,

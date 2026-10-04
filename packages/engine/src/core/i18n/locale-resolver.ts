@@ -12,6 +12,8 @@ export interface ResolvedLocale {
   /** BCP-47 formatting locale (e.g. "de-CH") — drives Intl number/date/currency
    *  formatting on the frontend. Region-aware, independent of the UI language. */
   format_locale: string;
+  /** Whether format_locale is the person's explicit preference rather than following code. */
+  has_format_locale_preference?: boolean;
   /** IANA timezone for datetime display (e.g. "Europe/Zurich"), or null. */
   timezone: string | null;
 }
@@ -97,6 +99,7 @@ export class LocaleResolver {
     return {
       ...base,
       format_locale: trimmed(pref?.format_locale) ?? language,
+      has_format_locale_preference: Boolean(trimmed(pref?.format_locale)),
       timezone: trimmed(pref?.timezone) ?? null,
     };
   }
@@ -118,11 +121,17 @@ export class LocaleResolver {
     acceptLanguageHeader?: string,
   ): Promise<string> {
     const enabled = await this.getEnabledLanguages();
-    if (prefLanguage && enabled.has(prefLanguage)) return prefLanguage;
-    if (userLanguage && enabled.has(userLanguage)) return userLanguage;
+    for (const requested of [prefLanguage, userLanguage]) {
+      if (!requested) continue;
+      const exact = [...enabled].find((code) => code.toLowerCase() === requested.toLowerCase());
+      if (exact) return exact;
+    }
     if (acceptLanguageHeader) {
       for (const lang of this.parseAcceptLanguage(acceptLanguageHeader)) {
-        if (enabled.has(lang)) return lang;
+        const exact = [...enabled].find((code) => code.toLowerCase() === lang);
+        if (exact) return exact;
+        const base = lang.split("-")[0]!;
+        if (enabled.has(base)) return base;
       }
     }
     return this.defaultLanguage;
@@ -244,10 +253,11 @@ export class LocaleResolver {
     return header
       .split(",")
       .map((part) => {
-        const [lang, qPart] = part.trim().split(";");
-        const q = qPart ? parseFloat(qPart.replace("q=", "")) : 1;
-        return { lang: lang!.trim().split("-")[0]!, q };
+        const [lang = "", ...params] = part.trim().split(";");
+        const quality = params.map((p) => p.trim().toLowerCase()).find((p) => p.startsWith("q="));
+        return { lang: lang.trim().toLowerCase(), q: quality ? Number(quality.slice(2)) : 1 };
       })
+      .filter((item) => item.lang && item.q > 0)
       .sort((a, b) => b.q - a.q)
       .map((item) => item.lang);
   }

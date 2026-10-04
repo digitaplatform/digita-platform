@@ -55,7 +55,7 @@ describe("the locale the engine resolves", () => {
     const locale = await resolver.resolve({ language: "de" });
 
     for (const field of FORMAT_FIELDS) expect(locale).not.toHaveProperty(field);
-    expect(locale).toEqual({ code: "de", fallback: "en", direction: "ltr", format_locale: "de", timezone: null });
+    expect(locale).toEqual({ code: "de", fallback: "en", direction: "ltr", format_locale: "de", has_format_locale_preference: false, timezone: null });
   });
 
   it("carries no format field for a language without a row of its own", async () => {
@@ -65,7 +65,7 @@ describe("the locale the engine resolves", () => {
     const locale = await resolver.resolve({ language: "fr" });
 
     for (const field of FORMAT_FIELDS) expect(locale).not.toHaveProperty(field);
-    expect(locale).toEqual({ code: "fr", fallback: "en", direction: "ltr", format_locale: "fr", timezone: null });
+    expect(locale).toEqual({ code: "fr", fallback: "en", direction: "ltr", format_locale: "fr", has_format_locale_preference: false, timezone: null });
   });
 });
 

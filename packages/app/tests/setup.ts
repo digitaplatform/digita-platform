@@ -34,7 +34,7 @@ if (typeof Element !== 'undefined') {
     const { loadChromeTexts } = await vi.importActual<typeof import('@/lib/chrome-i18n')>('@/lib/chrome-i18n');
     const suiteFetch = globalThis.fetch;
     globalThis.fetch = (async (url: string | URL | Request) => {
-      const language = /^translations\/([a-z]{2})\.json$/.exec(String(url))?.[1];
+      const language = /^translations\/([a-z]{2}(?:-[A-Z]{2})?)\.json$/.exec(String(url))?.[1];
       if (!language || !texts[language]) throw new Error(`unexpected fetch in test setup: ${String(url)}`);
       return new Response(JSON.stringify(texts[language]));
     }) as typeof fetch;
