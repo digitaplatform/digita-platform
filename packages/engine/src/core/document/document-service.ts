@@ -2260,7 +2260,7 @@ export class DocumentService {
     if (retentionPurge) {
       const setting = await this.assertRetentionPurgeAccess(user);
       const months = Number(setting["deleted_retention_months"] ?? 12);
-      if (![12, 18, 24, 30].includes(months)) throw new RangeError("Invalid deleted record retention");
+      if (![12, 18, 24, 30].includes(months)) throw new EngineError("field_invalid_select", { field: "deleted_retention_months", value: String(setting["deleted_retention_months"]) }, 400, "BAD_REQUEST");
       const policyCutoff = new Date();
       policyCutoff.setUTCMonth(policyCutoff.getUTCMonth() - months);
       if (!cutoff.deletedBefore || cutoff.createdBefore || date > policyCutoff) throw new EngineError("field_invalid_date", { field: "deleted" }, 400, "BAD_REQUEST");
